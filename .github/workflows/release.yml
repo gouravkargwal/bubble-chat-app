@@ -39,19 +39,11 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      - name: Create dummy google-services.json
-        run: |
-          mkdir -p app/src
-          cat > app/google-services.json <<'EOFGS'
-          {
-            "project_info": { "project_number": "0", "project_id": "dummy", "storage_bucket": "dummy.appspot.com" },
-            "client": [{ "client_info": { "mobilesdk_app_id": "1:0:android:dummy", "android_client_info": { "package_name": "com.rizzbot.app" } }, "api_key": [{ "current_key": "dummy" }] }],
-            "configuration_version": "1"
-          }
-          EOFGS
+      - name: Decode google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > app/google-services.json
 
       - name: Build release APK
-        run: ./gradlew assembleRelease -x uploadCrashlyticsMappingFileRelease
+        run: ./gradlew assembleRelease
 
       - name: Get version name
         id: version
