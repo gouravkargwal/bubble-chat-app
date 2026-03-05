@@ -55,11 +55,15 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/RizzBot-v${{ steps.version.outputs.version }}.apk
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/RizzBot-v${{ steps.version.outputs.version }}.apk
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/RizzBot.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: RizzBot v${{ steps.version.outputs.version }}
           generate_release_notes: true
-          files: RizzBot/app/build/outputs/apk/release/RizzBot-v${{ steps.version.outputs.version }}.apk
+          files: |
+            RizzBot/app/build/outputs/apk/release/RizzBot-v${{ steps.version.outputs.version }}.apk
+            RizzBot/app/build/outputs/apk/release/RizzBot.apk
