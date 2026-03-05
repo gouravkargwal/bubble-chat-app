@@ -52,7 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,12 +84,43 @@ fun SettingsScreen(
     val state by viewModel.state.collectAsState()
     val stats by viewModel.stats.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
+    val showAccessibilityPrompt by viewModel.showAccessibilityPrompt.collectAsState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     var showClearDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LifecycleResumeEffect(Unit) {
         viewModel.refreshPermissionStatus()
+        onPauseOrDispose {}
+    }
+
+    if (showAccessibilityPrompt) {
+        val isDisabling = !state.isServiceEnabled
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissAccessibilityPrompt() },
+            title = { Text(if (isDisabling) "Disable Accessibility Service?" else "Enable Accessibility Service") },
+            text = {
+                Text(
+                    if (isDisabling)
+                        "To allow banking apps to work properly, you should also disable the RizzBot accessibility service in system settings."
+                    else
+                        "RizzBot needs the accessibility service enabled to read conversations. Please enable it in system settings."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.dismissAccessibilityPrompt()
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissAccessibilityPrompt() }) {
+                    Text("Later")
+                }
+            }
+        )
     }
 
     Scaffold(

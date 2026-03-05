@@ -116,6 +116,11 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    private val _showAccessibilityPrompt = MutableStateFlow(false)
+    val showAccessibilityPrompt: StateFlow<Boolean> = _showAccessibilityPrompt.asStateFlow()
+
+    private var pendingServiceEnabled: Boolean = false
+
     fun toggleService(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setServiceEnabled(enabled)
@@ -126,7 +131,20 @@ class SettingsViewModel @Inject constructor(
             } else {
                 context.stopService(Intent(context, OverlayService::class.java))
             }
+
+            // Prompt user to also toggle accessibility service
+            if (!enabled && permissionHelper.isAccessibilityServiceEnabled()) {
+                pendingServiceEnabled = false
+                _showAccessibilityPrompt.value = true
+            } else if (enabled && !permissionHelper.isAccessibilityServiceEnabled()) {
+                pendingServiceEnabled = true
+                _showAccessibilityPrompt.value = true
+            }
         }
+    }
+
+    fun dismissAccessibilityPrompt() {
+        _showAccessibilityPrompt.value = false
     }
 
     fun selectProvider(provider: LlmProvider) {
