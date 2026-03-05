@@ -11,8 +11,11 @@ import com.rizzbot.app.domain.repository.ConversationRepository
 import com.rizzbot.app.domain.repository.LlmRepository
 import com.rizzbot.app.domain.repository.SettingsRepository
 import com.rizzbot.app.overlay.OverlayService
+import com.rizzbot.app.BuildConfig
 import com.rizzbot.app.util.AnalyticsHelper
+import com.rizzbot.app.util.InAppUpdateHelper
 import com.rizzbot.app.util.PermissionHelper
+import com.rizzbot.app.util.UpdateInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +64,9 @@ class SettingsViewModel @Inject constructor(
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+    private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
+    val updateInfo: StateFlow<UpdateInfo?> = _updateInfo.asStateFlow()
+
     val stats: StateFlow<RizzStats> = combine(
         profileCacheManager.observeAllSyncedNames(),
         conversationRepository.observeAllConversations(),
@@ -76,6 +82,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadSettings()
+        checkForUpdate()
     }
 
     private fun loadSettings() {
@@ -187,6 +194,13 @@ class SettingsViewModel @Inject constructor(
     fun clearAllData() {
         viewModelScope.launch {
             conversationRepository.deleteAll()
+        }
+    }
+
+    private fun checkForUpdate() {
+        viewModelScope.launch {
+            val info = InAppUpdateHelper.checkForUpdate(BuildConfig.VERSION_NAME)
+            _updateInfo.value = info
         }
     }
 }

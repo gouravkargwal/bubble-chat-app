@@ -1,0 +1,70 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: RizzBot
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > rizzbot-release.jks
+
+      - name: Create keystore.properties
+        run: |
+          cat > keystore.properties <<EOF
+          storeFile=rizzbot-release.jks
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      - name: Create local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Create dummy google-services.json
+        run: |
+          mkdir -p app/src
+          cat > app/google-services.json <<'EOFGS'
+          {
+            "project_info": { "project_number": "0", "project_id": "dummy", "storage_bucket": "dummy.appspot.com" },
+            "client": [{ "client_info": { "mobilesdk_app_id": "1:0:android:dummy", "android_client_info": { "package_name": "com.rizzbot.app" } }, "api_key": [{ "current_key": "dummy" }] }],
+            "configuration_version": "1"
+          }
+          EOFGS
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+
+      - name: Get version name
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/RizzBot-v${{ steps.version.outputs.version }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: RizzBot v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: RizzBot/app/build/outputs/apk/release/RizzBot-v${{ steps.version.outputs.version }}.apk
