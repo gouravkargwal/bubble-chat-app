@@ -224,6 +224,60 @@
     .step h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
     .step p { font-size: 0.9rem; color: var(--text-muted); }
 
+    /* ── Setup Guide ── */
+    .setup-guide {
+      max-width: 800px; margin: 0 auto;
+    }
+    .setup-step {
+      display: flex; gap: 1.5rem; position: relative;
+      padding-bottom: 2rem;
+    }
+    .setup-step:last-child { padding-bottom: 0; }
+    .setup-step::before {
+      content: ''; position: absolute; left: 27px; top: 56px; bottom: 0;
+      width: 2px; background: rgba(124,58,237,0.2);
+    }
+    .setup-step:last-child::before { display: none; }
+    .setup-step-num {
+      width: 56px; height: 56px; border-radius: 16px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; background: var(--gradient-btn); color: #fff;
+      position: relative; z-index: 1;
+    }
+    .setup-step-content {
+      flex: 1; padding-top: 0.3rem;
+    }
+    .setup-step-content h3 {
+      font-size: 1.15rem; font-weight: 700; margin-bottom: 0.4rem;
+    }
+    .setup-step-content > p {
+      font-size: 0.92rem; color: var(--text-muted); margin-bottom: 0.8rem;
+    }
+    .substeps {
+      list-style: none; counter-reset: substep;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; padding: 0.8rem 1rem;
+    }
+    .substeps li {
+      counter-increment: substep;
+      padding: 0.4rem 0; font-size: 0.85rem; color: var(--text-muted);
+      display: flex; align-items: baseline; gap: 0.6rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .substeps li:last-child { border-bottom: none; }
+    .substeps li::before {
+      content: counter(substep);
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700;
+      background: rgba(124,58,237,0.2); color: var(--pink-light);
+    }
+    .setup-tip {
+      margin-top: 0.5rem; padding: 0.5rem 0.8rem; border-radius: 8px;
+      font-size: 0.8rem; color: #4ADE80;
+      background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.15);
+    }
+
     /* ── Features ── */
     .features-grid {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -317,13 +371,69 @@
       background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
 
+    /* ── Download animation ── */
+    .btn-download {
+      position: relative; overflow: hidden;
+    }
+    .btn-download.downloading {
+      pointer-events: none; opacity: 0.85;
+    }
+    .btn-download.downloading .btn-text { visibility: hidden; }
+    .btn-download.downloading .btn-icon { visibility: hidden; }
+    .btn-download .btn-loading {
+      display: none; position: absolute; inset: 0;
+      align-items: center; justify-content: center; gap: 0.5rem;
+      font-weight: 600;
+    }
+    .btn-download.downloading .btn-loading { display: flex; }
+    .btn-download .spinner {
+      width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-download.downloaded .btn-loading { display: none; }
+    .btn-download.downloaded .btn-text { visibility: visible; }
+    .btn-download.downloaded .btn-icon { visibility: visible; }
+
     /* ── Responsive ── */
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
       nav { padding: 0.8rem 1.2rem; }
+      .nav-links { gap: 1rem; }
       .nav-links a:not(.btn) { display: none; }
       .hero { padding: 7rem 1.2rem 3rem; }
-      .hero-stats { gap: 1.5rem; }
+      .hero p { font-size: 1rem; }
+      .hero-stats { gap: 1.5rem; flex-wrap: wrap; }
+      .hero-buttons { flex-direction: column; align-items: center; }
       section { padding: 4rem 1.2rem; }
+      .section-title { margin-bottom: 2.5rem; }
+      .section-title p { font-size: 0.95rem; }
+      .phone-section { padding: 1rem 1rem 4rem; }
+      .phone-mockup { width: 260px; height: 560px; border-radius: 32px; }
+      .setup-step { gap: 1rem; }
+      .setup-step-num { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 12px; }
+      .setup-step::before { left: 21px; top: 44px; }
+      .setup-step-content h3 { font-size: 1rem; }
+      .substeps { padding: 0.6rem 0.8rem; }
+      .substeps li { font-size: 0.8rem; }
+      .features-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .vibes { gap: 0.6rem; }
+      .vibe-chip { padding: 0.7rem 1.2rem; font-size: 0.9rem; }
+      .providers { gap: 1rem; }
+      .provider { min-width: 120px; padding: 1rem 1.2rem; }
+      .privacy-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 420px) {
+      .hero { padding: 6rem 1rem 2rem; }
+      h1 { font-size: 2.2rem; }
+      .btn { padding: 0.75rem 1.5rem; font-size: 0.9rem; }
+      .steps { grid-template-columns: 1fr; }
+      .setup-step-num { width: 38px; height: 38px; font-size: 1rem; }
+      .setup-step::before { left: 18px; top: 38px; }
+      .phone-mockup { width: 230px; height: 500px; }
+      .suggestion-card { padding: 0.4rem; }
+      .suggestion-item { font-size: 0.6rem; padding: 0.35rem 0.5rem; }
     }
   </style>
 </head>
@@ -339,10 +449,11 @@
 <nav>
   <div class="logo"><span>&#x1F525;</span> RizzBot</div>
   <div class="nav-links">
-    <a href="#features">Features</a>
     <a href="#how">How it Works</a>
+    <a href="#setup">Setup Guide</a>
+    <a href="#features">Features</a>
     <a href="#privacy">Privacy</a>
-    <a href="#download" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 0.9rem;">Download</a>
+    <a href="https://github.com/gouravkargwal/bubble-chat-app/releases/latest/download/RizzBot-v1.0.0.apk" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 0.9rem;">Download</a>
   </div>
 </nav>
 
@@ -353,9 +464,10 @@
     <h1>Never Run Out of <span class="gradient">Rizz</span> Again</h1>
     <p>RizzBot reads your Aisle conversations and instantly generates 4 reply suggestions — Flirty, Witty, Smooth, and Bold — delivered in a floating bubble right on your chat screen.</p>
     <div class="hero-buttons">
-      <a href="#download" class="btn btn-primary">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-        Download for Android
+      <a href="https://github.com/gouravkargwal/bubble-chat-app/releases/latest/download/RizzBot-v1.0.0.apk" class="btn btn-primary btn-download" onclick="animateDownload(this)">
+        <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        <span class="btn-text">Download for Android</span>
+        <span class="btn-loading"><span class="spinner"></span> Downloading...</span>
       </a>
       <a href="#how" class="btn btn-secondary">See How It Works</a>
     </div>
@@ -431,6 +543,99 @@
       <h3>Tap & Reply</h3>
       <p>Tap the Rizz bubble to get 4 reply suggestions — one per vibe. Copy to clipboard or paste directly into the chat.</p>
     </div>
+  </div>
+</section>
+
+<!-- Setup Guide -->
+<section id="setup">
+  <div class="section-title">
+    <h2>Installation Guide</h2>
+    <p>Follow these steps to get RizzBot up and running on your Android device.</p>
+  </div>
+  <div class="setup-guide">
+
+    <div class="setup-step">
+      <div class="setup-step-num">&#x1F6E1;&#xFE0F;</div>
+      <div class="setup-step-content">
+        <h3>Disable Play Protect</h3>
+        <p>Google Play Protect blocks apps installed outside the Play Store. Temporarily disable it to install RizzBot.</p>
+        <ol class="substeps">
+          <li>Open the <strong>Google Play Store</strong> app</li>
+          <li>Tap your <strong>profile icon</strong> (top right)</li>
+          <li>Tap <strong>"Play Protect"</strong></li>
+          <li>Tap the <strong>gear icon</strong> (top right)</li>
+          <li>Toggle OFF <strong>"Scan apps with Play Protect"</strong></li>
+        </ol>
+        <div class="setup-tip">&#x1F4A1; You can re-enable Play Protect after installing the app.</div>
+      </div>
+    </div>
+
+    <div class="setup-step">
+      <div class="setup-step-num">&#x1F4E5;</div>
+      <div class="setup-step-content">
+        <h3>Install the APK</h3>
+        <p>Download and install the RizzBot APK file on your device.</p>
+        <ol class="substeps">
+          <li>Open the <strong>APK file</strong> from your downloads</li>
+          <li>If prompted, tap <strong>"Settings"</strong> to allow installs from this source</li>
+          <li>Toggle ON <strong>"Allow from this source"</strong></li>
+          <li>Go back and tap <strong>"Install"</strong></li>
+          <li>Wait for installation to complete</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="setup-step">
+      <div class="setup-step-num">&#x1F513;</div>
+      <div class="setup-step-content">
+        <h3>Allow Restricted Settings</h3>
+        <p>Android 13+ restricts accessibility for sideloaded apps. You need to allow it manually.</p>
+        <ol class="substeps">
+          <li>Open device <strong>Settings</strong></li>
+          <li>Go to <strong>"Apps"</strong> and find <strong>"RizzBot"</strong></li>
+          <li>Tap the <strong>three-dot menu</strong> (top right)</li>
+          <li>Tap <strong>"Allow restricted settings"</strong></li>
+          <li>Enter your device PIN/pattern if asked</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="setup-step">
+      <div class="setup-step-num">&#x267F;</div>
+      <div class="setup-step-content">
+        <h3>Enable Accessibility Service</h3>
+        <p>RizzBot uses accessibility to read chat messages on Aisle and show reply suggestions.</p>
+        <ol class="substeps">
+          <li>Open device <strong>Settings</strong> &rarr; <strong>"Accessibility"</strong></li>
+          <li>Find <strong>"RizzBot"</strong> in the list</li>
+          <li>Tap it and <strong>toggle ON</strong></li>
+          <li>Confirm the permission dialog</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="setup-step">
+      <div class="setup-step-num">&#x1F5C2;&#xFE0F;</div>
+      <div class="setup-step-content">
+        <h3>Allow Display Over Other Apps</h3>
+        <p>Overlay permission lets RizzBot show the floating bubble and suggestions on top of Aisle.</p>
+        <ol class="substeps">
+          <li>Open device <strong>Settings</strong> &rarr; <strong>"Apps"</strong></li>
+          <li>Find <strong>"RizzBot"</strong> and tap it</li>
+          <li>Tap <strong>"Display over other apps"</strong></li>
+          <li><strong>Toggle ON</strong></li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="setup-step">
+      <div class="setup-step-num">&#x1F680;</div>
+      <div class="setup-step-content">
+        <h3>You're All Set!</h3>
+        <p>Open Aisle, go to any chat, and the Rizz button will appear automatically. Tap it to get AI-powered reply suggestions!</p>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -514,23 +719,19 @@
     <div class="provider">
       <div class="provider-icon">&#x1F9E0;</div>
       <div class="provider-name">Groq</div>
-      <div class="provider-model">Llama 3.3 70B</div>
       <div class="provider-rec">Free & Fast</div>
     </div>
     <div class="provider">
       <div class="provider-icon">&#x1F916;</div>
       <div class="provider-name">OpenAI</div>
-      <div class="provider-model">GPT-4o Mini</div>
     </div>
     <div class="provider">
       <div class="provider-icon">&#x1F3AD;</div>
       <div class="provider-name">Claude</div>
-      <div class="provider-model">Claude Sonnet 4</div>
     </div>
     <div class="provider">
       <div class="provider-icon">&#x1F48E;</div>
       <div class="provider-name">Gemini</div>
-      <div class="provider-model">Gemini 2.0 Flash</div>
     </div>
   </div>
 </section>
@@ -578,9 +779,10 @@
   <h2>Ready to Level Up Your <span style="background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Conversations?</span></h2>
   <p>Download RizzBot and never stare at a blank text box again.</p>
   <div style="display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;">
-    <a href="#" class="btn btn-primary" style="font-size:1.1rem;padding:1rem 2.5rem;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-      Download APK
+    <a href="https://github.com/gouravkargwal/bubble-chat-app/releases/latest/download/RizzBot-v1.0.0.apk" class="btn btn-primary btn-download" style="font-size:1.1rem;padding:1rem 2.5rem;" onclick="animateDownload(this)">
+      <svg class="btn-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      <span class="btn-text">Download APK</span>
+      <span class="btn-loading"><span class="spinner"></span> Downloading...</span>
     </a>
   </div>
   <p style="margin-top:1.5rem;font-size:0.85rem;color:var(--text-muted);">Android 8.0+ required &middot; Free &middot; No ads</p>
@@ -600,5 +802,15 @@
   <p>&copy; 2026 RizzBot. Your AI-powered dating reply assistant.</p>
 </footer>
 
+<script>
+function animateDownload(btn) {
+  btn.classList.add('downloading');
+  setTimeout(function() {
+    btn.classList.remove('downloading');
+    btn.classList.add('downloaded');
+    setTimeout(function() { btn.classList.remove('downloaded'); }, 2000);
+  }, 3000);
+}
+</script>
 </body>
 </html>
