@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics.plugin)
 }
 
 android {
@@ -96,4 +98,16 @@ dependencies {
 
     // Security
     implementation(libs.security.crypto)
+
+    // Splash Screen
+    implementation(libs.splash.screen)
+
+    // In-App Update
+    implementation(libs.play.app.update)
+    implementation(libs.play.app.update.ktx)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.analytics)
 }

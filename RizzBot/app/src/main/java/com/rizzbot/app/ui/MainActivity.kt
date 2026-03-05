@@ -7,11 +7,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.rizzbot.app.data.local.datastore.SettingsDataStore
 import com.rizzbot.app.overlay.OverlayService
 import com.rizzbot.app.ui.navigation.RizzBotNavGraph
 import com.rizzbot.app.ui.theme.RizzBotTheme
+import com.rizzbot.app.util.InAppUpdateHelper
 import com.rizzbot.app.util.PermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -23,6 +25,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var permissionHelper: PermissionHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -46,5 +49,7 @@ class MainActivity : ComponentActivity() {
         if (permissionHelper.areAllPermissionsGranted()) {
             startForegroundService(Intent(this, OverlayService::class.java))
         }
+        // Check for app updates from Play Store
+        InAppUpdateHelper.checkForUpdate(this)
     }
 }

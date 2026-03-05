@@ -21,4 +21,12 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setServiceEnabled(enabled: Boolean) = settingsDataStore.setServiceEnabled(enabled)
     override suspend fun setTonePreference(tone: TonePreference) = settingsDataStore.setTonePreference(tone.name)
     override suspend fun setOnboardingComplete() = settingsDataStore.setOnboardingComplete()
+
+    override val selectedProvider: Flow<String> = settingsDataStore.selectedProvider
+    override val selectedModel: Flow<String> = settingsDataStore.selectedModel
+    override suspend fun setSelectedProvider(provider: String) = settingsDataStore.setSelectedProvider(provider)
+    override suspend fun setSelectedModel(model: String) = settingsDataStore.setSelectedModel(model)
+    override val repliesGenerated: Flow<Int> = settingsDataStore.repliesGenerated
+    override val hasSeenGuide: Flow<Boolean> = settingsDataStore.hasSeenGuide
+    override suspend fun setGuideComplete() = settingsDataStore.setGuideComplete()
 }

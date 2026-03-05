@@ -9,13 +9,14 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.rizzbot.app.accessibility.parser.AisleProfileParser
 import com.rizzbot.app.accessibility.parser.AisleScreenParser
 import com.rizzbot.app.accessibility.parser.ChatScreenDetector
+import com.rizzbot.app.accessibility.parser.LayoutHealthChecker
 import com.rizzbot.app.accessibility.parser.ViewTreeDumper
 import com.rizzbot.app.accessibility.trigger.SmartTriggerManager
-import com.rizzbot.app.domain.model.TonePreference
 import com.rizzbot.app.overlay.OverlayEvent
 import com.rizzbot.app.overlay.OverlayEventBus
 import com.rizzbot.app.overlay.OverlayService
 import com.rizzbot.app.overlay.manager.BubbleManager
+import com.rizzbot.app.util.AnalyticsHelper
 import com.rizzbot.app.util.Constants
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -34,10 +35,12 @@ class RizzBotAccessibilityService : AccessibilityService() {
     @Inject lateinit var chatScreenDetector: ChatScreenDetector
     @Inject lateinit var aisleScreenParser: AisleScreenParser
     @Inject lateinit var aisleProfileParser: AisleProfileParser
+    @Inject lateinit var layoutHealthChecker: LayoutHealthChecker
     @Inject lateinit var smartTriggerManager: SmartTriggerManager
     @Inject lateinit var overlayEventBus: OverlayEventBus
     @Inject lateinit var bubbleManager: BubbleManager
     @Inject lateinit var profileCacheManager: ProfileCacheManager
+    @Inject lateinit var analyticsHelper: AnalyticsHelper
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var isInChatScreen = false
@@ -64,7 +67,17 @@ class RizzBotAccessibilityService : AccessibilityService() {
         if (event == null) return
         val packageName = event.packageName?.toString() ?: return
 
-        if (packageName != Constants.AISLE_PACKAGE) return
+        // User left Aisle — hide all overlays unconditionally
+        if (packageName != Constants.AISLE_PACKAGE) {
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                Log.d(TAG, "Left Aisle (switched to $packageName) — hiding overlays")
+                isInChatScreen = false
+                isOnProfilePage = false
+                smartTriggerManager.onChatScreenExited()
+                bubbleManager.hide()
+            }
+            return
+        }
 
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> handleWindowStateChanged(event)
@@ -95,14 +108,14 @@ class RizzBotAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return
         try {
             // One-time debug dump to discover real Aisle view IDs
-            // Check logcat: adb logcat -s RizzBot:D
             if (!hasLoggedViewTree) {
                 hasLoggedViewTree = true
                 ViewTreeDumper.dump(root, "AisleScreen")
             }
 
-            // Profile page: show manual sync button (call bubbleManager directly to avoid event bus dropping)
+            // Profile page: show manual sync button
             if (aisleProfileParser.isProfilePage(root)) {
+                layoutHealthChecker.checkProfile(root)
                 if (!isOnProfilePage) {
                     Log.d(TAG, "Profile page detected!")
                     isOnProfilePage = true
@@ -122,6 +135,7 @@ class RizzBotAccessibilityService : AccessibilityService() {
             // Chat screen detection (only to show/hide Rizz button)
             if (!isInChatScreen) {
                 if (chatScreenDetector.isChatScreen(root)) {
+                    layoutHealthChecker.checkChatScreen(root)
                     Log.d(TAG, "Chat screen detected via content change!")
                     isInChatScreen = true
                     overlayEventBus.tryEmit(OverlayEvent.ShowRizzButton)
@@ -137,54 +151,49 @@ class RizzBotAccessibilityService : AccessibilityService() {
 
     private fun setupManualTrigger() {
         bubbleManager.onRizzButtonClicked = { handleRizzButtonClick() }
+        bubbleManager.onGenerateReplies = { handleGenerateReplies() }
         bubbleManager.onRefreshChat = { handleRefreshChat() }
-        bubbleManager.onToneSelected = { toneName -> handleToneSelected(toneName) }
         bubbleManager.onPasteToInput = { text -> handlePasteToInput(text) }
         bubbleManager.onSyncProfile = { handleSyncProfile() }
         bubbleManager.onRefreshReplies = { handleRefreshReplies() }
-        bubbleManager.onRizzMenuRequested = { handleRizzMenuRequested() }
-        bubbleManager.onIcebreakerClicked = { handleIcebreakerClick() }
+        bubbleManager.onNewTopicClicked = { handleNewTopicClick() }
+        bubbleManager.onReadFullChat = { handleReadFullChat() }
     }
 
     private fun handleRizzButtonClick() {
-        Log.d(TAG, "Rizz button clicked! Parsing screen on-demand...")
-        val root = rootInActiveWindow
-        if (root == null) {
-            Log.e(TAG, "rootInActiveWindow is NULL!")
-            return
-        }
-        try {
-            val parsed = aisleScreenParser.parseScreen(root)
-            if (parsed != null) {
-                Log.d(TAG, "Parsed: person=${parsed.personName}, messages=${parsed.messages.size}")
-                val profileInfo = profileCacheManager.getProfile(parsed.personName)?.toPromptString()
-                smartTriggerManager.onManualTrigger(parsed.personName, parsed.messages, serviceScope, profileInfo = profileInfo)
-            } else {
-                Log.e(TAG, "parseScreen returned null!")
-            }
-        } finally {
-            root.recycle()
-        }
-    }
+        Log.d(TAG, "Rizz button clicked — showing action menu")
+        analyticsHelper.logRizzButtonClicked()
 
-    private fun handleToneSelected(toneName: String) {
-        Log.d(TAG, "Tone selected: $toneName")
-        val tone = try {
-            TonePreference.valueOf(toneName)
-        } catch (_: Exception) {
-            Log.e(TAG, "Unknown tone: $toneName, defaulting to FLIRTY")
-            TonePreference.FLIRTY
-        }
-
+        // Check if profile is synced for this person so menu knows
         val root = rootInActiveWindow ?: return
         try {
             val parsed = aisleScreenParser.parseScreen(root)
             if (parsed != null) {
-                Log.d(TAG, "Generating reply with tone=${tone.label} for ${parsed.personName}, msgs=${parsed.messages.size}")
                 val profileInfo = profileCacheManager.getProfile(parsed.personName)?.toPromptString()
-                smartTriggerManager.onManualTrigger(parsed.personName, parsed.messages, serviceScope, tone, profileInfo)
+                bubbleManager.setHasProfile(profileInfo != null)
+            }
+        } finally {
+            root.recycle()
+        }
+
+        bubbleManager.showActionMenu()
+    }
+
+    private fun handleGenerateReplies() {
+        Log.d(TAG, "Generate replies requested")
+
+        val root = rootInActiveWindow ?: return
+        try {
+            ViewTreeDumper.dump(root, "ChatOnGenerate")
+            layoutHealthChecker.checkChatMessages(root)
+            val parsed = aisleScreenParser.parseScreen(root)
+            if (parsed != null) {
+                Log.d(TAG, "Parsed: person=${parsed.personName}, messages=${parsed.messages.size}")
+                val profileInfo = profileCacheManager.getProfile(parsed.personName)?.toPromptString()
+                bubbleManager.setHasProfile(profileInfo != null)
+                smartTriggerManager.onManualTrigger(parsed.personName, parsed.messages, serviceScope, profileInfo)
             } else {
-                Log.e(TAG, "handleToneSelected: parseScreen returned null")
+                Log.e(TAG, "parseScreen returned null!")
             }
         } finally {
             root.recycle()
@@ -213,17 +222,15 @@ class RizzBotAccessibilityService : AccessibilityService() {
 
     private fun handleRefreshReplies() {
         Log.d(TAG, "Refresh replies requested")
-        val root = rootInActiveWindow
-        if (root == null) {
-            Log.e(TAG, "handleRefreshReplies: rootInActiveWindow is NULL!")
-            return
-        }
+        analyticsHelper.logRefreshReplies()
+
+        val root = rootInActiveWindow ?: return
         try {
             val parsed = aisleScreenParser.parseScreen(root)
             if (parsed != null) {
                 Log.d(TAG, "Refreshing replies for ${parsed.personName}")
                 val profileInfo = profileCacheManager.getProfile(parsed.personName)?.toPromptString()
-                smartTriggerManager.onRefreshReplies(parsed.personName, parsed.messages, serviceScope, profileInfo = profileInfo)
+                smartTriggerManager.onRefreshReplies(parsed.personName, parsed.messages, serviceScope, profileInfo)
             } else {
                 Log.e(TAG, "handleRefreshReplies: parseScreen returned null")
             }
@@ -232,37 +239,43 @@ class RizzBotAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun handleRizzMenuRequested() {
-        Log.d(TAG, "Rizz menu requested - checking profile availability")
-        val root = rootInActiveWindow ?: return
-        try {
-            val parsed = aisleScreenParser.parseScreen(root)
-            val personName = parsed?.personName
-            val hasProfile = personName != null && profileCacheManager.isProfileSynced(personName)
-            Log.d(TAG, "Showing RizzMenu: person=$personName, hasProfile=$hasProfile")
-            bubbleManager.showRizzMenu(hasProfile)
-        } finally {
-            root.recycle()
-        }
-    }
+    private fun handleNewTopicClick() {
+        Log.d(TAG, "New topic / conversation starter requested")
+        analyticsHelper.logIcebreakerClicked()
 
-    private fun handleIcebreakerClick() {
-        Log.d(TAG, "Icebreaker requested!")
         val root = rootInActiveWindow ?: return
         try {
             val parsed = aisleScreenParser.parseScreen(root)
             if (parsed != null) {
                 val profileInfo = profileCacheManager.getProfile(parsed.personName)?.toPromptString()
-                if (profileInfo != null) {
-                    smartTriggerManager.onIcebreakerTrigger(parsed.personName, serviceScope, profileInfo)
-                } else {
-                    Log.e(TAG, "handleIcebreakerClick: no profile found for ${parsed.personName}")
-                }
+                smartTriggerManager.onConversationStarterTrigger(parsed.personName, serviceScope, profileInfo)
             } else {
-                Log.e(TAG, "handleIcebreakerClick: parseScreen returned null")
+                Log.e(TAG, "handleNewTopicClick: parseScreen returned null")
             }
         } finally {
             root.recycle()
+        }
+    }
+
+    private fun handleReadFullChat() {
+        Log.d(TAG, "Read Full Chat requested — scrolling through chat history")
+        overlayEventBus.tryEmit(OverlayEvent.ShowLoading("Reading full chat..."))
+
+        serviceScope.launch(Dispatchers.Default) {
+            val root = rootInActiveWindow ?: return@launch
+            try {
+                val parsed = aisleScreenParser.parseScreenWithScroll(root)
+                if (parsed != null) {
+                    Log.d(TAG, "Full chat read: person=${parsed.personName}, messages=${parsed.messages.size}")
+                    // Just save the messages — don't generate replies
+                    smartTriggerManager.onSaveFullChat(parsed.personName, parsed.messages, serviceScope)
+                } else {
+                    Log.e(TAG, "handleReadFullChat: parseScreenWithScroll returned null")
+                    overlayEventBus.tryEmit(OverlayEvent.ShowError("Couldn't read chat"))
+                }
+            } finally {
+                root.recycle()
+            }
         }
     }
 
@@ -308,6 +321,7 @@ class RizzBotAccessibilityService : AccessibilityService() {
 
                     if (fullProfile != null) {
                         profileCacheManager.cacheProfile(fullProfile)
+                        analyticsHelper.logProfileSynced()
                         Log.d(TAG, "Profile synced for $personName")
                     } else {
                         profileCacheManager.cacheProfile(visibleProfile)
@@ -316,7 +330,6 @@ class RizzBotAccessibilityService : AccessibilityService() {
                 } else {
                     profileCacheManager.cacheProfile(visibleProfile)
                 }
-                // Only show synced overlay if still on profile page
                 if (isOnProfilePage) {
                     overlayEventBus.emit(OverlayEvent.ShowProfileSynced(personName))
                 } else {

@@ -12,4 +12,11 @@ interface SettingsRepository {
     suspend fun setServiceEnabled(enabled: Boolean)
     suspend fun setTonePreference(tone: TonePreference)
     suspend fun setOnboardingComplete()
+    val selectedProvider: Flow<String>
+    val selectedModel: Flow<String>
+    suspend fun setSelectedProvider(provider: String)
+    suspend fun setSelectedModel(model: String)
+    val repliesGenerated: Flow<Int>
+    val hasSeenGuide: Flow<Boolean>
+    suspend fun setGuideComplete()
 }

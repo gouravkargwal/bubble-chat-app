@@ -2,9 +2,10 @@ package com.rizzbot.app.domain.usecase
 
 import android.util.Log
 import com.rizzbot.app.accessibility.model.ParsedMessage
+import com.rizzbot.app.domain.model.ChatMessage
 import com.rizzbot.app.domain.model.SuggestionResult
-import com.rizzbot.app.domain.model.TonePreference
 import com.rizzbot.app.domain.repository.LlmRepository
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 class GenerateReplyUseCase @Inject constructor(
@@ -16,19 +17,24 @@ class GenerateReplyUseCase @Inject constructor(
     suspend operator fun invoke(
         personName: String,
         currentScreenMessages: List<ParsedMessage>,
-        toneOverride: TonePreference? = null,
-        profileInfo: String? = null
+        profileInfo: String? = null,
+        isFullRead: Boolean = false
     ): SuggestionResult {
         return try {
             val isConversationStarter = currentScreenMessages.isEmpty()
-            Log.d("RizzBot", "GenerateReply: person=$personName, msgs=${currentScreenMessages.size}, starter=$isConversationStarter, profile=$profileInfo")
+            Log.d("RizzBot", "GenerateReply: person=$personName, msgs=${currentScreenMessages.size}, starter=$isConversationStarter, profile=${!profileInfo.isNullOrBlank()}, fullRead=$isFullRead")
 
             if (!isConversationStarter) {
-                Log.d("RizzBot", "GenerateReply: saving messages for $personName")
-                saveMessageUseCase(personName, currentScreenMessages)
+                if (isFullRead) {
+                    Log.d("RizzBot", "GenerateReply: replacing all messages for $personName (full read)")
+                    saveMessageUseCase.replaceAll(personName, currentScreenMessages)
+                } else {
+                    Log.d("RizzBot", "GenerateReply: saving messages for $personName")
+                    saveMessageUseCase(personName, currentScreenMessages)
+                }
             }
 
-            val systemPrompt = buildSystemPromptUseCase(toneOverride)
+            val systemPrompt = buildSystemPromptUseCase()
 
             val userPrompt = if (isConversationStarter) {
                 buildConversationStarterPrompt(personName, profileInfo)
@@ -37,81 +43,23 @@ class GenerateReplyUseCase @Inject constructor(
                 val history = getConversationHistoryUseCase(personName)
                 Log.d("RizzBot", "GenerateReply: history has ${history.size} messages")
 
-                val conversationContext = history.joinToString("\n") { msg ->
-                    val prefix = if (msg.isIncoming) "Them" else "You"
-                    "$prefix: ${msg.text}"
-                }
+                val now = System.currentTimeMillis()
+                val conversationContext = formatConversationWithTime(history, now)
+                val timeGapNote = detectTimeGap(history, now)
 
                 val isThinConversation = history.size <= 3
+                val lastMessage = history.lastOrNull()?.text ?: ""
 
                 if (isThinConversation && !profileInfo.isNullOrBlank()) {
-                    // Thin conversation WITH profile: use profile to create personal connection
-                    """
-$personName's profile:
-$profileInfo
-
-Conversation (early stage — just started):
-$conversationContext
-
-This chat JUST started. You have an advantage — you know things about them from their profile. Use it.
-
-Your reply should:
-- Feel like you're genuinely interested in THEM specifically, not just anyone
-- Pick ONE thing from their profile and weave it in naturally (don't list everything you know — that's creepy)
-- Create an "open loop" — say something that makes them curious or want to explain/share more
-- If they just said "Hi" or something generic, don't mirror the boring energy. Elevate it — bring something fun to the table
-- Be warm but not overeager. You're interested, not desperate.
-
-Think: "What would make HER specifically want to reply to THIS message?"
-
-IMPORTANT: Reply in the same language and script used in the conversation.
-                    """.trimIndent()
+                    buildThinConvoWithProfilePrompt(personName, profileInfo, conversationContext, lastMessage, timeGapNote)
                 } else if (isThinConversation) {
-                    // Thin conversation WITHOUT profile: create intrigue from nothing
-                    """
-Conversation with $personName (early stage — just started):
-
-$conversationContext
-
-This chat JUST started and you have no profile info. You need to create chemistry from scratch.
-
-Your reply should:
-- NOT mirror boring energy. If they said "Hi", don't say "Hi, how are you?" — that's a dead-end
-- Ask something fun, unexpected, or slightly challenging that reveals personality. E.g., "would you rather" style, playful assumptions, or an intriguing "I have a feeling you're the type who..."
-- Make them WANT to respond. Create curiosity about YOU while showing curiosity about THEM
-- Keep it light and fun. You're building a vibe, not conducting an interview
-
-Think: "If I were her, would I be excited to reply to this?"
-
-IMPORTANT: Reply in the same language and script used in the conversation.
-                    """.trimIndent()
+                    buildThinConvoNoProfilePrompt(personName, conversationContext, lastMessage, timeGapNote)
                 } else {
-                    // Normal conversation flow — keep the momentum
-                    val profileContext = if (!profileInfo.isNullOrBlank()) {
-                        "\n\nHer profile (use naturally, don't force it): $profileInfo"
-                    } else ""
-
-                    """
-Conversation with $personName:$profileContext
-
-$conversationContext
-
-Read the vibe. What's the energy? Match it, then elevate it slightly.
-
-Your reply should:
-- Respond to what they ACTUALLY said (don't ignore their message)
-- Add something new — a twist, a tease, a question, a callback to something earlier
-- If things are going well, keep the momentum. If it's getting flat, inject something unexpected
-- Leave a hook — end with something that makes it easy AND fun for them to reply
-
-Think: "What reply would make her smile and type back immediately?"
-
-IMPORTANT: Reply in the same language and script used in the conversation.
-                    """.trimIndent()
+                    buildNormalConvoPrompt(personName, profileInfo, conversationContext, lastMessage, timeGapNote)
                 }
             }
 
-            Log.d("RizzBot", "GenerateReply: calling LLM with tone=${toneOverride?.label ?: "default"}")
+            Log.d("RizzBot", "GenerateReply: calling LLM (4 vibes)")
             val rawReply = llmRepository.generateReply(systemPrompt, userPrompt)
             val replies = parseReplies(rawReply)
             Log.d("RizzBot", "GenerateReply: SUCCESS ${replies.size} replies, first=${replies.firstOrNull()?.take(50)}...")
@@ -122,51 +70,226 @@ IMPORTANT: Reply in the same language and script used in the conversation.
         }
     }
 
+    suspend fun invokeNewTopic(
+        personName: String,
+        profileInfo: String? = null
+    ): SuggestionResult {
+        return try {
+            Log.d("RizzBot", "GenerateNewTopic: person=$personName, profile=${!profileInfo.isNullOrBlank()}")
+
+            val systemPrompt = buildSystemPromptUseCase()
+            val history = getConversationHistoryUseCase(personName)
+            val now = System.currentTimeMillis()
+
+            val userPrompt = buildNewTopicPrompt(personName, profileInfo, history, now)
+
+            Log.d("RizzBot", "GenerateNewTopic: calling LLM")
+            val rawReply = llmRepository.generateReply(systemPrompt, userPrompt)
+            val replies = parseReplies(rawReply)
+            Log.d("RizzBot", "GenerateNewTopic: SUCCESS ${replies.size} replies")
+            SuggestionResult.Success(replies)
+        } catch (e: Exception) {
+            Log.e("RizzBot", "GenerateNewTopic: FAILED - ${e.message}", e)
+            SuggestionResult.Error(e.message ?: "Failed to generate new topics")
+        }
+    }
+
     private fun parseReplies(raw: String): List<String> {
-        // Split by "---" separator, filter blanks, trim each
         val parts = raw.split("---")
             .map { it.trim() }
             .filter { it.isNotBlank() }
-        // If LLM didn't use separator, return as single reply
+            .map { part ->
+                // Strip labels like "Flirty:", "1.", "**Bold**:", etc.
+                part.replace(Regex("^\\s*(?:Flirty|Witty|Smooth|Bold|Option|Reply|Vibe)\\s*\\d?\\s*[:\\-]+\\s*", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("^\\s*\\d+[.):]+\\s*"), "")
+                    .replace(Regex("^\\s*\\*\\*[^*]+\\*\\*\\s*[:\\-]*\\s*"), "")
+                    .trim()
+            }
+            .filter { it.isNotBlank() }
+
+        Log.d("RizzBot", "parseReplies: parsed ${parts.size} replies from ${raw.length} chars")
         return parts.ifEmpty { listOf(raw.trim()) }
     }
 
+    private fun formatConversationWithTime(history: List<ChatMessage>, now: Long): String {
+        val sb = StringBuilder()
+        var lastTimestamp = 0L
+
+        for (msg in history) {
+            val gap = if (lastTimestamp > 0) msg.timestamp - lastTimestamp else 0
+            // Insert time gap marker for gaps > 1 hour
+            if (gap > TimeUnit.HOURS.toMillis(1)) {
+                sb.appendLine("--- ${formatDuration(gap)} gap ---")
+            }
+            val prefix = if (msg.isIncoming) "Them" else "You"
+            val relTime = formatRelativeTime(now - msg.timestamp)
+            sb.appendLine("$prefix ($relTime): ${msg.text}")
+            lastTimestamp = msg.timestamp
+        }
+        return sb.toString().trim()
+    }
+
+    private fun detectTimeGap(history: List<ChatMessage>, now: Long): String {
+        if (history.size < 2) return ""
+        val lastMsg = history.last()
+        val secondLast = history[history.size - 2]
+
+        // Gap between the last two messages
+        val gapMs = lastMsg.timestamp - secondLast.timestamp
+        // Time since last message
+        val sinceLast = now - lastMsg.timestamp
+
+        val notes = mutableListOf<String>()
+
+        if (gapMs > TimeUnit.HOURS.toMillis(6)) {
+            val gapStr = formatDuration(gapMs)
+            val whoSentLast = if (lastMsg.isIncoming) "They" else "You"
+            val whoSentBefore = if (secondLast.isIncoming) "they" else "you"
+            notes.add("$whoSentLast replied after $gapStr (${whoSentBefore} sent the previous message).")
+        }
+
+        if (sinceLast > TimeUnit.HOURS.toMillis(2)) {
+            notes.add("Their last message was ${formatDuration(sinceLast)} ago.")
+        }
+
+        return if (notes.isNotEmpty()) {
+            "\nTIMING CONTEXT: ${notes.joinToString(" ")}\n"
+        } else ""
+    }
+
+    private fun formatRelativeTime(ms: Long): String {
+        val mins = TimeUnit.MILLISECONDS.toMinutes(ms)
+        val hours = TimeUnit.MILLISECONDS.toHours(ms)
+        val days = TimeUnit.MILLISECONDS.toDays(ms)
+        return when {
+            mins < 2 -> "just now"
+            mins < 60 -> "${mins}m ago"
+            hours < 24 -> "${hours}h ago"
+            days == 1L -> "yesterday"
+            else -> "${days}d ago"
+        }
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val mins = TimeUnit.MILLISECONDS.toMinutes(ms)
+        val hours = TimeUnit.MILLISECONDS.toHours(ms)
+        val days = TimeUnit.MILLISECONDS.toDays(ms)
+        return when {
+            mins < 60 -> "${mins} minutes"
+            hours < 24 -> "${hours} hours"
+            days == 1L -> "1 day"
+            else -> "$days days"
+        }
+    }
+
     private fun buildConversationStarterPrompt(personName: String, profileInfo: String?): String {
-        val profileContext = if (!profileInfo.isNullOrBlank()) {
+        return if (!profileInfo.isNullOrBlank()) {
             """
-$personName's profile:
+TASK: First message to $personName. Cold open — make it count.
+
+PROFILE:
 $profileInfo
 
-You're about to send the FIRST message to $personName. You have their profile — use it as your weapon.
-
-Pick ONE specific thing from their profile and use it to craft an opener that:
-- Shows you actually read their profile (not "hey beautiful")
-- Creates instant curiosity or makes them smile
-- Makes it EASY for them to reply (ask something or make a playful assumption they'll want to correct/confirm)
-- Feels like something a charming, confident person would actually text
-
-Good patterns: playful assumption about them, fun "would you rather" tied to their interests, a witty observation about something in their profile, a mini challenge.
-
-Bad patterns: "I noticed you like X, I like X too!" (boring), complimenting looks (generic), "hey how's your day" (dead).
+Pick 4 DIFFERENT specific details from their profile. For each, build a fun question, assumption, or scenario around it. Don't say "I noticed you like X" — just USE the detail naturally.
+Each reply must reference a DIFFERENT profile detail. Be specific, not generic.
             """.trimIndent()
         } else {
             """
-You're about to send the FIRST message to $personName on a dating app. No profile info available.
+TASK: First message to $personName. No profile info available.
 
-Craft an opener that:
-- Stands out in a sea of "hey" and "hi beautiful" messages
-- Creates curiosity — make them WANT to know more about you
-- Is easy to reply to — give them something to react to or answer
-- Shows personality and confidence without being tryhard
-
-Good patterns: fun hypothetical, playful observation, unexpected question, bold but charming assumption.
+Be memorable in under 20 words. Use: fun dilemmas, bold assumptions, mini scenarios, or playful frames. Each reply uses a different approach. Must require zero context to reply to.
             """.trimIndent()
         }
+    }
+
+    private fun buildThinConvoWithProfilePrompt(
+        personName: String,
+        profileInfo: String,
+        conversationContext: String,
+        lastMessage: String,
+        timeGapNote: String = ""
+    ): String {
+        return """
+TASK: Reply to $personName. Early conversation (1-3 messages). You have their profile — USE specific details.
+
+PROFILE:
+$profileInfo
+$timeGapNote
+CHAT:
+$conversationContext
+
+LAST MESSAGE: "$lastMessage"
+
+Respond to what they said FIRST, then weave in a specific profile detail as a hook. If their message is low-effort, pivot to something interesting from their profile. Each reply uses a DIFFERENT profile detail. Match their language.
+        """.trimIndent()
+    }
+
+    private fun buildThinConvoNoProfilePrompt(
+        personName: String,
+        conversationContext: String,
+        lastMessage: String,
+        timeGapNote: String = ""
+    ): String {
+        return """
+TASK: Reply to $personName. Early conversation (1-3 messages). No profile info available.
+$timeGapNote
+CHAT:
+$conversationContext
+
+LAST MESSAGE: "$lastMessage"
+
+Respond to what they said, then add personality — humor, curiosity, or a fun assumption about them. End with a hook (playful question, bold assumption, mini challenge). Never interview them. If they sent low-effort ("hi", "hey"), bring MORE energy. Match their language.
+        """.trimIndent()
+    }
+
+    private fun buildNormalConvoPrompt(
+        personName: String,
+        profileInfo: String?,
+        conversationContext: String,
+        lastMessage: String,
+        timeGapNote: String = ""
+    ): String {
+        val profileContext = if (!profileInfo.isNullOrBlank()) {
+            "\nPROFILE:\n$profileInfo\n"
+        } else ""
 
         return """
-$profileContext
+TASK: Continue conversation with $personName. Rapport is building — keep momentum.
+$profileContext$timeGapNote
+CHAT:
+$conversationContext
 
-If their profile suggests a regional language (Hindi, Hinglish), use that language. Otherwise use English.
+LAST MESSAGE: "$lastMessage"
+
+Respond to what they said first. Then advance — new angle, go deeper, or escalate. Match their energy: if flirty lean in, if dropping pivot to unused profile detail, if testing you play along. End each reply with a hook. Each of the 4 replies takes a different angle or uses a different detail. Match their language.
+        """.trimIndent()
+    }
+
+    private fun buildNewTopicPrompt(
+        personName: String,
+        profileInfo: String?,
+        history: List<ChatMessage>,
+        now: Long
+    ): String {
+        val conversationSummary = if (history.isNotEmpty()) {
+            val topics = history.map { it.text }.joinToString(" | ")
+            "ALREADY DISCUSSED (don't repeat): $topics"
+        } else {
+            "No conversation yet — this will be your opening message."
+        }
+
+        val profileSection = if (!profileInfo.isNullOrBlank()) {
+            "PROFILE:\n$profileInfo"
+        } else ""
+
+        return """
+TASK: 4 fresh topic pivots for $personName. New energy — nothing they've already talked about.
+
+$profileSection
+
+$conversationSummary
+
+Use 4 different strategies: (1) untapped profile detail with a fun spin, (2) creative hypothetical tied to their interests, (3) shared experience seed ("I feel like we'd..."), (4) playful debate on something they'd care about. Each must be specific, not generic. Keep it 1-3 sentences, conversational. Match their language.
         """.trimIndent()
     }
 }

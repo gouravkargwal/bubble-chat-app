@@ -5,10 +5,13 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.app.accessibility.ProfileCacheManager
-import com.rizzbot.app.domain.model.TonePreference
+import com.rizzbot.app.domain.model.LlmModel
+import com.rizzbot.app.domain.model.LlmProvider
 import com.rizzbot.app.domain.repository.ConversationRepository
+import com.rizzbot.app.domain.repository.LlmRepository
 import com.rizzbot.app.domain.repository.SettingsRepository
 import com.rizzbot.app.overlay.OverlayService
+import com.rizzbot.app.util.AnalyticsHelper
 import com.rizzbot.app.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,21 +30,30 @@ data class SettingsState(
     val isAccessibilityActive: Boolean = false,
     val isOverlayPermitted: Boolean = false,
     val apiKey: String = "",
-    val selectedTone: TonePreference = TonePreference.FLIRTY,
-    val showApiKey: Boolean = false
+    val showApiKey: Boolean = false,
+    val selectedProvider: LlmProvider = LlmProvider.GROQ,
+    val selectedModel: LlmModel = LlmProvider.GROQ.defaultModel,
+    val availableModels: List<LlmModel> = LlmProvider.GROQ.models,
+    val apiKeyStatus: ApiKeyStatus = ApiKeyStatus.NONE,
+    val showGuide: Boolean = false
 )
+
+enum class ApiKeyStatus { NONE, VALIDATING, VALID, INVALID }
 
 data class RizzStats(
     val profilesSynced: Int = 0,
     val totalConversations: Int = 0,
-    val totalMessages: Int = 0
+    val totalMessages: Int = 0,
+    val repliesGenerated: Int = 0
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val conversationRepository: ConversationRepository,
+    private val llmRepository: LlmRepository,
     private val permissionHelper: PermissionHelper,
+    private val analyticsHelper: AnalyticsHelper,
     profileCacheManager: ProfileCacheManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -51,12 +63,14 @@ class SettingsViewModel @Inject constructor(
 
     val stats: StateFlow<RizzStats> = combine(
         profileCacheManager.observeAllSyncedNames(),
-        conversationRepository.observeAllConversations()
-    ) { names, convos ->
+        conversationRepository.observeAllConversations(),
+        settingsRepository.repliesGenerated
+    ) { names, convos, replies ->
         RizzStats(
             profilesSynced = names.size,
             totalConversations = convos.size,
-            totalMessages = convos.sumOf { it.messageCount }
+            totalMessages = convos.sumOf { it.messageCount },
+            repliesGenerated = replies
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RizzStats())
 
@@ -68,13 +82,21 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val apiKey = settingsRepository.apiKey.first()
             val isEnabled = settingsRepository.isServiceEnabled.first()
-            val toneName = settingsRepository.tonePreference.first()
-            val tone = try { TonePreference.valueOf(toneName) } catch (_: Exception) { TonePreference.FLIRTY }
+            val providerName = settingsRepository.selectedProvider.first()
+            val modelId = settingsRepository.selectedModel.first()
+
+            val provider = try { LlmProvider.valueOf(providerName) } catch (_: Exception) { LlmProvider.GROQ }
+            val model = provider.models.find { it.id == modelId } ?: provider.defaultModel
+
+            val hasSeenGuide = settingsRepository.hasSeenGuide.first()
 
             _state.value = _state.value.copy(
                 isServiceEnabled = isEnabled,
                 apiKey = apiKey,
-                selectedTone = tone
+                selectedProvider = provider,
+                selectedModel = model,
+                availableModels = provider.models,
+                showGuide = !hasSeenGuide
             )
             refreshPermissionStatus()
         }
@@ -100,22 +122,66 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun updateApiKey(key: String) {
+    fun selectProvider(provider: LlmProvider) {
         viewModelScope.launch {
-            settingsRepository.setApiKey(key)
-            _state.value = _state.value.copy(apiKey = key)
+            val defaultModel = provider.defaultModel
+            settingsRepository.setSelectedProvider(provider.name)
+            settingsRepository.setSelectedModel(defaultModel.id)
+            settingsRepository.setApiKey("")
+            analyticsHelper.logProviderSelected(provider.name)
+            analyticsHelper.setUserProperty("provider", provider.name)
+            _state.value = _state.value.copy(
+                selectedProvider = provider,
+                selectedModel = defaultModel,
+                availableModels = provider.models,
+                apiKey = "",
+                showApiKey = false
+            )
         }
     }
 
-    fun selectTone(tone: TonePreference) {
+    fun selectModel(model: LlmModel) {
         viewModelScope.launch {
-            settingsRepository.setTonePreference(tone)
-            _state.value = _state.value.copy(selectedTone = tone)
+            settingsRepository.setSelectedModel(model.id)
+            _state.value = _state.value.copy(selectedModel = model)
+        }
+    }
+
+    fun updateApiKey(key: String) {
+        viewModelScope.launch {
+            settingsRepository.setApiKey(key)
+            _state.value = _state.value.copy(apiKey = key, apiKeyStatus = ApiKeyStatus.NONE)
+        }
+    }
+
+    fun validateApiKey() {
+        val key = _state.value.apiKey
+        if (key.isBlank()) {
+            _state.value = _state.value.copy(apiKeyStatus = ApiKeyStatus.INVALID)
+            return
+        }
+        _state.value = _state.value.copy(apiKeyStatus = ApiKeyStatus.VALIDATING)
+        viewModelScope.launch {
+            val isValid = llmRepository.validateApiKey()
+            _state.value = _state.value.copy(
+                apiKeyStatus = if (isValid) ApiKeyStatus.VALID else ApiKeyStatus.INVALID
+            )
         }
     }
 
     fun toggleShowApiKey() {
         _state.value = _state.value.copy(showApiKey = !_state.value.showApiKey)
+    }
+
+    fun dismissGuide() {
+        _state.value = _state.value.copy(showGuide = false)
+        viewModelScope.launch {
+            settingsRepository.setGuideComplete()
+        }
+    }
+
+    fun showGuideAgain() {
+        _state.value = _state.value.copy(showGuide = true)
     }
 
     fun clearAllData() {

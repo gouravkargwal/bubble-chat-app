@@ -13,7 +13,9 @@ import androidx.room.PrimaryKey
         childColumns = ["personName"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index("personName", "timestamp")]
+    indices = [
+        Index("personName", "timestamp")
+    ]
 )
 data class MessageEntity(
     @PrimaryKey(autoGenerate = true)
@@ -22,5 +24,6 @@ data class MessageEntity(
     val text: String,
     val isIncoming: Boolean,
     val timestamp: Long,
+    val timestampText: String? = null,
     val wasSuggestionUsed: Boolean = false
 )

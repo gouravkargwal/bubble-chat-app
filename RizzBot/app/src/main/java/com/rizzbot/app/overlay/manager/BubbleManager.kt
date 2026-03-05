@@ -13,7 +13,9 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.rizzbot.app.overlay.OverlayLifecycleOwner
 import com.rizzbot.app.overlay.ui.BubbleOverlay
 import com.rizzbot.app.overlay.ui.OverlayTheme
+import com.rizzbot.app.util.AnalyticsHelper
 import com.rizzbot.app.util.ClipboardHelper
+import com.rizzbot.app.util.HapticHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +23,9 @@ import javax.inject.Singleton
 @Singleton
 class BubbleManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val clipboardHelper: ClipboardHelper
+    private val clipboardHelper: ClipboardHelper,
+    private val hapticHelper: HapticHelper,
+    private val analyticsHelper: AnalyticsHelper
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var overlayView: ComposeView? = null
@@ -31,13 +35,13 @@ class BubbleManager @Inject constructor(
         private set
 
     var onRizzButtonClicked: (() -> Unit)? = null
+    var onGenerateReplies: (() -> Unit)? = null
     var onRefreshChat: (() -> Unit)? = null
-    var onToneSelected: ((String) -> Unit)? = null
     var onPasteToInput: ((String) -> Unit)? = null
     var onSyncProfile: (() -> Unit)? = null
     var onRefreshReplies: (() -> Unit)? = null
-    var onRizzMenuRequested: (() -> Unit)? = null
-    var onIcebreakerClicked: (() -> Unit)? = null
+    var onNewTopicClicked: (() -> Unit)? = null
+    var onReadFullChat: (() -> Unit)? = null
 
     private val layoutParams = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -57,13 +61,12 @@ class BubbleManager @Inject constructor(
         ensureOverlayVisible()
     }
 
-    fun showRizzMenu(hasProfile: Boolean = false) {
-        bubbleState = BubbleState.RizzMenu(hasProfile)
-        ensureOverlayVisible()
+    fun minimizeToRizzButton() {
+        bubbleState = BubbleState.RizzButton
     }
 
     fun hideRizzButton() {
-        if (bubbleState is BubbleState.RizzButton || bubbleState is BubbleState.RizzMenu) {
+        if (bubbleState is BubbleState.RizzButton) {
             hide()
         }
     }
@@ -76,19 +79,24 @@ class BubbleManager @Inject constructor(
         }
     }
 
-    fun showSuggestion(replies: List<String>) {
-        bubbleState = BubbleState.Expanded(replies)
+    private var currentHasProfile: Boolean = false
+    private var lastReplies: List<String>? = null
+
+    fun setHasProfile(hasProfile: Boolean) {
+        currentHasProfile = hasProfile
+    }
+
+    fun showActionMenu() {
+        hapticHelper.tick()
+        bubbleState = BubbleState.ActionMenu(currentHasProfile, lastReplies)
         ensureOverlayVisible()
     }
 
-    fun appendSuggestions(newReplies: List<String>) {
-        val current = bubbleState
-        if (current is BubbleState.Expanded) {
-            val combined = (current.suggestions + newReplies).take(MAX_SUGGESTIONS)
-            bubbleState = BubbleState.Expanded(combined)
-        } else {
-            showSuggestion(newReplies.take(MAX_SUGGESTIONS))
-        }
+    fun showSuggestion(replies: List<String>) {
+        hapticHelper.success()
+        lastReplies = replies
+        bubbleState = BubbleState.Expanded(replies, currentHasProfile)
+        ensureOverlayVisible()
     }
 
     companion object {
@@ -101,6 +109,7 @@ class BubbleManager @Inject constructor(
     }
 
     fun showError(message: String) {
+        hapticHelper.error()
         bubbleState = BubbleState.Error(message)
         ensureOverlayVisible()
     }
@@ -111,6 +120,7 @@ class BubbleManager @Inject constructor(
     }
 
     fun showProfileSynced(personName: String) {
+        hapticHelper.success()
         bubbleState = BubbleState.ProfileSynced(personName)
         ensureOverlayVisible()
     }
@@ -136,17 +146,28 @@ class BubbleManager @Inject constructor(
                     BubbleOverlay(
                         state = bubbleState,
                         onCopy = { suggestion ->
+                            hapticHelper.tick()
                             clipboardHelper.copyToClipboard(suggestion)
+                            analyticsHelper.logSuggestionCopied()
                         },
                         onDismiss = { hide() },
-                        onRizzClick = { onRizzMenuRequested?.invoke() },
-                        onGenerateReply = { onRizzButtonClicked?.invoke() },
+                        onMinimize = { minimizeToRizzButton() },
+                        onRizzClick = { onRizzButtonClicked?.invoke() },
+                        onGenerateReplies = { onGenerateReplies?.invoke() },
+                        onShowLastReplies = {
+                            lastReplies?.let { replies ->
+                                bubbleState = BubbleState.Expanded(replies, currentHasProfile)
+                            }
+                        },
                         onRefreshChat = { onRefreshChat?.invoke() },
-                        onToneSelected = { tone -> onToneSelected?.invoke(tone) },
-                        onPasteToInput = { text -> onPasteToInput?.invoke(text) },
+                        onPasteToInput = { text ->
+                            analyticsHelper.logSuggestionPasted()
+                            onPasteToInput?.invoke(text)
+                        },
                         onSyncProfile = { onSyncProfile?.invoke() },
                         onRefreshReplies = { onRefreshReplies?.invoke() },
-                        onIcebreakerClick = { onIcebreakerClicked?.invoke() }
+                        onNewTopicClick = { onNewTopicClicked?.invoke() },
+                        onReadFullChat = { onReadFullChat?.invoke() }
                     )
                 }
             }

@@ -38,13 +38,154 @@ class AisleScreenParser @Inject constructor() {
         }
 
         val messages = extractMessages(root).ifEmpty { extractMessagesFallback(root) }
-        Log.d(TAG, "ScreenParser: person=$personName, messages=${messages.size}")
-        messages.forEach { msg ->
+        val orderedMessages = assignOrderedTimestamps(messages)
+        Log.d(TAG, "ScreenParser: person=$personName, messages=${orderedMessages.size}")
+        orderedMessages.forEach { msg ->
             val dir = if (msg.isIncoming) "THEM" else "YOU"
             Log.d(TAG, "  [$dir] ${msg.text.take(40)}")
         }
 
-        return ParsedChatScreen(personName, messages)
+        return ParsedChatScreen(personName, orderedMessages)
+    }
+
+    /**
+     * Scroll-and-collect: scrolls up to load older messages, waits for new content
+     * to appear, then scrolls back down. Call from a background thread.
+     */
+    fun parseScreenWithScroll(root: AccessibilityNodeInfo, maxScrolls: Int = 20): ParsedChatScreen? {
+        val rootBounds = Rect()
+        root.getBoundsInScreen(rootBounds)
+        if (rootBounds.width() > 0) screenWidth = rootBounds.width()
+
+        val personName = findPersonName(root) ?: findPersonNameFallback(root)
+        if (personName == null) {
+            Log.e(TAG, "ScreenParser: could not find person name (scroll)")
+            return null
+        }
+
+        // PHASE 1: Scroll all the way to the top
+        val recyclerNodes = root.findAccessibilityNodeInfosByViewId(ID_RECYCLER_VIEW)
+        val recycler = recyclerNodes.firstOrNull()
+        var scrollsUp = 0
+
+        if (recycler != null && recycler.isScrollable) {
+            for (scroll in 1..maxScrolls) {
+                val scrolled = recycler.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                if (!scrolled) {
+                    Log.d(TAG, "ScreenParser: reached top after $scroll scrolls")
+                    break
+                }
+                scrollsUp++
+                Thread.sleep(800)
+                root.refresh()
+            }
+            Log.d(TAG, "ScreenParser: scrolled up $scrollsUp times")
+        }
+
+        // PHASE 2: Collect messages scrolling down (chronological order)
+        root.refresh()
+        Thread.sleep(500)
+
+        // Collect from current (topmost) view
+        val messageList = mutableListOf<ParsedMessage>()
+        // Track last N messages to dedup overlapping scroll windows
+        var lastBatchTexts = listOf<String>()
+
+        fun collectNewMessages(r: AccessibilityNodeInfo): Int {
+            val msgs = extractMessages(r).ifEmpty { extractMessagesFallback(r) }
+            if (msgs.isEmpty()) return 0
+
+            // Find where the overlap ends between previous batch and this batch
+            val currentTexts = msgs.map { "${if (it.isIncoming) "T" else "Y"}:${it.text}" }
+
+            if (lastBatchTexts.isEmpty()) {
+                messageList.addAll(msgs)
+                lastBatchTexts = currentTexts
+                return msgs.size
+            }
+
+            // Find the last message from previous batch in current batch to skip overlap
+            // Look for the longest matching suffix of lastBatch in the prefix of currentBatch
+            var overlapEnd = 0
+            if (lastBatchTexts.isNotEmpty()) {
+                // Try to find where the new messages start by matching the last few msgs
+                // of the previous batch with the beginning of this batch
+                val lastFew = lastBatchTexts.takeLast(minOf(5, lastBatchTexts.size))
+                for (startIdx in 0..minOf(currentTexts.size - 1, currentTexts.size)) {
+                    val remaining = currentTexts.subList(startIdx, minOf(startIdx + lastFew.size, currentTexts.size))
+                    if (remaining.size >= lastFew.size && remaining.subList(0, lastFew.size) == lastFew) {
+                        overlapEnd = startIdx + lastFew.size
+                        break
+                    }
+                }
+                // If no overlap found, try matching just the last message
+                if (overlapEnd == 0 && lastBatchTexts.isNotEmpty()) {
+                    val lastMsg = lastBatchTexts.last()
+                    val idx = currentTexts.indexOf(lastMsg)
+                    if (idx >= 0) {
+                        overlapEnd = idx + 1
+                    }
+                }
+            }
+
+            val newMsgs = msgs.subList(overlapEnd, msgs.size)
+            messageList.addAll(newMsgs)
+            lastBatchTexts = currentTexts
+            return newMsgs.size
+        }
+
+        collectNewMessages(root)
+        Log.d(TAG, "ScreenParser: initial collection: ${messageList.size} msgs")
+
+        // Scroll down to collect the rest
+        if (recycler != null && recycler.isScrollable && scrollsUp > 0) {
+            var noNewMessageScrolls = 0
+            for (scroll in 1..(scrollsUp + 5)) { // scroll down a bit extra to be safe
+                recycler.refresh()
+                val scrolled = recycler.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                if (!scrolled) {
+                    Log.d(TAG, "ScreenParser: reached bottom after $scroll forward scrolls")
+                    break
+                }
+                Thread.sleep(800)
+                root.refresh()
+
+                val newMsgs = collectNewMessages(root)
+                Log.d(TAG, "ScreenParser: scroll down $scroll — new=$newMsgs, total=${messageList.size}")
+
+                if (newMsgs == 0) {
+                    noNewMessageScrolls++
+                    if (noNewMessageScrolls >= 2) {
+                        Log.d(TAG, "ScreenParser: no new messages for 2 forward scrolls, at bottom")
+                        break
+                    }
+                } else {
+                    noNewMessageScrolls = 0
+                }
+            }
+        }
+
+        recyclerNodes.forEach { it.recycle() }
+
+        // Messages are already in chronological order (oldest first) since we scrolled top→bottom
+        val orderedMessages = assignOrderedTimestamps(messageList)
+        Log.d(TAG, "ScreenParser(scroll): person=$personName, messages=${orderedMessages.size}")
+        return ParsedChatScreen(personName, orderedMessages)
+    }
+
+    /**
+     * Assigns sequential timestamps to messages based on their screen order.
+     * Uses current time as the latest message timestamp, spacing them 1 minute apart.
+     * Larger spacing prevents ordering conflicts across multiple parse sessions.
+     */
+    private fun assignOrderedTimestamps(messages: List<ParsedMessage>): List<ParsedMessage> {
+        if (messages.isEmpty()) return messages
+        val now = System.currentTimeMillis()
+        val spacingMs = 60_000L // 1 minute between messages
+        // Space messages apart, newest message gets 'now'
+        return messages.mapIndexed { index, msg ->
+            msg.copy(timestamp = now - ((messages.size - 1 - index) * spacingMs))
+        }
     }
 
     // --- Primary ID-based parsing ---
@@ -74,13 +215,15 @@ class AisleScreenParser @Inject constructor() {
                 ID_CHAT_LAYOUT_INITIATOR -> {
                     val text = findTextById(child, ID_MESSAGE_TXT_INITIATOR)
                     if (!text.isNullOrBlank()) {
-                        messages.add(ParsedMessage(text = text, isIncoming = false))
+                        val timeText = findTimestampInNode(child)
+                        messages.add(ParsedMessage(text = text, isIncoming = false, timestampText = timeText))
                     }
                 }
                 ID_CHAT_LAYOUT_PARTNER -> {
                     val text = findTextById(child, ID_MESSAGE_TXT_PARTNER)
                     if (!text.isNullOrBlank()) {
-                        messages.add(ParsedMessage(text = text, isIncoming = true))
+                        val timeText = findTimestampInNode(child)
+                        messages.add(ParsedMessage(text = text, isIncoming = true, timestampText = timeText))
                     }
                 }
             }
@@ -89,6 +232,22 @@ class AisleScreenParser @Inject constructor() {
 
         recycler.recycle()
         return messages
+    }
+
+    private val TIME_PATTERN = Regex(
+        """(\d{1,2}:\d{2}\s*(AM|PM|am|pm)?)|""" +
+        """(Yesterday|Today|Just now)|""" +
+        """(\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))|""" +
+        """((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2})"""
+    )
+
+    private fun findTimestampInNode(node: AccessibilityNodeInfo): String? {
+        // Look for short text nodes that match time patterns
+        val texts = mutableListOf<String>()
+        collectTexts(node, texts)
+        return texts.firstOrNull { text ->
+            text.length in 3..20 && TIME_PATTERN.containsMatchIn(text)
+        }
     }
 
     // --- Fallback: structural/bounds-based parsing ---

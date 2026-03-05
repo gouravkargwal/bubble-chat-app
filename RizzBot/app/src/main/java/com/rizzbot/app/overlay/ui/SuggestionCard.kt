@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
@@ -46,17 +48,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+private val VIBE_LABELS = listOf("Flirty", "Witty", "Smooth", "Bold")
+
 @Composable
 fun SuggestionCard(
     suggestions: List<String>,
+    hasProfile: Boolean = false,
     onCopy: (String) -> Unit,
     onPaste: (String) -> Unit = {},
     onDismiss: () -> Unit,
-    onRefreshReplies: () -> Unit = {}
+    onRefreshReplies: () -> Unit = {},
+    onNewTopicClick: () -> Unit = {},
+    onReadFullChat: () -> Unit = {}
 ) {
     var selectedIndex by remember { mutableIntStateOf(0) }
     var copied by remember { mutableStateOf(false) }
     var pasted by remember { mutableStateOf(false) }
+    var showSyncHint by remember { mutableStateOf(false) }
     val copyButtonColor by animateColorAsState(
         targetValue = if (copied) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
         label = "copy_button_color"
@@ -111,6 +119,7 @@ fun SuggestionCard(
             ) {
                 suggestions.forEachIndexed { index, suggestion ->
                     val isSelected = index == selectedIndex
+                    val vibeLabel = VIBE_LABELS.getOrElse(index) { "Option ${index + 1}" }
                     OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -133,7 +142,7 @@ fun SuggestionCard(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Text(
-                                text = "Option ${index + 1}",
+                                text = vibeLabel,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary
@@ -154,25 +163,73 @@ fun SuggestionCard(
 
             Spacer(Modifier.height(8.dp))
 
-            // More replies button (hidden at max 4)
-            if (suggestions.size < 4) {
-                TextButton(
-                    onClick = onRefreshReplies,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            // Action row: Refresh + Read Full Chat + New Topic
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                TextButton(onClick = onRefreshReplies) {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(3.dp))
                     Text(
-                        "More replies",
-                        fontSize = 12.sp,
+                        "Refresh",
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                TextButton(onClick = onReadFullChat) {
+                    Icon(
+                        Icons.Default.MenuBook,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        "Read Chat",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        if (hasProfile) {
+                            showSyncHint = false
+                            onNewTopicClick()
+                        } else {
+                            showSyncHint = !showSyncHint
+                        }
+                    }
+                ) {
+                    val tint = if (hasProfile) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    Icon(
+                        Icons.Default.Lightbulb,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = tint
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        "New Topic",
+                        fontSize = 11.sp,
+                        color = tint
+                    )
+                }
+            }
+
+            if (showSyncHint) {
+                Text(
+                    text = "Sync their profile first to unlock conversation starters",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
             }
 
             Spacer(Modifier.height(4.dp))

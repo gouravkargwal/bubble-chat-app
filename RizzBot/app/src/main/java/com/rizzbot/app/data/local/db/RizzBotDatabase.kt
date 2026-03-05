@@ -11,7 +11,7 @@ import com.rizzbot.app.data.local.db.entity.ProfileEntity
 
 @Database(
     entities = [ConversationEntity::class, MessageEntity::class, ProfileEntity::class],
-    version = 2,
+    version = 5,
     exportSchema = false
 )
 abstract class RizzBotDatabase : RoomDatabase() {

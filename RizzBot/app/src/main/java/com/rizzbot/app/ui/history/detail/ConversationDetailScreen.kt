@@ -39,6 +39,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.app.accessibility.model.ParsedProfile
 import com.rizzbot.app.domain.model.ChatMessage
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -96,8 +99,8 @@ fun ConversationDetailScreen(
                     }
                 }
             } else {
-                items(messages, key = { it.timestamp }) { message ->
-                    ChatBubble(message = message)
+                items(messages.size) { index ->
+                    ChatBubble(message = messages[index])
                 }
             }
 
@@ -253,9 +256,11 @@ private fun ChatBubble(message: ChatMessage) {
         RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp)
     }
 
-    Box(
+    val timeDisplay = message.timestampText ?: formatTimestamp(message.timestamp)
+
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        contentAlignment = alignment
+        horizontalAlignment = if (isIncoming) Alignment.Start else Alignment.End
     ) {
         Box(
             modifier = Modifier
@@ -269,5 +274,17 @@ private fun ChatBubble(message: ChatMessage) {
                 fontSize = 14.sp
             )
         }
+        Text(
+            text = timeDisplay,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+        )
     }
+}
+
+private fun formatTimestamp(timestamp: Long): String {
+    if (timestamp == 0L) return ""
+    val sdf = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+    return sdf.format(Date(timestamp))
 }

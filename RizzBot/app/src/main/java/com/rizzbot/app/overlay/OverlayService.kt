@@ -36,13 +36,11 @@ class OverlayService : Service() {
             overlayEventBus.events.collect { event ->
                 when (event) {
                     is OverlayEvent.ShowSuggestion -> bubbleManager.showSuggestion(event.replies)
-                    is OverlayEvent.AppendSuggestion -> bubbleManager.appendSuggestions(event.replies)
                     is OverlayEvent.ShowLoading -> bubbleManager.showLoading(event.message)
                     is OverlayEvent.ShowError -> bubbleManager.showError(event.message)
                     is OverlayEvent.Hide -> bubbleManager.hide()
                     is OverlayEvent.ShowRizzButton -> bubbleManager.showRizzButton()
                     is OverlayEvent.HideRizzButton -> bubbleManager.hideRizzButton()
-                    is OverlayEvent.ManualTrigger -> bubbleManager.onRizzButtonClicked?.invoke()
                     is OverlayEvent.ShowProfileSyncButton -> bubbleManager.showProfileSyncButton(event.personName)
                     is OverlayEvent.ShowProfileSyncing -> bubbleManager.showProfileSyncing(event.personName)
                     is OverlayEvent.ShowProfileSynced -> bubbleManager.showProfileSynced(event.personName)

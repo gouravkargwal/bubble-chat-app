@@ -9,6 +9,7 @@ interface ConversationRepository {
     fun observeMessages(personName: String): Flow<List<ChatMessage>>
     suspend fun getRecentMessages(personName: String, limit: Int): List<ChatMessage>
     suspend fun saveMessages(personName: String, messages: List<ChatMessage>)
+    suspend fun replaceAllMessages(personName: String, messages: List<ChatMessage>)
     suspend fun deleteConversation(personName: String)
     suspend fun deleteAll()
 }

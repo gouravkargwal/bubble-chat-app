@@ -6,15 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,11 +17,15 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,6 +33,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,20 +49,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.app.overlay.manager.BubbleState
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BubbleOverlay(
     state: BubbleState,
     onCopy: (String) -> Unit,
     onDismiss: () -> Unit,
+    onMinimize: () -> Unit = {},
     onRizzClick: () -> Unit = {},
-    onGenerateReply: () -> Unit = {},
+    onGenerateReplies: () -> Unit = {},
+    onShowLastReplies: () -> Unit = {},
     onRefreshChat: () -> Unit = {},
-    onToneSelected: (String) -> Unit = {},
     onPasteToInput: (String) -> Unit = {},
     onSyncProfile: () -> Unit = {},
     onRefreshReplies: () -> Unit = {},
-    onIcebreakerClick: () -> Unit = {}
+    onNewTopicClick: () -> Unit = {},
+    onReadFullChat: () -> Unit = {}
 ) {
     // Auto-expand when suggestion arrives
     var expanded by remember { mutableStateOf(false) }
@@ -150,7 +151,6 @@ fun BubbleOverlay(
                 Spacer(Modifier.height(6.dp))
                 TextButton(
                     onClick = onSyncProfile,
-                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
                         Icons.Default.Refresh,
@@ -170,26 +170,8 @@ fun BubbleOverlay(
         return
     }
 
-    // RizzButton state: show the FAB
-    if (state is BubbleState.RizzButton) {
-        FloatingActionButton(
-            onClick = onRizzClick,
-            containerColor = MaterialTheme.colorScheme.primary,
-            shape = CircleShape,
-            modifier = Modifier.size(56.dp)
-        ) {
-            Icon(
-                Icons.Default.AutoAwesome,
-                contentDescription = "RizzBot",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-        return
-    }
-
-    // RizzMenu state: show tone selection menu
-    if (state is BubbleState.RizzMenu) {
+    // ActionMenu state: show options before generating
+    if (state is BubbleState.ActionMenu) {
         Card(
             modifier = Modifier
                 .widthIn(max = 260.dp)
@@ -209,12 +191,13 @@ fun BubbleOverlay(
                 ) {
                     Text(
                         text = "RizzBot",
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
                     )
                     IconButton(
-                        onClick = onDismiss,
+                        onClick = onMinimize,
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
@@ -228,49 +211,94 @@ fun BubbleOverlay(
 
                 Spacer(Modifier.height(8.dp))
 
-                Text(
-                    text = "Pick a vibe:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // Generate Replies — primary action
+                Button(
+                    onClick = onGenerateReplies,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text("Generate Replies", fontSize = 13.sp)
+                }
 
                 Spacer(Modifier.height(6.dp))
 
-                // Tone chips
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    ToneChip("Flirty", "Recommended", true) { onToneSelected("FLIRTY") }
-                    ToneChip("Witty", "Clever humor", false) { onToneSelected("WITTY") }
-                    ToneChip("Smooth", "Charming", false) { onToneSelected("SMOOTH") }
-                    ToneChip("Bold", "Direct & daring", false) { onToneSelected("BOLD") }
-                    if (state.hasProfile) {
-                        ToneChip("Icebreaker", "Profile-based", false) { onIcebreakerClick() }
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                // Refresh Chat button
-                TextButton(
-                    onClick = onRefreshChat,
-                    modifier = Modifier.fillMaxWidth()
+                // Read Full Chat
+                OutlinedButton(
+                    onClick = onReadFullChat,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        Icons.Default.Refresh,
+                        Icons.Default.MenuBook,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.size(6.dp))
-                    Text(
-                        "Refresh Chat",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Text("Read Full Chat", fontSize = 13.sp)
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                // New Topic
+                OutlinedButton(
+                    onClick = onNewTopicClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Lightbulb,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
                     )
+                    Spacer(Modifier.size(6.dp))
+                    Text("New Topic", fontSize = 13.sp)
+                }
+
+                // Show Last Replies — only if there are cached replies
+                if (state.lastReplies != null) {
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = onShowLastReplies,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.tertiary
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.size(6.dp))
+                        Text("Last Replies", fontSize = 13.sp)
+                    }
                 }
             }
+        }
+        return
+    }
+
+    // RizzButton state: show the FAB — tapping opens action menu
+    if (state is BubbleState.RizzButton) {
+        FloatingActionButton(
+            onClick = onRizzClick,
+            containerColor = MaterialTheme.colorScheme.primary,
+            shape = CircleShape,
+            modifier = Modifier.size(56.dp)
+        ) {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = "RizzBot",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(28.dp)
+            )
         }
         return
     }
@@ -315,13 +343,16 @@ fun BubbleOverlay(
                 is BubbleState.Expanded -> {
                     SuggestionCard(
                         suggestions = state.suggestions,
+                        hasProfile = state.hasProfile,
                         onCopy = { text -> onCopy(text) },
                         onPaste = { text -> onPasteToInput(text) },
                         onDismiss = {
                             expanded = false
-                            onDismiss()
+                            onMinimize()
                         },
-                        onRefreshReplies = onRefreshReplies
+                        onRefreshReplies = onRefreshReplies,
+                        onNewTopicClick = onNewTopicClick,
+                        onReadFullChat = onReadFullChat
                     )
                 }
                 is BubbleState.Loading -> {
@@ -372,11 +403,24 @@ fun BubbleOverlay(
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Spacer(Modifier.height(8.dp))
-                            TextButton(onClick = {
-                                expanded = false
-                                onDismiss()
-                            }) {
-                                Text("Dismiss", fontSize = 12.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = {
+                                    expanded = false
+                                    onMinimize()
+                                }) {
+                                    Text("Dismiss", fontSize = 12.sp)
+                                }
+                                TextButton(onClick = {
+                                    onRefreshReplies()
+                                }) {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.size(4.dp))
+                                    Text("Retry", fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -387,36 +431,4 @@ fun BubbleOverlay(
             }
         }
     }
-}
-
-@Composable
-private fun ToneChip(
-    label: String,
-    subtitle: String,
-    isRecommended: Boolean,
-    onClick: () -> Unit
-) {
-    AssistChip(
-        onClick = onClick,
-        label = {
-            Column(modifier = Modifier.padding(vertical = 2.dp)) {
-                Text(
-                    text = if (isRecommended) "$label ⭐" else label,
-                    fontSize = 13.sp,
-                    fontWeight = if (isRecommended) FontWeight.Bold else FontWeight.Normal
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        border = if (isRecommended) {
-            BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            AssistChipDefaults.assistChipBorder(enabled = true)
-        },
-        shape = RoundedCornerShape(12.dp)
-    )
 }

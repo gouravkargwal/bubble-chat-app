@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RizzBot — Your AI-Powered Dating Reply Assistant</title>
+  <meta name="description" content="RizzBot reads your Aisle conversations and generates 4 personalized reply suggestions in every vibe — Flirty, Witty, Smooth, and Bold. Powered by AI, delivered in a floating bubble." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --pink: #FF4D8D;
+      --pink-light: #FF6FA3;
+      --purple: #7C3AED;
+      --purple-dark: #5B21B6;
+      --bg-dark: #0F0B1A;
+      --bg-card: #1A1528;
+      --text: #F8F5FF;
+      --text-muted: #A89BBF;
+      --gradient: linear-gradient(135deg, #FF4D8D 0%, #7C3AED 50%, #4F46E5 100%);
+      --gradient-btn: linear-gradient(135deg, #FF4D8D, #7C3AED);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* ── Animated background ── */
+    .bg-glow {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    }
+    .bg-glow .orb {
+      position: absolute; border-radius: 50%; filter: blur(120px); opacity: 0.3;
+      animation: float 8s ease-in-out infinite alternate;
+    }
+    .bg-glow .orb:nth-child(1) { width: 500px; height: 500px; background: var(--pink); top: -10%; left: -5%; }
+    .bg-glow .orb:nth-child(2) { width: 600px; height: 600px; background: var(--purple); bottom: -15%; right: -10%; animation-delay: -3s; }
+    .bg-glow .orb:nth-child(3) { width: 350px; height: 350px; background: #4F46E5; top: 40%; left: 50%; animation-delay: -5s; }
+
+    @keyframes float {
+      to { transform: translate(40px, -30px) scale(1.1); }
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 1rem 2rem;
+      background: rgba(15, 11, 26, 0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo {
+      font-size: 1.5rem; font-weight: 800;
+      background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .logo span { font-size: 1.6rem; }
+    nav a {
+      color: var(--text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 500;
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--text); }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.85rem 2rem; border-radius: 50px; font-weight: 600; font-size: 1rem;
+      text-decoration: none; border: none; cursor: pointer; transition: all 0.3s;
+    }
+    .btn-primary {
+      background: var(--gradient-btn); color: #fff;
+      box-shadow: 0 4px 25px rgba(255,77,141,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 35px rgba(255,77,141,0.5); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08); color: var(--text);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.14); }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 8rem 2rem 4rem; text-align: center;
+    }
+    .hero-inner { max-width: 800px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 1.2rem; border-radius: 50px; font-size: 0.85rem; font-weight: 500;
+      background: rgba(124,58,237,0.2); border: 1px solid rgba(124,58,237,0.3);
+      color: var(--pink-light); margin-bottom: 2rem;
+    }
+    .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ADE80; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    h1 {
+      font-size: clamp(2.8rem, 6vw, 4.5rem); font-weight: 900; line-height: 1.1;
+      margin-bottom: 1.5rem;
+    }
+    h1 .gradient {
+      background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 1.2rem; color: var(--text-muted); max-width: 580px; margin: 0 auto 2.5rem;
+    }
+    .hero-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+    .hero-stats {
+      display: flex; justify-content: center; gap: 3rem; margin-top: 4rem;
+      padding-top: 2.5rem; border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .hero-stats .stat-num {
+      font-size: 1.8rem; font-weight: 800;
+      background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero-stats .stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+    /* ── Phone mockup ── */
+    .phone-section { padding: 2rem 2rem 6rem; display: flex; justify-content: center; }
+    .phone-mockup {
+      width: 300px; height: 640px; border-radius: 40px; position: relative;
+      background: #1E1832; border: 3px solid rgba(255,255,255,0.1);
+      box-shadow: 0 40px 80px rgba(0,0,0,0.5), 0 0 60px rgba(124,58,237,0.15);
+      overflow: hidden;
+    }
+    .phone-notch {
+      width: 120px; height: 28px; background: var(--bg-dark);
+      border-radius: 0 0 18px 18px; margin: 0 auto; position: relative; z-index: 2;
+    }
+    .phone-screen { padding: 1rem 1.2rem; }
+    .phone-screen .chat-header {
+      text-align: center; padding: 0.5rem 0 1rem;
+      font-weight: 600; font-size: 1rem; color: var(--text);
+    }
+    .chat-bubble {
+      padding: 0.65rem 0.9rem; border-radius: 16px; margin-bottom: 0.5rem;
+      font-size: 0.78rem; max-width: 85%; line-height: 1.45;
+      animation: fadeUp 0.6s ease both;
+    }
+    .chat-bubble.them {
+      background: rgba(255,255,255,0.08); border-bottom-left-radius: 4px;
+    }
+    .chat-bubble.me {
+      background: var(--gradient-btn); margin-left: auto; border-bottom-right-radius: 4px;
+    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .rizz-bubble {
+      position: absolute; bottom: 90px; right: 16px;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--gradient-btn); display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; box-shadow: 0 6px 25px rgba(255,77,141,0.5);
+      animation: bounce 2s ease-in-out infinite;
+      cursor: pointer;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .suggestion-card {
+      position: absolute; bottom: 46px; left: 10px; right: 10px;
+      background: rgba(26,21,40,0.95); border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 14px; padding: 0.6rem; backdrop-filter: blur(10px);
+    }
+    .suggestion-card .label {
+      font-size: 0.6rem; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--pink-light); font-weight: 600; margin-bottom: 0.4rem;
+    }
+    .suggestion-item {
+      padding: 0.45rem 0.65rem; border-radius: 8px; font-size: 0.68rem;
+      background: rgba(255,255,255,0.06); margin-bottom: 0.3rem; line-height: 1.35;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .suggestion-item .vibe-tag {
+      display: inline-block; font-size: 0.55rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--pink-light); margin-bottom: 2px;
+    }
+    .suggestion-actions {
+      display: flex; gap: 0.4rem; margin-top: 0.3rem; justify-content: center;
+    }
+    .suggestion-actions span {
+      font-size: 0.55rem; color: var(--text-muted); padding: 0.2rem 0.5rem;
+      border-radius: 6px; background: rgba(255,255,255,0.05);
+    }
+
+    /* ── Section basics ── */
+    section { padding: 6rem 2rem; }
+    .section-title {
+      text-align: center; margin-bottom: 4rem;
+    }
+    .section-title h2 {
+      font-size: clamp(2rem, 4vw, 3rem); font-weight: 800; margin-bottom: 1rem;
+    }
+    .section-title p { color: var(--text-muted); font-size: 1.1rem; max-width: 550px; margin: 0 auto; }
+
+    /* ── How it works ── */
+    .steps {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem; max-width: 1100px; margin: 0 auto;
+    }
+    .step {
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 20px; padding: 2rem; text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .step:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+    .step-num {
+      width: 50px; height: 50px; border-radius: 14px; margin: 0 auto 1.2rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; font-weight: 800; background: var(--gradient-btn); color: #fff;
+    }
+    .step h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .step p { font-size: 0.9rem; color: var(--text-muted); }
+
+    /* ── Features ── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem; max-width: 1100px; margin: 0 auto;
+    }
+    .feature-card {
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 20px; padding: 2rem;
+      transition: transform 0.3s, border-color 0.3s;
+    }
+    .feature-card:hover { transform: translateY(-3px); border-color: rgba(124,58,237,0.3); }
+    .feature-icon {
+      width: 48px; height: 48px; border-radius: 12px; margin-bottom: 1rem;
+      display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+      background: rgba(124,58,237,0.15);
+    }
+    .feature-card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .feature-card p { font-size: 0.9rem; color: var(--text-muted); }
+
+    /* ── Vibes ── */
+    .vibes {
+      display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;
+      max-width: 700px; margin: 0 auto;
+    }
+    .vibe-chip {
+      padding: 1rem 2rem; border-radius: 16px; font-weight: 600; font-size: 1rem;
+      border: 1px solid rgba(255,255,255,0.08); background: var(--bg-card);
+      transition: all 0.3s;
+    }
+    .vibe-chip:hover { border-color: var(--pink); transform: scale(1.05); }
+    .vibe-chip .emoji { font-size: 1.3rem; margin-right: 0.4rem; }
+    .vibe-desc {
+      text-align: center; margin-top: 2rem; color: var(--text-muted); font-size: 0.95rem;
+      max-width: 500px; margin-left: auto; margin-right: auto;
+    }
+
+    /* ── Providers ── */
+    .providers {
+      display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap;
+      max-width: 800px; margin: 0 auto;
+    }
+    .provider {
+      display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+      padding: 1.5rem 2rem; border-radius: 16px;
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06);
+      min-width: 140px; transition: all 0.3s;
+    }
+    .provider:hover { border-color: rgba(124,58,237,0.3); transform: translateY(-3px); }
+    .provider-icon { font-size: 2rem; }
+    .provider-name { font-weight: 600; font-size: 0.95rem; }
+    .provider-model { font-size: 0.75rem; color: var(--text-muted); text-align: center; }
+    .provider-rec {
+      font-size: 0.65rem; font-weight: 600; color: #4ADE80;
+      background: rgba(74,222,128,0.1); padding: 0.15rem 0.5rem; border-radius: 6px;
+    }
+
+    /* ── Privacy ── */
+    .privacy-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem; max-width: 900px; margin: 0 auto;
+    }
+    .privacy-item {
+      display: flex; gap: 1rem; align-items: flex-start;
+      padding: 1.5rem; border-radius: 16px;
+      background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .privacy-item .icon {
+      width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+      background: rgba(74,222,128,0.12);
+    }
+    .privacy-item h4 { font-weight: 600; margin-bottom: 0.25rem; }
+    .privacy-item p { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* ── CTA ── */
+    .cta {
+      text-align: center; padding: 6rem 2rem;
+      background: linear-gradient(180deg, transparent, rgba(124,58,237,0.08), transparent);
+    }
+    .cta h2 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 800; margin-bottom: 1rem; }
+    .cta p { color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem; max-width: 500px; margin-left: auto; margin-right: auto; }
+
+    /* ── Footer ── */
+    footer {
+      padding: 3rem 2rem; text-align: center;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    footer p { color: var(--text-muted); font-size: 0.85rem; }
+    footer .logo-sm {
+      font-size: 1.2rem; font-weight: 800; margin-bottom: 0.5rem;
+      background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      nav { padding: 0.8rem 1.2rem; }
+      .nav-links a:not(.btn) { display: none; }
+      .hero { padding: 7rem 1.2rem 3rem; }
+      .hero-stats { gap: 1.5rem; }
+      section { padding: 4rem 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-glow">
+  <div class="orb"></div>
+  <div class="orb"></div>
+  <div class="orb"></div>
+</div>
+
+<!-- Nav -->
+<nav>
+  <div class="logo"><span>&#x1F525;</span> RizzBot</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it Works</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#download" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 0.9rem;">Download</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="badge"><span class="dot"></span> AI-Powered Dating Assistant for Aisle</div>
+    <h1>Never Run Out of <span class="gradient">Rizz</span> Again</h1>
+    <p>RizzBot reads your Aisle conversations and instantly generates 4 reply suggestions — Flirty, Witty, Smooth, and Bold — delivered in a floating bubble right on your chat screen.</p>
+    <div class="hero-buttons">
+      <a href="#download" class="btn btn-primary">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        Download for Android
+      </a>
+      <a href="#how" class="btn btn-secondary">See How It Works</a>
+    </div>
+    <div class="hero-stats">
+      <div><div class="stat-num">4</div><div class="stat-label">AI Providers</div></div>
+      <div><div class="stat-num">4</div><div class="stat-label">Replies Per Tap</div></div>
+      <div><div class="stat-num">100%</div><div class="stat-label">On-Device</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Phone Mockup -->
+<div class="phone-section">
+  <div class="phone-mockup">
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+      <div class="chat-header">Priya</div>
+      <div class="chat-bubble them" style="animation-delay: 0.1s">Hey! I saw you're into hiking too. What's your favourite trail?</div>
+      <div class="chat-bubble me" style="animation-delay: 0.3s">The one that leads to good coffee afterwards &#x2615;</div>
+      <div class="chat-bubble them" style="animation-delay: 0.5s">Haha priorities! Where do you usually go?</div>
+    </div>
+    <div class="suggestion-card">
+      <div class="label">&#x2728; RizzBot Suggestions</div>
+      <div class="suggestion-item">
+        <div class="vibe-tag">&#x1F48B; Flirty</div>
+        <div>There's a trail that ends at this cute cafe... but I'd need someone cute to go with &#x1F60F;</div>
+      </div>
+      <div class="suggestion-item">
+        <div class="vibe-tag">&#x1F609; Witty</div>
+        <div>Anywhere the WiFi is weak and the views are strong. My phone needs a detox.</div>
+      </div>
+      <div class="suggestion-item">
+        <div class="vibe-tag">&#x1F60E; Smooth</div>
+        <div>There's a spot near Triund with unreal sunsets and filter coffee at the top.</div>
+      </div>
+      <div class="suggestion-item">
+        <div class="vibe-tag">&#x1F525; Bold</div>
+        <div>Skip the small talk — let's just pick a trail this weekend and find out.</div>
+      </div>
+      <div class="suggestion-actions">
+        <span>&#x1F4CB; Copy</span>
+        <span>&#x1F4E9; Paste to Chat</span>
+        <span>&#x1F504; Refresh</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- How It Works -->
+<section id="how">
+  <div class="section-title">
+    <h2>How It Works</h2>
+    <p>Four simple steps from setup to smooth operator.</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Quick Setup</h3>
+      <p>Grant accessibility & overlay permissions, pick your AI provider, and enter your API key. Takes under a minute.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Open Aisle</h3>
+      <p>RizzBot activates automatically when you open the Aisle dating app. A floating Rizz button appears on your chat screen.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Sync Their Profile</h3>
+      <p>Visit your match's profile and tap Sync. RizzBot uses their bio, interests, and Q&amp;A to personalize every reply.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <h3>Tap & Reply</h3>
+      <p>Tap the Rizz bubble to get 4 reply suggestions — one per vibe. Copy to clipboard or paste directly into the chat.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="section-title">
+    <h2>Loaded with Features</h2>
+    <p>Everything you need to level up your Aisle conversations.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4AC;</div>
+      <h3>Context-Aware Replies</h3>
+      <p>Reads up to 20 messages of conversation history so every suggestion fits naturally into your ongoing chat.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F464;</div>
+      <h3>Profile Syncing</h3>
+      <p>Sync your match's Aisle profile — bio, interests, Q&amp;A, traits, and more — so replies feel personal, not generic.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F3AF;</div>
+      <h3>4 Vibes, Every Time</h3>
+      <p>Every tap generates 4 replies: Flirty, Witty, Smooth, and Bold. Pick the one that fits your mood.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4E9;</div>
+      <h3>Copy or Paste to Chat</h3>
+      <p>Copy a suggestion to your clipboard, or paste it directly into Aisle's text input with a single tap.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x26A1;</div>
+      <h3>Floating Bubble UI</h3>
+      <p>No app switching needed. The suggestion card appears as an overlay right on top of your Aisle chat screen.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F504;</div>
+      <h3>Refresh & Read Chat</h3>
+      <p>Don't like the suggestions? Hit Refresh for new ones, or Read Chat to scroll through more history for better context.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4A1;</div>
+      <h3>New Topic Starters</h3>
+      <p>Running out of things to say? Generate fresh conversation starters based on your match's synced profile.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F4CB;</div>
+      <h3>Conversation History</h3>
+      <p>All chats and synced profiles saved locally on your device. Review past conversations and track your stats.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#x1F512;</div>
+      <h3>Your Keys, Your Data</h3>
+      <p>Bring your own API key. Keys are stored on-device only. No data is sent to or stored on any external server.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Vibes -->
+<section>
+  <div class="section-title">
+    <h2>4 Vibes. <span style="background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Every Single Tap.</span></h2>
+    <p>You get all four reply styles at once. Just pick the one that fits.</p>
+  </div>
+  <div class="vibes">
+    <div class="vibe-chip"><span class="emoji">&#x1F48B;</span> Flirty</div>
+    <div class="vibe-chip"><span class="emoji">&#x1F609;</span> Witty</div>
+    <div class="vibe-chip"><span class="emoji">&#x1F60E;</span> Smooth</div>
+    <div class="vibe-chip"><span class="emoji">&#x1F525;</span> Bold</div>
+  </div>
+  <p class="vibe-desc">Warm and teasing, sharp and clever, calm and magnetic, or refreshingly direct — all four generated simultaneously so you always have the perfect reply for the moment.</p>
+</section>
+
+<!-- AI Providers -->
+<section>
+  <div class="section-title">
+    <h2>Powered by Top AI Models</h2>
+    <p>Choose your AI provider and model. Bring your own API key.</p>
+  </div>
+  <div class="providers">
+    <div class="provider">
+      <div class="provider-icon">&#x1F9E0;</div>
+      <div class="provider-name">Groq</div>
+      <div class="provider-model">Llama 3.3 70B</div>
+      <div class="provider-rec">Free & Fast</div>
+    </div>
+    <div class="provider">
+      <div class="provider-icon">&#x1F916;</div>
+      <div class="provider-name">OpenAI</div>
+      <div class="provider-model">GPT-4o Mini</div>
+    </div>
+    <div class="provider">
+      <div class="provider-icon">&#x1F3AD;</div>
+      <div class="provider-name">Claude</div>
+      <div class="provider-model">Claude Sonnet 4</div>
+    </div>
+    <div class="provider">
+      <div class="provider-icon">&#x1F48E;</div>
+      <div class="provider-name">Gemini</div>
+      <div class="provider-model">Gemini 2.0 Flash</div>
+    </div>
+  </div>
+</section>
+
+<!-- Privacy -->
+<section id="privacy">
+  <div class="section-title">
+    <h2>Privacy First. Always.</h2>
+    <p>Your conversations are personal. We treat them that way.</p>
+  </div>
+  <div class="privacy-grid">
+    <div class="privacy-item">
+      <div class="icon">&#x1F512;</div>
+      <div>
+        <h4>Keys Stay On-Device</h4>
+        <p>API keys are stored only on your device and never transmitted to our servers.</p>
+      </div>
+    </div>
+    <div class="privacy-item">
+      <div class="icon">&#x1F6E1;&#xFE0F;</div>
+      <div>
+        <h4>Direct to Provider</h4>
+        <p>Chat data goes straight to your chosen AI provider for reply generation. No middleman, no external storage.</p>
+      </div>
+    </div>
+    <div class="privacy-item">
+      <div class="icon">&#x1F4F1;</div>
+      <div>
+        <h4>Local Storage Only</h4>
+        <p>All conversation history and profiles are stored in a local database on your phone. Clear everything with one tap.</p>
+      </div>
+    </div>
+    <div class="privacy-item">
+      <div class="icon">&#x1F441;&#xFE0F;</div>
+      <div>
+        <h4>Aisle Only</h4>
+        <p>The accessibility service exclusively monitors the Aisle app. It does not read content from any other app on your phone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="download">
+  <h2>Ready to Level Up Your <span style="background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Conversations?</span></h2>
+  <p>Download RizzBot and never stare at a blank text box again.</p>
+  <div style="display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;">
+    <a href="#" class="btn btn-primary" style="font-size:1.1rem;padding:1rem 2.5rem;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      Download APK
+    </a>
+  </div>
+  <p style="margin-top:1.5rem;font-size:0.85rem;color:var(--text-muted);">Android 8.0+ required &middot; Free &middot; No ads</p>
+</section>
+
+<!-- Coming Soon -->
+<section style="padding:3rem 2rem;">
+  <div style="max-width:600px;margin:0 auto;text-align:center;padding:2.5rem;border-radius:20px;background:linear-gradient(135deg,rgba(255,77,141,0.08),rgba(124,58,237,0.08));border:1px solid rgba(124,58,237,0.15);">
+    <h3 style="font-size:1.3rem;margin-bottom:0.8rem;">Coming Soon</h3>
+    <p style="color:var(--text-muted);font-size:0.95rem;"><strong>RizzBot Pro</strong> — hosted AI inference, no API key needed. Plus <strong>multi-app support</strong> for Bumble, Hinge, Tinder, and more.</p>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="logo-sm">&#x1F525; RizzBot</div>
+  <p>&copy; 2026 RizzBot. Your AI-powered dating reply assistant.</p>
+</footer>
+
+</body>
+</html>

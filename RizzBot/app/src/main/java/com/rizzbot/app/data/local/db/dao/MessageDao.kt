@@ -16,7 +16,7 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertMessages(messages: List<MessageEntity>)
 
-    @Query("SELECT * FROM messages WHERE personName = :personName ORDER BY timestamp ASC")
+    @Query("SELECT * FROM messages WHERE personName = :personName ORDER BY id ASC")
     fun observeMessages(personName: String): Flow<List<MessageEntity>>
 
     @Query("DELETE FROM messages WHERE personName = :personName")
@@ -24,4 +24,7 @@ interface MessageDao {
 
     @Query("SELECT COUNT(*) FROM messages WHERE personName = :personName")
     suspend fun getMessageCount(personName: String): Int
+
+    @Query("SELECT text FROM messages WHERE personName = :personName AND isIncoming = :isIncoming")
+    suspend fun getExistingTexts(personName: String, isIncoming: Boolean): List<String>
 }

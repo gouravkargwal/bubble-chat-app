@@ -13,9 +13,26 @@ class SaveMessageUseCase @Inject constructor(
             ChatMessage(
                 text = parsed.text,
                 isIncoming = parsed.isIncoming,
-                timestamp = parsed.timestamp
+                timestamp = parsed.timestamp,
+                timestampText = parsed.timestampText
             )
         }
         conversationRepository.saveMessages(personName, chatMessages)
+    }
+
+    /**
+     * Replace all messages for a conversation — used after a full chat read
+     * to ensure correct chronological ordering.
+     */
+    suspend fun replaceAll(personName: String, messages: List<ParsedMessage>) {
+        val chatMessages = messages.map { parsed ->
+            ChatMessage(
+                text = parsed.text,
+                isIncoming = parsed.isIncoming,
+                timestamp = parsed.timestamp,
+                timestampText = parsed.timestampText
+            )
+        }
+        conversationRepository.replaceAllMessages(personName, chatMessages)
     }
 }

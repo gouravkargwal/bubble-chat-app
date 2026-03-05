@@ -60,26 +60,69 @@ class ConversationRepositoryImpl @Inject constructor(
             )
         )
 
-        val entities = messages.map { msg ->
-            MessageEntity(
-                personName = personName,
-                text = msg.text,
-                isIncoming = msg.isIncoming,
-                timestamp = msg.timestamp
+        // Filter out messages already in DB to avoid duplicates
+        val existingIncoming = messageDao.getExistingTexts(personName, isIncoming = true).toSet()
+        val existingOutgoing = messageDao.getExistingTexts(personName, isIncoming = false).toSet()
+
+        val newMessages = messages.filter { msg ->
+            val existingSet = if (msg.isIncoming) existingIncoming else existingOutgoing
+            msg.text !in existingSet
+        }
+
+        if (newMessages.isNotEmpty()) {
+            val entities = newMessages.map { msg ->
+                MessageEntity(
+                    personName = personName,
+                    text = msg.text,
+                    isIncoming = msg.isIncoming,
+                    timestamp = msg.timestamp,
+                    timestampText = msg.timestampText
+                )
+            }
+            messageDao.insertMessages(entities)
+
+            // Update message count after insert
+            val messageCount = messageDao.getMessageCount(personName)
+            conversationDao.upsertConversation(
+                ConversationEntity(
+                    personName = personName,
+                    firstSeenTimestamp = existing?.firstSeenTimestamp ?: now,
+                    lastMessageTimestamp = now,
+                    messageCount = messageCount
+                )
             )
         }
-        messageDao.insertMessages(entities)
+    }
 
-        // Update message count after insert
-        val messageCount = messageDao.getMessageCount(personName)
+    override suspend fun replaceAllMessages(personName: String, messages: List<ChatMessage>) {
+        if (messages.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+
+        // Upsert conversation FIRST to satisfy foreign key constraint
+        val existing = conversationDao.getConversation(personName)
         conversationDao.upsertConversation(
             ConversationEntity(
                 personName = personName,
                 firstSeenTimestamp = existing?.firstSeenTimestamp ?: now,
                 lastMessageTimestamp = now,
-                messageCount = messageCount
+                messageCount = messages.size
             )
         )
+
+        // Delete all existing messages and re-insert in correct chronological order
+        messageDao.deleteMessagesForPerson(personName)
+
+        val entities = messages.map { msg ->
+            MessageEntity(
+                personName = personName,
+                text = msg.text,
+                isIncoming = msg.isIncoming,
+                timestamp = msg.timestamp,
+                timestampText = msg.timestampText
+            )
+        }
+        messageDao.insertMessages(entities)
     }
 
     override suspend fun deleteConversation(personName: String) {
@@ -94,6 +137,7 @@ class ConversationRepositoryImpl @Inject constructor(
     private fun MessageEntity.toDomain() = ChatMessage(
         text = text,
         isIncoming = isIncoming,
-        timestamp = timestamp
+        timestamp = timestamp,
+        timestampText = timestampText
     )
 }
