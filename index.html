@@ -534,10 +534,9 @@
     <h1>Never Run Out of <span class="gradient">Rizz</span> Again</h1>
     <p>RizzBot reads your Aisle conversations and instantly generates 4 reply suggestions — Flirty, Witty, Smooth, and Bold — delivered in a floating bubble right on your chat screen.</p>
     <div class="hero-buttons">
-      <a href="https://github.com/gouravkargwal/bubble-chat-app/releases/latest/download/RizzBot.apk" class="btn btn-primary btn-download" onclick="animateDownload(this, event)">
+      <a href="https://github.com/gouravkargwal/bubble-chat-app/releases/latest/download/RizzBot.apk" class="btn btn-primary btn-download" download>
         <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
         <span class="btn-text">Download for Android</span>
-        <span class="btn-loading"><span class="spinner"></span> Downloading...</span>
       </a>
       <a href="#how" class="btn btn-secondary">See How It Works</a>
     </div>
@@ -849,10 +848,9 @@
   <h2>Ready to Level Up Your <span style="background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Conversations?</span></h2>
   <p>Download RizzBot and never stare at a blank text box again.</p>
   <div style="display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;">
-    <a href="https://github.com/gouravkargwal/bubble-chat-app/releases/latest/download/RizzBot.apk" class="btn btn-primary btn-download" style="font-size:1.1rem;padding:1rem 2.5rem;" onclick="animateDownload(this, event)">
+    <a href="https://github.com/gouravkargwal/bubble-chat-app/releases/latest/download/RizzBot.apk" class="btn btn-primary btn-download" style="font-size:1.1rem;padding:1rem 2.5rem;" download>
       <svg class="btn-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
       <span class="btn-text">Download APK</span>
-      <span class="btn-loading"><span class="spinner"></span> Downloading...</span>
     </a>
   </div>
   <p style="margin-top:1.5rem;font-size:0.85rem;color:var(--text-muted);">Android 8.0+ required &middot; Free &middot; No ads</p>
@@ -1027,18 +1025,6 @@
 </footer>
 
 <script>
-function animateDownload(btn, e) {
-  e.preventDefault();
-  btn.classList.add('downloading');
-  var url = btn.href;
-  // Use window.location for reliable mobile downloads
-  window.location.href = url;
-  setTimeout(function() {
-    btn.classList.remove('downloading');
-    btn.classList.add('downloaded');
-    setTimeout(function() { btn.classList.remove('downloaded'); }, 2000);
-  }, 3000);
-}
 function toggleFaq(el) {
   el.parentElement.classList.toggle('open');
 }
