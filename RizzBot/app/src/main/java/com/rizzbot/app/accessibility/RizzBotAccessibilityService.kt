@@ -16,6 +16,7 @@ import com.rizzbot.app.overlay.OverlayEvent
 import com.rizzbot.app.overlay.OverlayEventBus
 import com.rizzbot.app.overlay.OverlayService
 import com.rizzbot.app.overlay.manager.BubbleManager
+import com.rizzbot.app.overlay.manager.BubbleState
 import com.rizzbot.app.util.AnalyticsHelper
 import com.rizzbot.app.util.Constants
 import dagger.hilt.android.AndroidEntryPoint
@@ -69,7 +70,7 @@ class RizzBotAccessibilityService : AccessibilityService() {
 
         // User left Aisle — hide all overlays unconditionally
         if (packageName != Constants.AISLE_PACKAGE) {
-            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            if (isInChatScreen || isOnProfilePage || bubbleManager.bubbleState !is BubbleState.Hidden) {
                 Log.d(TAG, "Left Aisle (switched to $packageName) — hiding overlays")
                 isInChatScreen = false
                 isOnProfilePage = false
