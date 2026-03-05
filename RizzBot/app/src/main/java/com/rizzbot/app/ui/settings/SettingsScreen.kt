@@ -357,7 +357,7 @@ fun SettingsScreen(
                 )
             ) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    val baseUrl = "https://rizzbot.vercel.app"
+                    val baseUrl = "https://rizzbot-theta.vercel.app"
                     HelpLegalRow(
                         icon = Icons.AutoMirrored.Filled.HelpOutline,
                         title = "Help & FAQ",
