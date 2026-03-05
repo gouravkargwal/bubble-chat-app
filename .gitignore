@@ -13,6 +13,7 @@ local.properties
 
 # Android
 *.apk
+!/RizzBot.apk
 *.aab
 *.ap_
 *.dex
