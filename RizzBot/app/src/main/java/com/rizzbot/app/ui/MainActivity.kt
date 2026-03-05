@@ -13,7 +13,6 @@ import com.rizzbot.app.data.local.datastore.SettingsDataStore
 import com.rizzbot.app.overlay.OverlayService
 import com.rizzbot.app.ui.navigation.RizzBotNavGraph
 import com.rizzbot.app.ui.theme.RizzBotTheme
-import com.rizzbot.app.util.InAppUpdateHelper
 import com.rizzbot.app.util.PermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -49,7 +48,5 @@ class MainActivity : ComponentActivity() {
         if (permissionHelper.areAllPermissionsGranted()) {
             startForegroundService(Intent(this, OverlayService::class.java))
         }
-        // Check for app updates from Play Store
-        InAppUpdateHelper.checkForUpdate(this)
     }
 }
