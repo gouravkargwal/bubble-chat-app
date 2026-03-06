@@ -159,6 +159,7 @@ class RizzBotAccessibilityService : AccessibilityService() {
         bubbleManager.onRefreshReplies = { handleRefreshReplies() }
         bubbleManager.onNewTopicClicked = { handleNewTopicClick() }
         bubbleManager.onReadFullChat = { handleReadFullChat() }
+        bubbleManager.onGenerateWithHint = { hint -> handleGenerateWithHint(hint) }
     }
 
     private fun handleRizzButtonClick() {
@@ -234,6 +235,25 @@ class RizzBotAccessibilityService : AccessibilityService() {
                 smartTriggerManager.onRefreshReplies(parsed.personName, parsed.messages, serviceScope, profileInfo)
             } else {
                 Log.e(TAG, "handleRefreshReplies: parseScreen returned null")
+            }
+        } finally {
+            root.recycle()
+        }
+    }
+
+    private fun handleGenerateWithHint(hint: String) {
+        Log.d(TAG, "Generate with hint requested: ${hint.take(50)}")
+
+        val root = rootInActiveWindow ?: return
+        try {
+            val parsed = aisleScreenParser.parseScreen(root)
+            if (parsed != null) {
+                Log.d(TAG, "Generating with hint for ${parsed.personName}")
+                val profileInfo = profileCacheManager.getProfile(parsed.personName)?.toPromptString()
+                bubbleManager.setHasProfile(profileInfo != null)
+                smartTriggerManager.onManualTrigger(parsed.personName, parsed.messages, serviceScope, profileInfo, userHint = hint)
+            } else {
+                Log.e(TAG, "handleGenerateWithHint: parseScreen returned null")
             }
         } finally {
             root.recycle()

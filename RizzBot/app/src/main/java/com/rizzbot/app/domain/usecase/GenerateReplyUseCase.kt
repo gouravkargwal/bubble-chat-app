@@ -18,7 +18,8 @@ class GenerateReplyUseCase @Inject constructor(
         personName: String,
         currentScreenMessages: List<ParsedMessage>,
         profileInfo: String? = null,
-        isFullRead: Boolean = false
+        isFullRead: Boolean = false,
+        userHint: String? = null
     ): SuggestionResult {
         return try {
             val isConversationStarter = currentScreenMessages.isEmpty()
@@ -36,8 +37,12 @@ class GenerateReplyUseCase @Inject constructor(
 
             val systemPrompt = buildSystemPromptUseCase()
 
+            val hintSection = if (!userHint.isNullOrBlank()) {
+                "\nUSER DIRECTION: Focus on: \"$userHint\". Incorporate this into all 4 replies while keeping each vibe distinct.\n"
+            } else ""
+
             val userPrompt = if (isConversationStarter) {
-                buildConversationStarterPrompt(personName, profileInfo)
+                buildConversationStarterPrompt(personName, profileInfo) + hintSection
             } else {
                 Log.d("RizzBot", "GenerateReply: loading conversation history")
                 val history = getConversationHistoryUseCase(personName)
@@ -50,13 +55,14 @@ class GenerateReplyUseCase @Inject constructor(
                 val isThinConversation = history.size <= 3
                 val lastMessage = history.lastOrNull()?.text ?: ""
 
-                if (isThinConversation && !profileInfo.isNullOrBlank()) {
+                val basePrompt = if (isThinConversation && !profileInfo.isNullOrBlank()) {
                     buildThinConvoWithProfilePrompt(personName, profileInfo, conversationContext, lastMessage, timeGapNote)
                 } else if (isThinConversation) {
                     buildThinConvoNoProfilePrompt(personName, conversationContext, lastMessage, timeGapNote)
                 } else {
                     buildNormalConvoPrompt(personName, profileInfo, conversationContext, lastMessage, timeGapNote)
                 }
+                basePrompt + hintSection
             }
 
             Log.d("RizzBot", "GenerateReply: calling LLM (4 vibes)")
@@ -72,7 +78,8 @@ class GenerateReplyUseCase @Inject constructor(
 
     suspend fun invokeNewTopic(
         personName: String,
-        profileInfo: String? = null
+        profileInfo: String? = null,
+        userHint: String? = null
     ): SuggestionResult {
         return try {
             Log.d("RizzBot", "GenerateNewTopic: person=$personName, profile=${!profileInfo.isNullOrBlank()}")
@@ -81,7 +88,10 @@ class GenerateReplyUseCase @Inject constructor(
             val history = getConversationHistoryUseCase(personName)
             val now = System.currentTimeMillis()
 
-            val userPrompt = buildNewTopicPrompt(personName, profileInfo, history, now)
+            val hintSection = if (!userHint.isNullOrBlank()) {
+                "\nUSER DIRECTION: Focus on: \"$userHint\". Incorporate this into all 4 replies while keeping each vibe distinct.\n"
+            } else ""
+            val userPrompt = buildNewTopicPrompt(personName, profileInfo, history, now) + hintSection
 
             Log.d("RizzBot", "GenerateNewTopic: calling LLM")
             val rawReply = llmRepository.generateReply(systemPrompt, userPrompt)
@@ -190,7 +200,9 @@ TASK: First message to $personName. Cold open — make it count.
 PROFILE:
 $profileInfo
 
-Pick 4 DIFFERENT specific details from their profile. For each, build a fun question, assumption, or scenario around it. Don't say "I noticed you like X" — just USE the detail naturally.
+Pick 4 DIFFERENT specific details from their profile. For each, build a fun question, assumption, or scenario around it.
+NEVER say "I noticed you like X" or "I see you're into X" — weave the detail in naturally as if you already know it.
+Try connecting two profile details together in at least one reply for depth.
 Each reply must reference a DIFFERENT profile detail. Be specific, not generic.
             """.trimIndent()
         } else {
@@ -198,6 +210,7 @@ Each reply must reference a DIFFERENT profile detail. Be specific, not generic.
 TASK: First message to $personName. No profile info available.
 
 Be memorable in under 20 words. Use: fun dilemmas, bold assumptions, mini scenarios, or playful frames. Each reply uses a different approach. Must require zero context to reply to.
+Don't sound like every other guy in their DMs. Surprise them.
             """.trimIndent()
         }
     }
@@ -220,7 +233,10 @@ $conversationContext
 
 LAST MESSAGE: "$lastMessage"
 
-Respond to what they said FIRST, then weave in a specific profile detail as a hook. If their message is low-effort, pivot to something interesting from their profile. Each reply uses a DIFFERENT profile detail. Match their language.
+Respond to what they said FIRST, then weave in a specific profile detail as a hook.
+If their message is low-effort ("hi", "hey", "haha"), DON'T match their energy — bring something interesting from their profile instead.
+Each reply uses a DIFFERENT profile detail. Don't reference a detail the conversation already covered.
+Match their language. Don't repeat their words back to them.
         """.trimIndent()
     }
 
@@ -238,7 +254,11 @@ $conversationContext
 
 LAST MESSAGE: "$lastMessage"
 
-Respond to what they said, then add personality — humor, curiosity, or a fun assumption about them. End with a hook (playful question, bold assumption, mini challenge). Never interview them. If they sent low-effort ("hi", "hey"), bring MORE energy. Match their language.
+Respond to what they said, then add personality — humor, curiosity, or a fun assumption about them.
+End with a hook (playful question, bold assumption, mini challenge). Never interview them with boring questions.
+If they sent low-effort ("hi", "hey", "haha"), bring WAY more energy — make them want to match yours.
+Don't repeat what they said. Build forward. Each reply should feel like a different person wrote it.
+Match their language.
         """.trimIndent()
     }
 
@@ -261,7 +281,16 @@ $conversationContext
 
 LAST MESSAGE: "$lastMessage"
 
-Respond to what they said first. Then advance — new angle, go deeper, or escalate. Match their energy: if flirty lean in, if dropping pivot to unused profile detail, if testing you play along. End each reply with a hook. Each of the 4 replies takes a different angle or uses a different detail. Match their language.
+CONVERSATION HEALTH CHECK:
+- If the last 3+ messages are about the same topic → at least ONE reply MUST change the subject entirely
+- If they're giving shorter replies → don't push harder on the same thing, pivot to something fresh
+- If the vibe is dying → go bold or funny, don't play it safe
+
+Respond to what they said first. Then advance — new angle, go deeper, or escalate.
+Match their energy: if flirty lean in, if energy is dropping pivot to an unused profile detail, if they're testing you then play along confidently.
+End each reply with a hook. Each of the 4 replies takes a COMPLETELY different angle.
+Don't repeat topics or questions already covered in the chat. Move the conversation FORWARD.
+Match their language.
         """.trimIndent()
     }
 
@@ -289,7 +318,13 @@ $profileSection
 
 $conversationSummary
 
-Use 4 different strategies: (1) untapped profile detail with a fun spin, (2) creative hypothetical tied to their interests, (3) shared experience seed ("I feel like we'd..."), (4) playful debate on something they'd care about. Each must be specific, not generic. Keep it 1-3 sentences, conversational. Match their language.
+Use 4 different strategies:
+(1) Untapped profile detail with a fun spin — don't just mention it, build a scenario around it
+(2) Creative hypothetical tied to their interests — "would you rather" or "what if" that reveals personality
+(3) Shared experience seed — "I feel like we'd..." or "okay but imagine us at..." that creates a shared future image
+(4) Playful debate on something they'd actually care about based on their profile/interests
+
+Each must be specific and surprising, not generic. Keep it 1-3 sentences, conversational. Match their language.
         """.trimIndent()
     }
 }

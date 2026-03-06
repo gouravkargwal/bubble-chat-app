@@ -18,30 +18,35 @@ data class ParsedProfile(
     /** Build a concise text summary for the LLM prompt */
     fun toPromptString(): String {
         val parts = mutableListOf<String>()
-        parts.add("[Dating app profile — all items below are from her profile, NOT about AI/tech]")
-        parts.add("Name: $name")
-        age?.let { parts.add("Age: $it") }
+        parts.add("[Her dating profile — use these details CREATIVELY, don't just reference them]")
+
+        // Name + Age on one line
+        val nameAge = buildString {
+            append("Name: $name")
+            age?.let { append(", Age: $it") }
+        }
+        parts.add(nameAge)
 
         // Basics with context (zodiac signs, height, religion, relationship status, etc.)
         if (basics.isNotEmpty()) {
             val labeled = basics.map { categorizeBasic(it) }
-            parts.add("About her: ${labeled.joinToString(", ")}")
+            parts.add("Vibe check: ${labeled.joinToString(", ")}")
         }
 
+        hometown?.let { parts.add("From: $it (hometown pride? homesick? explore this)") }
         education?.let { parts.add("Education: $it") }
-        hometown?.let { parts.add("Hometown: $it") }
         distance?.let { parts.add("Distance: $it") }
         motherTongue?.let { parts.add("Mother tongue: $it") }
-        if (languages.isNotEmpty()) parts.add("Languages she speaks: ${languages.joinToString(", ")}")
+        if (languages.isNotEmpty()) parts.add("She speaks: ${languages.joinToString(", ")}")
 
         if (qaPrompts.isNotEmpty()) {
-            parts.add("Her dating app Q&A:")
-            qaPrompts.forEach { parts.add("  Q: ${it.question} → Her answer: ${it.answer}") }
+            parts.add("Her Q&A (goldmine for conversation):")
+            qaPrompts.forEach { parts.add("  \"${it.question}\" → \"${it.answer}\" (build on this!)") }
         }
 
-        if (interests.isNotEmpty()) parts.add("Her hobbies/interests: ${interests.joinToString(", ")}")
-        if (traits.isNotEmpty()) parts.add("Her personality traits: ${traits.joinToString(", ")}")
-        if (philosophy.isNotEmpty()) parts.add("Her life philosophy/preferences: ${philosophy.joinToString(", ")}")
+        if (interests.isNotEmpty()) parts.add("Interests: ${interests.joinToString(", ")} (pick specific ones, don't list them all)")
+        if (traits.isNotEmpty()) parts.add("Personality: ${traits.joinToString(", ")}")
+        if (philosophy.isNotEmpty()) parts.add("Philosophy: ${philosophy.joinToString(", ")} (share or debate these)")
         relationshipGoal?.let { parts.add("Looking for: $it") }
         return parts.joinToString("\n")
     }

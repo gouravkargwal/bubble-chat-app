@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,6 +34,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,7 +46,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,12 +64,15 @@ fun SuggestionCard(
     onDismiss: () -> Unit,
     onRefreshReplies: () -> Unit = {},
     onNewTopicClick: () -> Unit = {},
-    onReadFullChat: () -> Unit = {}
+    onReadFullChat: () -> Unit = {},
+    onGenerateWithHint: (String) -> Unit = {},
+    onFocusChanged: (Boolean) -> Unit = {}
 ) {
     var selectedIndex by remember { mutableIntStateOf(0) }
     var copied by remember { mutableStateOf(false) }
     var pasted by remember { mutableStateOf(false) }
     var showSyncHint by remember { mutableStateOf(false) }
+    var hintText by remember { mutableStateOf("") }
     val copyButtonColor by animateColorAsState(
         targetValue = if (copied) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
         label = "copy_button_color"
@@ -76,6 +84,7 @@ fun SuggestionCard(
     Card(
         modifier = Modifier
             .widthIn(max = 300.dp)
+            .heightIn(max = 520.dp)
             .padding(8.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -83,7 +92,11 @@ fun SuggestionCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -112,9 +125,8 @@ fun SuggestionCard(
 
             Spacer(Modifier.height(6.dp))
 
-            // Reply options (scrollable if many)
+            // Reply options
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 suggestions.forEachIndexed { index, suggestion ->
@@ -163,23 +175,60 @@ fun SuggestionCard(
 
             Spacer(Modifier.height(8.dp))
 
-            // Action row: Refresh + Read Full Chat + New Topic
+            // Hint input field
+            OutlinedTextField(
+                value = hintText,
+                onValueChange = { hintText = it },
+                placeholder = {
+                    Text(
+                        "Guide AI (e.g. talk about travel)",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focusState ->
+                        onFocusChanged(focusState.isFocused)
+                    },
+                textStyle = TextStyle(fontSize = 12.sp),
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                )
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            // Action row: Refresh/Generate with hint + Read Full Chat + New Topic
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                TextButton(onClick = onRefreshReplies) {
+                TextButton(
+                    onClick = {
+                        if (hintText.isNotBlank()) {
+                            onGenerateWithHint(hintText)
+                        } else {
+                            onRefreshReplies()
+                        }
+                    }
+                ) {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (hintText.isNotBlank()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.width(3.dp))
                     Text(
-                        "Refresh",
+                        if (hintText.isNotBlank()) "Go" else "Refresh",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (hintText.isNotBlank()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 TextButton(onClick = onReadFullChat) {

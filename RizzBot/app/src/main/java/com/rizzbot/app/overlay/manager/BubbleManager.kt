@@ -42,6 +42,7 @@ class BubbleManager @Inject constructor(
     var onRefreshReplies: (() -> Unit)? = null
     var onNewTopicClicked: (() -> Unit)? = null
     var onReadFullChat: (() -> Unit)? = null
+    var onGenerateWithHint: ((String) -> Unit)? = null
 
     private val layoutParams = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -130,6 +131,19 @@ class BubbleManager @Inject constructor(
         ensureOverlayVisible()
     }
 
+    /** Toggle focusable flag so the keyboard can appear when editing the hint TextField */
+    private fun setOverlayFocusable(focusable: Boolean) {
+        overlayView ?: return
+        if (focusable) {
+            layoutParams.flags = layoutParams.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        } else {
+            layoutParams.flags = layoutParams.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
+        try {
+            windowManager.updateViewLayout(overlayView, layoutParams)
+        } catch (_: Exception) { }
+    }
+
     fun hide() {
         bubbleState = BubbleState.Hidden
         removeOverlay()
@@ -167,7 +181,9 @@ class BubbleManager @Inject constructor(
                         onSyncProfile = { onSyncProfile?.invoke() },
                         onRefreshReplies = { onRefreshReplies?.invoke() },
                         onNewTopicClick = { onNewTopicClicked?.invoke() },
-                        onReadFullChat = { onReadFullChat?.invoke() }
+                        onReadFullChat = { onReadFullChat?.invoke() },
+                        onGenerateWithHint = { hint -> onGenerateWithHint?.invoke(hint) },
+                        onFocusChanged = { focused -> setOverlayFocusable(focused) }
                     )
                 }
             }

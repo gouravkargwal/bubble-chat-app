@@ -7,5 +7,5 @@ object Constants {
     const val NOTIFICATION_CHANNEL_NAME = "RizzBot Overlay"
     const val OVERLAY_NOTIFICATION_ID = 1001
     const val LLM_MAX_TOKENS = 2048
-    const val LLM_TEMPERATURE = 0.9
+    const val LLM_TEMPERATURE = 1.0
 }

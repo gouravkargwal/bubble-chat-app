@@ -63,7 +63,9 @@ fun BubbleOverlay(
     onSyncProfile: () -> Unit = {},
     onRefreshReplies: () -> Unit = {},
     onNewTopicClick: () -> Unit = {},
-    onReadFullChat: () -> Unit = {}
+    onReadFullChat: () -> Unit = {},
+    onGenerateWithHint: (String) -> Unit = {},
+    onFocusChanged: (Boolean) -> Unit = {}
 ) {
     // Auto-expand when suggestion arrives
     var expanded by remember { mutableStateOf(false) }
@@ -352,7 +354,9 @@ fun BubbleOverlay(
                         },
                         onRefreshReplies = onRefreshReplies,
                         onNewTopicClick = onNewTopicClick,
-                        onReadFullChat = onReadFullChat
+                        onReadFullChat = onReadFullChat,
+                        onGenerateWithHint = onGenerateWithHint,
+                        onFocusChanged = onFocusChanged
                     )
                 }
                 is BubbleState.Loading -> {

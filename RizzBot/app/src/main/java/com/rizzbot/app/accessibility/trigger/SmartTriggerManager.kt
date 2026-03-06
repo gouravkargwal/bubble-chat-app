@@ -37,16 +37,17 @@ class SmartTriggerManager @Inject constructor(
         conversationMessages: List<ParsedMessage>,
         scope: CoroutineScope,
         profileInfo: String? = null,
-        isFullRead: Boolean = false
+        isFullRead: Boolean = false,
+        userHint: String? = null
     ) {
         currentJob?.cancel()
         currentPersonName = personName
 
-        Log.d(TAG, "SmartTrigger: manual trigger for $personName, msgs=${conversationMessages.size}, fullRead=$isFullRead")
+        Log.d(TAG, "SmartTrigger: manual trigger for $personName, msgs=${conversationMessages.size}, fullRead=$isFullRead, hint=${userHint?.take(30)}")
         overlayEventBus.tryEmit(OverlayEvent.ShowLoading("Generating replies..."))
 
         currentJob = scope.launch {
-            val result = generateReplyUseCase(personName, conversationMessages, profileInfo, isFullRead)
+            val result = generateReplyUseCase(personName, conversationMessages, profileInfo, isFullRead, userHint)
 
             when (result) {
                 is SuggestionResult.Success -> {
@@ -65,16 +66,17 @@ class SmartTriggerManager @Inject constructor(
     fun onConversationStarterTrigger(
         personName: String,
         scope: CoroutineScope,
-        profileInfo: String?
+        profileInfo: String?,
+        userHint: String? = null
     ) {
         currentJob?.cancel()
         currentPersonName = personName
 
-        Log.d(TAG, "SmartTrigger: new topic for $personName")
+        Log.d(TAG, "SmartTrigger: new topic for $personName, hint=${userHint?.take(30)}")
         overlayEventBus.tryEmit(OverlayEvent.ShowLoading("Finding fresh topics..."))
 
         currentJob = scope.launch {
-            val result = generateReplyUseCase.invokeNewTopic(personName, profileInfo)
+            val result = generateReplyUseCase.invokeNewTopic(personName, profileInfo, userHint)
 
             when (result) {
                 is SuggestionResult.Success -> {
@@ -113,13 +115,14 @@ class SmartTriggerManager @Inject constructor(
         personName: String,
         conversationMessages: List<ParsedMessage>,
         scope: CoroutineScope,
-        profileInfo: String? = null
+        profileInfo: String? = null,
+        userHint: String? = null
     ) {
-        Log.d(TAG, "SmartTrigger: refresh replies for $personName")
+        Log.d(TAG, "SmartTrigger: refresh replies for $personName, hint=${userHint?.take(30)}")
         overlayEventBus.tryEmit(OverlayEvent.ShowLoading("Refreshing replies..."))
 
         currentJob = scope.launch {
-            val result = generateReplyUseCase(personName, conversationMessages, profileInfo)
+            val result = generateReplyUseCase(personName, conversationMessages, profileInfo, userHint = userHint)
 
             when (result) {
                 is SuggestionResult.Success -> {

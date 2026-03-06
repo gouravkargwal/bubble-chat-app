@@ -209,6 +209,14 @@ class AisleProfileParser @Inject constructor() {
         if (profileRvNodes.isEmpty()) return parseVisibleProfile(root)
 
         val profileRv = profileRvNodes[0]
+
+        // Scroll to top first so we don't miss early fields (name, age, etc.)
+        var scrolledToTop = true
+        while (scrolledToTop) {
+            scrolledToTop = profileRv.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+            if (scrolledToTop) kotlinx.coroutines.delay(300)
+        }
+
         val allQA = mutableSetOf<QAPair>()
         val allLanguages = mutableSetOf<String>()
         val allBasics = mutableSetOf<String>()
@@ -246,11 +254,11 @@ class AisleProfileParser @Inject constructor() {
             val scrolled = profileRv.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
             if (!scrolled) break
 
-            kotlinx.coroutines.delay(300) // Let RecyclerView settle
+            kotlinx.coroutines.delay(500) // Let RecyclerView settle
             scrollAttempts++
 
             val newSize = allQA.size + allLanguages.size + allBasics.size +
-                    allInterests.size + allTraits.size
+                    allInterests.size + allTraits.size + allPhilosophy.size
 
             // If no new data after scroll, we've seen everything
             if (newSize == previousSize && scrollAttempts > 2) break
@@ -335,14 +343,22 @@ class AisleProfileParser @Inject constructor() {
     private fun findHometown(root: AccessibilityNodeInfo): String? {
         val htNodes = root.findAccessibilityNodeInfosByViewId(ID_HOME_TOWN_TEXT)
         if (htNodes.isEmpty()) return null
+
+        // The hometown label node's parent contains the actual hometown value
+        // as a sibling profile_general_text node
+        val htLabel = htNodes[0]
+        val parent = htLabel.parent
         htNodes.forEach { it.recycle() }
 
-        // Hometown value is a profile_general_text in the same container
-        // We look for the general text that follows the HOME TOWN label
-        val allGeneral = findAllTextsById(root, ID_PROFILE_GENERAL_TEXT)
-        // Hometown is typically one of the general texts - we can't perfectly distinguish
-        // but it's usually after distance. We'll handle it by checking the context
-        return null // Will be picked up from basics with HOME TOWN label context
+        if (parent != null) {
+            // Search the parent for a profile_general_text child
+            val generalTexts = findAllTextsById(parent, ID_PROFILE_GENERAL_TEXT)
+            parent.recycle()
+            // Filter out obvious non-hometown values (distance, etc.)
+            return generalTexts.firstOrNull { !it.contains("km away", ignoreCase = true) }
+        }
+
+        return null
     }
 
     private fun findInterests(root: AccessibilityNodeInfo): List<String> {
