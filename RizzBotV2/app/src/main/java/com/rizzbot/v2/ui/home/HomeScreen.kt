@@ -1,0 +1,444 @@
+package com.rizzbot.v2.ui.home
+
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.rizzbot.v2.domain.model.UserPreferences
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private val Pink = Color(0xFFE91E63)
+private val DarkBg = Color(0xFF0F0F1A)
+private val CardBg = Color(0xFF1A1A2E)
+private val DividerColor = Color(0xFF252542)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen(
+    onNavigateToSettings: () -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToStats: () -> Unit,
+    onNavigateToOptimize: () -> Unit,
+    onNavigateToSync: () -> Unit,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshPermissionStatus()
+        onPauseOrDispose {}
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("RizzBot", fontWeight = FontWeight.Bold) },
+                actions = {
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = DarkBg,
+                    titleContentColor = Color.White
+                )
+            )
+        },
+        containerColor = DarkBg
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 1. HERO CARD — Service Toggle
+            HeroCard(
+                isEnabled = state.isServiceEnabled,
+                hasPermission = state.hasOverlayPermission,
+                onToggle = { viewModel.toggleService(it) },
+                onGrantPermission = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                    )
+                }
+            )
+
+            // 2. FEATURES ROW — 3 core features
+            Text("Features", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.QuestionAnswer,
+                    title = "Replies",
+                    subtitle = "AI suggestions",
+                    accentColor = Pink,
+                    onClick = onNavigateToHistory
+                )
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.AutoAwesome,
+                    title = "Optimize",
+                    subtitle = "Your profile",
+                    accentColor = Color(0xFF9C27B0),
+                    onClick = onNavigateToOptimize
+                )
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.PersonSearch,
+                    title = "Sync",
+                    subtitle = "Their profile",
+                    accentColor = Color(0xFF2196F3),
+                    onClick = onNavigateToSync
+                )
+            }
+
+            // 3. STATS ROW
+            StatsRow(
+                generated = state.totalRepliesGenerated,
+                copied = state.totalRepliesCopied
+            )
+
+            // 4. HOW IT WORKS (dismissible)
+            if (state.showHowItWorks) {
+                HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
+            }
+
+            // 5. RECENT REPLIES
+            RecentRepliesSection(
+                replies = state.recentReplies,
+                onSeeAll = onNavigateToHistory
+            )
+
+            // 6. RIZZ PROFILE
+            val profile = state.rizzProfile
+            if (profile != null && profile.hasEnoughData) {
+                RizzProfileCard(
+                    preferences = profile,
+                    onSeeFullStats = onNavigateToStats
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun FeatureCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier.clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accentColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text(subtitle, color = Color.Gray, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun HeroCard(
+    isEnabled: Boolean,
+    hasPermission: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onGrantPermission: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp).animateContentSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (isEnabled) "RizzBot is ACTIVE" else "RizzBot is Inactive",
+                        color = if (isEnabled) Pink else Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        if (isEnabled) "Bubble is floating on screen" else "Tap to start the magic",
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+                }
+                Switch(
+                    checked = isEnabled,
+                    onCheckedChange = onToggle,
+                    enabled = hasPermission,
+                    colors = SwitchDefaults.colors(checkedTrackColor = Pink)
+                )
+            }
+
+            if (!hasPermission) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Pink.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.clickable { onGrantPermission() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = Pink, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Overlay permission required. Tap to grant.", color = Color.White, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatsRow(generated: Int, copied: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        StatCard(modifier = Modifier.weight(1f), value = "$generated", label = "Generated")
+        StatCard(modifier = Modifier.weight(1f), value = "$copied", label = "Copied")
+    }
+}
+
+@Composable
+private fun StatCard(modifier: Modifier = Modifier, value: String, label: String) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(value, color = Pink, fontWeight = FontWeight.Bold, fontSize = 24.sp)
+            Text(label, color = Color.Gray, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun HowItWorksCard(onDismiss: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("How It Works", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            StepItem(number = "1", text = "Open any dating app (Tinder, Bumble, Hinge...)")
+            StepItem(number = "2", text = "Tap the floating bubble when you see a chat")
+            StepItem(number = "3", text = "Pick a vibe direction (Flirty, Witty, etc.)")
+            StepItem(number = "4", text = "Copy the AI reply and send it!")
+        }
+    }
+}
+
+@Composable
+private fun StepItem(number: String, text: String) {
+    Row(
+        modifier = Modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Pink.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(number, color = Pink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(text, color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+    }
+}
+
+@Composable
+private fun RecentRepliesSection(
+    replies: List<com.rizzbot.v2.data.local.db.entity.ReplyHistoryEntity>,
+    onSeeAll: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Recent Replies", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                TextButton(onClick = onSeeAll) {
+                    Text("See all", color = Pink, fontSize = 13.sp)
+                }
+            }
+
+            if (replies.isEmpty()) {
+                Text(
+                    "No replies yet. Open a dating app and tap the bubble!",
+                    color = Color.Gray,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                replies.forEachIndexed { index, entry ->
+                    if (index > 0) HorizontalDivider(color = DividerColor, modifier = Modifier.padding(vertical = 8.dp))
+                    ReplyItem(entry)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplyItem(entry: com.rizzbot.v2.data.local.db.entity.ReplyHistoryEntity) {
+    val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                entry.personContext?.take(30) ?: "Unknown",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                dateFormat.format(Date(entry.createdAt)),
+                color = Color.Gray,
+                fontSize = 11.sp
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            entry.reply1,
+            color = Color.Gray,
+            fontSize = 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun RizzProfileCard(preferences: UserPreferences, onSeeFullStats: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Your Rizz Profile", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                TextButton(onClick = onSeeFullStats) {
+                    Text("Full stats", color = Pink, fontSize = 13.sp)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            preferences.vibeBreakdown.forEach { (vibe, percentage) ->
+                VibeBar(label = vibe, progress = percentage)
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun VibeBar(label: String, progress: Float) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, color = Color.White, fontSize = 13.sp)
+            Text("${(progress * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = Pink,
+            trackColor = DividerColor
+        )
+    }
+}

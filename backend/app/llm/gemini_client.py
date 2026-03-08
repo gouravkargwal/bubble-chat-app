@@ -1,0 +1,121 @@
+"""Gemini vision client using REST API."""
+
+import httpx
+import structlog
+
+from app.llm.base import LlmClient
+
+logger = structlog.get_logger()
+
+_RETRY_ATTEMPTS = 3
+_RETRY_DELAY = 1.0
+
+
+class GeminiClient(LlmClient):
+    def __init__(self, api_key: str, default_model: str = "gemini-2.5-flash") -> None:
+        self.api_key = api_key
+        self.default_model = default_model
+        self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=60.0))
+
+    async def vision_generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        base64_image: str,
+        temperature: float,
+        model: str | None = None,
+    ) -> str:
+        model = model or self.default_model
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
+            f":generateContent?key={self.api_key}"
+        )
+
+        parts: list[dict] = [{"text": user_prompt}]
+        if base64_image:
+            parts.append({
+                "inlineData": {
+                    "mimeType": "image/jpeg",
+                    "data": base64_image,
+                }
+            })
+
+        payload = {
+            "systemInstruction": {
+                "parts": [{"text": system_prompt}]
+            },
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": 2000,
+                "responseMimeType": "application/json",
+            },
+        }
+
+        last_error: Exception | None = None
+        for attempt in range(1, _RETRY_ATTEMPTS + 1):
+            try:
+                response = await self._client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+
+                # Extract text from Gemini response
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    raise ValueError("No candidates in Gemini response")
+
+                content = candidates[0].get("content", {})
+                parts = content.get("parts", [])
+                if not parts:
+                    raise ValueError("No parts in Gemini response")
+
+                text = parts[0].get("text", "")
+                if not text:
+                    raise ValueError("Empty text in Gemini response")
+
+                logger.info(
+                    "gemini_success",
+                    model=model,
+                    attempt=attempt,
+                    response_length=len(text),
+                )
+                return text
+
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                status = e.response.status_code
+                logger.warning(
+                    "gemini_http_error",
+                    status=status,
+                    attempt=attempt,
+                    body=e.response.text[:200],
+                )
+                if status == 401 or status == 403:
+                    raise ValueError("Invalid Gemini API key") from e
+                if status == 429:
+                    raise ValueError("Gemini rate limit exceeded") from e
+                if status < 500 and status != 429:
+                    raise
+                # Retry on 5xx
+                if attempt < _RETRY_ATTEMPTS:
+                    import asyncio
+                    await asyncio.sleep(_RETRY_DELAY * attempt)
+
+            except httpx.TimeoutException as e:
+                last_error = e
+                logger.warning("gemini_timeout", attempt=attempt)
+                if attempt < _RETRY_ATTEMPTS:
+                    import asyncio
+                    await asyncio.sleep(_RETRY_DELAY * attempt)
+
+            except Exception as e:
+                last_error = e
+                logger.error("gemini_error", error=str(e), attempt=attempt)
+                if attempt < _RETRY_ATTEMPTS:
+                    import asyncio
+                    await asyncio.sleep(_RETRY_DELAY * attempt)
+
+        raise last_error or RuntimeError("Gemini request failed after all retries")
+
+    async def close(self) -> None:
+        await self._client.aclose()

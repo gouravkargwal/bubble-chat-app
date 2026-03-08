@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">RizzBot</string>
-    <string name="accessibility_service_description">RizzBot reads chat messages from the Aisle dating app to suggest engaging reply suggestions. It only accesses Aisle\'s chat screen and does not read content from any other app. Your chat data is sent to your chosen AI provider solely to generate reply suggestions and is not stored on any external server.</string>
-</resources>
