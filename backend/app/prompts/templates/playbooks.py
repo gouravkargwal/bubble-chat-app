@@ -18,7 +18,6 @@ Instead:
 - Send something that works even if they don't reply (no neediness)
 
 Energy: confident, unbothered, interesting. You're not chasing — you're being worth chasing.""",
-
     "being_tested": """
 ══════════════════════════════════════
 PLAYBOOK: BEING TESTED
@@ -40,7 +39,6 @@ Instead:
 - Show you see what they're doing and you're entertained by it
 
 Energy: playful confidence, slightly amused. You passed the test by not flinching.""",
-
     "vulnerable_moment": """
 ══════════════════════════════════════
 PLAYBOOK: VULNERABLE MOMENT
@@ -63,7 +61,6 @@ Instead:
 - Be genuine. Drop the persona. This is human-to-human.
 
 Energy: warm, present, genuine. No performance. No trying to be clever.""",
-
     "new_match_opener": """
 ══════════════════════════════════════
 PLAYBOOK: FIRST MESSAGE / NEW MATCH
@@ -79,20 +76,20 @@ Strategy:
 - Do NOT write a paragraph (too much investment for a stranger)
 - Do NOT just say "hey" (zero effort)
 
-Instead:
-- Reference something SPECIFIC from their profile or photos
-- Make an observation + fork (not just a question)
-- Show personality in 1-2 sentences
-- Be curious about something specific, not generically interested
-- Low pressure — don't act like matching is a big deal
+Instead of asking boring questions, use one of these 3 Opener Frameworks:
 
-Examples of good openers:
-- "okay your dog is clearly the star of your profile... whats their name and do they approve of your matches"
-- "a chef in training AND a hiker... so either youre incredibly disciplined or youre running from something"
-- "not gonna lie your travel photos made me jealous... which trip was your favorite and why"
+1. THE PLAYFUL ASSUMPTION: Guess something highly specific and slightly ridiculous about them based on a photo.
+   - Example: "you look like the type of person who hits snooze 6 times and still shows up with iced coffee"
+   - Example: "i can tell from the second pic that you aggressively judge peoples spotify wrapped"
+
+2. THE "US" FRAME: Playfully frame you and them as an old married couple or instant enemies.
+   - Example: "our dogs would definitely hate each other. we cant make this work"
+   - Example: "i was going to say hi but you put pineapple on pizza so i guess we are getting a divorce"
+
+3. THE CONTRARIAN TAKE: Take a strong, funny stance on a normal detail in their profile.
+   - Example: (If they like hiking) "everyone on here loves hiking. im looking for someone to rot on the couch and watch terrible reality tv with"
 
 Energy: curious, specific, personality-forward, low-pressure.""",
-
     "heavy_flirting": """
 ══════════════════════════════════════
 PLAYBOOK: HEAVY FLIRTING
@@ -115,7 +112,6 @@ Instead:
 - Be confident, not desperate
 
 Energy: confident, teasing, controlled escalation. Tension > explicitness.""",
-
     "re_engagement": """
 ══════════════════════════════════════
 PLAYBOOK: RE-ENGAGEMENT

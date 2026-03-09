@@ -52,6 +52,9 @@ class BubbleManager @Inject constructor(
     private var bubbleX: Int
     private var bubbleY = 400
     private var stateCollectorJob: Job? = null
+    // When non-null, we're in "add more screenshots" mode and the next bubble tap
+    // should append a screenshot for this direction instead of reopening the picker.
+    private var pendingAppendDirection: DirectionWithHint? = null
 
     init {
         // Default position: right edge, vertically centered
@@ -196,7 +199,38 @@ class BubbleManager @Inject constructor(
                         SuggestionResult.ErrorType.QUOTA_EXCEEDED
                     )
                 } else {
-                    _state.value = BubbleState.DirectionPicker
+                    val appendDirection = pendingAppendDirection
+                    if (appendDirection != null) {
+                        // We're in "add more screenshots" mode: append another capture
+                        // without clearing previous ones, after the user tapped the bubble again.
+                        pendingAppendDirection = null
+                        activeScope.launch {
+                            hideForCapture()
+                            kotlinx.coroutines.delay(300)
+
+                            try {
+                                orchestrator.captureScreenshot()
+                            } finally {
+                                if (composeView == null) {
+                                    composeView = createAndAttachView()
+                                }
+                            }
+
+                            val previewBitmaps = orchestrator.getPreviewBitmaps()
+                            if (previewBitmaps.isNotEmpty()) {
+                                _state.value = BubbleState.ScreenshotPreview(previewBitmaps, appendDirection)
+                            } else {
+                                val result = orchestrator.result.value
+                                _state.value = when (result) {
+                                    is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                                    else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
+                                }
+                            }
+                        }
+                    } else {
+                        // Normal flow: show direction picker for first capture
+                        _state.value = BubbleState.DirectionPicker
+                    }
                 }
             }
             is OverlayEvent.HideBubble -> hide()
@@ -244,7 +278,15 @@ class BubbleManager @Inject constructor(
                 }
             }
             is OverlayEvent.AddMoreScreenshots -> {
+                // Put the user back into bubble mode; the next tap on the bubble
+                // will capture an additional screenshot for this direction.
+                pendingAppendDirection = event.direction
+                _state.value = BubbleState.RizzButton
+            }
+            is OverlayEvent.RetakeLastScreenshot -> {
                 activeScope.launch {
+                    // Remove the last screenshot, then capture a new one to replace it
+                    orchestrator.removeLastScreenshot()
                     hideForCapture()
                     kotlinx.coroutines.delay(300)
 
@@ -259,6 +301,12 @@ class BubbleManager @Inject constructor(
                     val previewBitmaps = orchestrator.getPreviewBitmaps()
                     if (previewBitmaps.isNotEmpty()) {
                         _state.value = BubbleState.ScreenshotPreview(previewBitmaps, event.direction)
+                    } else {
+                        val result = orchestrator.result.value
+                        _state.value = when (result) {
+                            is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                            else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
+                        }
                     }
                 }
             }

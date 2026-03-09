@@ -102,7 +102,7 @@ fun BubbleOverlay(
                     maxScreenshots = usage.maxScreenshots,
                     onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
                     onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
-                    onRetake = { onEvent(OverlayEvent.CaptureRequested(s.direction)) },
+                    onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
                     onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )

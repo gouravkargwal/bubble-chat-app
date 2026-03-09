@@ -45,7 +45,8 @@ def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
     new_n = n + 1
 
     # Running average: reply length (characters)
-    current.avg_reply_length = (current.avg_reply_length * n + len(copied_text)) / new_n
+    base_avg = current.avg_reply_length or 0.0
+    current.avg_reply_length = (base_avg * n + len(copied_text)) / new_n
 
     # Emoji count
     emoji_count = len(
@@ -81,8 +82,16 @@ def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
     else:
         current.punctuation_style = "casual"
 
-    # Word frequency tracking
-    word_freq = json.loads(current.word_frequency) if current.word_frequency else {}
+    # Word frequency tracking (Bulletproof JSON parsing)
+    word_freq: dict[str, int] = {}
+    if current.word_frequency:
+        try:
+            parsed = json.loads(current.word_frequency)
+            if isinstance(parsed, dict):
+                word_freq = parsed
+        except (json.JSONDecodeError, TypeError):
+            # Fallback to empty dict if corrupted
+            pass
     words = copied_text.lower().split()
     for word in words:
         clean = word.strip(".,!?\"'()[]")
