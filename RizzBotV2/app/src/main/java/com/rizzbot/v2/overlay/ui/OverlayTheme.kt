@@ -9,9 +9,9 @@ private val OverlayColorScheme = darkColorScheme(
     primary = Color(0xFFE91E63),
     onPrimary = Color.White,
     secondary = Color(0xFF9C27B0),
-    surface = Color(0xFF1A1A2E),
+    surface = Color.Transparent,
     onSurface = Color.White,
-    background = Color(0xFF0F0F1A),
+    background = Color.Transparent,
     onBackground = Color.White,
     error = Color(0xFFEF5350)
 )

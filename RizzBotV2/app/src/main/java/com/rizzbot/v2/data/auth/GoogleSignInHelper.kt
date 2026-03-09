@@ -1,9 +1,12 @@
 package com.rizzbot.v2.data.auth
 
 import android.content.Context
+import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -30,47 +33,68 @@ class GoogleSignInHelper @Inject constructor(
     suspend fun signIn(activityContext: Context): GoogleSignInResult {
         val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
         if (webClientId.isBlank()) {
-            return GoogleSignInResult.Error("Google Sign-In not configured. Set GOOGLE_WEB_CLIENT_ID in gradle.properties.")
+            return GoogleSignInResult.Error("Google Sign-In is not configured yet.")
         }
 
         return try {
-            val googleIdOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(webClientId)
-                .build()
-
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
-                .build()
-
-            val result = credentialManager.getCredential(activityContext, request)
-            val credential = result.credential
-
-            if (credential is CustomCredential &&
-                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-            ) {
-                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                val idToken = googleIdTokenCredential.idToken
-
-                // Sign in to Firebase with the Google credential
-                val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-                val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
-                val firebaseIdToken = authResult.user?.getIdToken(false)?.await()?.token
-                    ?: return GoogleSignInResult.Error("Failed to get Firebase token")
-
-                // Send Firebase token to our backend to upgrade the account
-                val success = authManager.authenticateFirebase(firebaseIdToken)
-                if (success) {
-                    GoogleSignInResult.Success(firebaseIdToken)
-                } else {
-                    GoogleSignInResult.Error("Backend authentication failed")
-                }
-            } else {
-                GoogleSignInResult.Error("Unexpected credential type")
+            // First try authorized accounts for faster sign-in
+            val idToken = try {
+                getGoogleIdToken(activityContext, webClientId, filterByAuthorized = true)
+            } catch (e: NoCredentialException) {
+                // No previously authorized account — show full account picker
+                getGoogleIdToken(activityContext, webClientId, filterByAuthorized = false)
             }
+
+            if (idToken == null) {
+                return GoogleSignInResult.Error("Could not retrieve your Google account. Please try again.")
+            }
+
+            // Sign in to Firebase with the Google credential
+            val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+            val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
+            val firebaseIdToken = authResult.user?.getIdToken(false)?.await()?.token
+                ?: return GoogleSignInResult.Error("Something went wrong. Please try again.")
+
+            // Send Firebase token to our backend to upgrade the account
+            val success = authManager.authenticateFirebase(firebaseIdToken)
+            if (success) {
+                GoogleSignInResult.Success(firebaseIdToken)
+            } else {
+                GoogleSignInResult.Error("Unable to connect to server. Please check your internet and try again.")
+            }
+        } catch (e: GetCredentialCancellationException) {
+            GoogleSignInResult.Error("Sign-in was cancelled.")
+        } catch (e: NoCredentialException) {
+            GoogleSignInResult.Error("No Google account found on this device. Please add one in Settings.")
         } catch (e: Exception) {
-            GoogleSignInResult.Error(e.message ?: "Sign-in failed")
+            Log.e("GoogleSignIn", "Sign-in failed", e)
+            GoogleSignInResult.Error("Something went wrong. Please try again.")
         }
+    }
+
+    private suspend fun getGoogleIdToken(
+        activityContext: Context,
+        webClientId: String,
+        filterByAuthorized: Boolean
+    ): String? {
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(filterByAuthorized)
+            .setServerClientId(webClientId)
+            .build()
+
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        val result = credentialManager.getCredential(activityContext, request)
+        val credential = result.credential
+
+        if (credential is CustomCredential &&
+            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) {
+            return GoogleIdTokenCredential.createFrom(credential.data).idToken
+        }
+        return null
     }
 
     fun isSignedIn(): Boolean {

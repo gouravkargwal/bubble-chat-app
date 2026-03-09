@@ -65,6 +65,8 @@ class OnboardingViewModel @Inject constructor(
             when (val result = googleSignInHelper.signIn(activityContext)) {
                 is GoogleSignInResult.Success -> {
                     analyticsHelper.authCompleted()
+                    // Refresh usage so the app knows the user's actual tier
+                    hostedRepository.refreshUsage()
                     _state.update {
                         it.copy(
                             isAuthenticating = false,

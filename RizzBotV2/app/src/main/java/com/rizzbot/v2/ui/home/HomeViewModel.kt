@@ -57,11 +57,15 @@ class HomeViewModel @Inject constructor(
             }.collect { _state.value = it }
         }
 
+        // Collect usage state immediately (may already have correct value from onboarding)
         viewModelScope.launch {
-            hostedRepository.refreshUsage()
             hostedRepository.usageState.collect { usage ->
                 _state.update { it.copy(usage = usage) }
             }
+        }
+        // Refresh in background to ensure latest data
+        viewModelScope.launch {
+            hostedRepository.refreshUsage()
         }
 
         // Fetch recent history from backend

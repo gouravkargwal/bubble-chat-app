@@ -63,7 +63,10 @@ fun BubbleOverlay(
         currentState is BubbleState.Error
 
     OverlayTheme {
-        Box(modifier = if (isFullScreen) Modifier.fillMaxSize() else Modifier) {
+        Box(
+            modifier = if (isFullScreen) Modifier.fillMaxSize()
+            else Modifier.background(Color.Transparent)
+        ) {
             // Scrim behind panels
             if (isFullScreen) {
                 Box(
@@ -136,29 +139,11 @@ private fun RizzButton(
     onDrag: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = EaseInOutCubic),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
-
     var totalDragDistance by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = modifier
-            .scale(scale)
-            .shadow(
-                elevation = 12.dp,
-                shape = CircleShape,
-                ambientColor = AccentPink.copy(alpha = 0.4f),
-                spotColor = AccentPink.copy(alpha = 0.4f)
-            )
-            .size(60.dp)
+            .size(56.dp)
             .clip(CircleShape)
             .background(
                 Brush.radialGradient(
@@ -187,7 +172,7 @@ private fun RizzButton(
     ) {
         Text(
             text = "\uD83D\uDD25",
-            fontSize = 26.sp,
+            fontSize = 24.sp,
             textAlign = TextAlign.Center
         )
     }

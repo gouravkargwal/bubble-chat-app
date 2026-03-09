@@ -129,11 +129,10 @@ async def generate_replies(
         )
     except ValueError as e:
         error_msg = str(e)
-        if "Invalid" in error_msg and "key" in error_msg.lower():
-            raise HTTPException(status_code=401, detail="Invalid API key")
         if "rate limit" in error_msg.lower():
             raise HTTPException(status_code=429, detail="LLM rate limit. Try again in a minute.")
-        raise HTTPException(status_code=502, detail=f"LLM error: {error_msg}")
+        logger.error("llm_value_error", error=error_msg)
+        raise HTTPException(status_code=502, detail="Failed to generate replies. Try again.")
     except Exception as e:
         logger.error("llm_call_failed", error=str(e))
         raise HTTPException(status_code=502, detail="Failed to generate replies. Try again.")

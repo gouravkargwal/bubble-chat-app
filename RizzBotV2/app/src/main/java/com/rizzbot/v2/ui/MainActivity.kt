@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
+import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.local.datastore.SettingsDataStore
 import com.rizzbot.v2.ui.navigation.NavGraph
 import com.rizzbot.v2.ui.navigation.Screen
@@ -22,6 +23,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var settingsDataStore: SettingsDataStore
+    @Inject lateinit var authManager: AuthManager
 
     private val pendingNavigation = mutableStateOf<String?>(null)
 
@@ -39,10 +41,14 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
             val navigateTo = pendingNavigation.value
 
+            // Both onboarding AND valid auth required to skip to Home
+            // Auto Backup can restore DataStore (onboarding=true) but not EncryptedSharedPrefs
+            val canSkipOnboarding = onboardingCompleted && authManager.isAuthenticated()
+
             RizzBotV2Theme {
                 NavGraph(
                     navController = navController,
-                    startDestination = if (onboardingCompleted) Screen.Home.route else Screen.Onboarding.route
+                    startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route
                 )
             }
 
