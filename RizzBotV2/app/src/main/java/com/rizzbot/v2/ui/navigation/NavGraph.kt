@@ -1,6 +1,7 @@
 package com.rizzbot.v2.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,7 +17,7 @@ import com.rizzbot.v2.ui.premium.PremiumScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
 
-private const val ANIM_DURATION = 300
+private const val ANIM_DURATION = 450
 
 @Composable
 fun NavGraph(
@@ -29,25 +30,25 @@ fun NavGraph(
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(ANIM_DURATION)
+                animationSpec = tween(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
             ) + fadeIn(animationSpec = tween(ANIM_DURATION))
         },
         exitTransition = {
             slideOutOfContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(ANIM_DURATION)
+                animationSpec = tween(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
             ) + fadeOut(animationSpec = tween(ANIM_DURATION))
         },
         popEnterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(ANIM_DURATION)
+                animationSpec = tween(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
             ) + fadeIn(animationSpec = tween(ANIM_DURATION))
         },
         popExitTransition = {
             slideOutOfContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(ANIM_DURATION)
+                animationSpec = tween(durationMillis = ANIM_DURATION, easing = FastOutSlowInEasing)
             ) + fadeOut(animationSpec = tween(ANIM_DURATION))
         }
     ) {
