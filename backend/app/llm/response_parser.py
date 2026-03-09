@@ -49,7 +49,11 @@ def parse_llm_response(raw: str) -> ParsedLlmResponse:
     # Last resort: try to extract any 4 distinct lines as replies
     # NOTE: analysis data will be empty defaults — degrades conversation memory
     # and Voice DNA training. Log as error for monitoring.
-    lines = [line.strip() for line in raw.strip().split("\n") if line.strip() and len(line.strip()) > 10]
+    lines = [
+        line.strip()
+        for line in raw.strip().split("\n")
+        if line.strip() and len(line.strip()) > 10
+    ]
     if len(lines) >= 4:
         logger.error(
             "parse_fallback_lines_no_analysis",
@@ -98,19 +102,57 @@ def _parse_json(text: str) -> ParsedLlmResponse:
     # Parse replies
     replies = data.get("replies", [])
     if not replies:
+        logger.error(
+            "parse_json_no_replies",
+            data_keys=list(data.keys()),
+            raw_data=str(data)[:500],
+        )
         raise ValueError("No replies in JSON response")
 
-    # Clean up replies
+    logger.debug(
+        "parse_json_raw_replies",
+        replies_type=type(replies).__name__,
+        replies_count=len(replies),
+        first_reply_type=type(replies[0]).__name__ if replies else None,
+        first_reply_preview=str(replies[0])[:200] if replies else None,
+    )
+
+    # Clean up replies - handle both string and dict formats
     cleaned = []
-    for reply in replies[:4]:
-        reply = str(reply).strip()
+    for idx, reply in enumerate(replies[:4]):
+        # Handle dict replies (e.g., {"text": "..."} or {"reply": "..."})
+        if isinstance(reply, dict):
+            reply_text = (
+                reply.get("text") or reply.get("reply") or reply.get("content") or ""
+            )
+            logger.debug(
+                "parse_dict_reply",
+                index=idx,
+                keys=list(reply.keys()),
+                text_preview=reply_text[:100],
+            )
+            reply = str(reply_text).strip()
+        else:
+            reply = str(reply).strip()
+
         # Remove numbered prefixes like "1. " or "Reply 1: "
         reply = re.sub(r"^(?:\d+[\.\)]\s*|Reply\s*\d+:\s*|[A-Z][a-z]+:\s*)", "", reply)
         if reply:
             cleaned.append(reply)
 
     if not cleaned:
+        logger.error(
+            "parse_json_all_empty",
+            replies_raw=str(replies)[:500],
+            data_preview=str(data)[:500],
+        )
         raise ValueError("All replies were empty after cleaning")
+
+    logger.info(
+        "parse_json_success",
+        cleaned_count=len(cleaned),
+        reply_lengths=[len(r) for r in cleaned],
+    )
 
     return ParsedLlmResponse(analysis=analysis, strategy=strategy, replies=cleaned)
 

@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import count_today_interactions, get_current_user
 from app.api.v1.schemas.schemas import VisionRequest, VisionResponse
 from app.config import settings
-from app.domain.conversation import build_conversation_context, find_or_create_conversation
+from app.domain.conversation import (
+    build_conversation_context,
+    find_or_create_conversation,
+)
 from app.domain.tiers import get_effective_tier, get_tier_config
 from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
@@ -29,7 +32,9 @@ _client: GeminiClient | None = None
 def _get_client() -> GeminiClient:
     global _client
     if _client is None:
-        _client = GeminiClient(api_key=settings.gemini_api_key, default_model=settings.gemini_model)
+        _client = GeminiClient(
+            api_key=settings.gemini_api_key, default_model=settings.gemini_model
+        )
     return _client
 
 
@@ -60,11 +65,13 @@ async def generate_replies(
     elif request.image:
         images = [request.image]
     if not images:
-        raise HTTPException(status_code=400, detail="At least one screenshot is required.")
+        raise HTTPException(
+            status_code=400, detail="At least one screenshot is required."
+        )
 
     # 4. Enforce max screenshots per tier
     if len(images) > tier_config.max_screenshots:
-        images = images[-tier_config.max_screenshots:]  # keep most recent
+        images = images[-tier_config.max_screenshots :]  # keep most recent
 
     # 5. Validate direction against tier's allowed directions
     if request.direction not in tier_config.allowed_directions:
@@ -130,21 +137,35 @@ async def generate_replies(
     except ValueError as e:
         error_msg = str(e)
         if "rate limit" in error_msg.lower():
-            raise HTTPException(status_code=429, detail="LLM rate limit. Try again in a minute.")
+            raise HTTPException(
+                status_code=429, detail="LLM rate limit. Try again in a minute."
+            )
         logger.error("llm_value_error", error=error_msg)
-        raise HTTPException(status_code=502, detail="Failed to generate replies. Try again.")
+        raise HTTPException(
+            status_code=502, detail="Failed to generate replies. Try again."
+        )
     except Exception as e:
         logger.error("llm_call_failed", error=str(e))
-        raise HTTPException(status_code=502, detail="Failed to generate replies. Try again.")
+        raise HTTPException(
+            status_code=502, detail="Failed to generate replies. Try again."
+        )
 
     latency_ms = int((time.monotonic() - start) * 1000)
 
     # 11. Parse response
     try:
         parsed = parse_llm_response(raw)
+        logger.info(
+            "replies_generated",
+            replies_count=len(parsed.replies),
+            reply_lengths=[len(r) for r in parsed.replies],
+            reply_previews=[r[:50] for r in parsed.replies],
+        )
     except ValueError as e:
         logger.error("parse_failed", error=str(e), raw=raw[:200])
-        raise HTTPException(status_code=502, detail="Failed to parse AI response. Try again.")
+        raise HTTPException(
+            status_code=502, detail="Failed to parse AI response. Try again."
+        )
 
     # 12. Find or create conversation from detected person
     convo = await find_or_create_conversation(
@@ -155,16 +176,50 @@ async def generate_replies(
 
     # 13. Save interaction
     replies = parsed.replies + [""] * (4 - len(parsed.replies))  # pad to 4
+
+    # Defensive: clamp analysis strings to DB limits (String(255))
+    their_tone = parsed.analysis.their_tone
+    if their_tone and len(their_tone) > 255:
+        logger.warning(
+            "analysis_tone_truncated",
+            original_length=len(their_tone),
+        )
+        their_tone = their_tone[:255]
+
+    their_effort = parsed.analysis.their_effort
+    if their_effort and len(their_effort) > 255:
+        logger.warning(
+            "analysis_effort_truncated",
+            original_length=len(their_effort),
+        )
+        their_effort = their_effort[:255]
+
+    conversation_temperature = parsed.analysis.conversation_temperature
+    if conversation_temperature and len(conversation_temperature) > 255:
+        logger.warning(
+            "analysis_temperature_truncated",
+            original_length=len(conversation_temperature),
+        )
+        conversation_temperature = conversation_temperature[:255]
+
+    detected_stage = parsed.analysis.stage
+    if detected_stage and len(detected_stage) > 255:
+        logger.warning(
+            "analysis_stage_truncated",
+            original_length=len(detected_stage),
+        )
+        detected_stage = detected_stage[:255]
+
     interaction = Interaction(
         conversation_id=convo.id,
         user_id=user.id,
         direction=request.direction,
         custom_hint=custom_hint,
         their_last_message=parsed.analysis.their_last_message,
-        their_tone=parsed.analysis.their_tone,
-        their_effort=parsed.analysis.their_effort,
-        conversation_temperature=parsed.analysis.conversation_temperature,
-        detected_stage=parsed.analysis.stage,
+        their_tone=their_tone,
+        their_effort=their_effort,
+        conversation_temperature=conversation_temperature,
+        detected_stage=detected_stage,
         person_name=parsed.analysis.person_name,
         key_detail=parsed.analysis.key_detail,
         reply_0=replies[0],
@@ -198,7 +253,11 @@ async def generate_replies(
         remaining = 9999
     return VisionResponse(
         replies=parsed.replies[:4],
-        person_name=parsed.analysis.person_name if parsed.analysis.person_name != "unknown" else None,
+        person_name=(
+            parsed.analysis.person_name
+            if parsed.analysis.person_name != "unknown"
+            else None
+        ),
         stage=parsed.analysis.stage,
         interaction_id=interaction.id,
         usage_remaining=max(0, remaining),

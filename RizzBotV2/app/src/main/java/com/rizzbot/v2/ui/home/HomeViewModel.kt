@@ -71,7 +71,11 @@ class HomeViewModel @Inject constructor(
         // Fetch recent history from backend
         viewModelScope.launch {
             val history = hostedRepository.getHistory(limit = 3)
-            _state.update { it.copy(recentReplies = history) }
+            // Filter out items with no valid replies
+            val validHistory = history.filter { item ->
+                item.replies.any { reply -> reply.isNotBlank() }
+            }
+            _state.update { it.copy(recentReplies = validHistory) }
         }
 
         // Fetch user preferences from backend

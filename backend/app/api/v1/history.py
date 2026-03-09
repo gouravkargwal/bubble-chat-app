@@ -42,7 +42,7 @@ async def get_history(
             person_name=i.person_name,
             direction=i.direction,
             custom_hint=i.custom_hint,
-            replies=[i.reply_0, i.reply_1, i.reply_2, i.reply_3],
+            replies=[r for r in [i.reply_0, i.reply_1, i.reply_2, i.reply_3] if r],
             copied_index=i.copied_index,
             created_at=int(i.created_at.timestamp()),
         )
@@ -67,6 +67,7 @@ async def delete_history_item(
     interaction = result.scalar_one_or_none()
     if not interaction:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Interaction not found")
 
     await db.delete(interaction)
@@ -115,7 +116,11 @@ async def get_preferences(
 
     vibe_breakdown = []
     for row in positive_rows:
-        name = VIBE_NAMES[row.rating_index] if 0 <= row.rating_index < len(VIBE_NAMES) else "Unknown"
+        name = (
+            VIBE_NAMES[row.rating_index]
+            if 0 <= row.rating_index < len(VIBE_NAMES)
+            else "Unknown"
+        )
         vibe_breakdown.append(
             VibeBreakdownItem(name=name, percentage=round(row.cnt / total_positive, 2))
         )
@@ -123,8 +128,7 @@ async def get_preferences(
     # Determine preferred length from positively-rated replies
     # Get the actual reply text for positively-rated interactions
     rated_result = await db.execute(
-        select(Interaction)
-        .where(
+        select(Interaction).where(
             Interaction.user_id == user.id,
             Interaction.rating_positive == True,
             Interaction.rating_index.is_not(None),
@@ -136,7 +140,12 @@ async def get_preferences(
     medium_count = 0
     long_count = 0
     for interaction in rated_interactions:
-        reply_fields = [interaction.reply_0, interaction.reply_1, interaction.reply_2, interaction.reply_3]
+        reply_fields = [
+            interaction.reply_0,
+            interaction.reply_1,
+            interaction.reply_2,
+            interaction.reply_3,
+        ]
         idx = interaction.rating_index
         if 0 <= idx < len(reply_fields):
             length = len(reply_fields[idx])
