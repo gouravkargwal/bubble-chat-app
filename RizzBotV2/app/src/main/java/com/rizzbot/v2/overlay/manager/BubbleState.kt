@@ -12,5 +12,5 @@ sealed class BubbleState {
     data class ScreenshotPreview(val bitmaps: List<Bitmap>, val direction: DirectionWithHint) : BubbleState()
     data object Loading : BubbleState()
     data class Expanded(val result: SuggestionResult.Success) : BubbleState()
-    data class Error(val message: String, val errorType: SuggestionResult.ErrorType) : BubbleState()
+    data class Error(val message: String, val errorType: SuggestionResult.ErrorType, val direction: DirectionWithHint? = null) : BubbleState()
 }

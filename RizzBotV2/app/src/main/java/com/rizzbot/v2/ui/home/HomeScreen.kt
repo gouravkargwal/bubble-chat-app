@@ -78,6 +78,11 @@ fun HomeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // 0. TRIAL EXPIRY BANNER
+            if (state.usage.tier != "free" && state.usage.trialDaysRemaining in 0..3) {
+                TrialBanner(daysRemaining = state.usage.trialDaysRemaining)
+            }
+
             // 1. HERO CARD — Service Toggle
             HeroCard(
                 isEnabled = state.isServiceEnabled,
@@ -434,6 +439,48 @@ private fun VibeBar(label: String, progress: Float) {
             color = Pink,
             trackColor = DividerColor
         )
+    }
+}
+
+@Composable
+private fun TrialBanner(daysRemaining: Int) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFF8F00).copy(alpha = 0.15f)
+        ),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Timer,
+                contentDescription = null,
+                tint = Color(0xFFFF8F00),
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    when (daysRemaining) {
+                        0 -> "Your Pro trial expires today!"
+                        1 -> "Your Pro trial expires tomorrow"
+                        else -> "Pro trial: $daysRemaining days remaining"
+                    },
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp
+                )
+                Text(
+                    "Upgrade to keep unlimited replies",
+                    color = Color(0xFFFF8F00),
+                    fontSize = 11.sp
+                )
+            }
+        }
     }
 }
 

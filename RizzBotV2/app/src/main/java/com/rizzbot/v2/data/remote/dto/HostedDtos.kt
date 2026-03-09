@@ -63,7 +63,8 @@ data class UsageResponse(
     val tier: String = "free",
     @SerialName("allowed_directions") val allowedDirections: List<String> = emptyList(),
     @SerialName("max_screenshots") val maxScreenshots: Int = 1,
-    @SerialName("premium_expires_at") val premiumExpiresAt: Long? = null,
+    @SerialName("custom_hints") val customHints: Boolean = false,
+    @SerialName("tier_expires_at") val tierExpiresAt: Long? = null,
     @SerialName("bonus_replies") val bonusReplies: Int = 0
 )
 

@@ -31,6 +31,7 @@ async def get_usage(
         tier=effective_tier,
         allowed_directions=tier_config.allowed_directions,
         max_screenshots=tier_config.max_screenshots,
-        premium_expires_at=int(user.premium_expires_at.timestamp()) if user.premium_expires_at else None,
+        custom_hints=tier_config.custom_hints,
+        tier_expires_at=int(user.tier_expires_at.timestamp()) if user.tier_expires_at else None,
         bonus_replies=user.bonus_replies,
     )

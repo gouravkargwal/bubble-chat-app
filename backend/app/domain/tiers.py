@@ -85,12 +85,8 @@ def get_effective_tier(user) -> str:
 
     now = _utc_now_naive()
 
-    # Check tier expiry (for promo/trial tiers)
+    # Check tier expiry (trial, promo, or subscription)
     if user.tier_expires_at and user.tier_expires_at < now:
-        return "free"
-
-    # Also check premium billing expiry
-    if user.premium_expires_at and user.premium_expires_at < now:
         return "free"
 
     return tier

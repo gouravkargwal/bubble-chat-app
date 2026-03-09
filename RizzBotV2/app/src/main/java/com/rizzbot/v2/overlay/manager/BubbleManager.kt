@@ -188,7 +188,17 @@ class BubbleManager @Inject constructor(
     private fun handleEvent(event: OverlayEvent) {
         val activeScope = ensureScope()
         when (event) {
-            is OverlayEvent.ShowBubble -> _state.value = BubbleState.DirectionPicker
+            is OverlayEvent.ShowBubble -> {
+                val usage = hostedRepository.usageState.value
+                if (usage.dailyRemaining <= 0 && usage.bonusReplies <= 0 && !usage.isPremium) {
+                    _state.value = BubbleState.Error(
+                        "Daily free limit reached",
+                        SuggestionResult.ErrorType.QUOTA_EXCEEDED
+                    )
+                } else {
+                    _state.value = BubbleState.DirectionPicker
+                }
+            }
             is OverlayEvent.HideBubble -> hide()
             is OverlayEvent.CaptureRequested -> {
                 activeScope.launch {
@@ -228,7 +238,7 @@ class BubbleManager @Inject constructor(
                     val result = orchestrator.result.value
                     _state.value = when (result) {
                         is SuggestionResult.Success -> BubbleState.Expanded(result)
-                        is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                        is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
                         is SuggestionResult.Loading -> BubbleState.Loading
                     }
                 }
@@ -310,7 +320,7 @@ class BubbleManager @Inject constructor(
                     val result = orchestrator.result.value
                     _state.value = when (result) {
                         is SuggestionResult.Success -> BubbleState.Expanded(result)
-                        is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                        is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
                         is SuggestionResult.Loading -> BubbleState.Loading
                     }
                 }

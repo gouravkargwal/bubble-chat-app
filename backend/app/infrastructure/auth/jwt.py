@@ -33,7 +33,7 @@ async def get_or_create_user(device_id: str, db: AsyncSession) -> User:
     user = result.scalar_one_or_none()
 
     if user is None:
-        user = User(device_id=device_id, daily_limit=settings.daily_free_limit)
+        user = User(device_id=device_id)
         db.add(user)
         await db.commit()
         await db.refresh(user)

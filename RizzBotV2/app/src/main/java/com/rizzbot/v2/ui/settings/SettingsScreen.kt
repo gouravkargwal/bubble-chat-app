@@ -252,6 +252,67 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Promo code section
+            Text("PROMO CODE", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Have a promo code?", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = state.promoCodeInput,
+                            onValueChange = { viewModel.onPromoCodeChanged(it) },
+                            placeholder = { Text("Enter promo code") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFE91E63),
+                                unfocusedBorderColor = Color(0xFF252542),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                cursorColor = Color(0xFFE91E63),
+                                focusedPlaceholderColor = Color.Gray,
+                                unfocusedPlaceholderColor = Color.Gray
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { viewModel.applyPromoCode() },
+                            enabled = state.promoCodeInput.isNotBlank() && !state.isApplyingPromo,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            if (state.isApplyingPromo) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Apply")
+                            }
+                        }
+                    }
+
+                    state.promoApplyResult?.let { result ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            result,
+                            color = if (result.contains("unlocked", ignoreCase = true)) Color(0xFF4CAF50) else Color(0xFFEF5350),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Support & Links
             Text("MORE", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))

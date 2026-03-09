@@ -58,7 +58,8 @@ class UsageResponse(BaseModel):
     tier: str = "free"
     allowed_directions: list[str] = []
     max_screenshots: int = 1
-    premium_expires_at: int | None = None
+    custom_hints: bool = False
+    tier_expires_at: int | None = None
     bonus_replies: int = 0
 
 

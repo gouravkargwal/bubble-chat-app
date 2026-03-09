@@ -1,5 +1,9 @@
 package com.rizzbot.v2.ui.navigation
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -12,6 +16,8 @@ import com.rizzbot.v2.ui.premium.PremiumScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
 
+private const val ANIM_DURATION = 300
+
 @Composable
 fun NavGraph(
     navController: NavHostController,
@@ -19,7 +25,31 @@ fun NavGraph(
 ) {
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = startDestination,
+        enterTransition = {
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                animationSpec = tween(ANIM_DURATION)
+            ) + fadeIn(animationSpec = tween(ANIM_DURATION))
+        },
+        exitTransition = {
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                animationSpec = tween(ANIM_DURATION)
+            ) + fadeOut(animationSpec = tween(ANIM_DURATION))
+        },
+        popEnterTransition = {
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                animationSpec = tween(ANIM_DURATION)
+            ) + fadeIn(animationSpec = tween(ANIM_DURATION))
+        },
+        popExitTransition = {
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                animationSpec = tween(ANIM_DURATION)
+            ) + fadeOut(animationSpec = tween(ANIM_DURATION))
+        }
     ) {
         composable(Screen.Onboarding.route) {
             OnboardingScreen(

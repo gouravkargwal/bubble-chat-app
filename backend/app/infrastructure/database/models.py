@@ -17,11 +17,9 @@ class User(Base):
     firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True, index=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
-    premium_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    daily_limit: Mapped[int] = mapped_column(Integer, default=5)
     tier: Mapped[str] = mapped_column(String(20), default="free")  # free, premium, pro
     tier_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tier_source: Mapped[str] = mapped_column(String(20), default="signup")  # signup, trial, purchase, promo, admin
     # Referral
     referral_code: Mapped[str | None] = mapped_column(String(8), unique=True, nullable=True, index=True)
     bonus_replies: Mapped[int] = mapped_column(Integer, default=0)

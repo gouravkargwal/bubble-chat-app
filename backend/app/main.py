@@ -27,7 +27,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
 
     await init_db()
+    await seed_signup_promo()
     yield
+
+
+async def seed_signup_promo() -> None:
+    """Ensure the signup promo code exists in the DB."""
+    if not settings.signup_promo_code:
+        return
+
+    from sqlalchemy import select
+    from app.infrastructure.database.engine import async_session
+    from app.infrastructure.database.models import Promo
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(Promo).where(Promo.code == settings.signup_promo_code)
+        )
+        if result.scalar_one_or_none() is None:
+            promo = Promo(
+                code=settings.signup_promo_code,
+                tier_grant="pro",
+                duration_days=3,
+                max_uses=0,  # unlimited
+                is_active=True,
+                new_users_only=True,
+            )
+            db.add(promo)
+            await db.commit()
+            structlog.get_logger().info(
+                "seeded_signup_promo",
+                code=settings.signup_promo_code,
+                tier="pro",
+                days=3,
+            )
 
 
 def create_app() -> FastAPI:

@@ -93,12 +93,11 @@ async def verify_purchase(
     )
     db.add(purchase)
 
-    # Activate premium + set tier
+    # Activate tier from purchase
     tier = PRODUCT_TIER_MAP.get(body.product_id, "premium")
-    user.is_premium = True
     user.tier = tier
-    user.premium_expires_at = expires_at
     user.tier_expires_at = expires_at
+    user.tier_source = "purchase"
     await db.commit()
 
     # Acknowledge the purchase — retry once on failure
@@ -136,12 +135,7 @@ async def billing_status(
     db: AsyncSession = Depends(get_db),
 ) -> BillingStatusResponse:
     """Get the user's current subscription status."""
-    # Check for expired premium
-    if user.is_premium and user.premium_expires_at:
-        if user.premium_expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
-            user.is_premium = False
-            user.premium_expires_at = None
-            await db.commit()
+    effective_tier = get_effective_tier(user)
 
     # Find active purchase
     result = await db.execute(
@@ -153,8 +147,8 @@ async def billing_status(
     purchase = result.scalar_one_or_none()
 
     return BillingStatusResponse(
-        is_premium=user.is_premium,
-        tier=get_effective_tier(user),
+        is_premium=effective_tier != "free",
+        tier=effective_tier,
         product_id=purchase.product_id if purchase else None,
         expires_at=int(purchase.expires_at.timestamp()) if purchase and purchase.expires_at else None,
         auto_renewing=purchase.auto_renewing if purchase else False,

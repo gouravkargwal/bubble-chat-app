@@ -85,6 +85,7 @@ fun BubbleOverlay(
                 )
                 is BubbleState.DirectionPicker -> DirectionPicker(
                     allowedDirections = usage.allowedDirections,
+                    customHintsEnabled = usage.customHintsEnabled,
                     onDirectionSelected = { direction ->
                         onEvent(OverlayEvent.CaptureRequested(direction))
                     },
@@ -116,7 +117,10 @@ fun BubbleOverlay(
                 is BubbleState.Error -> ErrorPanel(
                     message = s.message,
                     errorType = s.errorType,
-                    onRetry = { onEvent(OverlayEvent.CaptureRequested(DirectionWithHint())) },
+                    onRetry = {
+                        val dir = s.direction ?: DirectionWithHint()
+                        onEvent(OverlayEvent.Regenerate(dir))
+                    },
                     onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
                     onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
                     modifier = Modifier.align(Alignment.BottomCenter)
@@ -192,6 +196,7 @@ private fun RizzButton(
 @Composable
 private fun DirectionPicker(
     allowedDirections: List<String>,
+    customHintsEnabled: Boolean,
     onDirectionSelected: (DirectionWithHint) -> Unit,
     onUpgrade: () -> Unit,
     onDismiss: () -> Unit,
@@ -262,14 +267,26 @@ private fun DirectionPicker(
                         .fillMaxWidth()
                         .padding(vertical = 2.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = 0.05f))
-                        .clickable { showCustomInput = true }
+                        .background(Color.White.copy(alpha = if (customHintsEnabled) 0.05f else 0.02f))
+                        .clickable {
+                            if (customHintsEnabled) showCustomInput = true else onUpgrade()
+                        }
                         .padding(vertical = 10.dp, horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("\u270D\uFE0F", fontSize = 20.sp)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Custom hint", color = Color.White, fontSize = 14.sp)
+                    Text(
+                        "Custom hint",
+                        color = if (customHintsEnabled) Color.White else Color.Gray,
+                        fontSize = 14.sp
+                    )
+                    if (!customHintsEnabled) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text("\uD83D\uDD12", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("PRO", color = AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             } else {
                 OutlinedTextField(

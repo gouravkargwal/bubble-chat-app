@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env.dev", env_file_encoding="utf-8")
 
     # Database
     database_url: str = "postgresql+asyncpg://cookd:cookd@localhost:5432/cookd"
@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     google_play_service_account: str = ""
     google_play_package_name: str = "com.cookd.app"
 
-    # Rate limits
-    daily_free_limit: int = 5
+    # Signup trial — promo code auto-applied to new users (empty = no trial)
+    signup_promo_code: str = "WELCOME"
 
     # Sentry
     sentry_dsn: str = ""

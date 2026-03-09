@@ -72,8 +72,7 @@ async def apply_promo(
 
     user.tier = promo.tier_grant
     user.tier_expires_at = expires_at
-    user.is_premium = True
-    user.premium_expires_at = expires_at
+    user.tier_source = "promo"
 
     promo.current_uses += 1
 

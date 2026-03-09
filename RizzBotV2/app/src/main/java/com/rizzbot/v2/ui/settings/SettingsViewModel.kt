@@ -22,7 +22,10 @@ data class SettingsState(
     val referral: ReferralInfo? = null,
     val referralCodeInput: String = "",
     val referralApplyResult: String? = null,
-    val isApplyingReferral: Boolean = false
+    val isApplyingReferral: Boolean = false,
+    val promoCodeInput: String = "",
+    val promoApplyResult: String? = null,
+    val isApplyingPromo: Boolean = false
 )
 
 @HiltViewModel
@@ -88,6 +91,40 @@ class SettingsViewModel @Inject constructor(
                         it.copy(
                             isApplyingReferral = false,
                             referralApplyResult = e.message
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onPromoCodeChanged(code: String) {
+        _state.update { it.copy(promoCodeInput = code, promoApplyResult = null) }
+    }
+
+    fun applyPromoCode() {
+        val code = _state.value.promoCodeInput.trim()
+        if (code.isEmpty()) return
+
+        viewModelScope.launch {
+            _state.update { it.copy(isApplyingPromo = true, promoApplyResult = null) }
+            val result = hostedRepository.applyPromoCode(code)
+            result.fold(
+                onSuccess = { response ->
+                    hostedRepository.refreshUsage()
+                    _state.update {
+                        it.copy(
+                            isApplyingPromo = false,
+                            promoApplyResult = "${response.tierGranted.replaceFirstChar { c -> c.uppercase() }} unlocked for ${response.durationDays} days!",
+                            promoCodeInput = ""
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _state.update {
+                        it.copy(
+                            isApplyingPromo = false,
+                            promoApplyResult = e.message
                         )
                     }
                 }

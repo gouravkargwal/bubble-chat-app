@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.auth.GoogleSignInHelper
 import com.rizzbot.v2.data.auth.GoogleSignInResult
+import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.PermissionHelper
@@ -23,13 +24,18 @@ data class OnboardingState(
     val isAuthenticating: Boolean = false,
     val authError: String? = null,
     val onboardingDone: Boolean = false,
-    val userName: String? = null
+    val userName: String? = null,
+    val referralCode: String = "",
+    val referralApplying: Boolean = false,
+    val referralSuccess: String? = null,
+    val referralError: String? = null
 )
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
+    private val hostedRepository: HostedRepository,
     val googleSignInHelper: GoogleSignInHelper,
     private val permissionHelper: PermissionHelper,
     private val analyticsHelper: AnalyticsHelper
@@ -73,6 +79,38 @@ class OnboardingViewModel @Inject constructor(
                     }
                 }
             }
+        }
+    }
+
+    fun updateReferralCode(code: String) {
+        _state.update { it.copy(referralCode = code, referralError = null) }
+    }
+
+    fun applyReferralCode() {
+        val code = _state.value.referralCode.trim()
+        if (code.isEmpty()) return
+        viewModelScope.launch {
+            _state.update { it.copy(referralApplying = true, referralError = null) }
+            val result = hostedRepository.applyReferralCode(code)
+            result.fold(
+                onSuccess = { bonus ->
+                    _state.update {
+                        it.copy(
+                            referralApplying = false,
+                            referralSuccess = "+$bonus bonus replies unlocked!",
+                            referralError = null
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _state.update {
+                        it.copy(
+                            referralApplying = false,
+                            referralError = error.message
+                        )
+                    }
+                }
+            )
         }
     }
 

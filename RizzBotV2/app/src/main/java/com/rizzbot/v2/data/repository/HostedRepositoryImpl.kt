@@ -106,7 +106,9 @@ class HostedRepositoryImpl @Inject constructor(
                 tier = usage.tier,
                 bonusReplies = usage.bonusReplies,
                 allowedDirections = usage.allowedDirections,
-                maxScreenshots = usage.maxScreenshots
+                customHintsEnabled = usage.customHints,
+                maxScreenshots = usage.maxScreenshots,
+                premiumExpiresAt = usage.tierExpiresAt
             )
         } catch (e: Exception) {
             android.util.Log.w("HostedRepo", "refreshUsage failed: ${e.message}")
@@ -142,6 +144,25 @@ class HostedRepositoryImpl @Inject constructor(
                     else "Invalid request"
                 } ?: "Invalid request"
                 404 -> "Invalid referral code"
+                else -> "Something went wrong"
+            }
+            Result.failure(Exception(msg))
+        } catch (e: Exception) {
+            Result.failure(Exception("Network error. Try again."))
+        }
+    }
+
+    override suspend fun applyPromoCode(code: String): Result<com.rizzbot.v2.data.remote.dto.ApplyPromoResponse> {
+        return try {
+            val response = hostedApi.applyPromo(com.rizzbot.v2.data.remote.dto.ApplyPromoRequest(code))
+            refreshUsage()
+            Result.success(response)
+        } catch (e: HttpException) {
+            val msg = when (e.code()) {
+                404 -> "Invalid or expired promo code"
+                409 -> "You've already used this promo code"
+                410 -> "This promo code has expired or reached its limit"
+                403 -> "This promo is for new users only"
                 else -> "Something went wrong"
             }
             Result.failure(Exception(msg))
