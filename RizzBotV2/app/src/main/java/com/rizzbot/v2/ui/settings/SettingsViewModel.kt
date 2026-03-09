@@ -2,56 +2,101 @@ package com.rizzbot.v2.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.rizzbot.v2.domain.model.LlmModel
-import com.rizzbot.v2.domain.model.LlmProvider
-import com.rizzbot.v2.domain.repository.SettingsRepository
+import com.rizzbot.v2.data.auth.GoogleSignInHelper
+import com.rizzbot.v2.domain.model.ReferralInfo
+import com.rizzbot.v2.domain.repository.HostedRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SettingsState(
-    val provider: LlmProvider? = null,
-    val model: LlmModel? = null,
-    val apiKey: String = ""
+    val isPremium: Boolean = false,
+    val dailyLimit: Int = 5,
+    val userName: String? = null,
+    val userEmail: String? = null,
+    val signedOut: Boolean = false,
+    val referral: ReferralInfo? = null,
+    val referralCodeInput: String = "",
+    val referralApplyResult: String? = null,
+    val isApplyingReferral: Boolean = false
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository
+    private val hostedRepository: HostedRepository,
+    private val googleSignInHelper: GoogleSignInHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
     init {
+        _state.update {
+            it.copy(
+                userName = googleSignInHelper.getCurrentUserName(),
+                userEmail = googleSignInHelper.getCurrentUserEmail()
+            )
+        }
+
         viewModelScope.launch {
-            combine(
-                settingsRepository.provider,
-                settingsRepository.model,
-                settingsRepository.apiKey
-            ) { provider, model, apiKey ->
-                SettingsState(
-                    provider = provider,
-                    model = model,
-                    apiKey = apiKey ?: ""
-                )
-            }.collect { _state.value = it }
+            hostedRepository.refreshUsage()
+            hostedRepository.usageState.collect { usage ->
+                _state.update {
+                    it.copy(
+                        isPremium = usage.isPremium,
+                        dailyLimit = usage.dailyLimit
+                    )
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            val info = hostedRepository.getReferralInfo()
+            _state.update { it.copy(referral = info) }
         }
     }
 
-    fun updateProvider(provider: LlmProvider) {
+    fun onReferralCodeChanged(code: String) {
+        _state.update { it.copy(referralCodeInput = code, referralApplyResult = null) }
+    }
+
+    fun applyReferralCode() {
+        val code = _state.value.referralCodeInput.trim()
+        if (code.isEmpty()) return
+
         viewModelScope.launch {
-            settingsRepository.setProvider(provider)
-            settingsRepository.setModel(provider.defaultModel)
+            _state.update { it.copy(isApplyingReferral = true, referralApplyResult = null) }
+            val result = hostedRepository.applyReferralCode(code)
+            result.fold(
+                onSuccess = { bonus ->
+                    val info = hostedRepository.getReferralInfo()
+                    _state.update {
+                        it.copy(
+                            isApplyingReferral = false,
+                            referralApplyResult = "+$bonus bonus replies unlocked!",
+                            referralCodeInput = "",
+                            referral = info
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _state.update {
+                        it.copy(
+                            isApplyingReferral = false,
+                            referralApplyResult = e.message
+                        )
+                    }
+                }
+            )
         }
     }
 
-    fun updateModel(model: LlmModel) {
-        viewModelScope.launch { settingsRepository.setModel(model) }
-    }
-
-    fun updateApiKey(key: String) {
-        viewModelScope.launch { settingsRepository.setApiKey(key) }
+    fun signOut() {
+        googleSignInHelper.signOut()
+        _state.update { it.copy(signedOut = true) }
     }
 }

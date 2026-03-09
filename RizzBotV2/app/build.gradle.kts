@@ -22,11 +22,15 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.rizzbot.v2"
+        applicationId = "com.cookd.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "2.0.0"
+
+        // Set via gradle.properties or Firebase Console → Authentication → Google
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: ""}\"")
+        buildConfigField("String", "BACKEND_URL", "\"${project.findProperty("BACKEND_URL") ?: "https://api.cookd.app/"}\"")
     }
 
     signingConfigs {
@@ -93,11 +97,6 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Room
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
-    ksp(libs.room.compiler)
-
     // Network
     implementation(libs.retrofit)
     implementation(libs.okhttp)
@@ -128,4 +127,13 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
+    implementation(libs.firebase.auth)
+
+    // Google Sign-In (Credential Manager)
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services)
+    implementation(libs.googleid)
+
+    // Google Play Billing
+    implementation(libs.billing.ktx)
 }

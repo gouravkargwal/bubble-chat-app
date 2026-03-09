@@ -9,10 +9,8 @@ import com.rizzbot.v2.ui.history.HistoryScreen
 import com.rizzbot.v2.ui.home.HomeScreen
 import com.rizzbot.v2.ui.onboarding.OnboardingScreen
 import com.rizzbot.v2.ui.premium.PremiumScreen
-import com.rizzbot.v2.ui.profile.ProfileOptimizationScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
-import com.rizzbot.v2.ui.sync.SyncPersonScreen
 
 @Composable
 fun NavGraph(
@@ -39,14 +37,18 @@ fun NavGraph(
             HomeScreen(
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToHistory = { navController.navigate(Screen.ReplyHistory.route) },
-                onNavigateToStats = { navController.navigate(Screen.Stats.route) },
-                onNavigateToOptimize = { navController.navigate(Screen.ProfileOptimization.route) },
-                onNavigateToSync = { navController.navigate(Screen.SyncPerson.route) }
+                onNavigateToStats = { navController.navigate(Screen.Stats.route) }
             )
         }
         composable(Screen.Settings.route) {
             SettingsScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onPremium = { navController.navigate(Screen.Premium.route) },
+                onSignedOut = {
+                    navController.navigate(Screen.Onboarding.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
         composable(Screen.ReplyHistory.route) {
@@ -62,17 +64,8 @@ fun NavGraph(
         composable(Screen.Demo.route) {
             DemoScreen(
                 onBack = { navController.popBackStack() },
-                onSetupApiKey = { navController.popBackStack() }
-            )
-        }
-        composable(Screen.ProfileOptimization.route) {
-            ProfileOptimizationScreen(
-                onBack = { navController.popBackStack() }
-            )
-        }
-        composable(Screen.SyncPerson.route) {
-            SyncPersonScreen(
-                onBack = { navController.popBackStack() }
+                onSetupApiKey = { navController.popBackStack() },
+                onPremium = { navController.navigate(Screen.Premium.route) }
             )
         }
         composable(Screen.Premium.route) {

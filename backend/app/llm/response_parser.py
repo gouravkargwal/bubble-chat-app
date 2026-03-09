@@ -47,9 +47,15 @@ def parse_llm_response(raw: str) -> ParsedLlmResponse:
         pass
 
     # Last resort: try to extract any 4 distinct lines as replies
+    # NOTE: analysis data will be empty defaults — degrades conversation memory
+    # and Voice DNA training. Log as error for monitoring.
     lines = [line.strip() for line in raw.strip().split("\n") if line.strip() and len(line.strip()) > 10]
     if len(lines) >= 4:
-        logger.warning("parse_fallback_lines", line_count=len(lines))
+        logger.error(
+            "parse_fallback_lines_no_analysis",
+            line_count=len(lines),
+            raw_preview=raw[:300],
+        )
         return ParsedLlmResponse(
             analysis=AnalysisResult(),
             strategy=StrategyResult(),

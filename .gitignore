@@ -1,32 +1,55 @@
-# OS
+# ── OS ──
 .DS_Store
 Thumbs.db
 
-# IDE
+# ── IDE ──
 .idea/
+.vscode/
 *.iml
+*.swp
+*.swo
 
-# Gradle
+# ── Secrets & Environment ──
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+firebase-service-account.json
+google-services.json
+
+# ── Android / Gradle ──
 .gradle/
-build/
 local.properties
-
-# Android
 *.apk
-!/RizzBot.apk
 *.aab
 *.ap_
 *.dex
-
-# Kotlin
 *.class
 
-# UI Automator dumps
+# ── UI Automator dumps ──
 *.xml
 !**/src/**/*.xml
 !gradle/**/*.xml
 
-# Secrets
-*.jks
-*.keystore
-google-services.json
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+
+# ── Virtual environment ──
+.venv/
+venv/
+
+# ── Build outputs ──
+build/
+
+# ── Docker volumes ──
+pgdata_dev/
+
+# ── Test / Coverage ──
+.coverage
+htmlcov/
+.pytest_cache/

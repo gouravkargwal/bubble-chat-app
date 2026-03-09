@@ -1,4 +1,4 @@
-.PHONY: dev test lint install migrate docker-up docker-down eval
+.PHONY: dev test lint install migrate docker-dev docker-prod docker-down docker-down-prod db-shell eval
 
 install:
 	pip install -e ".[dev]"
@@ -16,11 +16,20 @@ lint:
 migrate:
 	alembic upgrade head
 
-docker-up:
+docker-dev:
 	docker compose up -d --build
+
+docker-prod:
+	docker compose -f docker-compose.prod.yml up -d --build
 
 docker-down:
 	docker compose down
+
+docker-down-prod:
+	docker compose -f docker-compose.prod.yml down
+
+db-shell:
+	docker compose exec postgres psql -U cookd
 
 eval:
 	python -m app.testing.runner

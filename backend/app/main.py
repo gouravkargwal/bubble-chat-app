@@ -2,7 +2,7 @@ import uuid
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import structlog
@@ -37,11 +37,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
+    # CORS — never combine wildcard origins with credentials
+    is_wildcard = settings.cors_origins == ["*"]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        allow_credentials=not is_wildcard,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -54,9 +55,13 @@ def create_app() -> FastAPI:
         response.headers["X-Correlation-ID"] = request.state.correlation_id
         return response
 
-    # Global exception handler
+    # Global exception handler — must NOT intercept HTTPException
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        # Let FastAPI handle its own HTTP exceptions (401, 403, 429, etc.)
+        if isinstance(exc, HTTPException):
+            raise exc
+
         logger = structlog.get_logger()
         correlation_id = getattr(request.state, "correlation_id", "unknown")
         logger.error(
@@ -87,7 +92,19 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "healthy", "version": "2.0.0"}
+        """Health check with database connectivity verification."""
+        from sqlalchemy import text
+        from app.infrastructure.database.engine import get_db
+
+        try:
+            async for db in get_db():
+                await db.execute(text("SELECT 1"))
+        except Exception:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "unhealthy", "version": "2.0.0", "db": "unreachable"},
+            )
+        return {"status": "healthy", "version": "2.0.0", "db": "connected"}
 
     return app
 

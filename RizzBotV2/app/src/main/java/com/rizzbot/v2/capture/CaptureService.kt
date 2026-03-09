@@ -47,7 +47,7 @@ class CaptureService : Service() {
     private fun buildNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Capturing screenshot")
-            .setContentText("RizzBot is taking a screenshot...")
+            .setContentText("Cookd is taking a screenshot...")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setOngoing(true)
             .build()

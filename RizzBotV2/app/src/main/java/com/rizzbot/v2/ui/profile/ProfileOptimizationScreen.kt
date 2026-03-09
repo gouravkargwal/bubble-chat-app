@@ -122,7 +122,7 @@ fun ProfileOptimizationScreen(
                         }
                         viewModel.analyzeProfile(bitmaps)
                     },
-                    onDeleteAnalysis = { viewModel.deleteAnalysis(it) }
+                    onDeleteAnalysis = { /* Will be handled by backend */ }
                 )
             }
         }
@@ -265,50 +265,7 @@ private fun ProfileSetupView(
         )
     }
 
-    // Previous analyses
-    if (state.previousAnalyses.isNotEmpty()) {
-        Spacer(modifier = Modifier.height(32.dp))
-        Text("Previous Analyses", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        state.previousAnalyses.forEach { analysis ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Score circle
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(scoreColor(analysis.overallScore)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("${analysis.overallScore}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(analysis.datingApp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-                                .format(java.util.Date(analysis.createdAt)),
-                            color = Color.Gray, fontSize = 11.sp
-                        )
-                    }
-                    IconButton(onClick = { onDeleteAnalysis(analysis.id) }) {
-                        Icon(Icons.Default.Delete, "Delete", tint = Color.Gray, modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-        }
-    }
+    // Previous analyses will be loaded from backend when feature is ready
 }
 
 @Composable

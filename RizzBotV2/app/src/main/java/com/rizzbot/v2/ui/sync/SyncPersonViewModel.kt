@@ -5,8 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.capture.ImageCompressor
-import com.rizzbot.v2.data.local.db.dao.PersonProfileDao
-import com.rizzbot.v2.data.local.db.entity.PersonProfileEntity
 import com.rizzbot.v2.domain.model.PersonProfileResult
 import com.rizzbot.v2.domain.usecase.SyncPersonProfileUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,27 +14,17 @@ import javax.inject.Inject
 
 data class SyncPersonState(
     val selectedImages: List<Uri> = emptyList(),
-    val result: PersonProfileResult? = null,
-    val savedProfiles: List<PersonProfileEntity> = emptyList()
+    val result: PersonProfileResult? = null
 )
 
 @HiltViewModel
 class SyncPersonViewModel @Inject constructor(
     private val syncPersonProfileUseCase: SyncPersonProfileUseCase,
-    private val imageCompressor: ImageCompressor,
-    private val personProfileDao: PersonProfileDao
+    private val imageCompressor: ImageCompressor
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SyncPersonState())
     val state: StateFlow<SyncPersonState> = _state.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            personProfileDao.getAll().collect { profiles ->
-                _state.value = _state.value.copy(savedProfiles = profiles)
-            }
-        }
-    }
 
     fun addImages(uris: List<Uri>) {
         val current = _state.value.selectedImages.toMutableList()
@@ -60,10 +48,6 @@ class SyncPersonViewModel @Inject constructor(
             val result = syncPersonProfileUseCase(base64List)
             _state.value = _state.value.copy(result = result)
         }
-    }
-
-    fun deleteProfile(id: Long) {
-        viewModelScope.launch { personProfileDao.deleteById(id) }
     }
 
     fun clearResult() {

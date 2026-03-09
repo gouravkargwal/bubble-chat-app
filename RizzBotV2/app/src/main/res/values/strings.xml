@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">RizzBot</string>
-    <string name="notification_channel_name">RizzBot Service</string>
+    <string name="app_name">Cookd</string>
+    <string name="notification_channel_name">Cookd Service</string>
     <string name="notification_channel_description">Keeps the floating bubble active</string>
-    <string name="notification_title">RizzBot is active</string>
+    <string name="notification_title">Cookd is active</string>
     <string name="notification_text">Tap the bubble to get reply suggestions</string>
     <string name="capture_channel_name">Screen Capture</string>
     <string name="capture_channel_description">Active during screenshot capture</string>
-    <string name="privacy_policy_url">https://rizzbot-theta.vercel.app/privacy</string>
-    <string name="website_url">https://rizzbot-theta.vercel.app</string>
-    <string name="share_text">Check out RizzBot - your AI chat assistant! One tap for instant reply suggestions. Download at https://rizzbot-theta.vercel.app</string>
+    <string name="privacy_policy_url">https://cookd.app/privacy</string>
+    <string name="website_url">https://cookd.app</string>
+    <string name="share_text">Check out Cookd - your AI dating chat assistant! One tap for instant reply suggestions. Download at https://cookd.app</string>
 </resources>

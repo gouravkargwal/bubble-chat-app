@@ -27,7 +27,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.rizzbot.v2.data.local.db.entity.PersonProfileEntity
 import com.rizzbot.v2.domain.model.PersonProfileResult
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -205,13 +204,7 @@ fun SyncPersonScreen(
                         }
                     }
 
-                    // Saved profiles
-                    if (state.savedProfiles.isNotEmpty()) {
-                        Text("Saved Profiles", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        state.savedProfiles.forEach { profile ->
-                            SavedProfileCard(profile = profile, onDelete = { viewModel.deleteProfile(profile.id) })
-                        }
-                    }
+                    // Saved profiles will be loaded from backend when feature is ready
                 }
             }
         }
@@ -300,38 +293,3 @@ private fun ProfileResultCard(result: PersonProfileResult.Success, onDone: () ->
     }
 }
 
-@Composable
-private fun SavedProfileCard(profile: PersonProfileEntity, onDelete: () -> Unit) {
-    val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(Pink.copy(alpha = 0.3f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(profile.name.take(1).uppercase(), color = Pink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(profile.name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Text(
-                    profile.interests?.take(50) ?: "No interests",
-                    color = Color.Gray,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(dateFormat.format(Date(profile.createdAt)), color = Color.Gray, fontSize = 10.sp)
-            }
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Delete, "Delete", tint = Color.Gray, modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}

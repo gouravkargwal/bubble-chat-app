@@ -1,12 +1,13 @@
 package com.rizzbot.v2.overlay.ui
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -21,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,16 +36,25 @@ import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.domain.model.ConversationDirection
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.SuggestionResult
+import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.overlay.OverlayEvent
 import com.rizzbot.v2.overlay.manager.BubbleState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+
+private val PanelShape = RoundedCornerShape(24.dp)
+private val PanelColor = Color(0xFF1A1A2E)
+private val PanelBorderColor = Color.White.copy(alpha = 0.08f)
+private val AccentPink = Color(0xFFE91E63)
 
 @Composable
 fun BubbleOverlay(
     state: StateFlow<BubbleState>,
+    usageState: StateFlow<UsageState>,
     onEvent: (OverlayEvent) -> Unit
 ) {
     val currentState by state.collectAsState()
+    val usage by usageState.collectAsState()
 
     val isFullScreen = currentState is BubbleState.DirectionPicker ||
         currentState is BubbleState.ScreenshotPreview ||
@@ -52,6 +64,19 @@ fun BubbleOverlay(
 
     OverlayTheme {
         Box(modifier = if (isFullScreen) Modifier.fillMaxSize() else Modifier) {
+            // Scrim behind panels
+            if (isFullScreen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onEvent(OverlayEvent.DismissSuggestions) }
+                )
+            }
+
             when (val s = currentState) {
                 is BubbleState.Hidden -> {}
                 is BubbleState.RizzButton -> RizzButton(
@@ -59,15 +84,18 @@ fun BubbleOverlay(
                     onDrag = { dx, dy -> onEvent(OverlayEvent.BubbleDragged(dx.toInt(), dy.toInt())) },
                 )
                 is BubbleState.DirectionPicker -> DirectionPicker(
+                    allowedDirections = usage.allowedDirections,
                     onDirectionSelected = { direction ->
                         onEvent(OverlayEvent.CaptureRequested(direction))
                     },
+                    onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
                     onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
                 is BubbleState.Capturing -> {}
                 is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
                     bitmaps = s.bitmaps,
+                    maxScreenshots = usage.maxScreenshots,
                     onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
                     onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
                     onRetake = { onEvent(OverlayEvent.CaptureRequested(s.direction)) },
@@ -79,15 +107,17 @@ fun BubbleOverlay(
                 )
                 is BubbleState.Expanded -> SuggestionPanel(
                     result = s.result,
-                    onCopy = { reply, index -> onEvent(OverlayEvent.CopyReply(reply, index)) },
-                    onRate = { index, positive, text -> onEvent(OverlayEvent.RateReply(index, positive, text)) },
+                    onCopy = { reply, index -> onEvent(OverlayEvent.CopyReply(reply, index, s.result.interactionId)) },
+                    onRate = { index, positive, text -> onEvent(OverlayEvent.RateReply(index, positive, text, s.result.interactionId)) },
                     onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
                     onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
                 is BubbleState.Error -> ErrorPanel(
                     message = s.message,
+                    errorType = s.errorType,
                     onRetry = { onEvent(OverlayEvent.CaptureRequested(DirectionWithHint())) },
+                    onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
                     onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
@@ -118,9 +148,24 @@ private fun RizzButton(
     Box(
         modifier = modifier
             .scale(scale)
-            .size(56.dp)
+            .shadow(
+                elevation = 12.dp,
+                shape = CircleShape,
+                ambientColor = AccentPink.copy(alpha = 0.4f),
+                spotColor = AccentPink.copy(alpha = 0.4f)
+            )
+            .size(60.dp)
             .clip(CircleShape)
-            .background(Color(0xFFE91E63))
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFF4081),
+                        AccentPink,
+                        Color(0xFFC2185B)
+                    )
+                )
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
             .pointerInput(Unit) {
                 detectTapGestures { onTap() }
             }
@@ -138,7 +183,7 @@ private fun RizzButton(
     ) {
         Text(
             text = "\uD83D\uDD25",
-            fontSize = 24.sp,
+            fontSize = 26.sp,
             textAlign = TextAlign.Center
         )
     }
@@ -146,7 +191,9 @@ private fun RizzButton(
 
 @Composable
 private fun DirectionPicker(
+    allowedDirections: List<String>,
     onDirectionSelected: (DirectionWithHint) -> Unit,
+    onUpgrade: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -156,9 +203,11 @@ private fun DirectionPicker(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E))
+            .padding(16.dp)
+            .border(1.dp, PanelBorderColor, PanelShape),
+        shape = PanelShape,
+        colors = CardDefaults.cardColors(containerColor = PanelColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -174,21 +223,35 @@ private fun DirectionPicker(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Direction chips in a flow layout
             ConversationDirection.entries.forEach { direction ->
+                val dirKey = direction.name.lowercase()
+                val isLocked = allowedDirections.isNotEmpty() && dirKey !in allowedDirections
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(vertical = 2.dp)
                         .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = if (isLocked) 0.02f else 0.05f))
                         .clickable {
-                            onDirectionSelected(DirectionWithHint(direction))
+                            if (isLocked) onUpgrade() else onDirectionSelected(DirectionWithHint(direction))
                         }
-                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                        .padding(vertical = 10.dp, horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(direction.emoji, fontSize = 20.sp)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(direction.displayName, color = Color.White, fontSize = 14.sp)
+                    Text(
+                        direction.displayName,
+                        color = if (isLocked) Color.Gray else Color.White,
+                        fontSize = 14.sp
+                    )
+                    if (isLocked) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text("\uD83D\uDD12", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("PRO", color = AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
@@ -197,9 +260,11 @@ private fun DirectionPicker(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .padding(vertical = 2.dp)
                         .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.05f))
                         .clickable { showCustomInput = true }
-                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                        .padding(vertical = 10.dp, horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("\u270D\uFE0F", fontSize = 20.sp)
@@ -215,7 +280,7 @@ private fun DirectionPicker(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFFE91E63),
+                        focusedBorderColor = AccentPink,
                         unfocusedBorderColor = Color.Gray
                     ),
                     singleLine = true
@@ -225,7 +290,7 @@ private fun DirectionPicker(
                     onClick = {
                         onDirectionSelected(DirectionWithHint(customHint = customHint))
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Generate")
@@ -237,12 +302,23 @@ private fun DirectionPicker(
 
 @Composable
 private fun LoadingOverlay(modifier: Modifier = Modifier) {
+    var dotCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500)
+            dotCount = (dotCount + 1) % 4
+        }
+    }
+    val dots = ".".repeat(dotCount)
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E))
+            .padding(16.dp)
+            .border(1.dp, PanelBorderColor, PanelShape),
+        shape = PanelShape,
+        colors = CardDefaults.cardColors(containerColor = PanelColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier
@@ -250,9 +326,9 @@ private fun LoadingOverlay(modifier: Modifier = Modifier) {
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            CircularProgressIndicator(color = Color(0xFFE91E63))
+            CircularProgressIndicator(color = AccentPink)
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Analyzing screenshot...", color = Color.White)
+            Text("Cooking up replies$dots", color = Color.White)
         }
     }
 }
@@ -260,6 +336,7 @@ private fun LoadingOverlay(modifier: Modifier = Modifier) {
 @Composable
 private fun ScreenshotPreviewPanel(
     bitmaps: List<android.graphics.Bitmap>,
+    maxScreenshots: Int,
     onConfirm: () -> Unit,
     onAddMore: () -> Unit,
     onRetake: () -> Unit,
@@ -272,9 +349,11 @@ private fun ScreenshotPreviewPanel(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(max = screenHeight * 0.75f)
-            .padding(16.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E))
+            .padding(16.dp)
+            .border(1.dp, PanelBorderColor, PanelShape),
+        shape = PanelShape,
+        colors = CardDefaults.cardColors(containerColor = PanelColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -295,7 +374,6 @@ private fun ScreenshotPreviewPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Screenshot preview - show latest
             Image(
                 bitmap = bitmaps.last().asImageBitmap(),
                 contentDescription = "Captured screenshot",
@@ -309,8 +387,14 @@ private fun ScreenshotPreviewPanel(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                if (bitmaps.size == 1) "add more screenshots for better context"
-                else "${bitmaps.size} screenshots ready",
+                when {
+                    bitmaps.size == 1 && maxScreenshots > 1 ->
+                        "Tip: Add more screenshots for better context (${bitmaps.size}/$maxScreenshots)"
+                    bitmaps.size == 1 ->
+                        "1 screenshot captured"
+                    else ->
+                        "${bitmaps.size}/$maxScreenshots screenshots ready"
+                },
                 color = Color.Gray,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
@@ -319,7 +403,6 @@ private fun ScreenshotPreviewPanel(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -331,13 +414,13 @@ private fun ScreenshotPreviewPanel(
                 ) {
                     Text("Retake", color = Color.White)
                 }
-                if (bitmaps.size < 5) {
+                if (bitmaps.size < maxScreenshots) {
                     OutlinedButton(
                         onClick = onAddMore,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("+ Add more", color = Color(0xFFE91E63))
+                        Text("+ Add more", color = AccentPink)
                     }
                 }
             }
@@ -347,7 +430,7 @@ private fun ScreenshotPreviewPanel(
             Button(
                 onClick = onConfirm,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Generate replies")
@@ -372,9 +455,11 @@ private fun SuggestionPanel(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(max = screenHeight * 0.7f)
-            .padding(16.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E))
+            .padding(16.dp)
+            .border(1.dp, PanelBorderColor, PanelShape),
+        shape = PanelShape,
+        colors = CardDefaults.cardColors(containerColor = PanelColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier
@@ -389,7 +474,7 @@ private fun SuggestionPanel(
                 Text("Suggestions", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Row {
                     IconButton(onClick = onRegenerate) {
-                        Icon(Icons.Default.Refresh, "Regenerate", tint = Color(0xFFE91E63))
+                        Icon(Icons.Default.Refresh, "Regenerate", tint = AccentPink)
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, "Close", tint = Color.White)
@@ -418,34 +503,72 @@ private fun SuggestionPanel(
 @Composable
 private fun ErrorPanel(
     message: String,
+    errorType: SuggestionResult.ErrorType,
     onRetry: () -> Unit,
+    onUpgrade: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isQuotaExceeded = errorType == SuggestionResult.ErrorType.QUOTA_EXCEEDED
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E))
+            .padding(16.dp)
+            .border(1.dp, PanelBorderColor, PanelShape),
+        shape = PanelShape,
+        colors = CardDefaults.cardColors(containerColor = PanelColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("\uD83D\uDE15", fontSize = 32.sp)
+            Text(if (isQuotaExceeded) "\uD83D\uDCA8" else "\uD83D\uDE15", fontSize = 32.sp)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(message, color = Color.White, textAlign = TextAlign.Center)
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onDismiss) {
-                    Text("Dismiss")
-                }
+            Text(
+                if (isQuotaExceeded) "Daily free limit reached" else message,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            if (isQuotaExceeded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Upgrade to Premium for unlimited replies",
+                    color = Color.Gray,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
                 Button(
-                    onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))
+                    onClick = onUpgrade,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Retry")
+                    Text("Upgrade Now")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Dismiss", color = Color.White)
+                }
+            } else {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("Dismiss", color = Color.White)
+                    }
+                    Button(
+                        onClick = onRetry,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPink)
+                    ) {
+                        Text("Retry")
+                    }
                 }
             }
         }

@@ -1,23 +1,24 @@
 package com.rizzbot.v2.domain.model
 
-data class HostedModeState(
-    val isAuthenticated: Boolean = false,
+data class UsageState(
     val isPremium: Boolean = false,
+    val tier: String = "free",
     val dailyLimit: Int = 5,
     val dailyUsed: Int = 0,
     val bonusReplies: Int = 0,
-    val referralCode: String? = null
+    val allowedDirections: List<String> = listOf("quick_reply", "keep_playful"),
+    val maxScreenshots: Int = 1
 ) {
     val dailyRemaining: Int
-        get() = if (isPremium) Int.MAX_VALUE else (dailyLimit - dailyUsed + bonusReplies).coerceAtLeast(0)
+        get() = if (dailyLimit == 0) Int.MAX_VALUE else (dailyLimit - dailyUsed).coerceAtLeast(0)
 
     val canGenerate: Boolean
-        get() = isPremium || dailyRemaining > 0
+        get() = dailyLimit == 0 || dailyRemaining > 0
 }
 
-enum class UserTier {
-    FREE_BYOK,      // Bring Your Own Key — unlimited
-    FREE_HOSTED,    // Hosted — 3-5 free/day
-    PREMIUM,        // $4.99/mo — unlimited hosted
-    PRO             // $9.99/mo — everything + analytics
-}
+data class ReferralInfo(
+    val referralCode: String = "",
+    val totalReferrals: Int = 0,
+    val bonusRepliesEarned: Int = 0,
+    val maxReferrals: Int = 10
+)

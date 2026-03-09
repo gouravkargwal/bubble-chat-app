@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -20,6 +20,12 @@ class User(Base):
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     premium_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     daily_limit: Mapped[int] = mapped_column(Integer, default=5)
+    tier: Mapped[str] = mapped_column(String(20), default="free")  # free, premium, pro
+    tier_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Referral
+    referral_code: Mapped[str | None] = mapped_column(String(8), unique=True, nullable=True, index=True)
+    bonus_replies: Mapped[int] = mapped_column(Integer, default=0)
+    referred_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     prompt_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -43,6 +49,9 @@ class Conversation(Base):
 
 class Interaction(Base):
     __tablename__ = "interactions"
+    __table_args__ = (
+        Index("ix_interactions_user_created", "user_id", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id: Mapped[str | None] = mapped_column(
@@ -72,6 +81,7 @@ class Interaction(Base):
     llm_model: Mapped[str] = mapped_column(String(100))
     prompt_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
     temperature_used: Mapped[float] = mapped_column(Float)
+    screenshot_count: Mapped[int] = mapped_column(Integer, default=1)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -95,3 +105,55 @@ class UserVoiceDNA(Base):
     ellipsis_count: Mapped[int] = mapped_column(Integer, default=0)
     word_frequency: Mapped[str] = mapped_column(Text, default="{}")  # JSON dict
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Referral(Base):
+    __tablename__ = "referrals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    referrer_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    referee_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    bonus_granted: Mapped[int] = mapped_column(Integer, default=5)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Purchase(Base):
+    __tablename__ = "purchases"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    product_id: Mapped[str] = mapped_column(String(100))  # e.g. cookd_premium_monthly
+    purchase_token: Mapped[str] = mapped_column(String(500), unique=True)
+    order_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="active")  # active, cancelled, expired, refunded
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    auto_renewing: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Promo(Base):
+    __tablename__ = "promos"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    code: Mapped[str] = mapped_column(String(30), unique=True, index=True)
+    tier_grant: Mapped[str] = mapped_column(String(20))  # premium or pro
+    duration_days: Mapped[int] = mapped_column(Integer, default=7)  # trial length
+    max_uses: Mapped[int] = mapped_column(Integer, default=100)
+    current_uses: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    new_users_only: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PromoRedemption(Base):
+    __tablename__ = "promo_redemptions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "promo_id", name="uq_promo_redemption_user_promo"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    promo_id: Mapped[str] = mapped_column(String(36), ForeignKey("promos.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

@@ -21,9 +21,10 @@ class GeminiClient(LlmClient):
         self,
         system_prompt: str,
         user_prompt: str,
-        base64_image: str,
+        base64_images: list[str],
         temperature: float,
         model: str | None = None,
+        max_output_tokens: int = 2000,
     ) -> str:
         model = model or self.default_model
         url = (
@@ -32,11 +33,11 @@ class GeminiClient(LlmClient):
         )
 
         parts: list[dict] = [{"text": user_prompt}]
-        if base64_image:
+        for img in base64_images:
             parts.append({
                 "inlineData": {
                     "mimeType": "image/jpeg",
-                    "data": base64_image,
+                    "data": img,
                 }
             })
 
@@ -47,7 +48,7 @@ class GeminiClient(LlmClient):
             "contents": [{"parts": parts}],
             "generationConfig": {
                 "temperature": temperature,
-                "maxOutputTokens": 2000,
+                "maxOutputTokens": max_output_tokens,
                 "responseMimeType": "application/json",
             },
         }

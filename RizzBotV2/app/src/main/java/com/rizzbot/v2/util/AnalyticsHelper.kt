@@ -36,16 +36,6 @@ class AnalyticsHelper @Inject constructor() {
     fun onboardingStepCompleted(step: Int) = logEvent("onboarding_step_completed", mapOf("step" to step))
     fun onboardingCompleted() = logEvent("onboarding_completed")
 
-    // Provider
-    fun providerSelected(provider: String) {
-        logEvent("provider_selected", mapOf("provider" to provider))
-        setUserProperty("selected_provider", provider)
-    }
-    fun modelSelected(model: String) {
-        logEvent("model_selected", mapOf("model" to model))
-        setUserProperty("selected_model", model)
-    }
-
     // Capture & Reply
     fun bubbleTapped() = logEvent("bubble_tapped")
     fun directionSelected(direction: String) = logEvent("direction_selected", mapOf("direction" to direction))
@@ -57,4 +47,9 @@ class AnalyticsHelper @Inject constructor() {
     fun replyRated(vibeIndex: Int, isPositive: Boolean) = logEvent("reply_rated", mapOf("vibe_index" to vibeIndex, "is_positive" to isPositive))
     fun replyRegenerated() = logEvent("reply_regenerated")
     fun sessionMemoryUsed(turnCount: Int) = logEvent("session_memory_used", mapOf("turn_count" to turnCount))
+
+    // Usage & Premium
+    fun quotaExhausted() = logEvent("quota_exhausted")
+    fun premiumViewed() = logEvent("premium_viewed")
+    fun authCompleted() = logEvent("auth_completed")
 }

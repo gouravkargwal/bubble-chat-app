@@ -12,8 +12,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Use sync SQLite URL for Alembic (strip async driver)
-db_url = settings.database_url.replace("sqlite+aiosqlite", "sqlite")
+# Convert async driver URL to sync for Alembic
+db_url = settings.database_url.replace("postgresql+asyncpg", "postgresql")
 config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata

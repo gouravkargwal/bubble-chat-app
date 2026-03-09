@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.model.UserPreferences
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -42,8 +43,6 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToStats: () -> Unit,
-    onNavigateToOptimize: () -> Unit,
-    onNavigateToSync: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -57,7 +56,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("RizzBot", fontWeight = FontWeight.Bold) },
+                title = { Text("Cookd", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
@@ -91,7 +90,10 @@ fun HomeScreen(
                 }
             )
 
-            // 2. FEATURES ROW — 3 core features
+            // 1.5 USAGE QUOTA
+            UsageQuotaCard(usage = state.usage)
+
+            // 2. FEATURES ROW
             Text("Features", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -101,25 +103,17 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.QuestionAnswer,
                     title = "Replies",
-                    subtitle = "AI suggestions",
+                    subtitle = "View history",
                     accentColor = Pink,
                     onClick = onNavigateToHistory
                 )
                 FeatureCard(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AutoAwesome,
-                    title = "Optimize",
-                    subtitle = "Your profile",
+                    icon = Icons.Default.BarChart,
+                    title = "Stats",
+                    subtitle = "Your style",
                     accentColor = Color(0xFF9C27B0),
-                    onClick = onNavigateToOptimize
-                )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.PersonSearch,
-                    title = "Sync",
-                    subtitle = "Their profile",
-                    accentColor = Color(0xFF2196F3),
-                    onClick = onNavigateToSync
+                    onClick = onNavigateToStats
                 )
             }
 
@@ -207,7 +201,7 @@ private fun HeroCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (isEnabled) "RizzBot is ACTIVE" else "RizzBot is Inactive",
+                        if (isEnabled) "Cookd is ACTIVE" else "Cookd is Inactive",
                         color = if (isEnabled) Pink else Color.Gray,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
@@ -323,7 +317,7 @@ private fun StepItem(number: String, text: String) {
 
 @Composable
 private fun RecentRepliesSection(
-    replies: List<com.rizzbot.v2.data.local.db.entity.ReplyHistoryEntity>,
+    replies: List<com.rizzbot.v2.data.remote.dto.HistoryItemResponse>,
     onSeeAll: () -> Unit
 ) {
     Card(
@@ -360,7 +354,7 @@ private fun RecentRepliesSection(
 }
 
 @Composable
-private fun ReplyItem(entry: com.rizzbot.v2.data.local.db.entity.ReplyHistoryEntity) {
+private fun ReplyItem(entry: com.rizzbot.v2.data.remote.dto.HistoryItemResponse) {
     val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
     Column {
         Row(
@@ -368,7 +362,7 @@ private fun ReplyItem(entry: com.rizzbot.v2.data.local.db.entity.ReplyHistoryEnt
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                entry.personContext?.take(30) ?: "Unknown",
+                entry.personName?.take(30) ?: "Unknown",
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
@@ -377,14 +371,14 @@ private fun ReplyItem(entry: com.rizzbot.v2.data.local.db.entity.ReplyHistoryEnt
                 modifier = Modifier.weight(1f)
             )
             Text(
-                dateFormat.format(Date(entry.createdAt)),
+                dateFormat.format(Date(entry.createdAt * 1000)),
                 color = Color.Gray,
                 fontSize = 11.sp
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            entry.reply1,
+            entry.replies.firstOrNull() ?: "",
             color = Color.Gray,
             fontSize = 13.sp,
             maxLines = 2,
@@ -440,5 +434,65 @@ private fun VibeBar(label: String, progress: Float) {
             color = Pink,
             trackColor = DividerColor
         )
+    }
+}
+
+@Composable
+private fun UsageQuotaCard(usage: UsageState) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Daily Usage", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                if (usage.isPremium) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50)),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            "UNLIMITED",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                } else {
+                    Text(
+                        "${usage.dailyUsed} of ${usage.dailyLimit} used",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+            if (!usage.isPremium) {
+                Spacer(modifier = Modifier.height(8.dp))
+                val progress = if (usage.dailyLimit > 0) usage.dailyUsed.toFloat() / usage.dailyLimit else 0f
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = if (progress >= 0.8f) Color(0xFFEF5350) else Pink,
+                    trackColor = DividerColor
+                )
+                if (usage.dailyRemaining <= 1 && usage.dailyRemaining >= 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        if (usage.dailyRemaining == 0) "Limit reached! Upgrade for unlimited replies."
+                        else "1 reply left today",
+                        color = Color(0xFFEF5350),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
     }
 }

@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # Database
-    database_url: str = "sqlite+aiosqlite:///./rizzbot.db"
+    database_url: str = "postgresql+asyncpg://cookd:cookd@localhost:5432/cookd"
 
     # Auth
     jwt_secret: str = "change-me"
@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
+    # Google Play Billing
+    google_play_service_account: str = ""
+    google_play_package_name: str = "com.cookd.app"
+
     # Rate limits
     daily_free_limit: int = 5
 
@@ -31,5 +35,19 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cors_origins: list[str] = ["*"]
 
+    def validate_production(self) -> None:
+        """Fail fast if critical secrets are not configured in production."""
+        if self.environment != "development":
+            if self.jwt_secret in ("change-me", ""):
+                raise RuntimeError(
+                    "JWT_SECRET must be set to a strong random value in production. "
+                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                )
+            if not self.gemini_api_key:
+                raise RuntimeError("GEMINI_API_KEY must be set in production.")
+            if "CHANGE-ME" in self.database_url.upper():
+                raise RuntimeError("DATABASE_URL contains placeholder credentials.")
+
 
 settings = Settings()
+settings.validate_production()

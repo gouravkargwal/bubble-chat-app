@@ -43,11 +43,12 @@ async def get_current_user(
 
 async def count_today_interactions(user_id: str, db: AsyncSession) -> int:
     """Count how many interactions the user has made today."""
-    today_start = date.today().isoformat()
+    from sqlalchemy import cast, Date
+
     result = await db.execute(
         select(func.count(Interaction.id)).where(
             Interaction.user_id == user_id,
-            func.date(Interaction.created_at) == today_start,
+            cast(Interaction.created_at, Date) == date.today(),
         )
     )
     return result.scalar_one()

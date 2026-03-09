@@ -4,7 +4,10 @@ sealed class SuggestionResult {
     data class Success(
         val replies: List<String>,
         val summary: String,
-        val personName: String?
+        val personName: String?,
+        val interactionId: String = "",
+        val stage: String? = null,
+        val usageRemaining: Int = -1
     ) : SuggestionResult()
 
     data class Error(
@@ -18,6 +21,7 @@ sealed class SuggestionResult {
         NO_INTERNET,
         INVALID_API_KEY,
         RATE_LIMITED,
+        QUOTA_EXCEEDED,
         UNREADABLE_SCREENSHOT,
         TIMEOUT,
         UNKNOWN

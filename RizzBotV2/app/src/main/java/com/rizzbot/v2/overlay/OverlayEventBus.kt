@@ -8,10 +8,12 @@ import javax.inject.Singleton
 
 @Singleton
 class OverlayEventBus @Inject constructor() {
-    private val _events = MutableSharedFlow<OverlayEvent>(extraBufferCapacity = 10)
+    private val _events = MutableSharedFlow<OverlayEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<OverlayEvent> = _events.asSharedFlow()
 
     fun send(event: OverlayEvent) {
-        _events.tryEmit(event)
+        if (!_events.tryEmit(event)) {
+            android.util.Log.w("OverlayEventBus", "Event buffer full, dropped: $event")
+        }
     }
 }

@@ -2,32 +2,30 @@ package com.rizzbot.v2.ui.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.rizzbot.v2.data.local.db.dao.ReplyHistoryDao
-import com.rizzbot.v2.data.local.db.entity.ReplyHistoryEntity
+import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
+import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.util.ClipboardHelper
-import com.rizzbot.v2.util.Constants
 import com.rizzbot.v2.util.HapticHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
-    private val replyHistoryDao: ReplyHistoryDao,
+    private val hostedRepository: HostedRepository,
     private val clipboardHelper: ClipboardHelper,
     private val hapticHelper: HapticHelper
 ) : ViewModel() {
 
-    val history: StateFlow<List<ReplyHistoryEntity>> = replyHistoryDao.getAll()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _history = MutableStateFlow<List<HistoryItemResponse>>(emptyList())
+    val history: StateFlow<List<HistoryItemResponse>> = _history.asStateFlow()
 
     init {
         viewModelScope.launch {
-            val cutoff = System.currentTimeMillis() - (Constants.REPLY_HISTORY_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
-            replyHistoryDao.deleteExpired(cutoff)
+            _history.value = hostedRepository.getHistory(limit = 50)
         }
     }
 
@@ -36,9 +34,10 @@ class HistoryViewModel @Inject constructor(
         hapticHelper.lightTap()
     }
 
-    fun deleteEntry(id: Long) {
+    fun deleteEntry(id: String) {
         viewModelScope.launch {
-            replyHistoryDao.deleteById(id)
+            hostedRepository.deleteHistoryItem(id)
+            _history.value = _history.value.filter { it.id != id }
         }
     }
 }

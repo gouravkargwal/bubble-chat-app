@@ -3,7 +3,8 @@ package com.rizzbot.v2.ui.onboarding
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.rizzbot.v2.domain.model.LlmProvider
+import com.rizzbot.v2.data.auth.GoogleSignInHelper
+import com.rizzbot.v2.data.auth.GoogleSignInResult
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.PermissionHelper
@@ -12,22 +13,24 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class OnboardingState(
     val currentStep: Int = 0,
     val hasOverlayPermission: Boolean = false,
-    val selectedProvider: LlmProvider? = null,
-    val selectedModelId: String? = null,
-    val apiKey: String = "",
-    val isApiKeyValid: Boolean = false
+    val isAuthenticating: Boolean = false,
+    val authError: String? = null,
+    val onboardingDone: Boolean = false,
+    val userName: String? = null
 )
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
+    val googleSignInHelper: GoogleSignInHelper,
     private val permissionHelper: PermissionHelper,
     private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
@@ -41,49 +44,43 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun refreshPermissions() {
-        _state.value = _state.value.copy(
-            hasOverlayPermission = permissionHelper.canDrawOverlays()
-        )
+        _state.update { it.copy(hasOverlayPermission = permissionHelper.canDrawOverlays()) }
     }
 
     fun nextStep() {
         val next = _state.value.currentStep + 1
-        _state.value = _state.value.copy(currentStep = next)
+        _state.update { it.copy(currentStep = next) }
         analyticsHelper.onboardingStepCompleted(next)
     }
 
-    fun selectProvider(provider: LlmProvider) {
-        _state.value = _state.value.copy(
-            selectedProvider = provider,
-            selectedModelId = provider.defaultModel.id,
-            apiKey = ""
-        )
-        analyticsHelper.providerSelected(provider.name)
-    }
-
-    fun selectModel(modelId: String) {
-        _state.value = _state.value.copy(selectedModelId = modelId)
-        analyticsHelper.modelSelected(modelId)
-    }
-
-    fun updateApiKey(key: String) {
-        _state.value = _state.value.copy(
-            apiKey = key,
-            isApiKeyValid = key.length >= 10
-        )
+    fun signInWithGoogle(activityContext: Context) {
+        viewModelScope.launch {
+            _state.update { it.copy(isAuthenticating = true, authError = null) }
+            when (val result = googleSignInHelper.signIn(activityContext)) {
+                is GoogleSignInResult.Success -> {
+                    analyticsHelper.authCompleted()
+                    _state.update {
+                        it.copy(
+                            isAuthenticating = false,
+                            userName = googleSignInHelper.getCurrentUserName()
+                        )
+                    }
+                    nextStep()
+                }
+                is GoogleSignInResult.Error -> {
+                    _state.update {
+                        it.copy(isAuthenticating = false, authError = result.message)
+                    }
+                }
+            }
+        }
     }
 
     fun completeOnboarding() {
         viewModelScope.launch {
-            val s = _state.value
-            s.selectedProvider?.let { settingsRepository.setProvider(it) }
-            s.selectedModelId?.let { modelId ->
-                val model = s.selectedProvider?.models?.find { it.id == modelId }
-                model?.let { settingsRepository.setModel(it) }
-            }
-            if (s.apiKey.isNotBlank()) settingsRepository.setApiKey(s.apiKey)
             settingsRepository.setOnboardingCompleted(true)
             analyticsHelper.onboardingCompleted()
+            _state.update { it.copy(onboardingDone = true) }
         }
     }
 }

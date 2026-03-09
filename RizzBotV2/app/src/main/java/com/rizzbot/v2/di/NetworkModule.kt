@@ -1,7 +1,7 @@
 package com.rizzbot.v2.di
 
 import com.rizzbot.v2.BuildConfig
-import com.rizzbot.v2.data.remote.LlmClientFactory
+import com.rizzbot.v2.data.auth.AuthInterceptor
 import com.rizzbot.v2.data.remote.api.HostedApi
 import dagger.Module
 import dagger.Provides
@@ -29,11 +29,12 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
         return OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
+            .addInterceptor(authInterceptor)
             .apply {
                 if (BuildConfig.DEBUG) {
                     addInterceptor(HttpLoggingInterceptor().apply {
@@ -52,19 +53,12 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideLlmClientFactory(
-        okHttpClient: OkHttpClient,
-        converterFactory: retrofit2.Converter.Factory
-    ): LlmClientFactory = LlmClientFactory(okHttpClient, converterFactory)
-
-    @Provides
-    @Singleton
     fun provideHostedApi(
         okHttpClient: OkHttpClient,
         converterFactory: retrofit2.Converter.Factory
     ): HostedApi {
         return retrofit2.Retrofit.Builder()
-            .baseUrl("https://api.rizzbot.app/")
+            .baseUrl(BuildConfig.BACKEND_URL)
             .client(okHttpClient)
             .addConverterFactory(converterFactory)
             .build()

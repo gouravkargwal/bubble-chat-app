@@ -5,14 +5,13 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import com.rizzbot.v2.domain.model.LlmProvider
 
 @Composable
 fun OnboardingScreen(
@@ -42,6 +40,10 @@ fun OnboardingScreen(
         onPauseOrDispose {}
     }
 
+    LaunchedEffect(state.onboardingDone) {
+        if (state.onboardingDone) onComplete()
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color(0xFF0F0F1A)
@@ -55,7 +57,7 @@ fun OnboardingScreen(
         ) {
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Step indicator
+            // Step indicator — 3 steps
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 repeat(3) { step ->
                     Box(
@@ -74,11 +76,17 @@ fun OnboardingScreen(
 
             AnimatedContent(targetState = state.currentStep, label = "step") { step ->
                 when (step) {
-                    0 -> PrivacyStep(
+                    0 -> GoogleSignInStep(
+                        isAuthenticating = state.isAuthenticating,
+                        authError = state.authError,
+                        onSignIn = { viewModel.signInWithGoogle(context) }
+                    )
+                    1 -> PrivacyStep(
+                        userName = state.userName,
                         onNext = { viewModel.nextStep() },
                         onTryDemo = onTryDemo
                     )
-                    1 -> OverlayPermissionStep(
+                    2 -> OverlayPermissionStep(
                         hasPermission = state.hasOverlayPermission,
                         onRequestPermission = {
                             val intent = Intent(
@@ -87,20 +95,7 @@ fun OnboardingScreen(
                             )
                             context.startActivity(intent)
                         },
-                        onNext = { viewModel.nextStep() }
-                    )
-                    2 -> ApiKeyStep(
-                        selectedProvider = state.selectedProvider,
-                        selectedModelId = state.selectedModelId,
-                        apiKey = state.apiKey,
-                        isValid = state.isApiKeyValid,
-                        onProviderSelected = { viewModel.selectProvider(it) },
-                        onModelSelected = { viewModel.selectModel(it) },
-                        onApiKeyChanged = { viewModel.updateApiKey(it) },
-                        onComplete = {
-                            viewModel.completeOnboarding()
-                            onComplete()
-                        }
+                        onComplete = { viewModel.completeOnboarding() }
                     )
                 }
             }
@@ -109,31 +104,25 @@ fun OnboardingScreen(
 }
 
 @Composable
-private fun PrivacyStep(onNext: () -> Unit, onTryDemo: () -> Unit) {
+private fun GoogleSignInStep(
+    isAuthenticating: Boolean,
+    authError: String?,
+    onSignIn: () -> Unit
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            Icons.Default.Shield,
-            contentDescription = null,
-            tint = Color(0xFFE91E63),
-            modifier = Modifier.size(64.dp)
-        )
+        Text("\uD83D\uDD25", fontSize = 56.sp)
         Spacer(modifier = Modifier.height(24.dp))
-        Text("Your Privacy Matters", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(16.dp))
+        Text("Welcome to Cookd", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "Your AI-powered dating chat assistant.\nSign in to get started.",
+            color = Color.Gray,
+            textAlign = TextAlign.Center,
+            fontSize = 14.sp,
+            lineHeight = 20.sp
+        )
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                PrivacyItem("Screenshots are captured ONLY when you tap the bubble")
-                PrivacyItem("Images are sent directly to your chosen AI provider")
-                PrivacyItem("Screenshots are NEVER stored on your device or our servers")
-                PrivacyItem("Your API key is stored locally and never shared")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         // Multi-app badge
         Card(
@@ -166,6 +155,77 @@ private fun PrivacyStep(onNext: () -> Unit, onTryDemo: () -> Unit) {
                         }
                     }
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Button(
+            onClick = onSignIn,
+            enabled = !isAuthenticating,
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            if (isAuthenticating) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.Black,
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Signing in...", color = Color.Black)
+            } else {
+                Icon(
+                    Icons.Default.AccountCircle,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Continue with Google",
+                    color = Color.Black,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
+
+        if (authError != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(authError, color = Color(0xFFEF5350), fontSize = 13.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun PrivacyStep(userName: String?, onNext: () -> Unit, onTryDemo: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            Icons.Default.Shield,
+            contentDescription = null,
+            tint = Color(0xFFE91E63),
+            modifier = Modifier.size(64.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if (userName != null) {
+            Text("Hey $userName!", color = Color(0xFFE91E63), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        Text("Your Privacy Matters", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                PrivacyItem("Screenshots are captured ONLY when you tap the bubble")
+                PrivacyItem("Images are sent securely to our servers and never stored")
+                PrivacyItem("Screenshots are NEVER saved on your device")
             }
         }
 
@@ -204,7 +264,7 @@ private fun PrivacyItem(text: String) {
 private fun OverlayPermissionStep(
     hasPermission: Boolean,
     onRequestPermission: () -> Unit,
-    onNext: () -> Unit
+    onComplete: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("\uD83D\uDD32", fontSize = 56.sp)
@@ -212,7 +272,7 @@ private fun OverlayPermissionStep(
         Text("Overlay Permission", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "RizzBot needs to display a floating bubble over other apps so you can get suggestions without switching apps.",
+            "Cookd needs to display a floating bubble over other apps so you can get suggestions without switching apps.",
             color = Color.Gray,
             textAlign = TextAlign.Center,
             fontSize = 14.sp
@@ -230,14 +290,15 @@ private fun OverlayPermissionStep(
                     Text("Permission granted!", color = Color.White)
                 }
             }
+
             Spacer(modifier = Modifier.height(24.dp))
             Button(
-                onClick = onNext,
+                onClick = onComplete,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Continue", modifier = Modifier.padding(8.dp))
+                Text("Get Started!", modifier = Modifier.padding(8.dp))
             }
         } else {
             Button(
@@ -247,117 +308,6 @@ private fun OverlayPermissionStep(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Grant Permission", modifier = Modifier.padding(8.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ApiKeyStep(
-    selectedProvider: LlmProvider?,
-    selectedModelId: String?,
-    apiKey: String,
-    isValid: Boolean,
-    onProviderSelected: (LlmProvider) -> Unit,
-    onModelSelected: (String) -> Unit,
-    onApiKeyChanged: (String) -> Unit,
-    onComplete: () -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFE91E63), modifier = Modifier.size(64.dp))
-        Spacer(modifier = Modifier.height(24.dp))
-        Text("Choose Your AI", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Select a provider and enter your API key. Groq and Gemini offer free API keys!",
-            color = Color.Gray,
-            textAlign = TextAlign.Center,
-            fontSize = 14.sp
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Provider selection
-        LlmProvider.entries.forEach { provider ->
-            val isSelected = selectedProvider == provider
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clickable { onProviderSelected(provider) },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) Color(0xFFE91E63).copy(alpha = 0.2f) else Color(0xFF1A1A2E)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(provider.displayName, color = Color.White, fontWeight = FontWeight.Bold)
-                        Text(provider.keyHelperText, color = Color.Gray, fontSize = 12.sp)
-                    }
-                    if (provider == LlmProvider.GROQ || provider == LlmProvider.GEMINI) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50)),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text("FREE", color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                        }
-                    }
-                }
-            }
-        }
-
-        if (selectedProvider != null) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Model selection
-            Text("Model", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                selectedProvider.models.forEach { model ->
-                    FilterChip(
-                        selected = model.id == selectedModelId,
-                        onClick = { onModelSelected(model.id) },
-                        label = { Text(model.displayName, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFFE91E63),
-                            selectedLabelColor = Color.White
-                        )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // API key input
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = onApiKeyChanged,
-                label = { Text("API Key") },
-                placeholder = { Text("Paste your API key here") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = Color(0xFFE91E63),
-                    unfocusedBorderColor = Color.Gray,
-                    focusedLabelColor = Color(0xFFE91E63)
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = onComplete,
-                enabled = isValid,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Get Started!", modifier = Modifier.padding(8.dp))
             }
         }
     }

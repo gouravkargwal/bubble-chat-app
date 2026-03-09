@@ -3,7 +3,7 @@ package com.rizzbot.v2.overlay.manager
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
-import android.util.DisplayMetrics
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
@@ -18,19 +18,22 @@ import com.rizzbot.v2.overlay.OverlayLifecycleOwner
 import com.rizzbot.v2.overlay.ui.BubbleOverlay
 import com.rizzbot.v2.util.ClipboardHelper
 import com.rizzbot.v2.util.HapticHelper
-import com.rizzbot.v2.data.local.db.dao.ReplyRatingDao
-import com.rizzbot.v2.data.local.db.entity.ReplyRatingEntity
+import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "BubbleManager"
 
 @Singleton
 class BubbleManager @Inject constructor(
@@ -39,15 +42,16 @@ class BubbleManager @Inject constructor(
     private val orchestrator: ScreenCaptureOrchestrator,
     private val clipboardHelper: ClipboardHelper,
     private val hapticHelper: HapticHelper,
-    private val ratingDao: ReplyRatingDao,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val hostedRepository: HostedRepository
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var scope: CoroutineScope? = null
     private val windowManager by lazy { context.getSystemService(Context.WINDOW_SERVICE) as WindowManager }
     private var composeView: ComposeView? = null
     private val lifecycleOwner = OverlayLifecycleOwner()
     private var bubbleX: Int
     private var bubbleY = 400
+    private var stateCollectorJob: Job? = null
 
     init {
         // Default position: right edge, vertically centered
@@ -58,10 +62,14 @@ class BubbleManager @Inject constructor(
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Hidden)
     val state: StateFlow<BubbleState> = _state.asStateFlow()
 
-    init {
-        scope.launch {
-            _state.collect { state ->
-                updateWindowForState(state)
+    private fun ensureScope(): CoroutineScope {
+        return scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main).also {
+            scope = it
+            // Start state collector for window layout updates
+            stateCollectorJob = it.launch {
+                _state.collect { state ->
+                    updateWindowForState(state)
+                }
             }
         }
     }
@@ -102,7 +110,9 @@ class BubbleManager @Inject constructor(
         val params = createParams(isFullScreenState(state))
         try {
             windowManager.updateViewLayout(view, params)
-        } catch (_: Exception) {}
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "View not attached when updating layout", e)
+        }
     }
 
     private fun createAndAttachView(): ComposeView {
@@ -111,6 +121,7 @@ class BubbleManager @Inject constructor(
             setContent {
                 BubbleOverlay(
                     state = _state,
+                    usageState = hostedRepository.usageState,
                     onEvent = { handleEvent(it) }
                 )
             }
@@ -124,6 +135,7 @@ class BubbleManager @Inject constructor(
     fun show() {
         if (composeView != null) return
 
+        ensureScope()
         lifecycleOwner.onCreate()
         lifecycleOwner.onResume()
         composeView = createAndAttachView()
@@ -134,10 +146,20 @@ class BubbleManager @Inject constructor(
     }
 
     fun hide() {
+        // Cancel all pending coroutines (LLM calls, tracking, etc.)
+        stateCollectorJob?.cancel()
+        stateCollectorJob = null
+        scope?.cancel()
+        scope = null
+
         lifecycleOwner.onPause()
         lifecycleOwner.onDestroy()
         composeView?.let {
-            try { windowManager.removeView(it) } catch (_: Exception) {}
+            try {
+                windowManager.removeView(it)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "View already removed", e)
+            }
         }
         composeView = null
         _state.value = BubbleState.Hidden
@@ -146,7 +168,11 @@ class BubbleManager @Inject constructor(
 
     fun hideForCapture() {
         composeView?.let {
-            try { windowManager.removeView(it) } catch (_: Exception) {}
+            try {
+                windowManager.removeView(it)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "View already removed during capture hide", e)
+            }
         }
         composeView = null
         _state.value = BubbleState.Capturing
@@ -160,11 +186,12 @@ class BubbleManager @Inject constructor(
     }
 
     private fun handleEvent(event: OverlayEvent) {
+        val activeScope = ensureScope()
         when (event) {
             is OverlayEvent.ShowBubble -> _state.value = BubbleState.DirectionPicker
             is OverlayEvent.HideBubble -> hide()
             is OverlayEvent.CaptureRequested -> {
-                scope.launch {
+                activeScope.launch {
                     // Clear previous screenshots on fresh capture/retake
                     orchestrator.clearScreenshot()
                     // Hide overlay before capture so it's not in the screenshot
@@ -189,13 +216,13 @@ class BubbleManager @Inject constructor(
                         val result = orchestrator.result.value
                         _state.value = when (result) {
                             is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
-                            else -> BubbleState.RizzButton
+                            else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
                         }
                     }
                 }
             }
             is OverlayEvent.ConfirmScreenshot -> {
-                scope.launch {
+                activeScope.launch {
                     _state.value = BubbleState.Loading
                     orchestrator.generateFromScreenshots(event.direction)
                     val result = orchestrator.result.value
@@ -207,7 +234,7 @@ class BubbleManager @Inject constructor(
                 }
             }
             is OverlayEvent.AddMoreScreenshots -> {
-                scope.launch {
+                activeScope.launch {
                     hideForCapture()
                     kotlinx.coroutines.delay(300)
 
@@ -232,18 +259,26 @@ class BubbleManager @Inject constructor(
             is OverlayEvent.CopyReply -> {
                 clipboardHelper.copyToClipboard(event.reply)
                 hapticHelper.lightTap()
-                scope.launch { settingsRepository.incrementRepliesCopied() }
+                activeScope.launch {
+                    settingsRepository.incrementRepliesCopied()
+                    if (event.interactionId.isNotEmpty()) {
+                        try {
+                            hostedRepository.trackCopy(event.interactionId, event.vibeIndex)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to track copy", e)
+                        }
+                    }
+                }
             }
             is OverlayEvent.RateReply -> {
-                scope.launch {
-                    ratingDao.insert(
-                        ReplyRatingEntity(
-                            direction = "",
-                            vibeIndex = event.vibeIndex,
-                            isPositive = event.isPositive,
-                            replyText = event.replyText
-                        )
-                    )
+                activeScope.launch {
+                    if (event.interactionId.isNotEmpty()) {
+                        try {
+                            hostedRepository.trackRating(event.interactionId, event.vibeIndex, event.isPositive)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to track rating", e)
+                        }
+                    }
                 }
             }
             is OverlayEvent.BubbleDragged -> {
@@ -253,11 +288,23 @@ class BubbleManager @Inject constructor(
                 val params = view.layoutParams as? WindowManager.LayoutParams ?: return
                 params.x = bubbleX
                 params.y = bubbleY
-                try { windowManager.updateViewLayout(view, params) } catch (_: Exception) {}
+                try {
+                    windowManager.updateViewLayout(view, params)
+                } catch (e: IllegalArgumentException) {
+                    Log.w(TAG, "View not attached during drag", e)
+                }
                 return // don't send drag events to eventBus
             }
+            is OverlayEvent.UpgradeTapped -> {
+                val intent = android.content.Intent(context, com.rizzbot.v2.ui.MainActivity::class.java).apply {
+                    putExtra("navigate_to", "premium")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                context.startActivity(intent)
+                _state.value = BubbleState.RizzButton
+            }
             is OverlayEvent.Regenerate -> {
-                scope.launch {
+                activeScope.launch {
                     _state.value = BubbleState.Loading
                     orchestrator.generateFromScreenshots(event.direction)
                     val result = orchestrator.result.value

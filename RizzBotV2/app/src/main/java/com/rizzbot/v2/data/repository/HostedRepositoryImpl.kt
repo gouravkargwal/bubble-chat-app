@@ -1,13 +1,20 @@
 package com.rizzbot.v2.data.repository
 
-import com.rizzbot.v2.data.local.datastore.SettingsDataStore
 import com.rizzbot.v2.data.remote.api.HostedApi
-import com.rizzbot.v2.data.remote.dto.HostedVisionRequest
-import com.rizzbot.v2.domain.model.HostedModeState
+import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
+import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
+import com.rizzbot.v2.data.remote.dto.TrackCopyRequest
+import com.rizzbot.v2.data.remote.dto.TrackRatingRequest
+import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
+import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
+import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
+import com.rizzbot.v2.domain.model.DirectionWithHint
+import com.rizzbot.v2.domain.model.ReferralInfo
 import com.rizzbot.v2.domain.model.SuggestionResult
+import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import retrofit2.HttpException
 import java.net.SocketTimeoutException
@@ -16,71 +23,55 @@ import javax.inject.Singleton
 
 @Singleton
 class HostedRepositoryImpl @Inject constructor(
-    private val hostedApi: HostedApi,
-    private val settingsDataStore: SettingsDataStore
+    private val hostedApi: HostedApi
 ) : HostedRepository {
 
-    private var authToken: String? = null
-    private val _hostedState = MutableStateFlow(HostedModeState())
-    override val hostedState: Flow<HostedModeState> = _hostedState.asStateFlow()
+    private val _usageState = MutableStateFlow(UsageState())
+    override val usageState: StateFlow<UsageState> = _usageState.asStateFlow()
 
-    override suspend fun authenticateAnonymous(): Boolean {
-        return try {
-            val response = hostedApi.authenticateAnonymous()
-            authToken = response.token
-            _hostedState.value = _hostedState.value.copy(isAuthenticated = true)
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    override suspend fun generateHostedReply(
-        systemPrompt: String,
-        userPrompt: String,
-        base64Image: String
+    override suspend fun generateReply(
+        base64Images: List<String>,
+        direction: DirectionWithHint
     ): SuggestionResult {
-        val token = authToken ?: run {
-            if (!authenticateAnonymous()) {
-                return SuggestionResult.Error(
-                    "Failed to authenticate. Check your connection.",
-                    SuggestionResult.ErrorType.UNKNOWN
-                )
-            }
-            authToken!!
-        }
-
         return try {
             val response = hostedApi.generateReply(
-                token = "Bearer $token",
-                request = HostedVisionRequest(
-                    image = base64Image,
-                    systemPrompt = systemPrompt,
-                    userPrompt = userPrompt
+                VisionGenerateRequest(
+                    images = base64Images,
+                    direction = direction.direction.name.lowercase(),
+                    customHint = direction.customHint
                 )
             )
 
-            _hostedState.value = _hostedState.value.copy(
-                dailyUsed = _hostedState.value.dailyLimit - response.usageRemaining
+            _usageState.value = _usageState.value.copy(
+                dailyUsed = _usageState.value.dailyLimit - response.usageRemaining
             )
 
             SuggestionResult.Success(
                 replies = response.replies,
-                summary = response.summary,
-                personName = response.personName
+                summary = response.personName ?: "",
+                personName = response.personName,
+                interactionId = response.interactionId,
+                stage = response.stage,
+                usageRemaining = response.usageRemaining
             )
         } catch (e: HttpException) {
             when (e.code()) {
-                401 -> {
-                    authToken = null
-                    _hostedState.value = _hostedState.value.copy(isAuthenticated = false)
-                    SuggestionResult.Error("Session expired. Please try again.", SuggestionResult.ErrorType.INVALID_API_KEY)
-                }
                 429 -> SuggestionResult.Error(
                     "Daily limit reached. Upgrade to Premium for unlimited replies.",
-                    SuggestionResult.ErrorType.RATE_LIMITED
+                    SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
-                else -> SuggestionResult.Error("Server error: ${e.code()}", SuggestionResult.ErrorType.UNKNOWN)
+                401 -> SuggestionResult.Error(
+                    "Session expired. Please restart the app.",
+                    SuggestionResult.ErrorType.INVALID_API_KEY
+                )
+                502 -> SuggestionResult.Error(
+                    "AI is temporarily unavailable. Try again.",
+                    SuggestionResult.ErrorType.UNKNOWN
+                )
+                else -> SuggestionResult.Error(
+                    "Server error: ${e.code()}",
+                    SuggestionResult.ErrorType.UNKNOWN
+                )
             }
         } catch (e: SocketTimeoutException) {
             SuggestionResult.Error("Request timed out. Try again.", SuggestionResult.ErrorType.TIMEOUT)
@@ -89,29 +80,115 @@ class HostedRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun refreshUsage() {
-        val token = authToken ?: return
+    override suspend fun trackCopy(interactionId: String, replyIndex: Int) {
         try {
-            val usage = hostedApi.getUsage("Bearer $token")
-            _hostedState.value = _hostedState.value.copy(
-                dailyLimit = usage.dailyLimit,
-                dailyUsed = usage.dailyUsed,
-                isPremium = usage.isPremium
-            )
-        } catch (_: Exception) {}
-    }
-
-    override suspend fun redeemReferral(code: String): Result<Int> {
-        return try {
-            // This would call a referral endpoint — placeholder for now
-            _hostedState.value = _hostedState.value.copy(
-                bonusReplies = _hostedState.value.bonusReplies + 5
-            )
-            Result.success(5)
+            hostedApi.trackCopy(TrackCopyRequest(interactionId, replyIndex))
         } catch (e: Exception) {
-            Result.failure(e)
+            android.util.Log.w("HostedRepo", "trackCopy failed: ${e.message}")
         }
     }
 
-    override fun getToken(): String? = authToken
+    override suspend fun trackRating(interactionId: String, replyIndex: Int, isPositive: Boolean) {
+        try {
+            hostedApi.trackRating(TrackRatingRequest(interactionId, replyIndex, isPositive))
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "trackRating failed: ${e.message}")
+        }
+    }
+
+    override suspend fun refreshUsage() {
+        try {
+            val usage = hostedApi.getUsage()
+            _usageState.value = UsageState(
+                dailyLimit = usage.dailyLimit,
+                dailyUsed = usage.dailyUsed,
+                isPremium = usage.isPremium,
+                tier = usage.tier,
+                bonusReplies = usage.bonusReplies,
+                allowedDirections = usage.allowedDirections,
+                maxScreenshots = usage.maxScreenshots
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "refreshUsage failed: ${e.message}")
+        }
+    }
+
+    override suspend fun getReferralInfo(): ReferralInfo? {
+        return try {
+            val info = hostedApi.getReferralInfo()
+            ReferralInfo(
+                referralCode = info.referralCode,
+                totalReferrals = info.totalReferrals,
+                bonusRepliesEarned = info.bonusRepliesEarned,
+                maxReferrals = info.maxReferrals
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "getReferralInfo failed: ${e.message}")
+            null
+        }
+    }
+
+    override suspend fun applyReferralCode(code: String): Result<Int> {
+        return try {
+            val response = hostedApi.applyReferral(ApplyReferralRequest(code))
+            refreshUsage()
+            Result.success(response.bonusGranted)
+        } catch (e: HttpException) {
+            val msg = when (e.code()) {
+                400 -> e.response()?.errorBody()?.string()?.let {
+                    if ("own" in it) "You can't use your own code"
+                    else if ("already" in it) "You've already used a referral code"
+                    else if ("maximum" in it) "This code has reached its limit"
+                    else "Invalid request"
+                } ?: "Invalid request"
+                404 -> "Invalid referral code"
+                else -> "Something went wrong"
+            }
+            Result.failure(Exception(msg))
+        } catch (e: Exception) {
+            Result.failure(Exception("Network error. Try again."))
+        }
+    }
+
+    override suspend fun verifyPurchase(
+        purchaseToken: String,
+        productId: String,
+        orderId: String?
+    ): Boolean {
+        return try {
+            val response = hostedApi.verifyPurchase(
+                VerifyPurchaseRequest(purchaseToken, productId, orderId)
+            )
+            if (response.isValid) {
+                refreshUsage()
+            }
+            response.isValid
+        } catch (_: Exception) { false }
+    }
+
+    override suspend fun getHistory(limit: Int): List<HistoryItemResponse> {
+        return try {
+            hostedApi.getHistory(limit).items
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "getHistory failed: ${e.message}")
+            emptyList()
+        }
+    }
+
+    override suspend fun deleteHistoryItem(id: String) {
+        try {
+            hostedApi.deleteHistoryItem(id)
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "deleteHistoryItem failed: ${e.message}")
+        }
+    }
+
+    override suspend fun getUserPreferences(): UserPreferencesResponse? {
+        return try {
+            hostedApi.getUserPreferences()
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "getUserPreferences failed: ${e.message}")
+            null
+        }
+    }
 }

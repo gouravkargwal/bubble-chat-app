@@ -3,6 +3,7 @@ package com.rizzbot.v2.capture
 import android.graphics.Bitmap
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.SuggestionResult
+import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.usecase.GenerateVisionReplyUseCase
 import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.Constants
@@ -11,6 +12,7 @@ import com.rizzbot.v2.util.NetworkHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,6 +21,7 @@ class ScreenCaptureOrchestrator @Inject constructor(
     private val screenCaptureManager: ScreenCaptureManager,
     private val imageCompressor: ImageCompressor,
     private val generateVisionReplyUseCase: GenerateVisionReplyUseCase,
+    private val hostedRepository: HostedRepository,
     private val networkHelper: NetworkHelper,
     private val hapticHelper: HapticHelper,
     private val analyticsHelper: AnalyticsHelper
@@ -35,8 +38,21 @@ class ScreenCaptureOrchestrator @Inject constructor(
     val isOnCooldown: Boolean
         get() = System.currentTimeMillis() - lastCaptureTime < Constants.CAPTURE_COOLDOWN_MS
 
+    suspend fun getMaxScreenshots(): Int = hostedRepository.usageState.first().maxScreenshots
+
+    fun canAddMore(maxScreenshots: Int): Boolean = previewBitmaps.size < maxScreenshots
+
     suspend fun captureScreenshot() {
         if (isOnCooldown) return
+
+        val maxScreenshots = getMaxScreenshots()
+        if (!canAddMore(maxScreenshots)) {
+            _result.value = SuggestionResult.Error(
+                "Max $maxScreenshots screenshots per request. Upgrade for more.",
+                SuggestionResult.ErrorType.UNKNOWN
+            )
+            return
+        }
 
         if (!networkHelper.isConnected()) {
             _result.value = SuggestionResult.Error(
@@ -95,16 +111,10 @@ class ScreenCaptureOrchestrator @Inject constructor(
             when (result) {
                 is SuggestionResult.Success -> {
                     hapticHelper.successTap()
-                    analyticsHelper.replyGenerated(
-                        generateVisionReplyUseCase.currentProvider,
-                        latencyMs
-                    )
+                    analyticsHelper.replyGenerated("hosted", latencyMs)
                 }
                 is SuggestionResult.Error -> {
-                    analyticsHelper.replyFailed(
-                        generateVisionReplyUseCase.currentProvider,
-                        result.message
-                    )
+                    analyticsHelper.replyFailed("hosted", result.message)
                 }
                 else -> {}
             }
@@ -118,14 +128,21 @@ class ScreenCaptureOrchestrator @Inject constructor(
         }
     }
 
-    fun getPreviewBitmaps(): List<Bitmap> = previewBitmaps.toList()
+    fun getPreviewBitmaps(): List<Bitmap> = synchronized(previewBitmaps) {
+        previewBitmaps.toList()
+    }
 
-    fun getLatestPreviewBitmap(): Bitmap? = previewBitmaps.lastOrNull()
+    fun getLatestPreviewBitmap(): Bitmap? = synchronized(previewBitmaps) {
+        previewBitmaps.lastOrNull()
+    }
 
     fun clearScreenshot() {
         base64Screenshots.clear()
-        previewBitmaps.forEach { it.recycle() }
-        previewBitmaps.clear()
+        // Don't recycle bitmaps here — Compose may still be rendering them.
+        // Let the GC collect them once all references are released.
+        synchronized(previewBitmaps) {
+            previewBitmaps.clear()
+        }
     }
 
     fun resetResult() {

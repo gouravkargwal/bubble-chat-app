@@ -1,5 +1,6 @@
 package com.rizzbot.v2.overlay.ui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,10 +12,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+private val AccentPink = Color(0xFFE91E63)
+private val CardShape = RoundedCornerShape(16.dp)
 
 @Composable
 fun SuggestionCard(
@@ -31,15 +37,28 @@ fun SuggestionCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .border(1.dp, Color.White.copy(alpha = 0.08f), CardShape)
             .clickable {
                 onCopy()
                 copied = true
             },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF252542))
+        shape = CardShape,
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF252542)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(label, color = Color(0xFFE91E63), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Column(
+            modifier = Modifier
+                .drawBehind {
+                    drawLine(
+                        color = AccentPink,
+                        start = Offset(0f, 0f),
+                        end = Offset(0f, size.height),
+                        strokeWidth = 3.dp.toPx()
+                    )
+                }
+                .padding(14.dp)
+        ) {
+            Text(label, color = AccentPink, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(4.dp))
             Text(reply, color = Color.White, fontSize = 14.sp)
             Spacer(modifier = Modifier.height(8.dp))

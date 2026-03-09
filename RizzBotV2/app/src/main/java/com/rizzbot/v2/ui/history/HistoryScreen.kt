@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.rizzbot.v2.data.local.db.entity.ReplyHistoryEntity
+import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -115,7 +115,7 @@ fun HistoryScreen(
 
 @Composable
 private fun HistoryCard(
-    entry: ReplyHistoryEntity,
+    entry: HistoryItemResponse,
     onCopyReply: (String) -> Unit
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
@@ -136,21 +136,20 @@ private fun HistoryCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    if (!entry.personContext.isNullOrBlank()) {
-                        Text(entry.personContext, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!entry.personName.isNullOrBlank()) {
+                        Text(entry.personName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(
                         "${entry.direction}${entry.customHint?.let { " \u2022 $it" } ?: ""}",
                         color = Color(0xFFE91E63), fontSize = 12.sp
                     )
                 }
-                Text(dateFormat.format(Date(entry.createdAt)), color = Color.Gray, fontSize = 11.sp)
+                Text(dateFormat.format(Date(entry.createdAt * 1000)), color = Color.Gray, fontSize = 11.sp)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Show first reply as preview, or all if expanded
-            val replies = listOf(entry.reply1, entry.reply2, entry.reply3, entry.reply4)
+            val replies = entry.replies
             val displayReplies = if (expanded) replies else replies.take(1)
 
             displayReplies.forEachIndexed { index, reply ->

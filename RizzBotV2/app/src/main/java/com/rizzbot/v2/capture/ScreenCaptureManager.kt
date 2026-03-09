@@ -95,7 +95,7 @@ class ScreenCaptureManager @Inject constructor(
         }
 
         virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "RizzBotCapture",
+            "CookdCapture",
             width, height, density,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             imageReader.surface,

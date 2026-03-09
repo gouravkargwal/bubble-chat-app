@@ -3,8 +3,8 @@ package com.rizzbot.v2.ui.stats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.domain.model.UserPreferences
+import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
-import com.rizzbot.v2.domain.usecase.AnalyzeUserPreferencesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -19,7 +19,7 @@ data class StatsState(
 @HiltViewModel
 class StatsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val analyzePreferences: AnalyzeUserPreferencesUseCase
+    private val hostedRepository: HostedRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StatsState())
@@ -41,8 +41,22 @@ class StatsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val prefs = analyzePreferences()
-            _state.value = _state.value.copy(preferences = prefs)
+            val prefs = hostedRepository.getUserPreferences()
+            if (prefs != null && prefs.hasEnoughData) {
+                val vibeBreakdown = prefs.vibeBreakdown.associate { it.name to it.percentage }
+                val preferredLength = when (prefs.preferredLength) {
+                    "short" -> UserPreferences.PreferredLength.SHORT
+                    "long" -> UserPreferences.PreferredLength.LONG
+                    else -> UserPreferences.PreferredLength.MEDIUM
+                }
+                _state.value = _state.value.copy(
+                    preferences = UserPreferences(
+                        totalRatings = prefs.totalRatings,
+                        vibeBreakdown = vibeBreakdown,
+                        preferredLength = preferredLength
+                    )
+                )
+            }
         }
     }
 }

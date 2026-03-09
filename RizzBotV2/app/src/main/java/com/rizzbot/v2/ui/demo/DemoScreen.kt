@@ -70,7 +70,8 @@ private val demoScenarios = listOf(
 @Composable
 fun DemoScreen(
     onBack: () -> Unit,
-    onSetupApiKey: () -> Unit
+    onSetupApiKey: () -> Unit,
+    onPremium: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -97,7 +98,7 @@ fun DemoScreen(
                 .padding(16.dp)
         ) {
             Text(
-                "Here's what RizzBot can do",
+                "Here's what Cookd can do",
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
@@ -124,17 +125,18 @@ fun DemoScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Set Up Your API Key & Start", modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
+                Text("Get Started", modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Groq and Gemini offer FREE API keys!",
-                color = Color.Gray,
-                fontSize = 12.sp,
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onPremium,
                 modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("View Premium Plans", color = Color(0xFFE91E63), fontWeight = FontWeight.Bold)
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }

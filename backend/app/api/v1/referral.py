@@ -1,0 +1,134 @@
+"""Referral system endpoints."""
+
+import secrets
+import string
+
+import structlog
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.deps import get_current_user
+from app.api.v1.schemas.schemas import (
+    ApplyReferralRequest,
+    ApplyReferralResponse,
+    ReferralInfoResponse,
+)
+from app.infrastructure.database.engine import get_db
+from app.infrastructure.database.models import Referral, User
+
+router = APIRouter()
+logger = structlog.get_logger()
+
+MAX_REFERRALS = 10
+BONUS_PER_REFERRAL = 5
+
+
+def generate_referral_code(length: int = 8) -> str:
+    """Generate a random alphanumeric referral code."""
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+@router.get("/referral/me", response_model=ReferralInfoResponse)
+async def get_my_referral(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReferralInfoResponse:
+    """Get the current user's referral code and stats."""
+    # Generate code if user doesn't have one yet
+    if not user.referral_code:
+        for _ in range(10):  # retry on collision
+            code = generate_referral_code()
+            existing = await db.execute(
+                select(User).where(User.referral_code == code)
+            )
+            if existing.scalar_one_or_none() is None:
+                user.referral_code = code
+                try:
+                    await db.commit()
+                    await db.refresh(user)
+                except IntegrityError:
+                    await db.rollback()
+                    continue
+                break
+
+    # Count total referrals
+    result = await db.execute(
+        select(func.count(Referral.id)).where(Referral.referrer_id == user.id)
+    )
+    total_referrals = result.scalar_one()
+
+    return ReferralInfoResponse(
+        referral_code=user.referral_code or "",
+        total_referrals=total_referrals,
+        bonus_replies_earned=user.bonus_replies,
+        max_referrals=MAX_REFERRALS,
+    )
+
+
+@router.post("/referral/apply", response_model=ApplyReferralResponse)
+async def apply_referral(
+    body: ApplyReferralRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApplyReferralResponse:
+    """Apply a referral code. Both referrer and referee get bonus replies."""
+    code = body.code.upper().strip()
+
+    # 1. Can't use own code
+    if user.referral_code and user.referral_code == code:
+        raise HTTPException(status_code=400, detail="You cannot use your own referral code.")
+
+    # 2. Already been referred
+    if user.referred_by:
+        raise HTTPException(status_code=400, detail="You have already used a referral code.")
+
+    # 3. Find referrer with row-level lock to prevent race conditions
+    result = await db.execute(
+        select(User).where(User.referral_code == code).with_for_update()
+    )
+    referrer = result.scalar_one_or_none()
+    if referrer is None:
+        raise HTTPException(status_code=404, detail="Invalid referral code.")
+
+    # 4. Check referrer cap (safe under FOR UPDATE lock)
+    referral_count = await db.execute(
+        select(func.count(Referral.id)).where(Referral.referrer_id == referrer.id)
+    )
+    if referral_count.scalar_one() >= MAX_REFERRALS:
+        raise HTTPException(
+            status_code=400, detail="This referral code has reached its maximum uses."
+        )
+
+    # 5. Grant bonus to both
+    user.referred_by = referrer.id
+    user.bonus_replies += BONUS_PER_REFERRAL
+    referrer.bonus_replies += BONUS_PER_REFERRAL
+
+    referral = Referral(
+        referrer_id=referrer.id,
+        referee_id=user.id,
+        bonus_granted=BONUS_PER_REFERRAL,
+    )
+    db.add(referral)
+
+    try:
+        await db.commit()
+        await db.refresh(user)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="You have already used a referral code.")
+
+    logger.info(
+        "referral_applied",
+        referee_id=user.id,
+        referrer_id=referrer.id,
+        bonus=BONUS_PER_REFERRAL,
+    )
+
+    return ApplyReferralResponse(
+        bonus_granted=BONUS_PER_REFERRAL,
+        new_total_bonus=user.bonus_replies,
+    )

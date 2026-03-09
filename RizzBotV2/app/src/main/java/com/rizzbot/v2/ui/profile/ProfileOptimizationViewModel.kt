@@ -5,8 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.capture.ImageCompressor
-import com.rizzbot.v2.data.local.db.dao.ProfileAnalysisDao
-import com.rizzbot.v2.data.local.db.entity.ProfileAnalysisEntity
 import com.rizzbot.v2.domain.model.DatingApp
 import com.rizzbot.v2.domain.model.ProfileAnalysisResult
 import com.rizzbot.v2.domain.usecase.AnalyzeProfileUseCase
@@ -21,7 +19,6 @@ data class ProfileOptimizationState(
     val selectedImages: List<Uri> = emptyList(),
     val result: ProfileAnalysisResult? = null,
     val isAnalyzing: Boolean = false,
-    val previousAnalyses: List<ProfileAnalysisEntity> = emptyList(),
     val freeAnalysesRemaining: Int = 1
 )
 
@@ -29,25 +26,11 @@ data class ProfileOptimizationState(
 class ProfileOptimizationViewModel @Inject constructor(
     private val analyzeProfileUseCase: AnalyzeProfileUseCase,
     private val imageCompressor: ImageCompressor,
-    private val profileAnalysisDao: ProfileAnalysisDao,
     private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileOptimizationState())
     val state: StateFlow<ProfileOptimizationState> = _state.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            profileAnalysisDao.getAll().collect { analyses ->
-                _state.value = _state.value.copy(previousAnalyses = analyses)
-            }
-        }
-        viewModelScope.launch {
-            val thisMonth = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
-            val countThisMonth = profileAnalysisDao.countSince(thisMonth)
-            _state.value = _state.value.copy(freeAnalysesRemaining = (1 - countThisMonth).coerceAtLeast(0))
-        }
-    }
 
     fun selectApp(app: DatingApp) {
         _state.value = _state.value.copy(selectedApp = app)
@@ -82,10 +65,6 @@ class ProfileOptimizationViewModel @Inject constructor(
             when (result) {
                 is ProfileAnalysisResult.Success -> {
                     analyticsHelper.logEvent("profile_analysis_completed", mapOf("score" to result.overallScore.toDouble()))
-                    // Refresh free count
-                    val thisMonth = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
-                    val countThisMonth = profileAnalysisDao.countSince(thisMonth)
-                    _state.value = _state.value.copy(freeAnalysesRemaining = (1 - countThisMonth).coerceAtLeast(0))
                 }
                 is ProfileAnalysisResult.Error -> {
                     analyticsHelper.logEvent("profile_analysis_failed", mapOf("error" to result.message))
@@ -93,10 +72,6 @@ class ProfileOptimizationViewModel @Inject constructor(
                 else -> {}
             }
         }
-    }
-
-    fun deleteAnalysis(id: Long) {
-        viewModelScope.launch { profileAnalysisDao.deleteById(id) }
     }
 
     fun clearResult() {
