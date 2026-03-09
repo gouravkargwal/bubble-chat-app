@@ -13,6 +13,7 @@ class LlmClient(ABC):
         temperature: float,
         model: str,
         max_output_tokens: int = 2000,
+        response_schema: dict | None = None,
     ) -> str:
         """Send a vision request and return raw LLM text output."""
         ...

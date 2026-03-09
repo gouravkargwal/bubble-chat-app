@@ -29,6 +29,41 @@ logger = structlog.get_logger()
 _client: GeminiClient | None = None
 
 
+GEMINI_RESPONSE_SCHEMA: dict = {
+    "type": "OBJECT",
+    "properties": {
+        "analysis": {
+            "type": "OBJECT",
+            "properties": {
+                "their_last_message": {"type": "STRING"},
+                "who_texted_last": {"type": "STRING"},
+                "their_tone": {"type": "STRING"},
+                "their_effort": {"type": "STRING"},
+                "conversation_temperature": {"type": "STRING"},
+                "stage": {"type": "STRING"},
+                "person_name": {"type": "STRING"},
+                "key_detail": {"type": "STRING"},
+                "what_they_want": {"type": "STRING"},
+            },
+        },
+        "strategy": {
+            "type": "OBJECT",
+            "properties": {
+                "wrong_moves": {"type": "ARRAY", "items": {"type": "STRING"}},
+                "right_energy": {"type": "STRING"},
+                "hook_point": {"type": "STRING"},
+            },
+        },
+        "replies": {
+            "type": "ARRAY",
+            "items": {"type": "STRING"},
+            "description": "Exactly 4 distinct string replies.",
+        },
+    },
+    "required": ["analysis", "strategy", "replies"],
+}
+
+
 def _get_client() -> GeminiClient:
     global _client
     if _client is None:
@@ -133,6 +168,7 @@ async def generate_replies(
             temperature=payload.temperature,
             model=settings.gemini_model,
             max_output_tokens=tier_config.max_output_tokens,
+            response_schema=GEMINI_RESPONSE_SCHEMA,
         )
     except ValueError as e:
         error_msg = str(e)

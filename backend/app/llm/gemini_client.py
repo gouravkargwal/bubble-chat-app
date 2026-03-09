@@ -25,6 +25,7 @@ class GeminiClient(LlmClient):
         temperature: float,
         model: str | None = None,
         max_output_tokens: int = 2000,
+        response_schema: dict | None = None,
     ) -> str:
         model = model or self.default_model
         url = (
@@ -34,23 +35,46 @@ class GeminiClient(LlmClient):
 
         parts: list[dict] = [{"text": user_prompt}]
         for img in base64_images:
-            parts.append({
-                "inlineData": {
-                    "mimeType": "image/jpeg",
-                    "data": img,
+            parts.append(
+                {
+                    "inlineData": {
+                        "mimeType": "image/jpeg",
+                        "data": img,
+                    }
                 }
-            })
+            )
+
+        generation_config: dict = {
+            "temperature": temperature,
+            "maxOutputTokens": max_output_tokens,
+            "responseMimeType": "application/json",
+        }
+        if response_schema is not None:
+            generation_config["responseSchema"] = response_schema
 
         payload = {
-            "systemInstruction": {
-                "parts": [{"text": system_prompt}]
-            },
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": parts}],
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_output_tokens,
-                "responseMimeType": "application/json",
-            },
+            "generationConfig": generation_config,
+            # Disable all standard safety filters so we always get a response.
+            "safetySettings": [
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE",
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE",
+                },
+            ],
         }
 
         last_error: Exception | None = None
@@ -118,6 +142,7 @@ class GeminiClient(LlmClient):
                 # Retry on 5xx
                 if attempt < _RETRY_ATTEMPTS:
                     import asyncio
+
                     await asyncio.sleep(_RETRY_DELAY * attempt)
 
             except httpx.TimeoutException as e:
@@ -125,6 +150,7 @@ class GeminiClient(LlmClient):
                 logger.warning("gemini_timeout", attempt=attempt)
                 if attempt < _RETRY_ATTEMPTS:
                     import asyncio
+
                     await asyncio.sleep(_RETRY_DELAY * attempt)
 
             except Exception as e:
@@ -132,6 +158,7 @@ class GeminiClient(LlmClient):
                 logger.error("gemini_error", error=str(e), attempt=attempt)
                 if attempt < _RETRY_ATTEMPTS:
                     import asyncio
+
                     await asyncio.sleep(_RETRY_DELAY * attempt)
 
         raise last_error or RuntimeError("Gemini request failed after all retries")

@@ -45,7 +45,11 @@ class ScenarioResult:
 
     @property
     def avg_judge_score(self) -> float:
-        scores = [r.judge_report.overall_score for r in self.runs if r.judge_report and not r.error]
+        scores = [
+            r.judge_report.overall_score
+            for r in self.runs
+            if r.judge_report and not r.error
+        ]
         return sum(scores) / len(scores) if scores else 0.0
 
     @property
@@ -80,7 +84,9 @@ class TestSuiteResult:
 
 
 class TestRunner:
-    def __init__(self, gemini_api_key: str | None = None, model: str | None = None) -> None:
+    def __init__(
+        self, gemini_api_key: str | None = None, model: str | None = None
+    ) -> None:
         api_key = gemini_api_key or settings.gemini_api_key
         self.model = model or settings.gemini_model
         self.client = GeminiClient(api_key=api_key, default_model=self.model)
@@ -174,9 +180,15 @@ class TestRunner:
             raw = await self.client.vision_generate(
                 system_prompt=payload.system_prompt,
                 user_prompt=user_prompt,
-                base64_image="",  # No real image in test mode
+                base64_images=[],  # No real image in test mode
                 temperature=payload.temperature,
                 model=self.model,
+                max_output_tokens=(
+                    payload.max_output_tokens
+                    if hasattr(payload, "max_output_tokens")
+                    else 2000
+                ),
+                response_schema=None,
             )
             latency_ms = int((time.monotonic() - start) * 1000)
 

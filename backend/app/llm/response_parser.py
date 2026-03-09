@@ -17,61 +17,26 @@ logger = structlog.get_logger()
 
 
 def parse_llm_response(raw: str) -> ParsedLlmResponse:
-    """Parse LLM output into structured response. Tries 3 strategies."""
-    # Strategy 1: Direct JSON parse
-    try:
-        return _parse_json(raw)
-    except (json.JSONDecodeError, KeyError, TypeError):
-        pass
+    """Parse LLM output into structured response.
 
-    # Strategy 2: Extract JSON from markdown code block
-    json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
-    if json_match:
-        try:
-            return _parse_json(json_match.group(1))
-        except (json.JSONDecodeError, KeyError, TypeError):
-            pass
-
-    # Strategy 3: Find any JSON object in the text
-    brace_match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if brace_match:
-        try:
-            return _parse_json(brace_match.group(0))
-        except (json.JSONDecodeError, KeyError, TypeError):
-            pass
-
-    # Strategy 4: Delimiter-based fallback (---/=== format from V1)
-    try:
-        return _parse_delimited(raw)
-    except Exception:
-        pass
-
-    # Last resort: try to extract any 4 distinct lines as replies
-    # NOTE: analysis data will be empty defaults — degrades conversation memory
-    # and Voice DNA training. Log as error for monitoring.
-    lines = [
-        line.strip()
-        for line in raw.strip().split("\n")
-        if line.strip() and len(line.strip()) > 10
-    ]
-    if len(lines) >= 4:
-        logger.error(
-            "parse_fallback_lines_no_analysis",
-            line_count=len(lines),
-            raw_preview=raw[:300],
-        )
-        return ParsedLlmResponse(
-            analysis=AnalysisResult(),
-            strategy=StrategyResult(),
-            replies=lines[:4],
-        )
-
-    raise ValueError(f"Could not parse LLM response: {raw[:200]}")
+    With structured outputs enabled on the Gemini API, we expect `raw` to be
+    a valid JSON string matching our response schema. Any JSON decode failure
+    is treated as a hard error.
+    """
+    return _parse_json(raw)
 
 
 def _parse_json(text: str) -> ParsedLlmResponse:
     """Parse a JSON response into structured domain objects."""
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        logger.error(
+            "parse_json_decode_error",
+            error=str(e),
+            text_preview=text[:500],
+        )
+        raise
 
     # Handle error response
     if "error" in data:
@@ -155,42 +120,3 @@ def _parse_json(text: str) -> ParsedLlmResponse:
     )
 
     return ParsedLlmResponse(analysis=analysis, strategy=strategy, replies=cleaned)
-
-
-def _parse_delimited(raw: str) -> ParsedLlmResponse:
-    """Fallback: parse the ---/=== delimiter format."""
-    # Split by === to separate replies from context
-    main_parts = raw.split("===")
-    replies_section = main_parts[0].strip()
-    context_section = main_parts[1].strip() if len(main_parts) > 1 else ""
-
-    # Split replies by ---
-    reply_parts = [r.strip() for r in replies_section.split("---") if r.strip()]
-
-    # Clean reply labels
-    cleaned = []
-    for reply in reply_parts[:4]:
-        reply = re.sub(r"^(?:\d+[\.\)]\s*|Reply\s*\d+:\s*|[A-Z][a-z]+:\s*)", "", reply)
-        if reply:
-            cleaned.append(reply)
-
-    if len(cleaned) < 2:
-        raise ValueError(f"Only found {len(cleaned)} replies in delimited format")
-
-    # Try to extract person name from context
-    person_name = "unknown"
-    name_match = re.search(r"Person(?:\s*name)?:\s*([^.\n]+)", context_section)
-    if name_match:
-        person_name = name_match.group(1).strip()
-
-    # Try to extract stage
-    stage = "early_talking"
-    stage_match = re.search(r"Stage:\s*([^\n.]+)", context_section)
-    if stage_match:
-        stage = stage_match.group(1).strip().lower().replace(" ", "_")
-
-    return ParsedLlmResponse(
-        analysis=AnalysisResult(person_name=person_name, stage=stage),
-        strategy=StrategyResult(),
-        replies=cleaned,
-    )

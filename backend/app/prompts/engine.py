@@ -2,8 +2,8 @@
 
 from app.domain.models import ConversationContext, PromptPayload, VoiceDNA
 from app.prompts.temperature import calculate_temperature
-from app.prompts.variants import PromptVariant, registry
-from app.prompts.templates.base_system import BASE_SYSTEM_PROMPT, OUTPUT_FORMAT
+from app.prompts.variants import registry
+from app.prompts.templates.base_system import BASE_SYSTEM_PROMPT
 from app.prompts.templates.few_shots import FEW_SHOTS
 from app.prompts.templates.anti_patterns import ANTI_PATTERNS
 from app.prompts.templates.fork_principle import FORK_PRINCIPLE
@@ -25,7 +25,6 @@ class PromptEngine:
     7. Voice DNA (user's texting style)
     8. Conversation history
     9. Self-critique checklist (freshest in attention)
-    10. Output format (last = strongest compliance)
     """
 
     def build(
@@ -75,27 +74,34 @@ class PromptEngine:
             parts.append(self._build_voice_dna_block(voice_dna))
 
         # 8. Conversation history
-        if variant.use_conversation_history and conversation_context and conversation_context.interaction_count > 0:
+        if (
+            variant.use_conversation_history
+            and conversation_context
+            and conversation_context.interaction_count > 0
+        ):
             parts.append(self._build_conversation_history_block(conversation_context))
 
         # 9. Self-critique checklist
         if variant.use_self_critique:
             parts.append(SELF_CRITIQUE)
 
-        # 10. Output format (last for strongest compliance)
-        parts.append(OUTPUT_FORMAT)
-
         system_prompt = "\n".join(parts)
 
         # Build user prompt
-        user_prompt = self._build_user_prompt(direction, custom_hint, conversation_context)
+        user_prompt = self._build_user_prompt(
+            direction, custom_hint, conversation_context
+        )
 
         # Calculate temperature
         temp = calculate_temperature(
             direction=direction,
             conversation_temperature="warm",  # default — actual analysis happens in LLM
-            stage=conversation_context.stage if conversation_context else "early_talking",
-            interaction_count=conversation_context.interaction_count if conversation_context else 0,
+            stage=(
+                conversation_context.stage if conversation_context else "early_talking"
+            ),
+            interaction_count=(
+                conversation_context.interaction_count if conversation_context else 0
+            ),
         )
 
         return PromptPayload(
@@ -123,7 +129,11 @@ class PromptEngine:
         else:
             emoji_text = "often — emojis are part of their style"
 
-        words_text = ", ".join(voice.common_words[:5]) if voice.common_words else "none detected yet"
+        words_text = (
+            ", ".join(voice.common_words[:5])
+            if voice.common_words
+            else "none detected yet"
+        )
 
         return f"""
 ══════════════════════════════════════
@@ -152,7 +162,9 @@ Their voice > your defaults."""
         ]
 
         if ctx.topics_worked:
-            parts.append(f"Topics that got good responses: {', '.join(ctx.topics_worked)}")
+            parts.append(
+                f"Topics that got good responses: {', '.join(ctx.topics_worked)}"
+            )
         if ctx.topics_failed:
             parts.append(f"Topics that fell flat: {', '.join(ctx.topics_failed)}")
 
@@ -163,7 +175,9 @@ Their voice > your defaults."""
                 parts.append(f"- {summary}")
 
         parts.append("")
-        parts.append("Use this history for continuity. Reference earlier topics naturally if relevant.")
+        parts.append(
+            "Use this history for continuity. Reference earlier topics naturally if relevant."
+        )
         parts.append("Do NOT repeat topics that failed. Lean into topics that worked.")
 
         return "\n".join(parts)
@@ -180,7 +194,9 @@ Their voice > your defaults."""
             parts.append(f"\nUser's specific request: {custom_hint}")
 
         if conversation_context and conversation_context.person_name != "unknown":
-            parts.append(f"\nYou're helping reply to: {conversation_context.person_name}")
+            parts.append(
+                f"\nYou're helping reply to: {conversation_context.person_name}"
+            )
 
         return "\n".join(parts)
 

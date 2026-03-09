@@ -8,35 +8,71 @@ from app.infrastructure.database.models import UserVoiceDNA
 
 # Common slang/abbreviations to track
 _SLANG_WORDS = {
-    "lol", "haha", "hahaha", "lmao", "ngl", "tbh", "lowkey", "fr", "imo",
-    "omg", "bruh", "gonna", "wanna", "kinda", "tho", "nah", "idk", "imo",
-    "ikr", "smh", "istg", "rn", "bro", "dude", "yoo", "yooo", "bet",
+    "lol",
+    "haha",
+    "hahaha",
+    "lmao",
+    "ngl",
+    "tbh",
+    "lowkey",
+    "fr",
+    "imo",
+    "omg",
+    "bruh",
+    "gonna",
+    "wanna",
+    "kinda",
+    "tho",
+    "nah",
+    "idk",
+    "imo",
+    "ikr",
+    "smh",
+    "istg",
+    "rn",
+    "bro",
+    "dude",
+    "yoo",
+    "yooo",
+    "bet",
 }
 
 
 def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
     """Update Voice DNA running averages from a newly copied reply."""
-    n = current.sample_count
+    # Older rows might have NULLs; treat them as zeros for running averages.
+    n = current.sample_count or 0
     new_n = n + 1
 
     # Running average: reply length (characters)
     current.avg_reply_length = (current.avg_reply_length * n + len(copied_text)) / new_n
 
     # Emoji count
-    emoji_count = len(re.findall(r"[\U0001f600-\U0001f9ff\U0001fa00-\U0001faff\u2600-\u26ff\u2700-\u27bf]", copied_text))
-    current.emoji_count += emoji_count
+    emoji_count = len(
+        re.findall(
+            r"[\U0001f600-\U0001f9ff\U0001fa00-\U0001faff\u2600-\u26ff\u2700-\u27bf]",
+            copied_text,
+        )
+    )
+    current.emoji_count = (current.emoji_count or 0) + emoji_count
     current.emoji_frequency = current.emoji_count / new_n
 
     # Capitalization
     is_lowercase = copied_text == copied_text.lower()
-    current.lowercase_count += 1 if is_lowercase else 0
-    current.capitalization = "lowercase" if current.lowercase_count / new_n > 0.7 else "normal"
+    current.lowercase_count = (current.lowercase_count or 0) + (
+        1 if is_lowercase else 0
+    )
+    current.capitalization = (
+        "lowercase" if current.lowercase_count / new_n > 0.7 else "normal"
+    )
 
     # Punctuation
     has_ellipsis = "..." in copied_text
     has_no_period = not copied_text.rstrip().endswith(".")
-    current.ellipsis_count += 1 if has_ellipsis else 0
-    current.no_period_count += 1 if has_no_period else 0
+    current.ellipsis_count = (current.ellipsis_count or 0) + (1 if has_ellipsis else 0)
+    current.no_period_count = (current.no_period_count or 0) + (
+        1 if has_no_period else 0
+    )
 
     if current.ellipsis_count / new_n > 0.3:
         current.punctuation_style = "ellipsis lover"
