@@ -3,8 +3,11 @@
 import json
 import re
 
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.models import VoiceDNA
-from app.infrastructure.database.models import UserVoiceDNA
+from app.infrastructure.database.models import UserVoiceDNA, Interaction
 
 # Common slang/abbreviations to track
 _SLANG_WORDS = {
@@ -118,9 +121,56 @@ def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
     return current
 
 
-def to_domain(db_model: UserVoiceDNA) -> VoiceDNA:
-    """Convert DB model to domain model for prompt injection."""
+async def to_domain(db_model: UserVoiceDNA, db: AsyncSession) -> VoiceDNA:
+    """Convert DB model to domain model for prompt injection, including vibe preferences."""
     common = json.loads(db_model.common_words) if db_model.common_words else []
+
+    # Calculate vibe preferences from user's ratings
+    VIBE_NAMES = ["Flirty", "Witty", "Smooth", "Bold"]
+
+    # Count all ratings (positive and negative) grouped by vibe index
+    ratings_result = await db.execute(
+        select(
+            Interaction.rating_index,
+            Interaction.rating_positive,
+            func.count(Interaction.id).label("cnt"),
+        )
+        .where(
+            Interaction.user_id == db_model.user_id,
+            Interaction.rating_index.is_not(None),
+        )
+        .group_by(Interaction.rating_index, Interaction.rating_positive)
+    )
+    ratings_rows = ratings_result.all()
+
+    # Calculate net score for each vibe: (positive_count - negative_count)
+    vibe_scores = {}  # {vibe_index: net_score}
+    for row in ratings_rows:
+        vibe_idx = row.rating_index
+        count = row.cnt
+        if vibe_idx not in vibe_scores:
+            vibe_scores[vibe_idx] = 0
+        if row.rating_positive:
+            vibe_scores[vibe_idx] += count
+        else:
+            vibe_scores[vibe_idx] -= count
+
+    # Determine top vibes (positive net score) and disliked vibes (negative net score)
+    top_vibes = []
+    disliked_vibes = []
+
+    for vibe_idx, score in vibe_scores.items():
+        if 0 <= vibe_idx < len(VIBE_NAMES):
+            vibe_name = VIBE_NAMES[vibe_idx]
+            if score > 0:
+                top_vibes.append((vibe_name, score))
+            elif score < 0:
+                disliked_vibes.append(vibe_name)
+
+    # Sort top vibes by score descending and extract just the names
+    top_vibes.sort(key=lambda x: x[1], reverse=True)
+    top_vibe_names = [name for name, _ in top_vibes]
+
     return VoiceDNA(
         avg_reply_length=db_model.avg_reply_length,
         emoji_frequency=db_model.emoji_frequency,
@@ -129,4 +179,6 @@ def to_domain(db_model: UserVoiceDNA) -> VoiceDNA:
         capitalization=db_model.capitalization,
         preferred_length=db_model.preferred_length,
         sample_count=db_model.sample_count,
+        top_vibes=top_vibe_names,
+        disliked_vibes=disliked_vibes,
     )

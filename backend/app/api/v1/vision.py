@@ -135,7 +135,7 @@ async def generate_replies(
         )
         voice_db = result.scalar_one_or_none()
         if voice_db and voice_db.sample_count >= 3:
-            voice_dna = voice_to_domain(voice_db)
+            voice_dna = await voice_to_domain(voice_db, db)
 
     # 8. Load conversation context only if tier supports memory
     conversation_context = None

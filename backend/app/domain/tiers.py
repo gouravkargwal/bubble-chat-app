@@ -41,7 +41,7 @@ TIERS: dict[str, TierConfig] = {
         max_conversations=3,
         max_screenshots=1,
         prompt_variant="minimal",
-        max_output_tokens=1500,
+        max_output_tokens=1024,  # Increased to accommodate spatial_audit + strategy
     ),
     "premium": TierConfig(
         name="Premium",
@@ -53,7 +53,7 @@ TIERS: dict[str, TierConfig] = {
         max_conversations=10,
         max_screenshots=3,
         prompt_variant="default",
-        max_output_tokens=2000,
+        max_output_tokens=1500,  # Increased for full schema with voice DNA
     ),
     "pro": TierConfig(
         name="Pro",
@@ -65,7 +65,7 @@ TIERS: dict[str, TierConfig] = {
         max_conversations=0,  # unlimited
         max_screenshots=5,
         prompt_variant="default",
-        max_output_tokens=2500,
+        max_output_tokens=2048,  # Increased for full schema with all features
     ),
 }
 

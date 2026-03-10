@@ -135,7 +135,7 @@ class PromptEngine:
             else "none detected yet"
         )
 
-        return f"""
+        base_dna = f"""
 ══════════════════════════════════════
 USER'S TEXTING STYLE (Voice DNA — match this closely)
 ══════════════════════════════════════
@@ -150,6 +150,26 @@ If they never use emojis, you never use emojis.
 If they say "lol" not "haha", you say "lol" not "haha".
 If they text lowercase, every reply must be lowercase.
 Their voice > your defaults."""
+
+        # Add vibe preference instructions
+        vibe_parts = []
+        if voice.disliked_vibes:
+            vibe_parts.append(
+                f"\n\n🚫 CRITICAL: User HATES these vibes: {', '.join(voice.disliked_vibes)}. "
+                f"Do NOT generate ANY replies with these tones. Avoid them completely."
+            )
+
+        if voice.top_vibes:
+            vibe_parts.append(
+                f"\n\n⭐ VIBE ALLOCATION: Focus all 4 replies on their preferred styles: {', '.join(voice.top_vibes)}. "
+                f"Redistribute the standard vibe mix to match their personality. "
+                f"For example, if they only like Witty and Smooth, give 2 Witty + 2 Smooth options."
+            )
+
+        if vibe_parts:
+            base_dna += "".join(vibe_parts)
+
+        return base_dna
 
     def _build_conversation_history_block(self, ctx: ConversationContext) -> str:
         parts = [

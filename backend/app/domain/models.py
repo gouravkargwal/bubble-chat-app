@@ -101,6 +101,8 @@ class VoiceDNA:
     capitalization: str = "lowercase"
     preferred_length: str = "medium"
     sample_count: int = 0
+    top_vibes: list[str] = field(default_factory=list)
+    disliked_vibes: list[str] = field(default_factory=list)
 
 
 @dataclass
