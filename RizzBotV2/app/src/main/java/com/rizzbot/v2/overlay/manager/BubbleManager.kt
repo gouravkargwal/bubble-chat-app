@@ -507,6 +507,17 @@ class BubbleManager @Inject constructor(
                     }
                 }
             }
+            is OverlayEvent.RemoveScreenshot -> {
+                activeScope.launch {
+                    orchestrator.removeScreenshotAt(event.index)
+                    val previewBitmaps = orchestrator.getPreviewBitmaps()
+                    if (previewBitmaps.isNotEmpty()) {
+                        _state.value = BubbleState.ScreenshotPreview(previewBitmaps, event.direction)
+                    } else {
+                        _state.value = BubbleState.DirectionPicker
+                    }
+                }
+            }
             is OverlayEvent.DismissSuggestions -> {
                 _state.value = BubbleState.RizzButton
                 // We intentionally DO NOT clear screenshots here to maintain state

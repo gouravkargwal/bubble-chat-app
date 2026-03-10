@@ -33,6 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import com.rizzbot.v2.domain.model.ConversationDirection
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.SuggestionResult
@@ -135,6 +137,9 @@ fun BubbleOverlay(
                             onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
                             onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
                             onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
+                            onRemoveScreenshot = { index ->
+                                onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
+                            },
                             onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
                         )
                         is BubbleState.Loading -> LoadingOverlay()
@@ -424,10 +429,21 @@ private fun ScreenshotPreviewPanel(
     onConfirm: () -> Unit,
     onAddMore: () -> Unit,
     onRetake: () -> Unit,
+    onRemoveScreenshot: (Int) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+
+    var selectedIndex by remember(bitmaps) {
+        mutableIntStateOf(bitmaps.lastIndex.coerceAtLeast(0))
+    }
+    LaunchedEffect(bitmaps.size) {
+        if (bitmaps.isEmpty()) return@LaunchedEffect
+        if (selectedIndex !in bitmaps.indices) {
+            selectedIndex = bitmaps.lastIndex
+        }
+    }
 
     Card(
         modifier = modifier
@@ -457,17 +473,85 @@ private fun ScreenshotPreviewPanel(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Image(
-                bitmap = bitmaps.last().asImageBitmap(),
-                contentDescription = "Captured screenshot",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = screenHeight * 0.35f)
-                    .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Fit
-            )
+            if (bitmaps.isNotEmpty()) {
+                // Outer box: not clipped, has border. Inner box: clipped image.
+                // Close button is anchored to the outer box so it visually
+                // overlaps the top-right corner of the image (half in / half out).
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = screenHeight * 0.35f)
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 4.dp, end = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    ) {
+                        Image(
+                            bitmap = bitmaps[selectedIndex].asImageBitmap(),
+                            contentDescription = "Captured screenshot",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onRemoveScreenshot(selectedIndex) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(y = 12.dp) // push down a bit so it sits on the edge
+                            .size(28.dp)
+                            .background(Color.Black.copy(alpha = 0.85f), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove screenshot",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
+
+            if (bitmaps.size > 1) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                ) {
+                    itemsIndexed(bitmaps) { index, bitmap ->
+                        Box(
+                            modifier = Modifier
+                                .width(60.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (index == selectedIndex) {
+                                        Color.White.copy(alpha = 0.12f)
+                                    } else {
+                                        Color.White.copy(alpha = 0.04f)
+                                    }
+                                )
+                                .clickable { selectedIndex = index }
+                                .padding(2.dp)
+                        ) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Screenshot thumbnail",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+            }
 
             Text(
                 when {
@@ -596,6 +680,7 @@ private fun ErrorPanel(
     modifier: Modifier = Modifier
 ) {
     val isQuotaExceeded = errorType == SuggestionResult.ErrorType.QUOTA_EXCEEDED
+    val isRateLimited = errorType == SuggestionResult.ErrorType.RATE_LIMITED
 
     Card(
         modifier = modifier
@@ -612,12 +697,14 @@ private fun ErrorPanel(
             Text(if (isQuotaExceeded) "\uD83D\uDCA8" else "\uD83D\uDE15", fontSize = 32.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                if (isQuotaExceeded) {
-                    "Daily free limit reached"
-                } else {
-                    // Hide low-level error details (e.g. provider quota, timeouts)
-                    // behind a friendly, generic server error message.
-                    "Something went wrong on our side. We're looking into it."
+                when {
+                    isQuotaExceeded -> "Daily free limit reached"
+                    isRateLimited -> "We're getting a lot of requests. Please try again in a minute."
+                    else -> {
+                        // Hide low-level error details (e.g. provider quota, timeouts)
+                        // behind a friendly, generic server error message.
+                        "Something went wrong on our side. We're looking into it."
+                    }
                 },
                 color = Color.White,
                 fontWeight = FontWeight.Bold,

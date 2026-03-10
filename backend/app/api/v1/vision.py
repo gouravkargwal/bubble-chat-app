@@ -202,10 +202,6 @@ async def generate_replies(
         )
     except ValueError as e:
         error_msg = str(e)
-        if "rate limit" in error_msg.lower():
-            raise HTTPException(
-                status_code=429, detail="LLM rate limit. Try again in a minute."
-            )
         logger.error("llm_value_error", error=error_msg)
         raise HTTPException(
             status_code=502, detail="Failed to generate replies. Try again."

@@ -147,6 +147,20 @@ class ScreenCaptureOrchestrator @Inject constructor(
         }
     }
 
+    fun removeScreenshotAt(index: Int) {
+        if (index < 0) return
+
+        if (index < base64Screenshots.size) {
+            base64Screenshots.removeAt(index)
+        }
+
+        synchronized(previewBitmaps) {
+            if (index < previewBitmaps.size) {
+                previewBitmaps.removeAt(index)
+            }
+        }
+    }
+
     fun clearScreenshot() {
         base64Screenshots.clear()
         // Don't recycle bitmaps here — Compose may still be rendering them.

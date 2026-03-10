@@ -63,6 +63,8 @@ class HostedRepositoryImpl @Inject constructor(
             )
         } catch (e: HttpException) {
             when (e.code()) {
+                // 429 is *only* used by the backend for app-level daily quota
+                // (DB-based check before calling Gemini).
                 429 -> SuggestionResult.Error(
                     "Daily limit reached. Upgrade to Premium for unlimited replies.",
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
@@ -71,6 +73,7 @@ class HostedRepositoryImpl @Inject constructor(
                     "Session expired. Please restart the app.",
                     SuggestionResult.ErrorType.INVALID_API_KEY
                 )
+                // 5xx (including Gemini rate limits) are treated as "our side" issues.
                 502 -> SuggestionResult.Error(
                     "AI is temporarily unavailable. Try again.",
                     SuggestionResult.ErrorType.UNKNOWN

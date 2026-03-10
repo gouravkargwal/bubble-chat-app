@@ -13,6 +13,7 @@ sealed class OverlayEvent {
     data class Regenerate(val direction: DirectionWithHint) : OverlayEvent()
     data class AddMoreScreenshots(val direction: DirectionWithHint) : OverlayEvent()
     data class RetakeLastScreenshot(val direction: DirectionWithHint) : OverlayEvent()
+    data class RemoveScreenshot(val index: Int, val direction: DirectionWithHint) : OverlayEvent()
     data object ClearAndStartOver : OverlayEvent()
     data object UpgradeTapped : OverlayEvent()
 }
