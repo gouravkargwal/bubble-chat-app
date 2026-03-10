@@ -1,7 +1,7 @@
 """Conversation memory manager — auto-detects and tracks per-person conversations."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,7 +63,8 @@ async def update_conversation_from_analysis(
 
     # Increment count
     conversation.interaction_count += 1
-    conversation.last_interaction_at = datetime.now(timezone.utc)
+    # Store naive UTC timestamp to match TIMESTAMP WITHOUT TIME ZONE column
+    conversation.last_interaction_at = datetime.utcnow()
 
     # Track topics
     if analysis.key_detail:
@@ -127,9 +128,15 @@ async def build_conversation_context(
     for interaction in reversed(recent_interactions):
         summary = f"[{interaction.direction}] "
         if interaction.copied_index is not None:
-            copied_reply = getattr(interaction, f"reply_{interaction.copied_index}", None)
+            copied_reply = getattr(
+                interaction, f"reply_{interaction.copied_index}", None
+            )
             if copied_reply:
-                summary += f'Sent: "{copied_reply[:60]}..."' if len(copied_reply) > 60 else f'Sent: "{copied_reply}"'
+                summary += (
+                    f'Sent: "{copied_reply[:60]}..."'
+                    if len(copied_reply) > 60
+                    else f'Sent: "{copied_reply}"'
+                )
             else:
                 summary += "Copied a reply"
         else:

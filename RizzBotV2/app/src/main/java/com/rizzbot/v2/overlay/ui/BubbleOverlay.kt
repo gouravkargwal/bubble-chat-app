@@ -1,11 +1,11 @@
 package com.rizzbot.v2.overlay.ui
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -16,13 +16,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -67,12 +67,20 @@ fun BubbleOverlay(
             modifier = if (isFullScreen) Modifier.fillMaxSize()
             else Modifier.background(Color.Transparent)
         ) {
-            // Scrim behind panels
-            if (isFullScreen) {
+            // 1. Scrim behind panels with smooth fade
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isFullScreen,
+                enter = androidx.compose.animation.fadeIn(
+                    animationSpec = androidx.compose.animation.core.tween(250)
+                ),
+                exit = androidx.compose.animation.fadeOut(
+                    animationSpec = androidx.compose.animation.core.tween(200)
+                )
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.3f))
+                        .background(Color.Black.copy(alpha = 0.6f))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -80,55 +88,142 @@ fun BubbleOverlay(
                 )
             }
 
-            when (val s = currentState) {
-                is BubbleState.Hidden -> {}
-                is BubbleState.RizzButton -> RizzButton(
-                    onTap = { onEvent(OverlayEvent.ShowBubble) },
-                    onDrag = { dx, dy -> onEvent(OverlayEvent.BubbleDragged(dx.toInt(), dy.toInt())) },
-                )
-                is BubbleState.DirectionPicker -> DirectionPicker(
-                    allowedDirections = usage.allowedDirections,
-                    customHintsEnabled = usage.customHintsEnabled,
-                    onDirectionSelected = { direction ->
-                        onEvent(OverlayEvent.CaptureRequested(direction))
-                    },
-                    onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
-                is BubbleState.Capturing -> {}
-                is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
-                    bitmaps = s.bitmaps,
-                    maxScreenshots = usage.maxScreenshots,
-                    onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
-                    onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
-                    onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
-                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
-                is BubbleState.Loading -> LoadingOverlay(
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
-                is BubbleState.Expanded -> SuggestionPanel(
-                    result = s.result,
-                    onCopy = { reply, index -> onEvent(OverlayEvent.CopyReply(reply, index, s.result.interactionId)) },
-                    onRate = { index, positive, text -> onEvent(OverlayEvent.RateReply(index, positive, text, s.result.interactionId)) },
-                    onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
-                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                )
-                is BubbleState.Error -> ErrorPanel(
-                    message = s.message,
-                    errorType = s.errorType,
-                    onRetry = {
-                        val dir = s.direction ?: DirectionWithHint()
-                        onEvent(OverlayEvent.Regenerate(dir))
-                    },
-                    onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
-                    modifier = Modifier.align(Alignment.BottomCenter)
+            // 2. Render RizzButton ONLY when not in full screen
+            if (currentState is BubbleState.RizzButton) {
+                RizzButton(
+                    onTap = { onEvent(OverlayEvent.ShowBubble) }
                 )
             }
+
+            // 3. The Panels (Animated scale-in popup centered on screen)
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isFullScreen,
+                enter = androidx.compose.animation.scaleIn(
+                    initialScale = 0.85f,
+                    animationSpec = androidx.compose.animation.core.tween(
+                        durationMillis = 250,
+                        easing = androidx.compose.animation.core.LinearOutSlowInEasing
+                    )
+                ) + androidx.compose.animation.fadeIn(
+                    animationSpec = androidx.compose.animation.core.tween(250)
+                ),
+                exit = androidx.compose.animation.scaleOut(
+                    targetScale = 0.85f,
+                    animationSpec = androidx.compose.animation.core.tween(
+                        durationMillis = 200,
+                        easing = androidx.compose.animation.core.FastOutLinearInEasing
+                    )
+                ) + androidx.compose.animation.fadeOut(
+                    animationSpec = androidx.compose.animation.core.tween(200)
+                ),
+                modifier = Modifier.align(Alignment.Center) // Centers the popup!
+            ) {
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    when (val s = currentState) {
+                        is BubbleState.DirectionPicker -> DirectionPicker(
+                            allowedDirections = usage.allowedDirections,
+                            customHintsEnabled = usage.customHintsEnabled,
+                            onDirectionSelected = { direction ->
+                                onEvent(OverlayEvent.CaptureRequested(direction))
+                            },
+                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
+                            bitmaps = s.bitmaps,
+                            maxScreenshots = usage.maxScreenshots,
+                            onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
+                            onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
+                            onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        is BubbleState.Loading -> LoadingOverlay()
+                        is BubbleState.Expanded -> SuggestionPanel(
+                            result = s.result,
+                            onCopy = { reply, index ->
+                                onEvent(
+                                    OverlayEvent.CopyReply(
+                                        reply,
+                                        index,
+                                        s.result.interactionId
+                                    )
+                                )
+                            },
+                            onRate = { index, positive, text ->
+                                onEvent(
+                                    OverlayEvent.RateReply(
+                                        index,
+                                        positive,
+                                        text,
+                                        s.result.interactionId
+                                    )
+                                )
+                            },
+                            onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
+                            onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        is BubbleState.Error -> ErrorPanel(
+                            message = s.message,
+                            errorType = s.errorType,
+                            onRetry = {
+                                val dir = s.direction ?: DirectionWithHint()
+                                onEvent(OverlayEvent.Regenerate(dir))
+                            },
+                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        else -> {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CloseTargetUI(isHovering: Boolean) {
+    val scale by animateFloatAsState(
+        targetValue = if (isHovering) 1.3f else 1.0f,
+        label = "close_target_scale"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (isHovering) Color(0xFFD32F2F) else Color(0xFF1A1A2E).copy(alpha = 0.8f),
+        label = "close_target_color"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 60.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(70.dp)
+                    .scale(scale)
+                    .clip(CircleShape)
+                    .background(containerColor)
+                    .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Close",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp)
+            )
         }
     }
 }
@@ -136,7 +231,6 @@ fun BubbleOverlay(
 @Composable
 private fun RizzButton(
     onTap: () -> Unit,
-    onDrag: (Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var totalDragDistance by remember { mutableFloatStateOf(0f) }
@@ -157,16 +251,6 @@ private fun RizzButton(
             .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
             .pointerInput(Unit) {
                 detectTapGestures { onTap() }
-            }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { totalDragDistance = 0f },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        totalDragDistance += kotlin.math.abs(dragAmount.x) + kotlin.math.abs(dragAmount.y)
-                        onDrag(dragAmount.x, dragAmount.y)
-                    }
-                )
             },
         contentAlignment = Alignment.Center
     ) {
@@ -197,7 +281,6 @@ private fun DirectionPicker(
             .border(1.dp, PanelBorderColor, PanelShape),
         shape = PanelShape,
         colors = CardDefaults.cardColors(containerColor = PanelColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -320,7 +403,6 @@ private fun LoadingOverlay(modifier: Modifier = Modifier) {
             .border(1.dp, PanelBorderColor, PanelShape),
         shape = PanelShape,
         colors = CardDefaults.cardColors(containerColor = PanelColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier
@@ -355,7 +437,6 @@ private fun ScreenshotPreviewPanel(
             .border(1.dp, PanelBorderColor, PanelShape),
         shape = PanelShape,
         colors = CardDefaults.cardColors(containerColor = PanelColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -447,6 +528,7 @@ private fun SuggestionPanel(
     onCopy: (String, Int) -> Unit,
     onRate: (Int, Boolean, String) -> Unit,
     onRegenerate: () -> Unit,
+    onClear: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -461,7 +543,6 @@ private fun SuggestionPanel(
             .border(1.dp, PanelBorderColor, PanelShape),
         shape = PanelShape,
         colors = CardDefaults.cardColors(containerColor = PanelColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier
@@ -477,6 +558,9 @@ private fun SuggestionPanel(
                 Row {
                     IconButton(onClick = onRegenerate) {
                         Icon(Icons.Default.Refresh, "Regenerate", tint = AccentPink)
+                    }
+                    IconButton(onClick = onClear) {
+                        Icon(Icons.Default.Delete, "Clear", tint = Color.Gray)
                     }
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, "Close", tint = Color.White)
@@ -520,7 +604,6 @@ private fun ErrorPanel(
             .border(1.dp, PanelBorderColor, PanelShape),
         shape = PanelShape,
         colors = CardDefaults.cardColors(containerColor = PanelColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -529,7 +612,13 @@ private fun ErrorPanel(
             Text(if (isQuotaExceeded) "\uD83D\uDCA8" else "\uD83D\uDE15", fontSize = 32.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                if (isQuotaExceeded) "Daily free limit reached" else message,
+                if (isQuotaExceeded) {
+                    "Daily free limit reached"
+                } else {
+                    // Hide low-level error details (e.g. provider quota, timeouts)
+                    // behind a friendly, generic server error message.
+                    "Something went wrong on our side. We're looking into it."
+                },
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center

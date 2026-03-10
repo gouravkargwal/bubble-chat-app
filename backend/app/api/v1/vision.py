@@ -32,9 +32,17 @@ _client: GeminiClient | None = None
 GEMINI_RESPONSE_SCHEMA: dict = {
     "type": "OBJECT",
     "properties": {
+        "spatial_audit": {
+            "type": "OBJECT",
+            "properties": {
+                "right_side_user_facts": {"type": "STRING"},
+                "left_side_them_facts": {"type": "STRING"},
+            },
+        },
         "analysis": {
             "type": "OBJECT",
             "properties": {
+                "detected_language_and_vibe": {"type": "STRING"},
                 "their_last_message": {"type": "STRING"},
                 "who_texted_last": {"type": "STRING"},
                 "their_tone": {"type": "STRING"},
@@ -45,6 +53,7 @@ GEMINI_RESPONSE_SCHEMA: dict = {
                 "key_detail": {"type": "STRING"},
                 "what_they_want": {"type": "STRING"},
             },
+            "required": ["detected_language_and_vibe"],
         },
         "strategy": {
             "type": "OBJECT",
@@ -60,7 +69,7 @@ GEMINI_RESPONSE_SCHEMA: dict = {
             "description": "Exactly 4 distinct string replies.",
         },
     },
-    "required": ["analysis", "strategy", "replies"],
+    "required": ["spatial_audit", "analysis", "strategy", "replies"],
 }
 
 
@@ -157,15 +166,34 @@ async def generate_replies(
         variant_id=tier_config.prompt_variant,
     )
 
-    # 10. Call Gemini
+    # 10. Dynamic temperature routing + call Gemini
     client = _get_client()
     start = time.monotonic()
     try:
+        # Dynamic Temperature Routing:
+        # Different directions and custom hints need different creativity levels.
+        base_temp_by_direction: dict[str, float] = {
+            "opener": 0.75,
+            "quick_reply": 0.4,
+            "escalate": 0.5,
+            "date_pitch": 0.5,
+            "ghosted": 0.5,
+        }
+
+        direction_key = request.direction or ""
+        if direction_key == "opener":
+            llm_temperature = 0.75
+        elif custom_hint:
+            # User provided a specific angle/joke → medium creativity.
+            llm_temperature = 0.6
+        else:
+            llm_temperature = base_temp_by_direction.get(direction_key, 0.4)
+
         raw = await client.vision_generate(
             system_prompt=payload.system_prompt,
             user_prompt=payload.user_prompt,
             base64_images=images,
-            temperature=payload.temperature,
+            temperature=llm_temperature,
             model=settings.gemini_model,
             max_output_tokens=tier_config.max_output_tokens,
             response_schema=GEMINI_RESPONSE_SCHEMA,
@@ -264,7 +292,7 @@ async def generate_replies(
         reply_3=replies[3],
         llm_model=settings.gemini_model,
         prompt_variant=tier_config.prompt_variant,
-        temperature_used=payload.temperature,
+        temperature_used=llm_temperature,
         screenshot_count=len(images),
         latency_ms=latency_ms,
     )

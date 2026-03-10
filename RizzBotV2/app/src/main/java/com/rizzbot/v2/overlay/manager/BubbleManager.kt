@@ -6,6 +6,8 @@ import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
@@ -52,9 +54,12 @@ class BubbleManager @Inject constructor(
     private var bubbleX: Int
     private var bubbleY = 400
     private var stateCollectorJob: Job? = null
+    private var currentDirection: DirectionWithHint? = null
     // When non-null, we're in "add more screenshots" mode and the next bubble tap
     // should append a screenshot for this direction instead of reopening the picker.
     private var pendingAppendDirection: DirectionWithHint? = null
+    private var closeTargetView: ComposeView? = null
+    private val _isHoveringClose = MutableStateFlow(false)
 
     init {
         // Default position: right edge, vertically centered
@@ -129,6 +134,115 @@ class BubbleManager @Inject constructor(
                 )
             }
         }
+
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+        var isDragging = false
+        var dragParams: WindowManager.LayoutParams? = null
+
+        view.setOnTouchListener { _, event ->
+            // Only allow dragging when we're in bubble mode
+            if (_state.value !is BubbleState.RizzButton) {
+                return@setOnTouchListener false
+            }
+
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    val lp = view.layoutParams as? WindowManager.LayoutParams
+                        ?: return@setOnTouchListener false
+
+                    dragParams = lp
+                    initialX = lp.x
+                    initialY = lp.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDragging = false
+                    // We handle the full gesture (tap or drag) here
+                    return@setOnTouchListener true
+                }
+
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val lp = dragParams ?: return@setOnTouchListener false
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+
+                    // Threshold to differentiate a tap from a drag
+                    if (!isDragging && (kotlin.math.abs(dx) > 10 || kotlin.math.abs(dy) > 10)) {
+                        isDragging = true
+                        showCloseTarget()
+                    }
+
+                    if (isDragging) {
+                        val dm = context.resources.displayMetrics
+                        val maxY = dm.heightPixels - view.height
+
+                        lp.x = initialX + dx.toInt()
+                        // Clamp Y so it can't go off the top or bottom of the screen
+                        lp.y = (initialY + dy.toInt()).coerceIn(0, maxY)
+
+                        bubbleX = lp.x
+                        bubbleY = lp.y
+
+                        try {
+                            windowManager.updateViewLayout(view, lp)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to update layout during drag", e)
+                        }
+
+                        checkCloseTargetHover(event.rawX, event.rawY)
+                        return@setOnTouchListener true
+                    }
+                }
+
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    val lp = dragParams
+
+                    if (isDragging && lp != null) {
+                        val droppedOnClose = _isHoveringClose.value
+                        hideCloseTarget()
+
+                        if (droppedOnClose) {
+                            hide()
+                        } else {
+                            // Snap to nearest Left or Right edge
+                            val dm = context.resources.displayMetrics
+                            val midX = dm.widthPixels / 2
+                            val bubbleCenterX = lp.x + (view.width / 2)
+                            val targetX = if (bubbleCenterX < midX) 0 else dm.widthPixels - view.width
+
+                            android.animation.ValueAnimator.ofInt(lp.x, targetX).apply {
+                                duration = 200 // Fast, smooth snap
+                                interpolator = android.view.animation.DecelerateInterpolator()
+                                addUpdateListener { animator ->
+                                    val newX = animator.animatedValue as Int
+                                    lp.x = newX
+                                    bubbleX = newX
+                                    try {
+                                        windowManager.updateViewLayout(view, lp)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to update layout during snap", e)
+                                    }
+                                }
+                                start()
+                            }
+                        }
+                        dragParams = null
+                        return@setOnTouchListener true
+                    } else {
+                        // Treat as a simple tap to open the bubble
+                        handleEvent(OverlayEvent.ShowBubble)
+                        dragParams = null
+                        return@setOnTouchListener true
+                    }
+                }
+            }
+
+            false
+        }
+
         view.setViewTreeLifecycleOwner(lifecycleOwner)
         view.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
         windowManager.addView(view, params)
@@ -167,6 +281,9 @@ class BubbleManager @Inject constructor(
         composeView = null
         _state.value = BubbleState.Hidden
         orchestrator.clearScreenshot()
+        currentDirection = null
+        pendingAppendDirection = null
+        hideCloseTarget()
     }
 
     fun hideForCapture() {
@@ -186,6 +303,61 @@ class BubbleManager @Inject constructor(
         if (composeView == null) {
             composeView = createAndAttachView()
         }
+    }
+
+    private fun showCloseTarget() {
+        if (closeTargetView != null) return
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            400,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+        }
+
+        closeTargetView = ComposeView(context).apply {
+            setContent {
+                val hovering by _isHoveringClose.collectAsState()
+                com.rizzbot.v2.overlay.ui.CloseTargetUI(isHovering = hovering)
+            }
+        }
+        windowManager.addView(closeTargetView, params)
+    }
+
+    private fun checkCloseTargetHover(rawX: Float, rawY: Float) {
+        val dm = context.resources.displayMetrics
+        // Create a forgiving 300px (wider) target zone near the bottom center
+        val inDropZone =
+            rawY > (dm.heightPixels - 500) &&
+                rawX > (dm.widthPixels / 2 - 250) &&
+                rawX < (dm.widthPixels / 2 + 250)
+
+        if (inDropZone != _isHoveringClose.value) {
+            _isHoveringClose.value = inDropZone
+            if (inDropZone) {
+                // Haptic feedback when user hovers over the close target
+                hapticHelper.lightTap()
+            }
+        }
+    }
+
+    private fun hideCloseTarget() {
+        closeTargetView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "Close target view already removed", e)
+            }
+        }
+        closeTargetView = null
+        _isHoveringClose.value = false
     }
 
     private fun handleEvent(event: OverlayEvent) {
@@ -228,8 +400,17 @@ class BubbleManager @Inject constructor(
                             }
                         }
                     } else {
-                        // Normal flow: show direction picker for first capture
-                        _state.value = BubbleState.DirectionPicker
+                        // Restore prior state if any, otherwise show picker
+                        val result = orchestrator.result.value
+                        val previews = orchestrator.getPreviewBitmaps()
+                        _state.value = when {
+                            result is SuggestionResult.Success -> BubbleState.Expanded(result)
+                            previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
+                                previews,
+                                currentDirection ?: DirectionWithHint()
+                            )
+                            else -> BubbleState.DirectionPicker
+                        }
                     }
                 }
             }
@@ -238,6 +419,7 @@ class BubbleManager @Inject constructor(
                 activeScope.launch {
                     // Clear previous screenshots on fresh capture/retake
                     orchestrator.clearScreenshot()
+                    currentDirection = event.direction
                     // Hide overlay before capture so it's not in the screenshot
                     hideForCapture()
                     kotlinx.coroutines.delay(300)
@@ -281,6 +463,7 @@ class BubbleManager @Inject constructor(
                 // Put the user back into bubble mode; the next tap on the bubble
                 // will capture an additional screenshot for this direction.
                 pendingAppendDirection = event.direction
+                currentDirection = event.direction
                 _state.value = BubbleState.RizzButton
             }
             is OverlayEvent.RetakeLastScreenshot -> {
@@ -312,7 +495,7 @@ class BubbleManager @Inject constructor(
             }
             is OverlayEvent.DismissSuggestions -> {
                 _state.value = BubbleState.RizzButton
-                orchestrator.clearScreenshot()
+                // We intentionally DO NOT clear screenshots here to maintain state
             }
             is OverlayEvent.CopyReply -> {
                 clipboardHelper.copyToClipboard(event.reply)
@@ -339,26 +522,24 @@ class BubbleManager @Inject constructor(
                     }
                 }
             }
-            is OverlayEvent.BubbleDragged -> {
-                bubbleX += event.deltaX
-                bubbleY += event.deltaY
-                val view = composeView ?: return
-                val params = view.layoutParams as? WindowManager.LayoutParams ?: return
-                params.x = bubbleX
-                params.y = bubbleY
-                try {
-                    windowManager.updateViewLayout(view, params)
-                } catch (e: IllegalArgumentException) {
-                    Log.w(TAG, "View not attached during drag", e)
-                }
-                return // don't send drag events to eventBus
-            }
             is OverlayEvent.UpgradeTapped -> {
-                val intent = android.content.Intent(context, com.rizzbot.v2.ui.MainActivity::class.java).apply {
-                    putExtra("navigate_to", "premium")
-                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                val usage = hostedRepository.usageState.value
+                // If user is not yet premium, send them to the upgrade screen.
+                // If they're already premium, just dismiss the error instead of
+                // taking them to a screen that says "you're already premium".
+                if (!usage.isPremium) {
+                    val intent = android.content.Intent(
+                        context,
+                        com.rizzbot.v2.ui.MainActivity::class.java
+                    ).apply {
+                        putExtra("navigate_to", "premium")
+                        addFlags(
+                            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        )
+                    }
+                    context.startActivity(intent)
                 }
-                context.startActivity(intent)
                 _state.value = BubbleState.RizzButton
             }
             is OverlayEvent.Regenerate -> {
@@ -372,6 +553,12 @@ class BubbleManager @Inject constructor(
                         is SuggestionResult.Loading -> BubbleState.Loading
                     }
                 }
+            }
+            is OverlayEvent.ClearAndStartOver -> {
+                orchestrator.clearScreenshot()
+                currentDirection = null
+                pendingAppendDirection = null
+                _state.value = BubbleState.DirectionPicker
             }
         }
         eventBus.send(event)

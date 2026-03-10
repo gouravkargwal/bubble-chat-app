@@ -38,6 +38,19 @@ def _parse_json(text: str) -> ParsedLlmResponse:
         )
         raise
 
+    # Optional: spatial audit (for debugging / analysis of left vs right facts)
+    spatial_audit = data.get("spatial_audit")
+    if isinstance(spatial_audit, dict):
+        logger.debug(
+            "parse_spatial_audit",
+            right_side_user_facts=str(spatial_audit.get("right_side_user_facts", ""))[
+                :300
+            ],
+            left_side_them_facts=str(spatial_audit.get("left_side_them_facts", ""))[
+                :300
+            ],
+        )
+
     # Handle error response
     if "error" in data:
         raise ValueError(f"LLM returned error: {data['error']}")

@@ -16,7 +16,7 @@ class ImageCompressor @Inject constructor() {
     suspend fun bitmapToBase64Jpeg(
         bitmap: Bitmap,
         quality: Int = Constants.IMAGE_QUALITY,
-        maxDimension: Int = 1536
+        maxDimension: Int = 2048
     ): String = withContext(Dispatchers.Default) {
 
         val longestEdge = max(bitmap.width, bitmap.height)

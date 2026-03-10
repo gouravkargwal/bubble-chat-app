@@ -84,6 +84,18 @@ class GeminiClient(LlmClient):
                 response.raise_for_status()
                 data = response.json()
 
+                # Log the raw Gemini response (truncated) for debugging
+                try:
+                    logger.debug(
+                        "gemini_raw_json",
+                        raw=response.text[:4000],
+                        model=model,
+                        attempt=attempt,
+                    )
+                except Exception:
+                    # Logging should never break the request flow
+                    pass
+
                 # Extract text from Gemini response
                 candidates = data.get("candidates", [])
                 if not candidates:
@@ -110,7 +122,7 @@ class GeminiClient(LlmClient):
                     raise ValueError("Empty text in Gemini response")
 
                 logger.debug(
-                    "gemini_raw_response",
+                    "gemini_parsed_response",
                     parts_count=len(parts),
                     thought_parts=sum(1 for p in parts if p.get("thought")),
                     text_preview=text[:300],
