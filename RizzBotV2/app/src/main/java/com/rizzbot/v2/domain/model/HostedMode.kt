@@ -9,7 +9,9 @@ data class UsageState(
     val allowedDirections: List<String> = listOf("quick_reply", "keep_playful"),
     val customHintsEnabled: Boolean = false,
     val maxScreenshots: Int = 1,
-    val premiumExpiresAt: Long? = null
+    val premiumExpiresAt: Long? = null,
+    val totalRepliesGenerated: Int = 0,  // Total from backend
+    val totalRepliesCopied: Int = 0  // Total from backend
 ) {
     val dailyRemaining: Int
         get() = if (dailyLimit == 0) Int.MAX_VALUE else (dailyLimit - dailyUsed).coerceAtLeast(0)

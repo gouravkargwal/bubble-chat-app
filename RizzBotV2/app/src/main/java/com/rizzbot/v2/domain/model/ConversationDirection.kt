@@ -5,35 +5,40 @@ enum class ConversationDirection(
     val emoji: String,
     val promptInstruction: String
 ) {
+    OPENER(
+        displayName = "First message",
+        emoji = "👋",
+        promptInstruction = "Generate an engaging first message based on their profile. Do not say 'Hey'."
+    ),
     QUICK_REPLY(
         displayName = "Quick reply",
         emoji = "⚡",
-        promptInstruction = "Reply naturally and engagingly to continue the conversation."
-    ),
-    GET_NUMBER(
-        displayName = "Get their number",
-        emoji = "🔥",
-        promptInstruction = "Steer the conversation toward exchanging phone numbers naturally. Don't be too direct."
-    ),
-    ASK_OUT(
-        displayName = "Ask them out",
-        emoji = "☕",
-        promptInstruction = "Smoothly suggest meeting up for a date. Be specific with a casual activity suggestion."
-    ),
-    KEEP_PLAYFUL(
-        displayName = "Keep it playful",
-        emoji = "😂",
-        promptInstruction = "Keep the conversation fun, flirty, and light-hearted. Use humor."
-    ),
-    GO_DEEPER(
-        displayName = "Go deeper",
-        emoji = "💬",
-        promptInstruction = "Take the conversation to a more meaningful level. Ask thoughtful questions."
+        promptInstruction = "Reply naturally to continue the conversation based strictly on the chat history."
     ),
     CHANGE_TOPIC(
         displayName = "Change topic",
         emoji = "🔄",
-        promptInstruction = "Smoothly transition to a new, interesting topic. Don't make the transition feel forced."
+        promptInstruction = "Smoothly transition to a new, interesting, and playful topic to escape the current boring loop."
+    ),
+    TEASE(
+        displayName = "Tease them",
+        emoji = "😏",
+        promptInstruction = "Playfully tease them, disagree with them, or challenge them based on what they just said."
+    ),
+    GET_NUMBER(
+        displayName = "Get their number",
+        emoji = "📱",
+        promptInstruction = "Steer the conversation toward exchanging phone numbers naturally."
+    ),
+    ASK_OUT(
+        displayName = "Ask them out",
+        emoji = "🥂",
+        promptInstruction = "Smoothly suggest meeting up for a date. Be specific with a casual activity."
+    ),
+    REVIVE_CHAT(
+        displayName = "Revive dead chat",
+        emoji = "👻",
+        promptInstruction = "Send a low-pressure, playful text to restart a dead conversation without sounding needy."
     );
 }
 

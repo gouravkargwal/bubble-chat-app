@@ -19,11 +19,16 @@ class TierConfig:
 
 # Direction definitions
 ALL_DIRECTIONS = [
-    "quick_reply", "keep_playful", "get_number",
-    "ask_out", "go_deeper", "change_topic",
+    "opener",
+    "quick_reply",
+    "change_topic",
+    "tease",
+    "get_number",
+    "ask_out",
+    "revive_chat",
 ]
 
-FREE_DIRECTIONS = ["quick_reply", "keep_playful"]
+FREE_DIRECTIONS = ["quick_reply", "change_topic", "tease"]
 
 TIERS: dict[str, TierConfig] = {
     "free": TierConfig(
@@ -74,6 +79,7 @@ def get_tier_config(tier: str) -> TierConfig:
 def _utc_now_naive() -> "datetime":
     """Return current UTC time as a naive datetime (consistent with DB storage)."""
     from datetime import datetime, timezone
+
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 

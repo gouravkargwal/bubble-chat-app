@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -18,14 +22,35 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun StatsScreen(
     onBack: () -> Unit,
     viewModel: StatsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    var isRefreshing by remember { mutableStateOf(false) }
+    
+    // Auto-refresh when screen becomes visible
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refresh()
+    }
+    
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            viewModel.refresh()
+            // Reset refreshing after a short delay (the actual data will update via flow)
+            kotlinx.coroutines.GlobalScope.launch {
+                kotlinx.coroutines.delay(1000)
+                isRefreshing = false
+            }
+        }
+    )
 
     Scaffold(
         topBar = {
@@ -44,13 +69,18 @@ fun StatsScreen(
         },
         containerColor = Color(0xFF0F0F1A)
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .pullRefresh(pullRefreshState)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
             // Stats cards row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -179,6 +209,14 @@ fun StatsScreen(
                     }
                 }
             }
+            
+            PullRefreshIndicator(
+                refreshing = isRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                backgroundColor = Color(0xFF1A1A2E),
+                contentColor = Color(0xFFE91E63)
+            )
         }
     }
 }

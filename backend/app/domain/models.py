@@ -3,12 +3,13 @@ from dataclasses import dataclass, field
 
 
 class Direction(StrEnum):
+    OPENER = "opener"
     QUICK_REPLY = "quick_reply"
+    CHANGE_TOPIC = "change_topic"
+    TEASE = "tease"
     GET_NUMBER = "get_number"
     ASK_OUT = "ask_out"
-    KEEP_PLAYFUL = "keep_playful"
-    GO_DEEPER = "go_deeper"
-    CHANGE_TOPIC = "change_topic"
+    REVIVE_CHAT = "revive_chat"
 
 
 class Stage(StrEnum):

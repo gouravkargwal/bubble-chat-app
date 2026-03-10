@@ -80,7 +80,7 @@ async def get_preferences(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserPreferencesResponse:
-    """Compute user's vibe preferences from server-side ratings."""
+    """Compute user's vibe preferences from server-side ratings (both positive and negative)."""
     # Count total rated interactions
     total_result = await db.execute(
         select(func.count(Interaction.id)).where(
@@ -98,35 +98,51 @@ async def get_preferences(
             preferred_length="medium",
         )
 
-    # Count positive ratings grouped by reply index (vibe)
-    positive_result = await db.execute(
+    # Count ALL ratings (positive and negative) grouped by reply index (vibe)
+    all_ratings_result = await db.execute(
         select(
             Interaction.rating_index,
+            Interaction.rating_positive,
             func.count(Interaction.id).label("cnt"),
         )
         .where(
             Interaction.user_id == user.id,
-            Interaction.rating_positive == True,
             Interaction.rating_index.is_not(None),
         )
-        .group_by(Interaction.rating_index)
+        .group_by(Interaction.rating_index, Interaction.rating_positive)
     )
-    positive_rows = positive_result.all()
-    total_positive = sum(row.cnt for row in positive_rows) or 1
+    all_ratings_rows = all_ratings_result.all()
+
+    # Calculate net score for each vibe: (positive_count - negative_count)
+    vibe_scores = {}  # {vibe_index: net_score}
+    for row in all_ratings_rows:
+        vibe_idx = row.rating_index
+        count = row.cnt
+        if vibe_idx not in vibe_scores:
+            vibe_scores[vibe_idx] = 0
+        if row.rating_positive:
+            vibe_scores[vibe_idx] += count
+        else:
+            vibe_scores[vibe_idx] -= count
+
+    # Filter out negative-net-score vibes and normalize to percentages
+    positive_vibes = {k: v for k, v in vibe_scores.items() if v > 0}
+    total_positive_score = sum(positive_vibes.values()) or 1
 
     vibe_breakdown = []
-    for row in positive_rows:
-        name = (
-            VIBE_NAMES[row.rating_index]
-            if 0 <= row.rating_index < len(VIBE_NAMES)
-            else "Unknown"
-        )
+    for vibe_idx, score in positive_vibes.items():
+        name = VIBE_NAMES[vibe_idx] if 0 <= vibe_idx < len(VIBE_NAMES) else "Unknown"
         vibe_breakdown.append(
-            VibeBreakdownItem(name=name, percentage=round(row.cnt / total_positive, 2))
+            VibeBreakdownItem(
+                name=name, percentage=round(score / total_positive_score, 2)
+            )
         )
 
-    # Determine preferred length from positively-rated replies
-    # Get the actual reply text for positively-rated interactions
+    # Sort by percentage descending
+    vibe_breakdown.sort(key=lambda x: x.percentage, reverse=True)
+
+    # Determine preferred length from positively-rated replies only
+    # (negative ratings don't tell us much about length preference)
     rated_result = await db.execute(
         select(Interaction).where(
             Interaction.user_id == user.id,

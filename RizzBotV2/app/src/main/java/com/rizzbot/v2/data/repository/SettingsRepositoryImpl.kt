@@ -13,13 +13,11 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override val serviceEnabled: Flow<Boolean> = dataStore.serviceEnabled
     override val onboardingCompleted: Flow<Boolean> = dataStore.onboardingCompleted
-    override val totalRepliesGenerated: Flow<Int> = dataStore.totalRepliesGenerated
-    override val totalRepliesCopied: Flow<Int> = dataStore.totalRepliesCopied
+    // Removed: totalRepliesGenerated, totalRepliesCopied (now sourced from backend)
     override val firstCaptureDone: Flow<Boolean> = dataStore.firstCaptureDone
 
     override suspend fun setServiceEnabled(enabled: Boolean) { dataStore.setServiceEnabled(enabled) }
     override suspend fun setOnboardingCompleted(completed: Boolean) { dataStore.setOnboardingCompleted(completed) }
-    override suspend fun incrementRepliesGenerated() { dataStore.incrementRepliesGenerated() }
-    override suspend fun incrementRepliesCopied() { dataStore.incrementRepliesCopied() }
+    // Removed: incrementRepliesGenerated, incrementRepliesCopied (backend tracks via interactions table)
     override suspend fun setFirstCaptureDone() { dataStore.setFirstCaptureDone() }
 }

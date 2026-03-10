@@ -1,5 +1,8 @@
 package com.rizzbot.v2.data.repository
 
+import android.content.Context
+import android.content.Intent
+import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
@@ -13,6 +16,8 @@ import com.rizzbot.v2.domain.model.ReferralInfo
 import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
+import com.rizzbot.v2.overlay.OverlayService
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +28,9 @@ import javax.inject.Singleton
 
 @Singleton
 class HostedRepositoryImpl @Inject constructor(
-    private val hostedApi: HostedApi
+    private val hostedApi: HostedApi,
+    private val authManager: dagger.Lazy<AuthManager>,
+    @ApplicationContext private val context: Context
 ) : HostedRepository {
 
     private val _usageState = MutableStateFlow(UsageState())
@@ -108,8 +115,26 @@ class HostedRepositoryImpl @Inject constructor(
                 allowedDirections = usage.allowedDirections,
                 customHintsEnabled = usage.customHints,
                 maxScreenshots = usage.maxScreenshots,
-                premiumExpiresAt = usage.tierExpiresAt
+                premiumExpiresAt = usage.tierExpiresAt,
+                totalRepliesGenerated = usage.totalRepliesGenerated,
+                totalRepliesCopied = usage.totalRepliesCopied
             )
+        } catch (e: HttpException) {
+            if (e.code() == 401) {
+                // Backend no longer recognizes this user/token → treat as hard logout.
+                authManager.get().clearAuth()
+                // Stop overlay service so "Cookd is active" indicator goes off
+                context.stopService(Intent(context, OverlayService::class.java))
+                // Reset to initial usage state; UI should now behave as fully signed-out.
+                _usageState.value = UsageState()
+                
+                // Restart app to trigger MainActivity's auth check → sends user to onboarding
+                val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                context.startActivity(intent)
+                return
+            }
+            android.util.Log.w("HostedRepo", "refreshUsage http failed: ${e.message()}")
         } catch (e: Exception) {
             android.util.Log.w("HostedRepo", "refreshUsage failed: ${e.message}")
         }

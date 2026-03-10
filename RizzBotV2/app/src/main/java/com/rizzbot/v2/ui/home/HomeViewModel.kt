@@ -33,7 +33,8 @@ class HomeViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
     private val hostedRepository: HostedRepository,
-    private val permissionHelper: PermissionHelper
+    private val permissionHelper: PermissionHelper,
+    private val bubbleManager: dagger.Lazy<com.rizzbot.v2.overlay.manager.BubbleManager>
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
@@ -43,27 +44,39 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 settingsRepository.serviceEnabled,
-                settingsRepository.totalRepliesGenerated,
-                settingsRepository.totalRepliesCopied,
                 settingsRepository.firstCaptureDone
-            ) { serviceEnabled, generated, copied, firstCaptureDone ->
+            ) { serviceEnabled, firstCaptureDone ->
                 _state.value.copy(
-                    isServiceEnabled = serviceEnabled,
+                    // Use actual bubble visibility, not just the stored pref
+                    isServiceEnabled = serviceEnabled && bubbleManager.get().isActuallyShown.value,
                     hasOverlayPermission = permissionHelper.canDrawOverlays(),
-                    totalRepliesGenerated = generated,
-                    totalRepliesCopied = copied,
                     showHowItWorks = !firstCaptureDone
                 )
             }.collect { _state.value = it }
         }
 
-        // Collect usage state immediately (may already have correct value from onboarding)
+        // Also collect bubble visibility changes to update isServiceEnabled in real-time
         viewModelScope.launch {
-            hostedRepository.usageState.collect { usage ->
-                _state.update { it.copy(usage = usage) }
+            bubbleManager.get().isActuallyShown.collect { isShown ->
+                _state.update { currentState ->
+                    currentState.copy(isServiceEnabled = isShown)
+                }
             }
         }
-        // Refresh in background to ensure latest data
+
+        // Collect usage state immediately (includes totalRepliesGenerated/Copied from backend)
+        viewModelScope.launch {
+            hostedRepository.usageState.collect { usage ->
+                _state.update { 
+                    it.copy(
+                        usage = usage,
+                        totalRepliesGenerated = usage.totalRepliesGenerated,
+                        totalRepliesCopied = usage.totalRepliesCopied
+                    ) 
+                }
+            }
+        }
+        // Refresh in background to ensure latest data from backend
         viewModelScope.launch {
             hostedRepository.refreshUsage()
         }

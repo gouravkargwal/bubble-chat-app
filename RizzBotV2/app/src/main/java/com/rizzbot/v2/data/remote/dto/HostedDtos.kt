@@ -65,7 +65,9 @@ data class UsageResponse(
     @SerialName("max_screenshots") val maxScreenshots: Int = 1,
     @SerialName("custom_hints") val customHints: Boolean = false,
     @SerialName("tier_expires_at") val tierExpiresAt: Long? = null,
-    @SerialName("bonus_replies") val bonusReplies: Int = 0
+    @SerialName("bonus_replies") val bonusReplies: Int = 0,
+    @SerialName("total_replies_generated") val totalRepliesGenerated: Int = 0,
+    @SerialName("total_replies_copied") val totalRepliesCopied: Int = 0
 )
 
 // ── Conversations ──

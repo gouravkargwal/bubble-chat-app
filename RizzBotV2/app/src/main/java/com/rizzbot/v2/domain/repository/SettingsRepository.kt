@@ -5,13 +5,11 @@ import kotlinx.coroutines.flow.Flow
 interface SettingsRepository {
     val serviceEnabled: Flow<Boolean>
     val onboardingCompleted: Flow<Boolean>
-    val totalRepliesGenerated: Flow<Int>
-    val totalRepliesCopied: Flow<Int>
+    // Removed: totalRepliesGenerated, totalRepliesCopied (now sourced from backend)
     val firstCaptureDone: Flow<Boolean>
 
     suspend fun setServiceEnabled(enabled: Boolean)
     suspend fun setOnboardingCompleted(completed: Boolean)
-    suspend fun incrementRepliesGenerated()
-    suspend fun incrementRepliesCopied()
+    // Removed: incrementRepliesGenerated, incrementRepliesCopied (backend tracks via interactions table)
     suspend fun setFirstCaptureDone()
 }

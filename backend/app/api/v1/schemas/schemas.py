@@ -15,7 +15,9 @@ class AuthResponse(BaseModel):
 
 
 class FirebaseAuthRequest(BaseModel):
-    firebase_token: str = Field(..., description="Firebase ID token from the client SDK")
+    firebase_token: str = Field(
+        ..., description="Firebase ID token from the client SDK"
+    )
     device_id: str | None = Field(
         default=None,
         description="Optional device ID to migrate anonymous data to the Firebase account",
@@ -24,8 +26,12 @@ class FirebaseAuthRequest(BaseModel):
 
 # Vision
 class VisionRequest(BaseModel):
-    image: str | None = Field(default=None, description="Single base64 screenshot (backward compat)")
-    images: list[str] | None = Field(default=None, description="Multiple base64 screenshots")
+    image: str | None = Field(
+        default=None, description="Single base64 screenshot (backward compat)"
+    )
+    images: list[str] | None = Field(
+        default=None, description="Multiple base64 screenshots"
+    )
     direction: str = Field(default="quick_reply")
     custom_hint: str | None = Field(default=None, max_length=200)
 
@@ -61,6 +67,8 @@ class UsageResponse(BaseModel):
     custom_hints: bool = False
     tier_expires_at: int | None = None
     bonus_replies: int = 0
+    total_replies_generated: int = 0  # Total interactions created by this user
+    total_replies_copied: int = 0  # Total interactions where user copied a reply
 
 
 # Conversations

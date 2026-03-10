@@ -172,22 +172,24 @@ async def generate_replies(
     try:
         # Dynamic Temperature Routing:
         # Different directions and custom hints need different creativity levels.
-        base_temp_by_direction: dict[str, float] = {
-            "opener": 0.75,
-            "quick_reply": 0.4,
-            "escalate": 0.5,
-            "date_pitch": 0.5,
-            "ghosted": 0.5,
-        }
-
-        direction_key = request.direction or ""
-        if direction_key == "opener":
+        direction_key = (request.direction or "").lower()
+        if custom_hint:
+            # User provided a specific angle → medium-high creativity.
+            llm_temperature = 0.7
+        elif direction_key == "opener":
+            # Cold read → max creativity.
+            llm_temperature = 0.8
+        elif direction_key in ("change_topic", "tease"):
+            # Needs high creativity to pivot/joke.
             llm_temperature = 0.75
-        elif custom_hint:
-            # User provided a specific angle/joke → medium creativity.
+        elif direction_key == "revive_chat":
             llm_temperature = 0.6
+        elif direction_key in ("get_number", "ask_out"):
+            # Goal-oriented → lower creativity, more precision.
+            llm_temperature = 0.5
         else:
-            llm_temperature = base_temp_by_direction.get(direction_key, 0.4)
+            # quick_reply and anything else → strict context matching.
+            llm_temperature = 0.4
 
         raw = await client.vision_generate(
             system_prompt=payload.system_prompt,

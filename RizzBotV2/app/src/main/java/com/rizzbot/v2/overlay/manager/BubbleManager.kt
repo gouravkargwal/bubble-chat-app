@@ -70,6 +70,15 @@ class BubbleManager @Inject constructor(
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Hidden)
     val state: StateFlow<BubbleState> = _state.asStateFlow()
 
+    // Public flow for UI to check if bubble is actually visible (not just pref = true)
+    val isActuallyShown: StateFlow<Boolean> = MutableStateFlow(false).also { flow ->
+        ensureScope().launch {
+            _state.collect { bubbleState ->
+                flow.value = bubbleState !is BubbleState.Hidden
+            }
+        }
+    }
+
     private fun ensureScope(): CoroutineScope {
         return scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main).also {
             scope = it
@@ -284,6 +293,11 @@ class BubbleManager @Inject constructor(
         currentDirection = null
         pendingAppendDirection = null
         hideCloseTarget()
+
+        // Clear service enabled pref so HomeScreen doesn't show stale "active" state
+        ensureScope().launch {
+            settingsRepository.setServiceEnabled(false)
+        }
     }
 
     fun hideForCapture() {
@@ -501,7 +515,7 @@ class BubbleManager @Inject constructor(
                 clipboardHelper.copyToClipboard(event.reply)
                 hapticHelper.lightTap()
                 activeScope.launch {
-                    settingsRepository.incrementRepliesCopied()
+                    // Backend tracks copy via trackCopy endpoint (sets copied_index in interactions table)
                     if (event.interactionId.isNotEmpty()) {
                         try {
                             hostedRepository.trackCopy(event.interactionId, event.vibeIndex)
