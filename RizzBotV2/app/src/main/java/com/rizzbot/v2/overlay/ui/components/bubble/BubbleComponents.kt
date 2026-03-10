@@ -1,0 +1,252 @@
+package com.rizzbot.v2.overlay.ui.components.bubble
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.rizzbot.v2.overlay.manager.BubbleState
+import com.rizzbot.v2.overlay.ui.theme.OverlayColors
+import kotlinx.coroutines.delay
+
+/**
+ * The main floating bubble button with pulsing animation
+ * Shows a circular loading indicator around the border when loading
+ */
+@Composable
+fun RizzButton(
+    onTap: () -> Unit,
+    isLoading: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val pulse = rememberInfiniteTransition(label = "rizz_pulse")
+    
+    // Normal gentle pulse
+    val scale by pulse.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rizz_pulse_scale"
+    )
+    
+    // Rotation animation for loading indicator
+    val rotation by pulse.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "loading_rotation"
+    )
+
+    Box(
+        modifier = modifier
+            .size(56.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = CircleShape,
+                spotColor = OverlayColors.AccentPink
+            )
+            .scale(scale),
+        contentAlignment = Alignment.Center
+    ) {
+        // Background circle (clipped)
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(
+                    if (isLoading) {
+                        // Black background when loading to make white indicator visible
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF1A1A1A),
+                                Color(0xFF000000)
+                            )
+                        )
+                    } else {
+                        // Normal pink gradient when not loading
+                        Brush.radialGradient(colors = OverlayColors.BubbleGradientColors)
+                    }
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                .pointerInput(Unit) {
+                    detectTapGestures { onTap() }
+                }
+        )
+        
+        // Circular loading indicator (drawn on top, NOT clipped)
+        if (isLoading) {
+            Canvas(modifier = Modifier.size(56.dp)) {
+                val strokeWidth = 4.dp.toPx()
+                // Draw inside the bubble, accounting for stroke width and border
+                val padding = strokeWidth / 2 + 2.dp.toPx()
+                val diameter = size.minDimension - (padding * 2)
+                
+                drawArc(
+                    color = Color.White,
+                    startAngle = rotation,
+                    // Use a partial arc so the \"head\" of the loader is clearly visible
+                    sweepAngle = 110f,
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(padding, padding),
+                    size = androidx.compose.ui.geometry.Size(diameter, diameter),
+                    style = Stroke(
+                        width = strokeWidth,
+                        cap = StrokeCap.Round
+                    )
+                )
+            }
+        }
+        
+        // Fire emoji on top
+        Text(
+            text = "\uD83D\uDD25",
+            fontSize = 24.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Bubble with contextual hints that appear based on state
+ */
+@Composable
+fun BubbleWithHints(
+    state: BubbleState,
+    dockOnLeft: Boolean,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val showAddMoreHint = state is BubbleState.RizzButtonAddMore
+    val showLoadingHint = state is BubbleState.Loading
+    
+    // Auto-hide the "add more" hint after 4 seconds
+    var showAddMoreHintWithTimeout by remember(showAddMoreHint) { 
+        mutableStateOf(showAddMoreHint) 
+    }
+    
+    LaunchedEffect(showAddMoreHint) {
+        if (showAddMoreHint) {
+            showAddMoreHintWithTimeout = true
+            delay(4000)
+            showAddMoreHintWithTimeout = false
+        }
+    }
+
+    Box(modifier = modifier.wrapContentSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (dockOnLeft) {
+                RizzButton(onTap = onTap, isLoading = showLoadingHint)
+                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
+                // Hint bubble to the right (only show for "add more" hint, not loading)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showAddMoreHintWithTimeout,
+                    enter = fadeIn(animationSpec = tween(300)) + 
+                            slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300)),
+                    exit = fadeOut(animationSpec = tween(300)) + 
+                           slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300))
+                ) {
+                    TalkingBubble(text = "Tap for next screenshot")
+                }
+            } else {
+                // Hint bubble to the left (only show for "add more" hint, not loading)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showAddMoreHintWithTimeout,
+                    enter = fadeIn(animationSpec = tween(300)) + 
+                            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)),
+                    exit = fadeOut(animationSpec = tween(300)) + 
+                           slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+                ) {
+                    TalkingBubble(text = "Tap for next screenshot")
+                }
+                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
+                RizzButton(onTap = onTap, isLoading = showLoadingHint)
+            }
+        }
+    }
+}
+
+/**
+ * A speech bubble that displays hint text
+ */
+@Composable
+fun TalkingBubble(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color.Black.copy(alpha = 0.85f),
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 0.dp,
+        modifier = modifier
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+    }
+}
+
+/**
+ * An animated loading speech bubble with pulsing dots
+ */
+@Composable
+fun LoadingSpeechBubble() {
+    var dotCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500)
+            dotCount = (dotCount + 1) % 4
+        }
+    }
+    val dots = ".".repeat(dotCount)
+    TalkingBubble(text = "Cooking up replies$dots")
+}

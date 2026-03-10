@@ -93,13 +93,7 @@ class BubbleManager @Inject constructor(
         }
     }
 
-    private fun isFullScreenState(state: BubbleState): Boolean = when (state) {
-        is BubbleState.DirectionPicker,
-        is BubbleState.ScreenshotPreview,
-        is BubbleState.Expanded,
-        is BubbleState.Error -> true
-        else -> false
-    }
+    private fun isFullScreenState(state: BubbleState): Boolean = state.isExpandedState()
 
     private fun createParams(fullScreen: Boolean): WindowManager.LayoutParams {
         return WindowManager.LayoutParams(
@@ -344,7 +338,7 @@ class BubbleManager @Inject constructor(
         closeTargetView = ComposeView(context).apply {
             setContent {
                 val hovering by _isHoveringClose.collectAsState()
-                com.rizzbot.v2.overlay.ui.CloseTargetUI(isHovering = hovering)
+                com.rizzbot.v2.overlay.ui.components.shared.CloseTargetUI(isHovering = hovering)
             }
         }
         windowManager.addView(closeTargetView, params)

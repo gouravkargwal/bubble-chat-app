@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons)
     implementation(libs.compose.animation)
+    implementation("androidx.compose.animation:animation-graphics:1.7.6")
     debugImplementation(libs.compose.ui.tooling)
 
     // Lifecycle

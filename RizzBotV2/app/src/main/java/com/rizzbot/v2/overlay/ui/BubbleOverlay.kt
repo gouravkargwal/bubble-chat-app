@@ -1,66 +1,59 @@
 package com.rizzbot.v2.overlay.ui
 
 import android.os.Build
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import com.rizzbot.v2.domain.model.ConversationDirection
 import com.rizzbot.v2.domain.model.DirectionWithHint
-import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.overlay.OverlayEvent
 import com.rizzbot.v2.overlay.manager.BubbleState
-import kotlinx.coroutines.delay
+import com.rizzbot.v2.overlay.ui.components.bubble.BubbleWithHints
+import com.rizzbot.v2.overlay.ui.components.panels.BubbleHeader
+import com.rizzbot.v2.overlay.ui.components.panels.DirectionPicker
+import com.rizzbot.v2.overlay.ui.components.panels.ErrorPanel
+import com.rizzbot.v2.overlay.ui.components.panels.LoadingOverlay
+import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
+import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
+import com.rizzbot.v2.overlay.ui.theme.OverlayColors
+import com.rizzbot.v2.overlay.ui.theme.OverlayShapes
 import kotlinx.coroutines.flow.StateFlow
 
-private val PanelShape = RoundedCornerShape(24.dp)
-private val PanelColor = Color(0xFF1A1A2E)
-private val PanelBorderColor = Color.White.copy(alpha = 0.08f)
-private val AccentPink = Color(0xFFE91E63)
-
+/**
+ * Main entry point for the Bubble Overlay UI
+ * 
+ * This composable manages the entire overlay experience including:
+ * - Floating bubble with hints
+ * - Full-screen panels for direction picking, screenshot preview, and reply suggestions
+ * - Smooth scale and fade transitions
+ * - Background scrim with blur effect
+ */
 @Composable
 fun BubbleOverlay(
     state: StateFlow<BubbleState>,
@@ -79,38 +72,21 @@ fun BubbleOverlay(
 
     OverlayTheme {
         Box(
-            modifier = if (isFullScreen) Modifier.fillMaxSize()
+            modifier = if (isFullScreen) Modifier.fillMaxSize() 
             else Modifier.background(Color.Transparent)
         ) {
-            // 1. Scrim behind panels with smooth fade
-            val scrimBase = Modifier.fillMaxSize()
-            val scrimModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                scrimBase.blur(16.dp)
-            } else {
-                scrimBase
-            }
-
-            androidx.compose.animation.AnimatedVisibility(
+            // Background scrim with blur effect
+            BackgroundScrim(
                 visible = isFullScreen,
-                enter = androidx.compose.animation.fadeIn(
-                    animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)
-                ),
-                exit = androidx.compose.animation.fadeOut(
-                    animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
-                )
-            ) {
-                Box(
-                    modifier = scrimModifier
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onEvent(OverlayEvent.DismissSuggestions) }
-                )
-            }
+                onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+            )
 
-            // 2. Bubble + speech hints when not in full screen
-            if (!isFullScreen) {
+            // Floating bubble with hints (shown when not in full-screen mode)
+            AnimatedVisibility(
+                visible = !isFullScreen,
+                enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                exit = fadeOut() + scaleOut(targetScale = 0.8f)
+            ) {
                 BubbleWithHints(
                     state = currentState,
                     dockOnLeft = dockLeft,
@@ -118,844 +94,162 @@ fun BubbleOverlay(
                 )
             }
 
-            // 3. The Panels (Animated scale-in popup centered on screen)
-            androidx.compose.animation.AnimatedVisibility(
+            // Full-screen card panels (shown when in full-screen mode)
+            AnimatedVisibility(
                 visible = isFullScreen,
-                enter = androidx.compose.animation.scaleIn(
-                    initialScale = 0.9f,
+                enter = scaleIn(
+                    initialScale = 0.2f,
                     animationSpec = spring(
-                        dampingRatio = 0.8f,
+                        dampingRatio = 0.75f,
                         stiffness = Spring.StiffnessMediumLow
                     )
-                ) + androidx.compose.animation.fadeIn(
+                ) + fadeIn(
                     animationSpec = spring(
                         dampingRatio = 0.85f,
                         stiffness = Spring.StiffnessLow
                     )
                 ),
-                exit = androidx.compose.animation.scaleOut(
-                    targetScale = 0.9f,
+                exit = scaleOut(
+                    targetScale = 0.2f,
                     animationSpec = spring(
                         dampingRatio = 0.9f,
                         stiffness = Spring.StiffnessMedium
                     )
-                ) + androidx.compose.animation.fadeOut(
+                ) + fadeOut(
                     animationSpec = spring(
                         dampingRatio = 0.9f,
                         stiffness = Spring.StiffnessMedium
                     )
                 ),
-                modifier = Modifier.align(Alignment.Center) // Centers the popup!
+                modifier = Modifier.align(Alignment.Center)
             ) {
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .animateContentSize(
-                                animationSpec = spring(
-                                    dampingRatio = 0.85f,
-                                    stiffness = Spring.StiffnessMedium
-                                )
-                            ),
-                        shape = PanelShape,
-                        colors = CardDefaults.cardColors(containerColor = PanelColor),
-                        border = BorderStroke(1.dp, PanelBorderColor)
-                    ) {
-                        Column {
-                            BubbleHeader(
-                                currentState = currentState,
-                                onBack = { onEvent(OverlayEvent.Back) },
-                                onClose = { onEvent(OverlayEvent.DismissSuggestions) },
-                                onStartOver = { onEvent(OverlayEvent.ClearAndStartOver) }
-                            )
-
-                            Divider(color = Color.White.copy(alpha = 0.08f))
-
-                    when (val s = currentState) {
-                        is BubbleState.DirectionPicker -> DirectionPicker(
-                            allowedDirections = usage.allowedDirections,
-                            customHintsEnabled = usage.customHintsEnabled,
-                            onDirectionSelected = { direction ->
-                                onEvent(OverlayEvent.CaptureRequested(direction))
-                            },
-                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                        )
-                        is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
-                            bitmaps = s.bitmaps,
-                            maxScreenshots = usage.maxScreenshots,
-                            onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
-                            onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
-                            onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
-                            onRemoveScreenshot = { index ->
-                                onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
-                            },
-                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                        )
-                        is BubbleState.Loading -> LoadingOverlay()
-                        is BubbleState.Expanded -> SuggestionPanel(
-                            result = s.result,
-                            onCopy = { reply, index ->
-                                onEvent(
-                                    OverlayEvent.CopyReply(
-                                        reply,
-                                        index,
-                                        s.result.interactionId
-                                    )
-                                )
-                            },
-                            onRate = { index, positive, text ->
-                                onEvent(
-                                    OverlayEvent.RateReply(
-                                        index,
-                                        positive,
-                                        text,
-                                        s.result.interactionId
-                                    )
-                                )
-                            },
-                            onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
-                            onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
-                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                        )
-                        is BubbleState.Error -> ErrorPanel(
-                            message = s.message,
-                            errorType = s.errorType,
-                            onRetry = {
-                                val dir = s.direction ?: DirectionWithHint()
-                                onEvent(OverlayEvent.Regenerate(dir))
-                            },
-                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                        )
-                        else -> {}
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun CloseTargetUI(isHovering: Boolean) {
-    val scale by animateFloatAsState(
-        targetValue = if (isHovering) 1.3f else 1.0f,
-        label = "close_target_scale"
-    )
-    val containerColor by animateColorAsState(
-        targetValue = if (isHovering) Color(0xFFD32F2F) else Color(0xFF1A1A2E).copy(alpha = 0.8f),
-        label = "close_target_color"
-    )
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 60.dp),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .size(70.dp)
-                    .scale(scale)
-                    .clip(CircleShape)
-                    .background(containerColor)
-                    .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp)
+                FullScreenCard(
+                    currentState = currentState,
+                    usage = usage,
+                    onEvent = onEvent
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Close",
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp)
-            )
         }
     }
 }
 
+/**
+ * Background scrim with optional blur effect (Android 12+)
+ */
 @Composable
-private fun RizzButton(
-    onTap: () -> Unit,
-    modifier: Modifier = Modifier
+private fun BackgroundScrim(
+    visible: Boolean,
+    onDismiss: () -> Unit
 ) {
-    val pulse = rememberInfiniteTransition(label = "rizz_pulse")
-    val scale by pulse.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(
-                durationMillis = 1400
-            ),
-            repeatMode = RepeatMode.Reverse
+    val scrimBase = Modifier.fillMaxSize()
+    val scrimModifier = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        scrimBase.blur(16.dp)
+    } else {
+        scrimBase
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(
+            animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)
         ),
-        label = "rizz_pulse_scale"
-    )
-
-    Box(
-        modifier = modifier
-            .size(56.dp)
-            .shadow(
-                elevation = 8.dp,
-                shape = CircleShape,
-                spotColor = AccentPink
-            )
-            .scale(scale)
-            .clip(CircleShape)
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFFFF4081),
-                        AccentPink,
-                        Color(0xFFC2185B)
-                    )
-                )
-            )
-            .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-            .pointerInput(Unit) {
-                detectTapGestures { onTap() }
-            },
-        contentAlignment = Alignment.Center
+        exit = fadeOut(
+            animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
+        )
     ) {
-        Text(
-            text = "\uD83D\uDD25",
-            fontSize = 24.sp,
-            textAlign = TextAlign.Center
+        Box(
+            modifier = scrimModifier
+                .background(OverlayColors.ScrimColor)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { onDismiss() }
         )
     }
 }
 
+/**
+ * The main card container with smooth animations
+ * Contains all full-screen panels (Direction Picker, Screenshot Preview, Loading, Replies, Error)
+ */
 @Composable
-private fun BubbleWithHints(
-    state: BubbleState,
-    dockOnLeft: Boolean,
-    onTap: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val showAddMoreHint = state is BubbleState.RizzButtonAddMore
-    val showLoadingHint = state is BubbleState.Loading
-    
-    // Auto-hide the "add more" hint after 4 seconds
-    var showAddMoreHintWithTimeout by remember(showAddMoreHint) { 
-        mutableStateOf(showAddMoreHint) 
-    }
-    
-    LaunchedEffect(showAddMoreHint) {
-        if (showAddMoreHint) {
-            showAddMoreHintWithTimeout = true
-            delay(4000)
-            showAddMoreHintWithTimeout = false
-        }
-    }
-
-    Box(modifier = modifier.wrapContentSize()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (dockOnLeft) {
-                RizzButton(onTap = onTap)
-                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
-                Box(modifier = Modifier.wrapContentWidth()) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showAddMoreHintWithTimeout || showLoadingHint,
-                        enter = androidx.compose.animation.fadeIn(
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        ) + androidx.compose.animation.slideInHorizontally(
-                            initialOffsetX = { -it },
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        ),
-                        exit = androidx.compose.animation.fadeOut(
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        ) + androidx.compose.animation.slideOutHorizontally(
-                            targetOffsetX = { -it },
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        )
-                    ) {
-                        if (showAddMoreHintWithTimeout) {
-                            TalkingBubble(text = "Tap for next screenshot")
-                        } else if (showLoadingHint) {
-                            LoadingSpeechBubble()
-                        }
-                    }
-                }
-            } else {
-                Box(modifier = Modifier.wrapContentWidth()) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showAddMoreHintWithTimeout || showLoadingHint,
-                        enter = androidx.compose.animation.fadeIn(
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        ) + androidx.compose.animation.slideInHorizontally(
-                            initialOffsetX = { it },
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        ),
-                        exit = androidx.compose.animation.fadeOut(
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        ) + androidx.compose.animation.slideOutHorizontally(
-                            targetOffsetX = { it },
-                            animationSpec = androidx.compose.animation.core.tween(300)
-                        )
-                    ) {
-                        if (showAddMoreHintWithTimeout) {
-                            TalkingBubble(text = "Tap for next screenshot")
-                        } else if (showLoadingHint) {
-                            LoadingSpeechBubble()
-                        }
-                    }
-                }
-                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
-                RizzButton(onTap = onTap)
-            }
-        }
-    }
-}
-
-@Composable
-private fun TalkingBubble(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        color = Color.Black.copy(alpha = 0.85f),
-        shape = RoundedCornerShape(16.dp),
-        tonalElevation = 0.dp,
-        modifier = modifier
-    ) {
-        Text(
-            text = text,
-            color = Color.White,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-        )
-    }
-}
-
-@Composable
-private fun LoadingSpeechBubble() {
-    var dotCount by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(500)
-            dotCount = (dotCount + 1) % 4
-        }
-    }
-    val dots = ".".repeat(dotCount)
-
-    TalkingBubble(text = "Cooking up replies$dots")
-}
-
-@Composable
-private fun DirectionPicker(
-    allowedDirections: List<String>,
-    customHintsEnabled: Boolean,
-    onDirectionSelected: (DirectionWithHint) -> Unit,
-    onUpgrade: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var customHint by remember { mutableStateOf("") }
-    var showCustomInput by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-            ConversationDirection.entries.forEach { direction ->
-                val dirKey = direction.name.lowercase()
-                val isLocked = allowedDirections.isNotEmpty() && dirKey !in allowedDirections
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = if (isLocked) 0.02f else 0.05f))
-                        .clickable {
-                            if (isLocked) onUpgrade() else onDirectionSelected(DirectionWithHint(direction))
-                        }
-                        .padding(vertical = 10.dp, horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(direction.emoji, fontSize = 20.sp)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        direction.displayName,
-                        color = if (isLocked) Color.Gray else Color.White,
-                        fontSize = 14.sp
-                    )
-                    if (isLocked) {
-                        Spacer(modifier = Modifier.weight(1f))
-                        Text("\uD83D\uDD12", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("PRO", color = AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            // Custom hint option
-            if (!showCustomInput) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(alpha = if (customHintsEnabled) 0.05f else 0.02f))
-                        .clickable {
-                            if (customHintsEnabled) showCustomInput = true else onUpgrade()
-                        }
-                        .padding(vertical = 10.dp, horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("\u270D\uFE0F", fontSize = 20.sp)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        "Custom hint",
-                        color = if (customHintsEnabled) Color.White else Color.Gray,
-                        fontSize = 14.sp
-                    )
-                    if (!customHintsEnabled) {
-                        Spacer(modifier = Modifier.weight(1f))
-                        Text("\uD83D\uDD12", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("PRO", color = AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            } else {
-                OutlinedTextField(
-                    value = customHint,
-                    onValueChange = { customHint = it },
-                    placeholder = { Text("e.g., mention that I also love hiking", color = Color.Gray) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = AccentPink,
-                        unfocusedBorderColor = Color.Gray
-                    ),
-                    singleLine = true
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        onDirectionSelected(DirectionWithHint(customHint = customHint))
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Generate")
-            }
-        }
-    }
-}
-
-@Composable
-private fun LoadingOverlay(modifier: Modifier = Modifier) {
-    var dotCount by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(500)
-            dotCount = (dotCount + 1) % 4
-        }
-    }
-    val dots = ".".repeat(dotCount)
-
-    Column(
-        modifier = modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            CircularProgressIndicator(color = AccentPink)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Cooking up replies$dots", color = Color.White)
-    }
-}
-
-@Composable
-private fun ScreenshotPreviewPanel(
-    bitmaps: List<android.graphics.Bitmap>,
-    maxScreenshots: Int,
-    onConfirm: () -> Unit,
-    onAddMore: () -> Unit,
-    onRetake: () -> Unit,
-    onRemoveScreenshot: (Int) -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-
-    var selectedIndex by remember(bitmaps) {
-        mutableIntStateOf(bitmaps.lastIndex.coerceAtLeast(0))
-    }
-    LaunchedEffect(bitmaps.size) {
-        if (bitmaps.isEmpty()) return@LaunchedEffect
-        if (selectedIndex !in bitmaps.indices) {
-            selectedIndex = bitmaps.lastIndex
-        }
-    }
-
-    val aspectRatio = remember(selectedIndex, bitmaps.size) {
-        val bmp = bitmaps.getOrNull(selectedIndex)
-        val w = bmp?.width ?: 0
-        val h = bmp?.height ?: 0
-        if (w > 0 && h > 0) w.toFloat() / h.toFloat() else 9f / 16f
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(max = screenHeight * 0.75f)
-            .padding(16.dp)
-    ) {
-        if (bitmaps.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = screenHeight * 0.4f)
-            ) {
-                Image(
-                    bitmap = bitmaps[selectedIndex].asImageBitmap(),
-                    contentDescription = "Captured screenshot",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Fit
-                )
-
-                IconButton(
-                    onClick = { onRemoveScreenshot(selectedIndex) },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(32.dp)
-                        .background(Color.Black.copy(alpha = 0.85f), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remove screenshot",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (bitmaps.size > 1) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp)
-                ) {
-                    itemsIndexed(bitmaps) { index, bitmap ->
-                        Box(
-                            modifier = Modifier
-                                .width(60.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (index == selectedIndex) {
-                                        Color.White.copy(alpha = 0.12f)
-                                    } else {
-                                        Color.White.copy(alpha = 0.04f)
-                                    }
-                                )
-                                .clickable { selectedIndex = index }
-                                .padding(2.dp)
-                        ) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = "Screenshot thumbnail",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text(
-                when {
-                    bitmaps.size == 1 && maxScreenshots > 1 ->
-                        "Tip: Add more screenshots for better context (${bitmaps.size}/$maxScreenshots)"
-                    bitmaps.size == 1 ->
-                        "1 screenshot captured"
-                    else ->
-                        "${bitmaps.size}/$maxScreenshots screenshots ready"
-                },
-                color = Color.Gray,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onRetake,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Retake", color = Color.White)
-                }
-                if (bitmaps.size < maxScreenshots) {
-                    OutlinedButton(
-                        onClick = onAddMore,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("+ Add more", color = AccentPink)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = onConfirm,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Generate replies")
-        }
-    }
-}
-
-@Composable
-private fun SuggestionPanel(
-    result: SuggestionResult.Success,
-    onCopy: (String, Int) -> Unit,
-    onRate: (Int, Boolean, String) -> Unit,
-    onRegenerate: () -> Unit,
-    onClear: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val vibeLabels = listOf("\uD83D\uDD25 Flirty", "\uD83D\uDE0F Witty", "\u2728 Smooth", "\uD83D\uDCAA Bold")
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(max = screenHeight * 0.7f)
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                    IconButton(onClick = onRegenerate) {
-                        Icon(Icons.Default.Refresh, "Regenerate", tint = AccentPink)
-                    }
-                    IconButton(onClick = onClear) {
-                        Icon(Icons.Default.Delete, "Clear", tint = Color.Gray)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            result.replies.forEachIndexed { index, reply ->
-                SuggestionCard(
-                    label = vibeLabels.getOrElse(index) { "\uD83D\uDCAC Reply" },
-                    reply = reply,
-                    onCopy = { onCopy(reply, index) },
-                    onThumbsUp = { onRate(index, true, reply) },
-                    onThumbsDown = { onRate(index, false, reply) }
-                )
-                if (index < result.replies.lastIndex) {
-                    Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ErrorPanel(
-    message: String,
-    errorType: SuggestionResult.ErrorType,
-    onRetry: () -> Unit,
-    onUpgrade: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val isQuotaExceeded = errorType == SuggestionResult.ErrorType.QUOTA_EXCEEDED
-    val isRateLimited = errorType == SuggestionResult.ErrorType.RATE_LIMITED
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(if (isQuotaExceeded) "\uD83D\uDCA8" else "\uD83D\uDE15", fontSize = 32.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                when {
-                    isQuotaExceeded -> "Daily free limit reached"
-                    isRateLimited -> "We're getting a lot of requests. Please try again in a minute."
-                    else -> {
-                        // Hide low-level error details (e.g. provider quota, timeouts)
-                        // behind a friendly, generic server error message.
-                        "Something went wrong on our side. We're looking into it."
-                    }
-                },
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            if (isQuotaExceeded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Upgrade to Premium for unlimited replies",
-                    color = Color.Gray,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onUpgrade,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Upgrade Now")
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Dismiss", color = Color.White)
-                }
-            } else {
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onDismiss) {
-                        Text("Dismiss", color = Color.White)
-                    }
-                    Button(
-                        onClick = onRetry,
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentPink)
-                    ) {
-                        Text("Retry")
-                    }
-                }
-        }
-    }
-}
-
-@Composable
-private fun BubbleHeader(
+private fun FullScreenCard(
     currentState: BubbleState,
-    onBack: () -> Unit,
-    onClose: () -> Unit,
-    onStartOver: () -> Unit
+    usage: UsageState,
+    onEvent: (OverlayEvent) -> Unit
 ) {
-    val (step, title, subtitle) = when (currentState) {
-        is BubbleState.DirectionPicker -> Triple(
-            1,
-            "Step 1 of 3",
-            "Pick the vibe"
-        )
-        is BubbleState.ScreenshotPreview -> Triple(
-            2,
-            "Step 2 of 3",
-            "Check your screenshots"
-        )
-        is BubbleState.Loading -> Triple(
-            3,
-            "Step 3 of 3",
-            "Cooking up replies"
-        )
-        is BubbleState.Expanded -> Triple(
-            3,
-            "Step 3 of 3",
-            "Pick a reply"
-        )
-        is BubbleState.Error -> Triple(
-            3,
-            "Step 3 of 3",
-            "Something went wrong"
-        )
-        else -> Triple(0, "", "")
-    }
-
-    if (step == 0) return
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.02f))
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (step > 1) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White
+    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = 0.85f,
+                        stiffness = Spring.StiffnessMedium
                     )
-                }
-            }
-        }
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.weight(1f)
+                ),
+            shape = OverlayShapes.PanelShape,
+            colors = CardDefaults.cardColors(containerColor = OverlayColors.PanelColor),
+            border = BorderStroke(1.dp, OverlayColors.PanelBorderColor)
         ) {
-            Text(
-                text = title,
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    color = Color.Gray,
-                    fontSize = 11.sp
+            Column {
+                // Header with navigation
+                BubbleHeader(
+                    currentState = currentState,
+                    onBack = { onEvent(OverlayEvent.Back) },
+                    onClose = { onEvent(OverlayEvent.DismissSuggestions) },
+                    onStartOver = { onEvent(OverlayEvent.ClearAndStartOver) }
                 )
-            }
-        }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (step > 1) {
-                TextButton(onClick = onStartOver) {
-                    Text("Start over", color = AccentPink, fontSize = 11.sp)
+                Divider(color = Color.White.copy(alpha = 0.08f))
+
+                // Route to appropriate panel based on current state
+                when (val s = currentState) {
+                    is BubbleState.DirectionPicker -> DirectionPicker(
+                        allowedDirections = usage.allowedDirections,
+                        customHintsEnabled = usage.customHintsEnabled,
+                        onDirectionSelected = { direction ->
+                            onEvent(OverlayEvent.CaptureRequested(direction))
+                        },
+                        onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                    )
+                    is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
+                        bitmaps = s.bitmaps,
+                        maxScreenshots = usage.maxScreenshots,
+                        onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
+                        onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
+                        onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
+                        onRemoveScreenshot = { index ->
+                            onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
+                        },
+                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                    )
+                    is BubbleState.Loading -> LoadingOverlay()
+                    is BubbleState.Expanded -> SuggestionPanel(
+                        result = s.result,
+                        onCopy = { reply, index ->
+                            onEvent(OverlayEvent.CopyReply(reply, index, s.result.interactionId))
+                        },
+                        onRate = { index, positive, text ->
+                            onEvent(OverlayEvent.RateReply(index, positive, text, s.result.interactionId))
+                        },
+                        onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
+                        onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
+                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                    )
+                    is BubbleState.Error -> ErrorPanel(
+                        message = s.message,
+                        errorType = s.errorType,
+                        onRetry = {
+                            val dir = s.direction ?: DirectionWithHint()
+                            onEvent(OverlayEvent.Regenerate(dir))
+                        },
+                        onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                    )
+                    else -> {}
                 }
-            }
-            IconButton(onClick = onClose) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = Color.White
-                )
             }
         }
     }

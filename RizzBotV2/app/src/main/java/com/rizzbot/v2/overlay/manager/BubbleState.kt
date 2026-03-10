@@ -14,4 +14,10 @@ sealed class BubbleState {
     data object Loading : BubbleState()
     data class Expanded(val result: SuggestionResult.Success) : BubbleState()
     data class Error(val message: String, val errorType: SuggestionResult.ErrorType, val direction: DirectionWithHint? = null) : BubbleState()
+    
+    // Helper to check if this state should show expanded content
+    fun isExpandedState(): Boolean = when (this) {
+        is DirectionPicker, is ScreenshotPreview, is Expanded, is Error -> true
+        else -> false
+    }
 }
