@@ -585,6 +585,33 @@ class BubbleManager @Inject constructor(
                 pendingAppendDirection = null
                 _state.value = BubbleState.DirectionPicker
             }
+            is OverlayEvent.Back -> {
+                val previews = orchestrator.getPreviewBitmaps()
+                when (_state.value) {
+                    is BubbleState.ScreenshotPreview -> {
+                        // From capture, back goes to a clean start.
+                        orchestrator.clearScreenshot()
+                        currentDirection = null
+                        pendingAppendDirection = null
+                        _state.value = BubbleState.DirectionPicker
+                    }
+                    is BubbleState.Loading,
+                    is BubbleState.Expanded,
+                    is BubbleState.Error -> {
+                        // From replies/error/loading, prefer going back to capture if possible.
+                        if (previews.isNotEmpty()) {
+                            val direction = currentDirection ?: DirectionWithHint()
+                            _state.value = BubbleState.ScreenshotPreview(previews, direction)
+                        } else {
+                            _state.value = BubbleState.DirectionPicker
+                        }
+                    }
+                    else -> {
+                        // From picker or anything else, minimize back to the small bubble.
+                        _state.value = BubbleState.RizzButton
+                    }
+                }
+            }
         }
         eventBus.send(event)
     }
