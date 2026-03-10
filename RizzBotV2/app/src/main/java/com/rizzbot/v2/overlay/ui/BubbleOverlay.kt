@@ -65,14 +65,15 @@ private val AccentPink = Color(0xFFE91E63)
 fun BubbleOverlay(
     state: StateFlow<BubbleState>,
     usageState: StateFlow<UsageState>,
+    dockOnLeft: StateFlow<Boolean>,
     onEvent: (OverlayEvent) -> Unit
 ) {
     val currentState by state.collectAsState()
     val usage by usageState.collectAsState()
+    val dockLeft by dockOnLeft.collectAsState()
 
     val isFullScreen = currentState is BubbleState.DirectionPicker ||
         currentState is BubbleState.ScreenshotPreview ||
-        currentState is BubbleState.Loading ||
         currentState is BubbleState.Expanded ||
         currentState is BubbleState.Error
 
@@ -108,9 +109,11 @@ fun BubbleOverlay(
                 )
             }
 
-            // 2. Render RizzButton ONLY when not in full screen
-            if (currentState is BubbleState.RizzButton) {
-                RizzButton(
+            // 2. Bubble + speech hints when not in full screen
+            if (!isFullScreen) {
+                BubbleWithHints(
+                    state = currentState,
+                    dockOnLeft = dockLeft,
                     onTap = { onEvent(OverlayEvent.ShowBubble) }
                 )
             }
@@ -168,64 +171,64 @@ fun BubbleOverlay(
 
                             Divider(color = Color.White.copy(alpha = 0.08f))
 
-                            when (val s = currentState) {
-                                is BubbleState.DirectionPicker -> DirectionPicker(
-                                    allowedDirections = usage.allowedDirections,
-                                    customHintsEnabled = usage.customHintsEnabled,
-                                    onDirectionSelected = { direction ->
-                                        onEvent(OverlayEvent.CaptureRequested(direction))
-                                    },
-                                    onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                    when (val s = currentState) {
+                        is BubbleState.DirectionPicker -> DirectionPicker(
+                            allowedDirections = usage.allowedDirections,
+                            customHintsEnabled = usage.customHintsEnabled,
+                            onDirectionSelected = { direction ->
+                                onEvent(OverlayEvent.CaptureRequested(direction))
+                            },
+                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
+                            bitmaps = s.bitmaps,
+                            maxScreenshots = usage.maxScreenshots,
+                            onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
+                            onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
+                            onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
+                            onRemoveScreenshot = { index ->
+                                onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
+                            },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        is BubbleState.Loading -> LoadingOverlay()
+                        is BubbleState.Expanded -> SuggestionPanel(
+                            result = s.result,
+                            onCopy = { reply, index ->
+                                onEvent(
+                                    OverlayEvent.CopyReply(
+                                        reply,
+                                        index,
+                                        s.result.interactionId
+                                    )
                                 )
-                                is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
-                                    bitmaps = s.bitmaps,
-                                    maxScreenshots = usage.maxScreenshots,
-                                    onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
-                                    onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
-                                    onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
-                                    onRemoveScreenshot = { index ->
-                                        onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
-                                    },
-                                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                            },
+                            onRate = { index, positive, text ->
+                                onEvent(
+                                    OverlayEvent.RateReply(
+                                        index,
+                                        positive,
+                                        text,
+                                        s.result.interactionId
+                                    )
                                 )
-                                is BubbleState.Loading -> LoadingOverlay()
-                                is BubbleState.Expanded -> SuggestionPanel(
-                                    result = s.result,
-                                    onCopy = { reply, index ->
-                                        onEvent(
-                                            OverlayEvent.CopyReply(
-                                                reply,
-                                                index,
-                                                s.result.interactionId
-                                            )
-                                        )
-                                    },
-                                    onRate = { index, positive, text ->
-                                        onEvent(
-                                            OverlayEvent.RateReply(
-                                                index,
-                                                positive,
-                                                text,
-                                                s.result.interactionId
-                                            )
-                                        )
-                                    },
-                                    onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
-                                    onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
-                                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                                )
-                                is BubbleState.Error -> ErrorPanel(
-                                    message = s.message,
-                                    errorType = s.errorType,
-                                    onRetry = {
-                                        val dir = s.direction ?: DirectionWithHint()
-                                        onEvent(OverlayEvent.Regenerate(dir))
-                                    },
-                                    onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                                    onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                                )
-                                else -> {}
+                            },
+                            onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
+                            onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        is BubbleState.Error -> ErrorPanel(
+                            message = s.message,
+                            errorType = s.errorType,
+                            onRetry = {
+                                val dir = s.direction ?: DirectionWithHint()
+                                onEvent(OverlayEvent.Regenerate(dir))
+                            },
+                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                        else -> {}
                             }
                         }
                     }
@@ -334,6 +337,124 @@ private fun RizzButton(
 }
 
 @Composable
+private fun BubbleWithHints(
+    state: BubbleState,
+    dockOnLeft: Boolean,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val showAddMoreHint = state is BubbleState.RizzButtonAddMore
+    val showLoadingHint = state is BubbleState.Loading
+    
+    // Auto-hide the "add more" hint after 4 seconds
+    var showAddMoreHintWithTimeout by remember(showAddMoreHint) { 
+        mutableStateOf(showAddMoreHint) 
+    }
+    
+    LaunchedEffect(showAddMoreHint) {
+        if (showAddMoreHint) {
+            showAddMoreHintWithTimeout = true
+            delay(4000)
+            showAddMoreHintWithTimeout = false
+        }
+    }
+
+    Box(modifier = modifier.wrapContentSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (dockOnLeft) {
+                RizzButton(onTap = onTap)
+                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
+                Box(modifier = Modifier.wrapContentWidth()) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showAddMoreHintWithTimeout || showLoadingHint,
+                        enter = androidx.compose.animation.fadeIn(
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        ) + androidx.compose.animation.slideInHorizontally(
+                            initialOffsetX = { -it },
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        ),
+                        exit = androidx.compose.animation.fadeOut(
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        ) + androidx.compose.animation.slideOutHorizontally(
+                            targetOffsetX = { -it },
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        )
+                    ) {
+                        if (showAddMoreHintWithTimeout) {
+                            TalkingBubble(text = "Tap for next screenshot")
+                        } else if (showLoadingHint) {
+                            LoadingSpeechBubble()
+                        }
+                    }
+                }
+            } else {
+                Box(modifier = Modifier.wrapContentWidth()) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showAddMoreHintWithTimeout || showLoadingHint,
+                        enter = androidx.compose.animation.fadeIn(
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        ) + androidx.compose.animation.slideInHorizontally(
+                            initialOffsetX = { it },
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        ),
+                        exit = androidx.compose.animation.fadeOut(
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        ) + androidx.compose.animation.slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        )
+                    ) {
+                        if (showAddMoreHintWithTimeout) {
+                            TalkingBubble(text = "Tap for next screenshot")
+                        } else if (showLoadingHint) {
+                            LoadingSpeechBubble()
+                        }
+                    }
+                }
+                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
+                RizzButton(onTap = onTap)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TalkingBubble(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color.Black.copy(alpha = 0.85f),
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 0.dp,
+        modifier = modifier
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun LoadingSpeechBubble() {
+    var dotCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(500)
+            dotCount = (dotCount + 1) % 4
+        }
+    }
+    val dots = ".".repeat(dotCount)
+
+    TalkingBubble(text = "Cooking up replies$dots")
+}
+
+@Composable
 private fun DirectionPicker(
     allowedDirections: List<String>,
     customHintsEnabled: Boolean,
@@ -350,7 +471,7 @@ private fun DirectionPicker(
             .fillMaxWidth()
             .padding(16.dp)
     ) {
-        ConversationDirection.entries.forEach { direction ->
+            ConversationDirection.entries.forEach { direction ->
                 val dirKey = direction.name.lowercase()
                 val isLocked = allowedDirections.isNotEmpty() && dirKey !in allowedDirections
 
@@ -382,57 +503,57 @@ private fun DirectionPicker(
                 }
             }
 
-        // Custom hint option
-        if (!showCustomInput) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = if (customHintsEnabled) 0.05f else 0.02f))
-                    .clickable {
-                        if (customHintsEnabled) showCustomInput = true else onUpgrade()
+            // Custom hint option
+            if (!showCustomInput) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = if (customHintsEnabled) 0.05f else 0.02f))
+                        .clickable {
+                            if (customHintsEnabled) showCustomInput = true else onUpgrade()
+                        }
+                        .padding(vertical = 10.dp, horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("\u270D\uFE0F", fontSize = 20.sp)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        "Custom hint",
+                        color = if (customHintsEnabled) Color.White else Color.Gray,
+                        fontSize = 14.sp
+                    )
+                    if (!customHintsEnabled) {
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text("\uD83D\uDD12", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("PRO", color = AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
-                    .padding(vertical = 10.dp, horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("\u270D\uFE0F", fontSize = 20.sp)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    "Custom hint",
-                    color = if (customHintsEnabled) Color.White else Color.Gray,
-                    fontSize = 14.sp
-                )
-                if (!customHintsEnabled) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text("\uD83D\uDD12", fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("PRO", color = AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
-            }
-        } else {
-            OutlinedTextField(
-                value = customHint,
-                onValueChange = { customHint = it },
-                placeholder = { Text("e.g., mention that I also love hiking", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = AccentPink,
-                    unfocusedBorderColor = Color.Gray
-                ),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    onDirectionSelected(DirectionWithHint(customHint = customHint))
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Generate")
+            } else {
+                OutlinedTextField(
+                    value = customHint,
+                    onValueChange = { customHint = it },
+                    placeholder = { Text("e.g., mention that I also love hiking", color = Color.Gray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AccentPink,
+                        unfocusedBorderColor = Color.Gray
+                    ),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        onDirectionSelected(DirectionWithHint(customHint = customHint))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Generate")
             }
         }
     }
@@ -451,13 +572,13 @@ private fun LoadingOverlay(modifier: Modifier = Modifier) {
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        CircularProgressIndicator(color = AccentPink)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Cooking up replies$dots", color = Color.White)
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator(color = AccentPink)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Cooking up replies$dots", color = Color.White)
     }
 }
 
@@ -484,6 +605,13 @@ private fun ScreenshotPreviewPanel(
         }
     }
 
+    val aspectRatio = remember(selectedIndex, bitmaps.size) {
+        val bmp = bitmaps.getOrNull(selectedIndex)
+        val w = bmp?.width ?: 0
+        val h = bmp?.height ?: 0
+        if (w > 0 && h > 0) w.toFloat() / h.toFloat() else 9f / 16f
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -494,127 +622,122 @@ private fun ScreenshotPreviewPanel(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = screenHeight * 0.35f)
-                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+                    .heightIn(max = screenHeight * 0.4f)
             ) {
-                Box(
+                Image(
+                    bitmap = bitmaps[selectedIndex].asImageBitmap(),
+                    contentDescription = "Captured screenshot",
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = 4.dp, end = 4.dp)
+                        .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                ) {
-                    Image(
-                        bitmap = bitmaps[selectedIndex].asImageBitmap(),
-                        contentDescription = "Captured screenshot",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Fit
+                )
 
                 IconButton(
                     onClick = { onRemoveScreenshot(selectedIndex) },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .offset(y = 12.dp) // push down a bit so it sits on the edge
-                        .size(28.dp)
+                        .padding(8.dp)
+                        .size(32.dp)
                         .background(Color.Black.copy(alpha = 0.85f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove screenshot",
                         tint = Color.White,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        if (bitmaps.size > 1) {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(72.dp)
-            ) {
-                itemsIndexed(bitmaps) { index, bitmap ->
-                    Box(
-                        modifier = Modifier
-                            .width(60.dp)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (index == selectedIndex) {
-                                    Color.White.copy(alpha = 0.12f)
-                                } else {
-                                    Color.White.copy(alpha = 0.04f)
-                                }
-                            )
-                            .clickable { selectedIndex = index }
-                            .padding(2.dp)
-                    ) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Screenshot thumbnail",
+            if (bitmaps.size > 1) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                ) {
+                    itemsIndexed(bitmaps) { index, bitmap ->
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
+                                .width(60.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (index == selectedIndex) {
+                                        Color.White.copy(alpha = 0.12f)
+                                    } else {
+                                        Color.White.copy(alpha = 0.04f)
+                                    }
+                                )
+                                .clickable { selectedIndex = index }
+                                .padding(2.dp)
+                        ) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Screenshot thumbnail",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        Text(
-            when {
-                bitmaps.size == 1 && maxScreenshots > 1 ->
-                    "Tip: Add more screenshots for better context (${bitmaps.size}/$maxScreenshots)"
-                bitmaps.size == 1 ->
-                    "1 screenshot captured"
-                else ->
-                    "${bitmaps.size}/$maxScreenshots screenshots ready"
-            },
-            color = Color.Gray,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+            Text(
+                when {
+                    bitmaps.size == 1 && maxScreenshots > 1 ->
+                        "Tip: Add more screenshots for better context (${bitmaps.size}/$maxScreenshots)"
+                    bitmaps.size == 1 ->
+                        "1 screenshot captured"
+                    else ->
+                        "${bitmaps.size}/$maxScreenshots screenshots ready"
+                },
+                color = Color.Gray,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedButton(
-                onClick = onRetake,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Retake", color = Color.White)
-            }
-            if (bitmaps.size < maxScreenshots) {
                 OutlinedButton(
-                    onClick = onAddMore,
+                    onClick = onRetake,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("+ Add more", color = AccentPink)
+                    Text("Retake", color = Color.White)
+                }
+                if (bitmaps.size < maxScreenshots) {
+                    OutlinedButton(
+                        onClick = onAddMore,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("+ Add more", color = AccentPink)
+                    }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Button(
-            onClick = onConfirm,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Generate replies")
+            Button(
+                onClick = onConfirm,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Generate replies")
         }
     }
 }
@@ -637,32 +760,32 @@ private fun SuggestionPanel(
             .heightIn(max = screenHeight * 0.7f)
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onRegenerate) {
-                Icon(Icons.Default.Refresh, "Regenerate", tint = AccentPink)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                    IconButton(onClick = onRegenerate) {
+                        Icon(Icons.Default.Refresh, "Regenerate", tint = AccentPink)
+                    }
+                    IconButton(onClick = onClear) {
+                        Icon(Icons.Default.Delete, "Clear", tint = Color.Gray)
+                }
             }
-            IconButton(onClick = onClear) {
-                Icon(Icons.Default.Delete, "Clear", tint = Color.Gray)
-            }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        result.replies.forEachIndexed { index, reply ->
-            SuggestionCard(
-                label = vibeLabels.getOrElse(index) { "\uD83D\uDCAC Reply" },
-                reply = reply,
-                onCopy = { onCopy(reply, index) },
-                onThumbsUp = { onRate(index, true, reply) },
-                onThumbsDown = { onRate(index, false, reply) }
-            )
-            if (index < result.replies.lastIndex) {
-                Spacer(modifier = Modifier.height(8.dp))
+            result.replies.forEachIndexed { index, reply ->
+                SuggestionCard(
+                    label = vibeLabels.getOrElse(index) { "\uD83D\uDCAC Reply" },
+                    reply = reply,
+                    onCopy = { onCopy(reply, index) },
+                    onThumbsUp = { onRate(index, true, reply) },
+                    onThumbsDown = { onRate(index, false, reply) }
+                )
+                if (index < result.replies.lastIndex) {
+                    Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -685,61 +808,61 @@ private fun ErrorPanel(
             .fillMaxWidth()
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(if (isQuotaExceeded) "\uD83D\uDCA8" else "\uD83D\uDE15", fontSize = 32.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            when {
-                isQuotaExceeded -> "Daily free limit reached"
-                isRateLimited -> "We're getting a lot of requests. Please try again in a minute."
-                else -> {
-                    // Hide low-level error details (e.g. provider quota, timeouts)
-                    // behind a friendly, generic server error message.
-                    "Something went wrong on our side. We're looking into it."
-                }
-            },
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        if (isQuotaExceeded) {
-            Spacer(modifier = Modifier.height(4.dp))
+        ) {
+            Text(if (isQuotaExceeded) "\uD83D\uDCA8" else "\uD83D\uDE15", fontSize = 32.sp)
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Upgrade to Premium for unlimited replies",
-                color = Color.Gray,
-                fontSize = 13.sp,
+                when {
+                    isQuotaExceeded -> "Daily free limit reached"
+                    isRateLimited -> "We're getting a lot of requests. Please try again in a minute."
+                    else -> {
+                        // Hide low-level error details (e.g. provider quota, timeouts)
+                        // behind a friendly, generic server error message.
+                        "Something went wrong on our side. We're looking into it."
+                    }
+                },
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onUpgrade,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Upgrade Now")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Dismiss", color = Color.White)
-            }
-        } else {
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onDismiss) {
+            if (isQuotaExceeded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Upgrade to Premium for unlimited replies",
+                    color = Color.Gray,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onUpgrade,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Upgrade Now")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
                     Text("Dismiss", color = Color.White)
                 }
-                Button(
-                    onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink)
-                ) {
-                    Text("Retry")
+            } else {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("Dismiss", color = Color.White)
+                    }
+                    Button(
+                        onClick = onRetry,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPink)
+                    ) {
+                        Text("Retry")
+                    }
                 }
-            }
         }
     }
 }

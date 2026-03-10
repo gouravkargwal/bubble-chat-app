@@ -60,6 +60,8 @@ class BubbleManager @Inject constructor(
     private var pendingAppendDirection: DirectionWithHint? = null
     private var closeTargetView: ComposeView? = null
     private val _isHoveringClose = MutableStateFlow(false)
+    private val _dockOnLeft = MutableStateFlow(false)
+    val dockOnLeft: StateFlow<Boolean> = _dockOnLeft.asStateFlow()
 
     init {
         // Default position: right edge, vertically centered
@@ -94,7 +96,6 @@ class BubbleManager @Inject constructor(
     private fun isFullScreenState(state: BubbleState): Boolean = when (state) {
         is BubbleState.DirectionPicker,
         is BubbleState.ScreenshotPreview,
-        is BubbleState.Loading,
         is BubbleState.Expanded,
         is BubbleState.Error -> true
         else -> false
@@ -139,6 +140,7 @@ class BubbleManager @Inject constructor(
                 BubbleOverlay(
                     state = _state,
                     usageState = hostedRepository.usageState,
+                    dockOnLeft = dockOnLeft,
                     onEvent = { handleEvent(it) }
                 )
             }
@@ -153,7 +155,7 @@ class BubbleManager @Inject constructor(
 
         view.setOnTouchListener { _, event ->
             // Only allow dragging when we're in bubble mode
-            if (_state.value !is BubbleState.RizzButton) {
+            if (_state.value !is BubbleState.RizzButton && _state.value !is BubbleState.RizzButtonAddMore) {
                 return@setOnTouchListener false
             }
 
@@ -220,7 +222,10 @@ class BubbleManager @Inject constructor(
                             val dm = context.resources.displayMetrics
                             val midX = dm.widthPixels / 2
                             val bubbleCenterX = lp.x + (view.width / 2)
-                            val targetX = if (bubbleCenterX < midX) 0 else dm.widthPixels - view.width
+                            val dockLeft = bubbleCenterX < midX
+                            _dockOnLeft.value = dockLeft
+                            // Leave some margin so bubble doesn't go completely off-screen
+                            val targetX = if (dockLeft) 8 else dm.widthPixels - view.width - 8
 
                             android.animation.ValueAnimator.ofInt(lp.x, targetX).apply {
                                 duration = 200 // Fast, smooth snap
@@ -478,7 +483,7 @@ class BubbleManager @Inject constructor(
                 // will capture an additional screenshot for this direction.
                 pendingAppendDirection = event.direction
                 currentDirection = event.direction
-                _state.value = BubbleState.RizzButton
+                _state.value = BubbleState.RizzButtonAddMore
             }
             is OverlayEvent.RetakeLastScreenshot -> {
                 activeScope.launch {
