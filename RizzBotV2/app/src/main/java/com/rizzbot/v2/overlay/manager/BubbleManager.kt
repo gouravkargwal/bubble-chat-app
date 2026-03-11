@@ -148,15 +148,15 @@ class BubbleManager @Inject constructor(
         var dragParams: WindowManager.LayoutParams? = null
 
         view.setOnTouchListener { _, event ->
-            // Only allow dragging when we're in bubble mode
-            if (_state.value !is BubbleState.RizzButton && _state.value !is BubbleState.RizzButtonAddMore) {
-                return@setOnTouchListener false
-            }
+            Log.d(TAG, "Touch event: action=${event.action} state=${_state.value}")
 
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
                     val lp = view.layoutParams as? WindowManager.LayoutParams
-                        ?: return@setOnTouchListener false
+                        ?: run {
+                            Log.w(TAG, "ACTION_DOWN but layoutParams is not WindowManager.LayoutParams")
+                            return@setOnTouchListener false
+                        }
 
                     dragParams = lp
                     initialX = lp.x
@@ -164,18 +164,28 @@ class BubbleManager @Inject constructor(
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     isDragging = false
+                    Log.d(
+                        TAG,
+                        "ACTION_DOWN at raw=(${event.rawX}, ${event.rawY}) lp=(${lp.x}, ${lp.y})"
+                    )
                     // We handle the full gesture (tap or drag) here
                     return@setOnTouchListener true
                 }
 
                 android.view.MotionEvent.ACTION_MOVE -> {
-                    val lp = dragParams ?: return@setOnTouchListener false
+                    val lp = dragParams ?: return@setOnTouchListener true
                     val dx = event.rawX - initialTouchX
                     val dy = event.rawY - initialTouchY
 
-                    // Threshold to differentiate a tap from a drag
-                    if (!isDragging && (kotlin.math.abs(dx) > 10 || kotlin.math.abs(dy) > 10)) {
+                    // Threshold to differentiate a tap from a drag (use dp-scaled threshold)
+                    val density = context.resources.displayMetrics.density
+                    val dragThreshold = 4f * density // ~4dp
+                    if (!isDragging && (kotlin.math.abs(dx) > dragThreshold || kotlin.math.abs(dy) > dragThreshold)) {
                         isDragging = true
+                        Log.d(
+                            TAG,
+                            "Starting drag: dx=$dx dy=$dy threshold=$dragThreshold"
+                        )
                         showCloseTarget()
                     }
 
@@ -192,13 +202,15 @@ class BubbleManager @Inject constructor(
 
                         try {
                             windowManager.updateViewLayout(view, lp)
+                            Log.d(TAG, "Dragging bubble to x=${lp.x}, y=${lp.y}")
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to update layout during drag", e)
                         }
 
                         checkCloseTargetHover(event.rawX, event.rawY)
-                        return@setOnTouchListener true
                     }
+                    // Always keep consuming MOVE events while in bubble mode
+                    return@setOnTouchListener true
                 }
 
                 android.view.MotionEvent.ACTION_UP,
@@ -207,6 +219,7 @@ class BubbleManager @Inject constructor(
 
                     if (isDragging && lp != null) {
                         val droppedOnClose = _isHoveringClose.value
+                        Log.d(TAG, "ACTION_UP after drag. droppedOnClose=$droppedOnClose x=${lp.x}, y=${lp.y}")
                         hideCloseTarget()
 
                         if (droppedOnClose) {
@@ -230,6 +243,7 @@ class BubbleManager @Inject constructor(
                                     bubbleX = newX
                                     try {
                                         windowManager.updateViewLayout(view, lp)
+                                        Log.d(TAG, "Snapping bubble to x=$newX, y=${lp.y}")
                                     } catch (e: Exception) {
                                         Log.w(TAG, "Failed to update layout during snap", e)
                                     }
@@ -240,14 +254,17 @@ class BubbleManager @Inject constructor(
                         dragParams = null
                         return@setOnTouchListener true
                     } else {
-                        // Treat as a simple tap to open the bubble
-                        handleEvent(OverlayEvent.ShowBubble)
+                        // No significant movement: treat as a simple tap anywhere in the small overlay.
                         dragParams = null
+                        Log.d(TAG, "ACTION_UP without drag, treating as tap")
+                        handleEvent(OverlayEvent.ShowBubble)
                         return@setOnTouchListener true
                     }
                 }
             }
 
+            // We should never really hit this because we early-return for each action,
+            // but keep it here as a safe default.
             false
         }
 

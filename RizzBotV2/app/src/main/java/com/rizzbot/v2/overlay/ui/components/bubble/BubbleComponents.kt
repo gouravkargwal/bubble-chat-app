@@ -13,6 +13,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -24,8 +25,11 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -144,11 +148,12 @@ fun RizzButton(
             }
         }
         
-        // Fire emoji on top
-        Text(
-            text = "\uD83D\uDD25",
-            fontSize = 24.sp,
-            textAlign = TextAlign.Center
+        // Rizz icon on top (vector, consistent across devices)
+        Icon(
+            imageVector = Icons.Filled.Whatshot,
+            contentDescription = "Rizz",
+            tint = Color.White,
+            modifier = Modifier.size(24.dp)
         )
     }
 }
@@ -185,25 +190,29 @@ fun BubbleWithHints(
                 RizzButton(onTap = onTap, isLoading = showLoadingHint)
                 Box(modifier = Modifier.width(8.dp)) // Fixed spacer
                 // Hint bubble to the right (only show for "add more" hint, not loading)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showAddMoreHintWithTimeout,
-                    enter = fadeIn(animationSpec = tween(300)) + 
-                            slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300)),
-                    exit = fadeOut(animationSpec = tween(300)) + 
-                           slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300))
-                ) {
-                    TalkingBubble(text = "Tap for next screenshot")
+                Box(modifier = Modifier.wrapContentWidth()) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showAddMoreHintWithTimeout,
+                        enter = fadeIn(animationSpec = tween(300)) +
+                                slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300)),
+                        exit = fadeOut(animationSpec = tween(300)) +
+                               slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300))
+                    ) {
+                        TalkingBubble(text = "Tap for next screenshot")
+                    }
                 }
             } else {
                 // Hint bubble to the left (only show for "add more" hint, not loading)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showAddMoreHintWithTimeout,
-                    enter = fadeIn(animationSpec = tween(300)) + 
-                            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)),
-                    exit = fadeOut(animationSpec = tween(300)) + 
-                           slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
-                ) {
-                    TalkingBubble(text = "Tap for next screenshot")
+                Box(modifier = Modifier.wrapContentWidth()) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showAddMoreHintWithTimeout,
+                        enter = fadeIn(animationSpec = tween(300)) +
+                                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)),
+                        exit = fadeOut(animationSpec = tween(300)) +
+                               slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+                    ) {
+                        TalkingBubble(text = "Tap for next screenshot")
+                    }
                 }
                 Box(modifier = Modifier.width(8.dp)) // Fixed spacer
                 RizzButton(onTap = onTap, isLoading = showLoadingHint)
@@ -213,7 +222,7 @@ fun BubbleWithHints(
 }
 
 /**
- * A speech bubble that displays hint text
+ * A speech bubble that displays hint text (no tail)
  */
 @Composable
 fun TalkingBubble(
@@ -221,14 +230,16 @@ fun TalkingBubble(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color.Black.copy(alpha = 0.85f),
+        color = Color(0xFF111111),
+        contentColor = Color.White,
         shape = RoundedCornerShape(16.dp),
         tonalElevation = 0.dp,
+        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
         modifier = modifier
     ) {
         Text(
             text = text,
-            color = Color.White,
             fontSize = 13.sp,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
