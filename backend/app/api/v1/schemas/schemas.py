@@ -34,6 +34,7 @@ class VisionRequest(BaseModel):
     )
     direction: str = Field(default="quick_reply")
     custom_hint: str | None = Field(default=None, max_length=200)
+    conversation_id: str | None = None
 
 
 class VisionResponse(BaseModel):
@@ -42,6 +43,7 @@ class VisionResponse(BaseModel):
     stage: str = "early_talking"
     interaction_id: str
     usage_remaining: int
+    conversation_id: str
 
 
 # Tracking

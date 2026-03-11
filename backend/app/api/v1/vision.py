@@ -18,7 +18,12 @@ from app.domain.conversation import (
 from app.domain.tiers import get_effective_tier, get_tier_config
 from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import Interaction, User, UserVoiceDNA
+from app.infrastructure.database.models import (
+    Conversation,
+    Interaction,
+    User,
+    UserVoiceDNA,
+)
 from app.llm.gemini_client import GeminiClient
 from app.llm.response_parser import parse_llm_response
 from app.prompts.engine import prompt_engine
@@ -205,25 +210,18 @@ async def generate_replies(
         if voice_db and voice_db.sample_count >= 3:
             voice_dna = await voice_to_domain(voice_db, db)
 
-    # 8. Load conversation context only if tier supports memory
+    # 8. Load conversation context only if tier supports memory and a conversation_id is provided
     conversation_context = None
-    if tier_config.conversation_memory:
-        last_interaction = await db.execute(
-            select(Interaction)
-            .where(Interaction.user_id == user.id)
-            .order_by(Interaction.created_at.desc())
-            .limit(1)
-        )
-        last = last_interaction.scalar_one_or_none()
-        if last and last.conversation_id:
-            from app.infrastructure.database.models import Conversation
-
-            convo_result = await db.execute(
-                select(Conversation).where(Conversation.id == last.conversation_id)
+    if tier_config.conversation_memory and request.conversation_id:
+        convo_result = await db.execute(
+            select(Conversation).where(
+                Conversation.id == request.conversation_id,
+                Conversation.user_id == user.id,
             )
-            convo = convo_result.scalar_one_or_none()
-            if convo and convo.is_active:
-                conversation_context = await build_conversation_context(convo, db)
+        )
+        convo = convo_result.scalar_one_or_none()
+        if convo and convo.is_active:
+            conversation_context = await build_conversation_context(convo, db)
 
     # 9. Build prompt using tier's variant
     payload = prompt_engine.build(
@@ -334,12 +332,35 @@ async def generate_replies(
 
     latency_ms = int((time.monotonic() - start) * 1000)
 
-    # 11. Find or create conversation from detected person
-    convo = await find_or_create_conversation(
-        user_id=user.id,
-        person_name=parsed.analysis.person_name,
-        db=db,
-    )
+    # 11. Resolve conversation using explicit conversation_id when provided
+    if request.conversation_id:
+        convo_result = await db.execute(
+            select(Conversation).where(
+                Conversation.id == request.conversation_id,
+                Conversation.user_id == user.id,
+            )
+        )
+        convo = convo_result.scalar_one_or_none()
+        if convo is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Conversation not found.",
+            )
+
+        # Self-heal missing names: upgrade from 'unknown' when we detect a real name
+        if (
+            convo.person_name
+            and convo.person_name.lower() == "unknown"
+            and parsed.analysis.person_name
+            and parsed.analysis.person_name.lower() != "unknown"
+        ):
+            convo.person_name = parsed.analysis.person_name
+    else:
+        convo = await find_or_create_conversation(
+            user_id=user.id,
+            person_name=parsed.analysis.person_name,
+            db=db,
+        )
 
     # 13. Save interaction
     replies = parsed.replies + [""] * (4 - len(parsed.replies))  # pad to 4
@@ -428,4 +449,5 @@ async def generate_replies(
         stage=parsed.analysis.stage,
         interaction_id=interaction.id,
         usage_remaining=max(0, remaining),
+        conversation_id=convo.id,
     )
