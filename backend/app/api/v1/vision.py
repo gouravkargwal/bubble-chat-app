@@ -1,5 +1,6 @@
 """Main reply generation endpoint — the core product."""
 
+import json
 import time
 
 import structlog
@@ -35,23 +36,90 @@ GEMINI_RESPONSE_SCHEMA: dict = {
         "spatial_audit": {
             "type": "OBJECT",
             "properties": {
-                "right_side_user_facts": {"type": "STRING"},
-                "left_side_them_facts": {"type": "STRING"},
+                "right_side_user_facts": {
+                    "type": "STRING",
+                    "description": (
+                        "Bullet points only. Max 20 words total. "
+                        "Key on-screen facts about the user/right side only."
+                    ),
+                },
+                "left_side_them_facts": {
+                    "type": "STRING",
+                    "description": (
+                        "Bullet points only. Max 20 words total. "
+                        "Key on-screen facts about them/left side only."
+                    ),
+                },
             },
         },
         "analysis": {
             "type": "OBJECT",
             "properties": {
-                "detected_language_and_vibe": {"type": "STRING"},
-                "their_last_message": {"type": "STRING"},
-                "who_texted_last": {"type": "STRING"},
-                "their_tone": {"type": "STRING"},
-                "their_effort": {"type": "STRING"},
-                "conversation_temperature": {"type": "STRING"},
-                "stage": {"type": "STRING"},
-                "person_name": {"type": "STRING"},
-                "key_detail": {"type": "STRING"},
-                "what_they_want": {"type": "STRING"},
+                "detected_language_and_vibe": {
+                    "type": "STRING",
+                    "description": (
+                        "Under 2 short sentences. Detect chat language and high-level vibe only."
+                    ),
+                },
+                "their_last_message": {
+                    "type": "STRING",
+                    "description": (
+                        "Very short paraphrase of their last message. Max 25 words. No emojis."
+                    ),
+                },
+                "who_texted_last": {
+                    "type": "STRING",
+                    "description": (
+                        "Exactly one of: 'user', 'them', or 'unknown'. No extra words."
+                    ),
+                },
+                "their_tone": {
+                    "type": "STRING",
+                    "description": (
+                        "Single short phrase summarizing their tone, e.g. 'playful but cautious'. "
+                        "Max 8 words."
+                    ),
+                },
+                "their_effort": {
+                    "type": "STRING",
+                    "description": (
+                        "Single short phrase for effort level, e.g. 'low effort, one-word replies'. "
+                        "Max 8 words."
+                    ),
+                },
+                "conversation_temperature": {
+                    "type": "STRING",
+                    "description": (
+                        "Single short phrase (e.g. 'cold', 'warming up', 'very warm'). Max 5 words."
+                    ),
+                },
+                "stage": {
+                    "type": "STRING",
+                    "description": (
+                        "Single short phrase for relationship stage, e.g. 'early texting', "
+                        "'planning first date'. Max 8 words."
+                    ),
+                },
+                "person_name": {
+                    "type": "STRING",
+                    "description": (
+                        "Their first name only if clearly visible. Otherwise 'unknown'."
+                    ),
+                },
+                "key_detail": {
+                    "type": "STRING",
+                    "description": (
+                        "One critical contextual detail you must remember. "
+                        "Max 20 words. No lists."
+                    ),
+                },
+                "what_they_want": {
+                    "type": "STRING",
+                    "description": (
+                        "Best guess of what they want from the convo right now. "
+                        "Max 20 words. Single sentence."
+                    ),
+                },
             },
             "required": ["detected_language_and_vibe"],
         },
@@ -166,70 +234,107 @@ async def generate_replies(
         variant_id=tier_config.prompt_variant,
     )
 
-    # 10. Dynamic temperature routing + call Gemini
+    # 10. Dynamic temperature routing + call Gemini with retry on JSON truncation
     client = _get_client()
     start = time.monotonic()
-    try:
-        # Dynamic Temperature Routing:
-        # Different directions and custom hints need different creativity levels.
-        direction_key = (request.direction or "").lower()
-        if custom_hint:
-            # User provided a specific angle → medium-high creativity.
-            llm_temperature = 0.7
-        elif direction_key == "opener":
-            # Cold read → max creativity.
-            llm_temperature = 0.8
-        elif direction_key in ("change_topic", "tease"):
-            # Needs high creativity to pivot/joke.
-            llm_temperature = 0.75
-        elif direction_key == "revive_chat":
-            llm_temperature = 0.6
-        elif direction_key in ("get_number", "ask_out"):
-            # Goal-oriented → lower creativity, more precision.
-            llm_temperature = 0.5
-        else:
-            # quick_reply and anything else → strict context matching.
-            llm_temperature = 0.4
 
-        raw = await client.vision_generate(
-            system_prompt=payload.system_prompt,
-            user_prompt=payload.user_prompt,
-            base64_images=images,
-            temperature=llm_temperature,
-            model=settings.gemini_model,
-            max_output_tokens=tier_config.max_output_tokens,
-            response_schema=GEMINI_RESPONSE_SCHEMA,
-        )
-    except ValueError as e:
-        error_msg = str(e)
-        logger.error("llm_value_error", error=error_msg)
-        raise HTTPException(
-            status_code=502, detail="Failed to generate replies. Try again."
-        )
-    except Exception as e:
-        logger.error("llm_call_failed", error=str(e))
+    # Dynamic Temperature Routing:
+    # Different directions and custom hints need different creativity levels.
+    direction_key = (request.direction or "").lower()
+    if custom_hint:
+        # User provided a specific angle → medium-high creativity.
+        llm_temperature = 0.7
+    elif direction_key == "opener":
+        # Cold read → max creativity.
+        llm_temperature = 0.8
+    elif direction_key in ("change_topic", "tease"):
+        # Needs high creativity to pivot/joke.
+        llm_temperature = 0.75
+    elif direction_key == "revive_chat":
+        llm_temperature = 0.6
+    elif direction_key in ("get_number", "ask_out"):
+        # Goal-oriented → lower creativity, more precision.
+        llm_temperature = 0.5
+    else:
+        # quick_reply and anything else → strict context matching.
+        llm_temperature = 0.4
+
+    # Dynamic token routing: base 1500 tokens + 500 per image.
+    max_tokens = 1500 + 500 * len(images)
+
+    raw = ""
+    parsed = None
+
+    for attempt in range(1, 3):
+        try:
+            raw = await client.vision_generate(
+                system_prompt=payload.system_prompt,
+                user_prompt=payload.user_prompt,
+                base64_images=images,
+                temperature=llm_temperature,
+                model=settings.gemini_model,
+                max_output_tokens=int(max_tokens),
+                response_schema=GEMINI_RESPONSE_SCHEMA,
+            )
+            parsed = parse_llm_response(raw)
+            logger.info(
+                "replies_generated",
+                attempt=attempt,
+                replies_count=len(parsed.replies),
+                reply_lengths=[len(r) for r in parsed.replies],
+                reply_previews=[r[:50] for r in parsed.replies],
+            )
+            break
+        except json.JSONDecodeError as e:
+            # Handle Gemini sometimes truncating JSON strings.
+            if attempt == 1 and "Unterminated string" in str(e):
+                logger.warning(
+                    "llm_json_unterminated_retry",
+                    attempt=attempt,
+                    error=str(e),
+                    old_max_tokens=max_tokens,
+                )
+                max_tokens *= 1.5
+                continue
+            logger.error(
+                "llm_json_decode_error",
+                attempt=attempt,
+                error=str(e),
+                raw_preview=raw[:200],
+            )
+            raise HTTPException(
+                status_code=502, detail="Failed to parse AI JSON response. Try again."
+            )
+        except ValueError as e:
+            # parse_llm_response or client-level validation error
+            logger.error(
+                "llm_value_error",
+                attempt=attempt,
+                error=str(e),
+                raw_preview=raw[:200],
+            )
+            raise HTTPException(
+                status_code=502, detail="Failed to generate replies. Try again."
+            )
+        except Exception as e:
+            logger.error(
+                "llm_call_failed",
+                attempt=attempt,
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=502, detail="Failed to generate replies. Try again."
+            )
+
+    if parsed is None:
+        logger.error("llm_no_successful_attempts")
         raise HTTPException(
             status_code=502, detail="Failed to generate replies. Try again."
         )
 
     latency_ms = int((time.monotonic() - start) * 1000)
 
-    # 11. Parse response
-    try:
-        parsed = parse_llm_response(raw)
-        logger.info(
-            "replies_generated",
-            replies_count=len(parsed.replies),
-            reply_lengths=[len(r) for r in parsed.replies],
-            reply_previews=[r[:50] for r in parsed.replies],
-        )
-    except ValueError as e:
-        logger.error("parse_failed", error=str(e), raw=raw[:200])
-        raise HTTPException(
-            status_code=502, detail="Failed to parse AI response. Try again."
-        )
-
-    # 12. Find or create conversation from detected person
+    # 11. Find or create conversation from detected person
     convo = await find_or_create_conversation(
         user_id=user.id,
         person_name=parsed.analysis.person_name,

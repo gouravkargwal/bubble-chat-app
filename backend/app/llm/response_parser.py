@@ -1,9 +1,9 @@
 """Parse structured LLM output into domain objects.
 
-Three-tier fallback:
-1. Direct JSON parse
-2. Extract JSON from markdown code fences
-3. Regex-based delimiter extraction (---/=== format)
+This module assumes Gemini's native Structured JSON Outputs are enabled.
+We expect the raw model output to be a single valid JSON object that
+matches our response schema, and we do not perform markdown or regex
+fallback extraction.
 """
 
 import json

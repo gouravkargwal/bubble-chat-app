@@ -53,9 +53,9 @@ async def update_conversation_from_analysis(
     db: AsyncSession,
 ) -> None:
     """Update conversation context after an interaction."""
-    # Update stage
+    # Update stage (clamp to DB column limit String(30))
     if analysis.stage and analysis.stage != "unknown":
-        conversation.stage = analysis.stage
+        conversation.stage = analysis.stage[:30]
 
     # Update person name if better detected
     if analysis.person_name and analysis.person_name != "unknown":
