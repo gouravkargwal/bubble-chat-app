@@ -106,18 +106,21 @@ class GeminiClient(LlmClient):
                 if not parts:
                     raise ValueError("No parts in Gemini response")
 
-                # Gemini 2.5 Flash is a thinking model — skip thought parts
-                text = ""
+                # Gemini 2.5 Flash is a thinking model — skip thought parts and concatenate ALL text parts
+                text_chunks = []
                 for part in parts:
                     if part.get("thought"):
                         continue
-                    text = part.get("text", "")
-                    if text:
-                        break
+                    chunk = part.get("text", "")
+                    if chunk:
+                        text_chunks.append(chunk)
 
-                if not text:
+                text = "".join(text_chunks)
+
+                if not text and parts:
                     # Fallback: use last part's text if all were thought parts
                     text = parts[-1].get("text", "")
+
                 if not text:
                     raise ValueError("Empty text in Gemini response")
 

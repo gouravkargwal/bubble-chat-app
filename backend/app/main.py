@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import structlog
+from pyinstrument import Profiler
 
 from app.config import settings
 from app.infrastructure.database.engine import init_db
@@ -80,6 +81,26 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Profiling middleware (limited to the vision generate endpoint)
+    @app.middleware("http")
+    async def profile_request(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+        # Only profile the vision generate endpoint
+        if "vision/generate" not in request.url.path:
+            return await call_next(request)
+
+        profiler = Profiler(interval=0.001, async_mode="enabled")
+        profiler.start()
+        try:
+            response: Response = await call_next(request)
+        finally:
+            profiler.stop()
+            # Write HTML report to project root (WORKDIR is /app in Docker)
+            html_output = profiler.output_html()
+            with open("profile_results.html", "w", encoding="utf-8") as f:
+                f.write(html_output)
+
+        return response
+
     # Correlation ID middleware
     @app.middleware("http")
     async def add_correlation_id(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
@@ -90,7 +111,9 @@ def create_app() -> FastAPI:
 
     # Global exception handler — must NOT intercept HTTPException
     @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def global_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         # Let FastAPI handle its own HTTP exceptions (401, 403, 429, etc.)
         if isinstance(exc, HTTPException):
             raise exc
@@ -135,7 +158,11 @@ def create_app() -> FastAPI:
         except Exception:
             return JSONResponse(
                 status_code=503,
-                content={"status": "unhealthy", "version": "2.0.0", "db": "unreachable"},
+                content={
+                    "status": "unhealthy",
+                    "version": "2.0.0",
+                    "db": "unreachable",
+                },
             )
         return {"status": "healthy", "version": "2.0.0", "db": "connected"}
 

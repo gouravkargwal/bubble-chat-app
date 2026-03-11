@@ -38,18 +38,28 @@ def _parse_json(text: str) -> ParsedLlmResponse:
         )
         raise
 
-    # Optional: spatial audit (for debugging / analysis of left vs right facts)
-    spatial_audit = data.get("spatial_audit")
-    if isinstance(spatial_audit, dict):
-        logger.debug(
-            "parse_spatial_audit",
-            right_side_user_facts=str(spatial_audit.get("right_side_user_facts", ""))[
-                :300
-            ],
-            left_side_them_facts=str(spatial_audit.get("left_side_them_facts", ""))[
-                :300
-            ],
-        )
+    # Parse visual transcript (forces the AI to map spatial layout)
+    transcript_data = data.get("visual_transcript", [])
+    visual_transcript = []
+    for item in transcript_data:
+        if (
+            isinstance(item, dict)
+            and "side" in item
+            and "sender" in item
+            and "message_text" in item
+        ):
+            from app.domain.models import VisualTranscriptItem
+
+            visual_transcript.append(
+                VisualTranscriptItem(
+                    side=str(item.get("side")),
+                    sender=str(item.get("sender")),
+                    message_text=str(item.get("message_text")),
+                )
+            )
+
+    if visual_transcript:
+        logger.debug("parse_visual_transcript", items=len(visual_transcript))
 
     # Handle error response
     if "error" in data:
@@ -132,4 +142,9 @@ def _parse_json(text: str) -> ParsedLlmResponse:
         reply_lengths=[len(r) for r in cleaned],
     )
 
-    return ParsedLlmResponse(analysis=analysis, strategy=strategy, replies=cleaned)
+    return ParsedLlmResponse(
+        visual_transcript=visual_transcript,
+        analysis=analysis,
+        strategy=strategy,
+        replies=cleaned,
+    )

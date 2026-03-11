@@ -38,95 +38,84 @@ _client: GeminiClient | None = None
 GEMINI_RESPONSE_SCHEMA: dict = {
     "type": "OBJECT",
     "properties": {
-        "spatial_audit": {
-            "type": "OBJECT",
-            "properties": {
-                "right_side_user_facts": {
-                    "type": "STRING",
-                    "description": (
-                        "Bullet points only. Max 20 words total. "
-                        "Key on-screen facts about the user/right side only."
-                    ),
+        "visual_transcript": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "side": {
+                        "type": "STRING",
+                        "description": "Exactly 'left' or 'right'",
+                    },
+                    "sender": {
+                        "type": "STRING",
+                        "description": "'user' if right, 'them' if left",
+                    },
+                    "message_text": {
+                        "type": "STRING",
+                        "description": "Max 15 words of the bubble's text.",
+                    },
                 },
-                "left_side_them_facts": {
-                    "type": "STRING",
-                    "description": (
-                        "Bullet points only. Max 20 words total. "
-                        "Key on-screen facts about them/left side only."
-                    ),
-                },
+                "required": ["side", "sender", "message_text"],
             },
+            "description": "Chronological transcript of the last 3-4 visible chat bubbles.",
         },
         "analysis": {
             "type": "OBJECT",
             "properties": {
                 "detected_language_and_vibe": {
                     "type": "STRING",
-                    "description": (
-                        "Under 2 short sentences. Detect chat language and high-level vibe only."
-                    ),
+                    "description": "Max 5 words.",
                 },
                 "their_last_message": {
                     "type": "STRING",
-                    "description": (
-                        "Very short paraphrase of their last message. Max 25 words. No emojis."
-                    ),
+                    "description": "Max 8 words. Paraphrase.",
                 },
                 "who_texted_last": {
                     "type": "STRING",
-                    "description": (
-                        "Exactly one of: 'user', 'them', or 'unknown'. No extra words."
-                    ),
+                    "description": "Exactly 'user', 'them', or 'unclear'.",
                 },
                 "their_tone": {
                     "type": "STRING",
-                    "description": (
-                        "Single short phrase summarizing their tone, e.g. 'playful but cautious'. "
-                        "Max 8 words."
-                    ),
+                    "description": "Max 3 words.",
                 },
                 "their_effort": {
                     "type": "STRING",
-                    "description": (
-                        "Single short phrase for effort level, e.g. 'low effort, one-word replies'. "
-                        "Max 8 words."
-                    ),
+                    "description": "Max 3 words.",
                 },
                 "conversation_temperature": {
                     "type": "STRING",
-                    "description": (
-                        "Single short phrase (e.g. 'cold', 'warming up', 'very warm'). Max 5 words."
-                    ),
+                    "description": "Max 2 words.",
                 },
                 "stage": {
                     "type": "STRING",
-                    "description": (
-                        "Single short phrase for relationship stage, e.g. 'early texting', "
-                        "'planning first date'. Max 8 words."
-                    ),
+                    "description": "Max 3 words.",
                 },
                 "person_name": {
                     "type": "STRING",
-                    "description": (
-                        "Their first name only if clearly visible. Otherwise 'unknown'."
-                    ),
+                    "description": "First name or 'unknown'.",
                 },
                 "key_detail": {
                     "type": "STRING",
-                    "description": (
-                        "One critical contextual detail you must remember. "
-                        "Max 20 words. No lists."
-                    ),
+                    "description": "Max 8 words. Telegraphic.",
                 },
                 "what_they_want": {
                     "type": "STRING",
-                    "description": (
-                        "Best guess of what they want from the convo right now. "
-                        "Max 20 words. Single sentence."
-                    ),
+                    "description": "Max 8 words.",
                 },
             },
-            "required": ["detected_language_and_vibe"],
+            "required": [
+                "detected_language_and_vibe",
+                "their_last_message",
+                "who_texted_last",
+                "their_tone",
+                "their_effort",
+                "conversation_temperature",
+                "stage",
+                "person_name",
+                "key_detail",
+                "what_they_want",
+            ],
         },
         "strategy": {
             "type": "OBJECT",
@@ -142,7 +131,7 @@ GEMINI_RESPONSE_SCHEMA: dict = {
             "description": "Exactly 4 distinct string replies.",
         },
     },
-    "required": ["spatial_audit", "analysis", "strategy", "replies"],
+    "required": ["visual_transcript", "analysis", "strategy", "replies"],
 }
 
 
@@ -235,6 +224,7 @@ async def generate_replies(
     # 10. Dynamic temperature routing + call Gemini with retry on JSON truncation
     client = _get_client()
     start = time.monotonic()
+    t1 = t2 = t3 = start
 
     # Dynamic Temperature Routing:
     # Different directions and custom hints need different creativity levels.
@@ -257,11 +247,18 @@ async def generate_replies(
         # quick_reply and anything else → strict context matching.
         llm_temperature = 0.4
 
-    # Dynamic token routing: base 1500 tokens + 500 per image.
-    max_tokens = 1500 + 500 * len(images)
+    # Dynamic token routing: Give a massive ceiling for the model's 'thought' process
+    max_tokens = 8000 + (1000 * len(images))
 
     raw = ""
     parsed = None
+
+    # Phase 1: setup completed (everything before the first LLM call)
+    t1 = time.monotonic()
+    logger.info(
+        "vision_timing_phase_1_setup",
+        timing_phase_1_setup_ms=int((t1 - start) * 1000),
+    )
 
     for attempt in range(1, 3):
         try:
@@ -274,7 +271,22 @@ async def generate_replies(
                 max_output_tokens=int(max_tokens),
                 response_schema=GEMINI_RESPONSE_SCHEMA,
             )
+
+            # Phase 2: LLM call latency
+            t2 = time.monotonic()
+            logger.info(
+                "vision_timing_phase_2_llm",
+                timing_phase_2_llm_ms=int((t2 - t1) * 1000),
+            )
+
             parsed = parse_llm_response(raw)
+
+            # Phase 3: parsing latency
+            t3 = time.monotonic()
+            logger.info(
+                "vision_timing_phase_3_parse",
+                timing_phase_3_parse_ms=int((t3 - t2) * 1000),
+            )
             logger.info(
                 "replies_generated",
                 attempt=attempt,
@@ -439,6 +451,14 @@ async def generate_replies(
         remaining = effective_limit - daily_used - 1
     else:
         remaining = 9999
+
+    # Phase 4: DB writes and response construction latency
+    t4 = time.monotonic()
+    logger.info(
+        "vision_timing_phase_4_db_writes",
+        timing_phase_4_db_writes_ms=int((t4 - t3) * 1000),
+    )
+
     return VisionResponse(
         replies=parsed.replies[:4],
         person_name=(

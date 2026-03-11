@@ -218,6 +218,20 @@ Their voice > your defaults."""
                 f"\nYou're helping reply to: {conversation_context.person_name}"
             )
 
+        # Direction-specific final instructions to leverage recency bias
+        if direction == "change_topic":
+            parts.append(
+                "\n⚠️ IMPORTANT: The user wants to CHANGE THE TOPIC. Do not mention the old subject. Pivot to something completely new."
+            )
+        elif direction == "ask_out":
+            parts.append(
+                "\n⚠️ IMPORTANT: The goal is to ASK THEM OUT. Be specific and bold with a concrete plan (place and time)."
+            )
+        elif direction == "revive_chat":
+            parts.append(
+                "\n⚠️ IMPORTANT: This is a dead chat. Do not reference their last text directly. Focus on a high-energy fresh restart."
+            )
+
         return "\n".join(parts)
 
 

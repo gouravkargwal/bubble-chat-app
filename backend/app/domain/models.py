@@ -75,7 +75,15 @@ class StrategyResult:
 
 
 @dataclass
+class VisualTranscriptItem:
+    side: str
+    sender: str
+    message_text: str
+
+
+@dataclass
 class ParsedLlmResponse:
+    visual_transcript: list[VisualTranscriptItem]
     analysis: AnalysisResult
     strategy: StrategyResult
     replies: list[str]

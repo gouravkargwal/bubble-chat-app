@@ -38,21 +38,19 @@ CRITICAL RULE: Always bounce the ball back. End with a subtle hook—a statement
 DIRECTION: CHANGE TOPIC
 ══════════════════════════════════════
 
-Pivot to something new. The current conversation loop is dry or boring — escape it smoothly.
+CRITICAL OVERRIDE: You are explicitly granted permission to IGNORE the rule about hooking into their last message. The current topic is DEAD, boring, or they are giving low-effort replies (like "yup", "lol", "nice").
+EXEMPT FROM WORD COUNT: You are allowed to write more than her last message to successfully pivot.
 
-Use a BRIDGE from what they said to transition naturally:
-- "okay that reminds me..." + new topic
-- "wait speaking of [thing]..." + related new topic
-- "okay completely random but [interesting thing]" (owning the pivot)
-- Use something from their profile you haven't talked about yet
+Your job is to cleanly pivot the conversation. Do NOT mention the `KEY_DETAIL` from the current topic.
+Ignore the last message. Do NOT mention the previous topic. Pick something completely random like "thoughts on crocs" or "pineapple on pizza" to reset the vibe.
 
-Bad transitions:
-- "anyway" (lazy, signals you're bored)
-- "random question but" (overused)
-- "so..." (dead energy)
-- Completely ignoring what they said and asking something unrelated
+Use one of these 3 strategies for your 4 replies:
+1. The Playful Call-Out: Lightly tease them for being a dry texter (e.g., "careful, don't overwhelm me with all this enthusiasm").
+2. The Hard Pivot: Ask a polarizing, fun, or random question that requires a real answer (e.g., "crucial question. pineapple on pizza. we need to establish this now").
+3. The Random Observation: Share something random/funny that just happened to you to restart the engine.
 
-The new topic should be INTERESTING — something that reveals personality or creates playful debate. Goal: Get out of the boring zone without making it feel forced.""",
+You MUST still follow the STYLE RULE (all lowercase, no punctuation).
+""",
     "tease": """
 ══════════════════════════════════════
 DIRECTION: TEASE THEM
@@ -96,7 +94,11 @@ Make it feel like a casual, obvious next step.""",
 DIRECTION: ASK THEM OUT
 ══════════════════════════════════════
 
+CRITICAL OVERRIDE: You can ignore the rule about matching their last message length when asking them out.
+EXEMPT FROM WORD COUNT: You are allowed to be longer than her text so you can clearly propose a plan.
+
 Suggest meeting up. Be SPECIFIC — name an activity connected to the vibe.
+You are allowed to be longer than her text. Suggest a SPECIFIC place (like a cafe or ramen spot) and a time.
 
 Good: "theres this ramen spot near downtown that does insane spicy miso... you free this weekend"
 Good (If chat is cold/new): "i know we just matched but im craving coffee today, want to tag along?"
@@ -110,13 +112,19 @@ Rules:
 NEVER say:
 - "We should hang out sometime" (vague, never happens)
 - "Would you like to go on a date?" (too formal, too much pressure)
-- "I'd love to take you out" (AI language + old-fashioned)""",
+- "I'd love to take you out" (AI language + old-fashioned)
+
+You MUST still follow the STYLE RULE (all lowercase, no punctuation).""",
     "revive_chat": """
 ══════════════════════════════════════
 DIRECTION: REVIVE DEAD CHAT
 ══════════════════════════════════════
 
+CRITICAL OVERRIDE: You are allowed to ignore the previous topic and last message when reviving the chat.
+EXEMPT FROM WORD COUNT: You can use more words than her last message to restart the energy.
+
 Restart a conversation that's gone cold. Low-pressure, playful, no neediness.
+Treat this as a fresh start. Do not mention the old conversation. Use a random funny observation to get her attention.
 
 Techniques:
 - CALLBACK: Reference something specific from the old conversation.
@@ -131,7 +139,9 @@ NEVER say:
 - "Long time no speak!" (obvious and low effort)
 - "Sorry I've been MIA" (apologetic = needy energy)
 
-Keep it short. One punch. Make them want to reply.""",
+Keep it short. One punch. Make them want to reply.
+
+You MUST still follow the STYLE RULE (all lowercase, no punctuation).""",
 }
 
 
