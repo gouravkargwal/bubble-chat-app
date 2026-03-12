@@ -116,28 +116,79 @@ fun SettingsScreen(
 
                     // Plan info
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = Color(0xFFE91E63), modifier = Modifier.size(24.dp))
+                        Icon(
+                            Icons.Default.WorkspacePremium,
+                            contentDescription = null,
+                            tint = Color(0xFFE91E63),
+                            modifier = Modifier.size(24.dp)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
+
+                        val tier = state.tier
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                if (state.isPremium) "Premium" else "Free Plan",
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                if (state.isPremium) "Unlimited replies" else "${state.dailyLimit} replies/day",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
+                            when (tier) {
+                                "premium" -> {
+                                    Text(
+                                        "GOD MODE ACTIVE",
+                                        color = Color(0xFFFFD700),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "Deep Persona Sync & Semantic Profiling enabled.",
+                                        color = Color.Gray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                "pro" -> {
+                                    Text(
+                                        "Pro Wingman Active",
+                                        color = Color(0xFF7C4DFF),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "Unlimited AI Replies & Basic Voice DNA.",
+                                        color = Color.Gray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                else -> {
+                                    Text(
+                                        "Basic Wingman (Free)",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        "${state.dailyLimit} replies/day",
+                                        color = Color.Gray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
                         }
-                        if (!state.isPremium) {
-                            Button(
-                                onClick = onPremium,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            ) {
-                                Text("Upgrade", fontSize = 12.sp)
+
+                        when (tier) {
+                            "premium" -> {
+                                // No upgrade button when in God Mode
+                            }
+                            "pro" -> {
+                                Button(
+                                    onClick = onPremium,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Upgrade to God Mode", fontSize = 12.sp, color = Color.Black)
+                                }
+                            }
+                            else -> {
+                                Button(
+                                    onClick = onPremium,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Upgrade to Pro / God Mode", fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -173,22 +224,24 @@ fun SettingsScreen(
                             }) {
                                 Icon(Icons.Default.ContentCopy, "Copy", tint = Color(0xFFE91E63))
                             }
-                            IconButton(onClick = {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        "Use my code ${referral.referralCode} to get 5 bonus replies on Cookd! https://cookd.app"
-                                    )
+                            IconButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(
+                                            Intent.EXTRA_TEXT,
+                                            "Use my code ${referral.referralCode} to unlock 24 Hours of God Mode on Cookd! https://cookd.app"
+                                        )
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "Share Code"))
                                 }
-                                context.startActivity(Intent.createChooser(intent, "Share Code"))
-                            }) {
+                            ) {
                                 Icon(Icons.Default.Share, "Share", tint = Color(0xFFE91E63))
                             }
                         }
 
                         Text(
-                            "${referral.totalReferrals}/${referral.maxReferrals} friends invited  •  +${referral.bonusRepliesEarned} bonus replies",
+                            "${referral.totalReferrals}/${referral.maxReferrals} friends invited  •  ${referral.bonusRepliesEarned} God Mode unlocks earned",
                             color = Color.Gray,
                             fontSize = 12.sp
                         )

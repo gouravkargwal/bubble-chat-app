@@ -2,6 +2,7 @@ package com.rizzbot.v2.overlay.ui.components.panels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -60,10 +61,22 @@ fun DirectionPicker(
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = if (isLocked) 0.02f else 0.05f))
+                    .background(
+                        if (isLocked) Color(0xFFE91E63).copy(alpha = 0.05f)
+                        else Color.White.copy(alpha = 0.05f)
+                    )
                     .clickable {
                         if (isLocked) onUpgrade() else onDirectionSelected(DirectionWithHint(direction))
                     }
+                    .then(
+                        if (isLocked) Modifier
+                            .border(
+                                width = 1.dp,
+                                color = OverlayColors.AccentPink.copy(alpha = 0.9f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        else Modifier
+                    )
                     .padding(vertical = 10.dp, horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -78,7 +91,12 @@ fun DirectionPicker(
                     Spacer(modifier = Modifier.weight(1f))
                     Text("\uD83D\uDD12", fontSize = 14.sp)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("PRO", color = OverlayColors.AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "UNLOCK",
+                        color = OverlayColors.AccentPink,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -94,6 +112,15 @@ fun DirectionPicker(
                     .clickable {
                         if (customHintsEnabled) showCustomInput = true else onUpgrade()
                     }
+                    .then(
+                        if (!customHintsEnabled) Modifier
+                            .border(
+                                width = 1.dp,
+                                color = OverlayColors.AccentPink.copy(alpha = 0.9f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        else Modifier
+                    )
                     .padding(vertical = 10.dp, horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -108,7 +135,12 @@ fun DirectionPicker(
                     Spacer(modifier = Modifier.weight(1f))
                     Text("\uD83D\uDD12", fontSize = 14.sp)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("PRO", color = OverlayColors.AccentPink, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "UNLOCK",
+                        color = OverlayColors.AccentPink,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         } else {

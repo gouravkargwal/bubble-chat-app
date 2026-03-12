@@ -178,5 +178,49 @@ class GeminiClient(LlmClient):
 
         raise last_error or RuntimeError("Gemini request failed after all retries")
 
+    async def generate_content(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str = "gemini-2.5-flash",
+        temperature: float = 0.3,
+        max_output_tokens: int = 1024,
+    ) -> str:
+        """Generic text-only content generation helper."""
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
+            f":generateContent?key={self.api_key}"
+        )
+
+        payload = {
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"parts": [{"text": user_prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_output_tokens,
+                "responseMimeType": "text/plain",
+            },
+        }
+
+        response = await self._client.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise ValueError("No candidates in Gemini text response")
+
+        content = candidates[0].get("content", {})
+        parts = content.get("parts", [])
+        if not parts:
+            raise ValueError("No parts in Gemini text response")
+
+        text_chunks = [p.get("text", "") for p in parts if p.get("text")]
+        text = "".join(text_chunks).strip()
+        if not text:
+            raise ValueError("Empty text in Gemini text response")
+
+        return text
+
     async def close(self) -> None:
         await self._client.aclose()

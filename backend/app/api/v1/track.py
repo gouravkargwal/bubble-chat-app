@@ -9,9 +9,14 @@ from app.api.v1.deps import get_current_user
 from app.api.v1.schemas.schemas import CopyTrackRequest, RatingTrackRequest
 from app.domain.conversation import update_conversation_from_analysis
 from app.domain.models import AnalysisResult
-from app.domain.voice_dna import update_from_copy
+from app.domain.voice_dna import update_voice_dna_stats
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import Conversation, Interaction, User, UserVoiceDNA
+from app.infrastructure.database.models import (
+    Conversation,
+    Interaction,
+    User,
+    UserVoiceDNA,
+)
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -44,7 +49,7 @@ async def track_copy(
     if not copied_text:
         return {"status": "ok"}
 
-    # Update Voice DNA
+    # Update Voice DNA (using copied reply as a proxy for their style, when no organic text yet)
     voice_result = await db.execute(
         select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
     )
@@ -53,7 +58,7 @@ async def track_copy(
         voice = UserVoiceDNA(user_id=user.id)
         db.add(voice)
 
-    update_from_copy(voice, copied_text)
+    update_voice_dna_stats(voice, copied_text)
     await db.commit()
 
     # Update conversation context (mark topic as "worked")
@@ -69,7 +74,9 @@ async def track_copy(
                 key_detail=interaction.key_detail or "",
                 conversation_temperature=interaction.conversation_temperature or "warm",
             )
-            await update_conversation_from_analysis(convo, analysis, request.reply_index, db)
+            await update_conversation_from_analysis(
+                convo, analysis, request.reply_index, db
+            )
 
     logger.info("copy_tracked", user_id=user.id, reply_index=request.reply_index)
     return {"status": "ok"}

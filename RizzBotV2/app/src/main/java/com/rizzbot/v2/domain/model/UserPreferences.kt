@@ -4,7 +4,11 @@ data class UserPreferences(
     val totalRatings: Int = 0,
     val vibeBreakdown: Map<String, Float> = emptyMap(),
     val preferredLength: PreferredLength = PreferredLength.MEDIUM,
-    val promptSummary: String? = null
+    val promptSummary: String? = null,
+    val emojiFrequency: Float = 0f,
+    val lowercaseUsage: Float = 0f,
+    val punctuationStyle: String = "Casual",
+    val topSlang: List<String> = emptyList()
 ) {
     enum class PreferredLength { SHORT, MEDIUM, LONG }
 

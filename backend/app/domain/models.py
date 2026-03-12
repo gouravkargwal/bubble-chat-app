@@ -111,6 +111,8 @@ class VoiceDNA:
     sample_count: int = 0
     top_vibes: list[str] = field(default_factory=list)
     disliked_vibes: list[str] = field(default_factory=list)
+    recent_organic_messages: list[str] = field(default_factory=list)
+    semantic_profile: str | None = None
 
 
 @dataclass

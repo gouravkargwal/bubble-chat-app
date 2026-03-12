@@ -45,6 +45,7 @@ async def get_history(
             replies=[r for r in [i.reply_0, i.reply_1, i.reply_2, i.reply_3] if r],
             copied_index=i.copied_index,
             created_at=int(i.created_at.timestamp()),
+            user_organic_text=i.user_organic_text,
         )
         for i in interactions
     ]

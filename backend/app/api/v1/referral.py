@@ -41,9 +41,7 @@ async def get_my_referral(
     if not user.referral_code:
         for _ in range(10):  # retry on collision
             code = generate_referral_code()
-            existing = await db.execute(
-                select(User).where(User.referral_code == code)
-            )
+            existing = await db.execute(select(User).where(User.referral_code == code))
             if existing.scalar_one_or_none() is None:
                 user.referral_code = code
                 try:
@@ -74,16 +72,20 @@ async def apply_referral(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApplyReferralResponse:
-    """Apply a referral code. Both referrer and referee get bonus replies."""
+    """Apply a referral code. Both referrer and referee get a 24-hour premium tier (God Mode)."""
     code = body.code.upper().strip()
 
     # 1. Can't use own code
     if user.referral_code and user.referral_code == code:
-        raise HTTPException(status_code=400, detail="You cannot use your own referral code.")
+        raise HTTPException(
+            status_code=400, detail="You cannot use your own referral code."
+        )
 
     # 2. Already been referred
     if user.referred_by:
-        raise HTTPException(status_code=400, detail="You have already used a referral code.")
+        raise HTTPException(
+            status_code=400, detail="You have already used a referral code."
+        )
 
     # 3. Find referrer with row-level lock to prevent race conditions
     result = await db.execute(
@@ -102,10 +104,20 @@ async def apply_referral(
             status_code=400, detail="This referral code has reached its maximum uses."
         )
 
-    # 5. Grant bonus to both
+    # 5. Grant 24 hours of premium ("God Mode") to both
+    from datetime import datetime, timedelta
+
     user.referred_by = referrer.id
-    user.bonus_replies += BONUS_PER_REFERRAL
-    referrer.bonus_replies += BONUS_PER_REFERRAL
+    now = datetime.utcnow()
+    expires_at = now + timedelta(hours=24)
+
+    user.tier = "premium"
+    user.tier_expires_at = expires_at
+    user.tier_source = "referral"
+
+    referrer.tier = "premium"
+    referrer.tier_expires_at = expires_at
+    referrer.tier_source = "referral"
 
     referral = Referral(
         referrer_id=referrer.id,
@@ -119,16 +131,20 @@ async def apply_referral(
         await db.refresh(user)
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="You have already used a referral code.")
+        raise HTTPException(
+            status_code=400, detail="You have already used a referral code."
+        )
 
     logger.info(
         "referral_applied",
         referee_id=user.id,
         referrer_id=referrer.id,
-        bonus=BONUS_PER_REFERRAL,
+        tier="premium",
+        duration_hours=24,
     )
 
     return ApplyReferralResponse(
-        bonus_granted=BONUS_PER_REFERRAL,
-        new_total_bonus=user.bonus_replies,
+        tier_granted="premium",
+        duration_hours=24,
+        expires_at=int(expires_at.timestamp()),
     )

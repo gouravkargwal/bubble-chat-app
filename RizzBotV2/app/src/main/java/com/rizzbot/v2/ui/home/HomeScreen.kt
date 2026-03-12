@@ -4,8 +4,10 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -144,7 +146,8 @@ fun HomeScreen(
             if (profile != null && profile.hasEnoughData) {
                 RizzProfileCard(
                     preferences = profile,
-                    onSeeFullStats = onNavigateToStats
+                    onSeeFullStats = onNavigateToStats,
+                    isGodMode = state.usage.tier == "god_mode"
                 )
             }
 
@@ -393,7 +396,11 @@ private fun ReplyItem(entry: com.rizzbot.v2.data.remote.dto.HistoryItemResponse)
 }
 
 @Composable
-private fun RizzProfileCard(preferences: UserPreferences, onSeeFullStats: () -> Unit) {
+private fun RizzProfileCard(
+    preferences: UserPreferences,
+    onSeeFullStats: () -> Unit,
+    isGodMode: Boolean
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = CardBg),
         shape = RoundedCornerShape(16.dp)
@@ -404,18 +411,150 @@ private fun RizzProfileCard(preferences: UserPreferences, onSeeFullStats: () -> 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Your Rizz Profile", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    "Your Digital Twin Status",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
                 TextButton(onClick = onSeeFullStats) {
                     Text("Full stats", color = Pink, fontSize = 13.sp)
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            preferences.vibeBreakdown.forEach { (vibe, percentage) ->
-                VibeBar(label = vibe, progress = percentage)
+            // Voice DNA metrics
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricBar(
+                    label = "Emoji Frequency",
+                    value = preferences.emojiFrequency.coerceIn(0f, 1f)
+                )
+                MetricBar(
+                    label = "Lowercase Usage",
+                    value = preferences.lowercaseUsage.coerceIn(0f, 1f)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Punctuation Style", color = Color.White, fontSize = 13.sp)
+                    Text(
+                        preferences.punctuationStyle,
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Top slang chips
+            if (preferences.topSlang.isNotEmpty()) {
+                Text(
+                    "Top Slang",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
                 Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    preferences.topSlang.forEach { slang ->
+                        Surface(
+                            color = Color.White.copy(alpha = 0.06f),
+                            shape = RoundedCornerShape(999.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                        ) {
+                            Text(
+                                text = slang,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Premium / God Mode messaging
+            if (!isGodMode) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "Deep Persona Sync: 🔒",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "Upgrade to God Mode to see your exact psychological texting profile.",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.25f)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "Semantic Profile",
+                            color = Color(0xFFA5D6A7),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "You have a dry, deadpan humor style and prefer short, witty comebacks.",
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun MetricBar(label: String, value: Float) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, color = Color.White, fontSize = 13.sp)
+            Text("${(value * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { value },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = Pink,
+            trackColor = DividerColor
+        )
     }
 }
 

@@ -1,5 +1,7 @@
 package com.rizzbot.v2.ui.history
 
+import android.content.Intent
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,11 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +37,7 @@ fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val history by viewModel.history.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -104,7 +109,18 @@ fun HistoryScreen(
                     ) {
                         HistoryCard(
                             entry = entry,
-                            onCopyReply = { viewModel.copyReply(it) }
+                            onCopyReply = { reply, isHighValue ->
+                                viewModel.copyReply(reply)
+                                if (isHighValue) {
+                                    // Track high-value copy and maybe launch in-app review.
+                                    viewModel.incrementHighValueCopyCount { count ->
+                                        if (count == 2) {
+                                            // TODO: Ensure implementation("com.google.android.play:review:2.0.1") is added in app/build.gradle.kts
+                                            launchInAppReview(context)
+                                        }
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -116,8 +132,9 @@ fun HistoryScreen(
 @Composable
 private fun HistoryCard(
     entry: HistoryItemResponse,
-    onCopyReply: (String) -> Unit
+    onCopyReply: (String, Boolean) -> Unit
 ) {
+    val context = LocalContext.current
     val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
     val vibeLabels = listOf("\uD83D\uDD25 Flirty", "\uD83D\uDE0F Witty", "\u2728 Smooth", "\uD83D\uDCAA Bold")
     var expanded by remember { mutableStateOf(false) }
@@ -149,6 +166,29 @@ private fun HistoryCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            if (!entry.userOrganicText.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Surface(
+                        color = Color(0xFF252542),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "You: ${entry.userOrganicText}",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
             val replies = entry.replies
             val displayReplies = if (expanded) replies else replies.take(1)
 
@@ -173,11 +213,38 @@ private fun HistoryCard(
                             maxLines = if (expanded) Int.MAX_VALUE else 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        IconButton(
-                            onClick = { onCopyReply(reply) },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(Icons.Default.ContentCopy, "Copy", tint = Color.Gray, modifier = Modifier.size(14.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val isHighValue = entry.direction in listOf("Opener", "Ask Out", "Tease")
+                            IconButton(
+                                onClick = { onCopyReply(reply, isHighValue) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    "Copy",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    val shareText = "$reply\n\n— Generated by Cookd App \uD83D\uDD25"
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    }
+                                    val shareIntent = Intent.createChooser(sendIntent, null)
+                                    context.startActivity(shareIntent)
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    "Share",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
                 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.domain.repository.HostedRepository
+import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.ClipboardHelper
 import com.rizzbot.v2.util.HapticHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,7 +18,8 @@ import javax.inject.Inject
 class HistoryViewModel @Inject constructor(
     private val hostedRepository: HostedRepository,
     private val clipboardHelper: ClipboardHelper,
-    private val hapticHelper: HapticHelper
+    private val hapticHelper: HapticHelper,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _history = MutableStateFlow<List<HistoryItemResponse>>(emptyList())
@@ -36,6 +38,13 @@ class HistoryViewModel @Inject constructor(
     fun copyReply(text: String) {
         clipboardHelper.copyToClipboard(text)
         hapticHelper.lightTap()
+    }
+
+    fun incrementHighValueCopyCount(onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val value = settingsRepository.incrementHighValueCopyCount()
+            onResult(value)
+        }
     }
 
     fun deleteEntry(id: String) {

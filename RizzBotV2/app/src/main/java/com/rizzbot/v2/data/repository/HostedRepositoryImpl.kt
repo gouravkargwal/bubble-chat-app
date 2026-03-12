@@ -5,6 +5,7 @@ import android.content.Intent
 import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
+import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.data.remote.dto.TrackCopyRequest
 import com.rizzbot.v2.data.remote.dto.TrackRatingRequest
@@ -158,11 +159,11 @@ class HostedRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun applyReferralCode(code: String): Result<Int> {
+    override suspend fun applyReferralCode(code: String): Result<ApplyReferralResponse> {
         return try {
             val response = hostedApi.applyReferral(ApplyReferralRequest(code))
             refreshUsage()
-            Result.success(response.bonusGranted)
+            Result.success(response)
         } catch (e: HttpException) {
             val msg = when (e.code()) {
                 400 -> e.response()?.errorBody()?.string()?.let {

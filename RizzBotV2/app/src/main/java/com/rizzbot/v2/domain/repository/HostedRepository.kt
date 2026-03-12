@@ -1,6 +1,7 @@
 package com.rizzbot.v2.domain.repository
 
 import com.rizzbot.v2.data.remote.dto.ApplyPromoResponse
+import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
 import com.rizzbot.v2.domain.model.DirectionWithHint
@@ -26,7 +27,7 @@ interface HostedRepository {
 
     // Referral
     suspend fun getReferralInfo(): ReferralInfo?
-    suspend fun applyReferralCode(code: String): Result<Int>
+    suspend fun applyReferralCode(code: String): Result<ApplyReferralResponse>
 
     // Promo
     suspend fun applyPromoCode(code: String): Result<ApplyPromoResponse>

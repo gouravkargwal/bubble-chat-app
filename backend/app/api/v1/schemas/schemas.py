@@ -46,6 +46,15 @@ class VisionResponse(BaseModel):
     conversation_id: str
 
 
+class CalibrationRequest(BaseModel):
+    images: list[str] = Field(..., description="Base64 screenshots for calibration")
+
+
+class CalibrationResponse(BaseModel):
+    messages_extracted: int
+    success: bool
+
+
 # Tracking
 class CopyTrackRequest(BaseModel):
     interaction_id: str
@@ -99,8 +108,9 @@ class ApplyReferralRequest(BaseModel):
 
 
 class ApplyReferralResponse(BaseModel):
-    bonus_granted: int
-    new_total_bonus: int
+    tier_granted: str
+    duration_hours: int
+    expires_at: int  # unix timestamp
 
 
 # Billing
@@ -143,6 +153,7 @@ class HistoryItemResponse(BaseModel):
     replies: list[str]
     copied_index: int | None = None
     created_at: int  # unix timestamp
+    user_organic_text: str | None = None
 
 
 class HistoryListResponse(BaseModel):

@@ -93,6 +93,7 @@ class Interaction(Base):
     detected_stage: Mapped[str | None] = mapped_column(String(255), nullable=True)
     person_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     key_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_organic_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Generated replies
     reply_0: Mapped[str] = mapped_column(Text)
     reply_1: Mapped[str] = mapped_column(Text)
@@ -133,6 +134,10 @@ class UserVoiceDNA(Base):
     no_period_count: Mapped[int] = mapped_column(Integer, default=0)
     ellipsis_count: Mapped[int] = mapped_column(Integer, default=0)
     word_frequency: Mapped[str] = mapped_column(Text, default="{}")  # JSON dict
+    recent_organic_messages: Mapped[str] = mapped_column(
+        Text, default="[]"
+    )  # JSON array
+    semantic_profile: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 

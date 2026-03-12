@@ -155,10 +155,10 @@ private fun ProfileSetupView(
             Column {
                 Text(
                     if (state.freeAnalysesRemaining > 0) "${state.freeAnalysesRemaining} free analysis this month"
-                    else "Free analysis used this month",
+                    else "Profile Roaster Locked",
                     color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                 )
-                Text("Premium: unlimited analyses", color = Color.Gray, fontSize = 11.sp)
+                Text("God Mode: Unlimited AI Psychological Analysis", color = Color.Gray, fontSize = 11.sp)
             }
         }
     }
@@ -251,15 +251,21 @@ private fun ProfileSetupView(
     Spacer(modifier = Modifier.height(24.dp))
 
     // Analyze button
+    val isLocked = state.freeAnalysesRemaining <= 0
     Button(
         onClick = onAnalyze,
         enabled = state.selectedImages.isNotEmpty() && !state.isAnalyzing && state.freeAnalysesRemaining > 0,
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+        colors = if (!isLocked) {
+            ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))
+        } else {
+            ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
     ) {
         Text(
-            if (state.freeAnalysesRemaining > 0) "Analyze My Profile" else "Upgrade to Premium",
+            if (!isLocked) "Analyze My Profile" else "Unlock God Mode ($29.99/mo)",
+            color = if (!isLocked) Color.White else Color.Black,
             modifier = Modifier.padding(8.dp),
             fontWeight = FontWeight.Bold
         )

@@ -29,9 +29,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -149,24 +152,19 @@ private data class FeatureSlide(
 
 private val featureSlides = listOf(
     FeatureSlide(
-        emoji = "\uD83D\uDD25",
-        title = "AI-Powered Replies",
-        description = "Get witty, personalized reply suggestions for any dating app conversation in seconds."
+        emoji = "\uD83E\uDDD1\u200D\uD83D\uDCBB",
+        title = "Never Sound Like a Bot",
+        description = "Unlike other apps, Cookd learns your exact texting style, slang, and humor."
     ),
     FeatureSlide(
         emoji = "\uD83D\uDCAC",
         title = "Works Everywhere",
-        description = "Tinder, Bumble, Hinge, WhatsApp, Instagram — one floating bubble works across all apps."
+        description = "Tinder, Bumble, Hinge, iMessage — one floating bubble for all your apps."
     ),
     FeatureSlide(
         emoji = "\uD83C\uDFAF",
-        title = "6 Reply Directions",
-        description = "Quick reply, keep playful, go deeper, get their number, ask out, or change topic."
-    ),
-    FeatureSlide(
-        emoji = "\uD83E\uDDE0",
-        title = "Learns Your Style",
-        description = "The more you use it, the better it matches your texting voice and personality."
+        title = "God Mode Unlock",
+        description = "Upload your chat and let our AI write the perfect flirty, witty, or teasing reply."
     ),
 )
 
@@ -355,14 +353,15 @@ private data class PlanFeature(
 
 private val planFeatures = listOf(
     PlanFeature("5 replies/day", includedInFree = true, includedInPro = false),
-    PlanFeature("Unlimited replies", includedInFree = false, includedInPro = true),
+    PlanFeature("Unlimited AI Replies", includedInFree = false, includedInPro = true),
     PlanFeature("2 directions (Quick, Playful)", includedInFree = true, includedInPro = false),
     PlanFeature("All 6 directions", includedInFree = false, includedInPro = true),
     PlanFeature("1 screenshot per request", includedInFree = true, includedInPro = false),
     PlanFeature("Up to 5 screenshots", includedInFree = false, includedInPro = true),
     PlanFeature("Custom hints", includedInFree = false, includedInPro = true),
-    PlanFeature("Voice DNA — learns your style", includedInFree = false, includedInPro = true),
+    PlanFeature("Deep Persona Sync (Sounds exactly like you)", includedInFree = false, includedInPro = true),
     PlanFeature("Conversation memory", includedInFree = false, includedInPro = true),
+    PlanFeature("Profile Roaster (Upload her pics)", includedInFree = false, includedInPro = true),
 )
 
 @Composable
@@ -425,13 +424,13 @@ private fun TrialShowcaseStep(
                         textAlign = TextAlign.Center
                     )
                     Surface(
-                        color = ProPurple.copy(alpha = 0.2f),
+                        color = Gold.copy(alpha = 0.2f),
                         shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.width(48.dp)
                     ) {
                         Text(
-                            "Pro",
-                            color = ProPurple,
+                            "God Mode",
+                            color = Gold,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -553,7 +552,18 @@ private fun ReferralStep(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Enter a friend's code to get 5 bonus replies for both of you.",
+            buildAnnotatedString {
+                append("Enter a friend's code to unlock ")
+                withStyle(
+                    style = SpanStyle(
+                        color = Gold,
+                        fontWeight = FontWeight.Bold
+                    )
+                ) {
+                    append("24 Hours of God Mode")
+                }
+                append(" for both of you.")
+            },
             color = SubtleText,
             textAlign = TextAlign.Center,
             fontSize = 14.sp,

@@ -135,7 +135,14 @@ class PromptEngine:
             else "none detected yet"
         )
 
-        base_dna = f"""
+        base_dna = ""
+        if voice.semantic_profile:
+            base_dna += (
+                "\n\n🧠 PSYCHOLOGICAL STYLE GUIDE (CRITICAL):\n"
+                f"{voice.semantic_profile}\n"
+            )
+
+        base_dna += f"""
 ══════════════════════════════════════
 USER'S TEXTING STYLE (Voice DNA — match this closely)
 ══════════════════════════════════════
@@ -168,6 +175,11 @@ Their voice > your defaults."""
 
         if vibe_parts:
             base_dna += "".join(vibe_parts)
+
+        if voice.recent_organic_messages:
+            base_dna += "\n\n⭐ EXACT EXAMPLES OF HOW THEY TEXT (Mimic this cadence, slang, and capitalization perfectly):\n"
+            for i, msg in enumerate(voice.recent_organic_messages, 1):
+                base_dna += f'{i}. "{msg}"\n'
 
         return base_dna
 

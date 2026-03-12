@@ -41,28 +41,28 @@ _SLANG_WORDS = {
 }
 
 
-def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
-    """Update Voice DNA running averages from a newly copied reply."""
+def update_voice_dna_stats(current: UserVoiceDNA, organic_text: str) -> UserVoiceDNA:
+    """Update Voice DNA running averages from a newly observed organic reply."""
     # Older rows might have NULLs; treat them as zeros for running averages.
     n = current.sample_count or 0
     new_n = n + 1
 
     # Running average: reply length (characters)
     base_avg = current.avg_reply_length or 0.0
-    current.avg_reply_length = (base_avg * n + len(copied_text)) / new_n
+    current.avg_reply_length = (base_avg * n + len(organic_text)) / new_n
 
     # Emoji count
     emoji_count = len(
         re.findall(
             r"[\U0001f600-\U0001f9ff\U0001fa00-\U0001faff\u2600-\u26ff\u2700-\u27bf]",
-            copied_text,
+            organic_text,
         )
     )
     current.emoji_count = (current.emoji_count or 0) + emoji_count
     current.emoji_frequency = current.emoji_count / new_n
 
     # Capitalization
-    is_lowercase = copied_text == copied_text.lower()
+    is_lowercase = organic_text == organic_text.lower()
     current.lowercase_count = (current.lowercase_count or 0) + (
         1 if is_lowercase else 0
     )
@@ -71,8 +71,8 @@ def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
     )
 
     # Punctuation
-    has_ellipsis = "..." in copied_text
-    has_no_period = not copied_text.rstrip().endswith(".")
+    has_ellipsis = "..." in organic_text
+    has_no_period = not organic_text.rstrip().endswith(".")
     current.ellipsis_count = (current.ellipsis_count or 0) + (1 if has_ellipsis else 0)
     current.no_period_count = (current.no_period_count or 0) + (
         1 if has_no_period else 0
@@ -95,7 +95,7 @@ def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
         except (json.JSONDecodeError, TypeError):
             # Fallback to empty dict if corrupted
             pass
-    words = copied_text.lower().split()
+    words = organic_text.lower().split()
     for word in words:
         clean = word.strip(".,!?\"'()[]")
         if clean in _SLANG_WORDS:
@@ -117,6 +117,20 @@ def update_from_copy(current: UserVoiceDNA, copied_text: str) -> UserVoiceDNA:
         current.preferred_length = "medium"
 
     current.sample_count = new_n
+
+    # Maintain rolling window of recent organic messages (last 5)
+    try:
+        recent_msgs = (
+            json.loads(current.recent_organic_messages)
+            if current.recent_organic_messages
+            else []
+        )
+    except (json.JSONDecodeError, TypeError):
+        recent_msgs = []
+
+    recent_msgs.append(organic_text)
+    recent_msgs = recent_msgs[-5:]
+    current.recent_organic_messages = json.dumps(recent_msgs)
 
     return current
 
@@ -181,4 +195,10 @@ async def to_domain(db_model: UserVoiceDNA, db: AsyncSession) -> VoiceDNA:
         sample_count=db_model.sample_count,
         top_vibes=top_vibe_names,
         disliked_vibes=disliked_vibes,
+        recent_organic_messages=(
+            json.loads(db_model.recent_organic_messages)
+            if getattr(db_model, "recent_organic_messages", None)
+            else []
+        ),
+        semantic_profile=getattr(db_model, "semantic_profile", None),
     )

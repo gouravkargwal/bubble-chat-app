@@ -15,6 +15,7 @@ import javax.inject.Inject
 
 data class SettingsState(
     val isPremium: Boolean = false,
+    val tier: String = "free",
     val dailyLimit: Int = 5,
     val userName: String? = null,
     val userEmail: String? = null,
@@ -51,6 +52,7 @@ class SettingsViewModel @Inject constructor(
                 _state.update {
                     it.copy(
                         isPremium = usage.isPremium,
+                        tier = usage.tier,
                         dailyLimit = usage.dailyLimit
                     )
                 }
@@ -75,12 +77,12 @@ class SettingsViewModel @Inject constructor(
             _state.update { it.copy(isApplyingReferral = true, referralApplyResult = null) }
             val result = hostedRepository.applyReferralCode(code)
             result.fold(
-                onSuccess = { bonus ->
+                onSuccess = { response ->
                     val info = hostedRepository.getReferralInfo()
                     _state.update {
                         it.copy(
                             isApplyingReferral = false,
-                            referralApplyResult = "+$bonus bonus replies unlocked!",
+                            referralApplyResult = "+${response.durationHours} hours of God Mode unlocked!",
                             referralCodeInput = "",
                             referral = info
                         )

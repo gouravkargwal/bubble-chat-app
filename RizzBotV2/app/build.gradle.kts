@@ -120,9 +120,10 @@ dependencies {
     // Splash Screen
     implementation(libs.splash.screen)
 
-    // In-App Update
+    // In-App Update & Review
     implementation(libs.play.app.update)
     implementation(libs.play.app.update.ktx)
+    implementation("com.google.android.play:review:2.0.1")
 
     // Firebase
     implementation(platform(libs.firebase.bom))

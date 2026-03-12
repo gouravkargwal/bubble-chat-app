@@ -103,8 +103,9 @@ data class ApplyReferralRequest(
 
 @Serializable
 data class ApplyReferralResponse(
-    @SerialName("bonus_granted") val bonusGranted: Int,
-    @SerialName("new_total_bonus") val newTotalBonus: Int
+    @SerialName("tier_granted") val tierGranted: String,
+    @SerialName("duration_hours") val durationHours: Int,
+    @SerialName("expires_at") val expiresAt: Long
 )
 
 // ── Billing ──
@@ -155,7 +156,8 @@ data class HistoryItemResponse(
     @SerialName("custom_hint") val customHint: String? = null,
     val replies: List<String>,
     @SerialName("copied_index") val copiedIndex: Int? = null,
-    @SerialName("created_at") val createdAt: Long
+    @SerialName("created_at") val createdAt: Long,
+    @SerialName("user_organic_text") val userOrganicText: String? = null
 )
 
 @Serializable

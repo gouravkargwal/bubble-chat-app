@@ -1,10 +1,20 @@
 package com.rizzbot.v2.ui.premium
 
 import android.app.Activity
+import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -84,35 +94,17 @@ fun PremiumScreen(
                     textAlign = TextAlign.Center
                 )
             } else if (state.purchaseResult is PurchaseResult.Success) {
-                Spacer(modifier = Modifier.height(48.dp))
-                Text("\uD83C\uDF89", fontSize = 64.sp)
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    "Welcome to Premium!",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "Your subscription is now active. Enjoy unlimited replies!",
-                    color = Color.Gray,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(
-                    onClick = {
+                VoiceDNACalibrationModal(
+                    onDismiss = {
                         viewModel.clearResult()
                         onBack()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Start Using Cookd", fontWeight = FontWeight.Bold)
-                }
+                    onImagesSelected = { uris: List<Uri> ->
+                        // TODO: send URIs to backend vision/generate endpoint with dummy direction
+                        viewModel.clearResult()
+                        onBack()
+                    }
+                )
             } else {
                 // Header
                 Spacer(modifier = Modifier.height(16.dp))
@@ -123,7 +115,13 @@ fun PremiumScreen(
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                VisualHook()
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
                     "Never run out of replies again",
                     color = Color.Gray,
@@ -141,26 +139,22 @@ fun PremiumScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Premium tier
-                val premiumProduct = if (state.isWeekly) state.premiumWeekly else state.premiumMonthly
+                // Pro tier
+                val proProductDetails = if (state.isWeekly) state.premiumWeekly else state.premiumMonthly
                 PricingCard(
-                    title = "Premium",
-                    productDetails = premiumProduct,
-                    fallbackPrice = if (state.isWeekly) "$1.99" else "$4.99",
+                    title = "Pro",
+                    productDetails = proProductDetails,
+                    fallbackPrice = if (state.isWeekly) "$4.99" else "$14.99",
                     period = if (state.isWeekly) "wk" else "mo",
-                    isRecommended = true,
-                    savings = if (!state.isWeekly) "Save 40% vs weekly" else null,
                     features = listOf(
-                        "50 replies/day (vs 5 free)",
-                        "All 6 reply directions",
-                        "Custom hints for replies",
-                        "Up to 3 screenshots per request",
-                        "Conversation memory (10 people)",
-                        "Better AI prompt quality"
+                        "Unlimited Replies",
+                        "Unlock all 6 directions",
+                        "Basic Voice DNA (Learns your texting style)",
+                        "Unlimited memory"
                     ),
                     isPurchasing = state.isPurchasing,
                     onPurchase = {
-                        premiumProduct?.let { product ->
+                        proProductDetails?.let { product ->
                             activity?.let { viewModel.purchase(it, product) }
                         }
                     }
@@ -168,29 +162,26 @@ fun PremiumScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Pro tier
-                val proProduct = if (state.isWeekly) state.proWeekly else state.proMonthly
+                // God Mode tier
+                val godModeProductDetails = if (state.isWeekly) state.proWeekly else state.proMonthly
                 PricingCard(
-                    title = "Pro",
-                    productDetails = proProduct,
-                    fallbackPrice = if (state.isWeekly) "$2.99" else "$9.99",
+                    title = "God Mode",
+                    productDetails = godModeProductDetails,
+                    fallbackPrice = if (state.isWeekly) "$8.99" else "$29.99",
                     period = if (state.isWeekly) "wk" else "mo",
-                    isRecommended = false,
-                    savings = if (!state.isWeekly) "Save 25% vs weekly" else null,
                     features = listOf(
-                        "Everything in Premium",
-                        "Unlimited replies",
-                        "Up to 5 screenshots per request",
-                        "Voice DNA \u2014 AI learns your style",
-                        "Unlimited conversation memory",
-                        "Longest, highest-quality replies"
+                        "Everything in Pro",
+                        "Deep Persona Sync (Semantic Profiling)",
+                        "AI sounds exactly like you",
+                        "Powered by advanced AI engine"
                     ),
                     isPurchasing = state.isPurchasing,
                     onPurchase = {
-                        proProduct?.let { product ->
+                        godModeProductDetails?.let { product ->
                             activity?.let { viewModel.purchase(it, product) }
                         }
-                    }
+                    },
+                    badge = if (!state.isWeekly) "BEST VALUE" else null
                 )
 
                 // Error message
@@ -232,70 +223,119 @@ fun PremiumScreen(
 }
 
 @Composable
-private fun BillingPeriodToggle(
-    isWeekly: Boolean,
-    onToggle: (Boolean) -> Unit
-) {
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        modifier = Modifier
-            .clip(shape)
-            .background(CardBg)
-            .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
-            .padding(4.dp)
+private fun VisualHook() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        PeriodTab(
-            label = "Weekly",
-            selected = isWeekly,
-            onClick = { onToggle(true) },
-            modifier = Modifier.weight(1f)
-        )
-        PeriodTab(
-            label = "Monthly",
-            badge = "BEST VALUE",
-            selected = !isWeekly,
-            onClick = { onToggle(false) },
-            modifier = Modifier.weight(1f)
-        )
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ChatBubble(
+                text = "I noticed your picture in Paris. Did you enjoy it?",
+                isMe = false,
+                bubbleColor = Color(0xFF2A2A3C),
+                textColor = Color.White
+            )
+            ChatBubble(
+                text = "Greetings! Yes, the architecture was splendid. 🤖🚩",
+                isMe = true,
+                bubbleColor = Color(0xFFB71C1C),
+                textColor = Color.White
+            )
+            ChatBubble(
+                text = "lmao not the eiffel tower pic... u actually speak french or just went for the croissants 🧑🔥",
+                isMe = true,
+                bubbleColor = Color(0xFF1B5E20),
+                textColor = Color.White
+            )
+        }
     }
 }
 
 @Composable
-private fun PeriodTab(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    badge: String? = null
+private fun BillingPeriodToggle(
+    isWeekly: Boolean,
+    onToggle: (Boolean) -> Unit
 ) {
-    val bg = if (selected) AccentPink else Color.Transparent
-    val textColor = if (selected) Color.White else Color.Gray
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .clickable { onClick() }
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xFF1F1F30)),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = textColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            if (badge != null && selected) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.2f)),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Text(
-                        badge,
-                        color = Color.White,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                    )
-                }
-            }
+        val weeklySelected = isWeekly
+        val monthlySelected = !isWeekly
+
+        fun segmentColor(selected: Boolean) =
+            if (selected) AccentPink else Color.Transparent
+
+        fun textColor(selected: Boolean) =
+            if (selected) Color.White else Color.Gray
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(999.dp))
+                .background(segmentColor(weeklySelected))
+                .clickable { if (!weeklySelected) onToggle(true) }
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Weekly",
+                color = textColor(weeklySelected),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(999.dp))
+                .background(segmentColor(monthlySelected))
+                .clickable { if (!monthlySelected) onToggle(false) }
+                .padding(vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Monthly",
+                color = textColor(monthlySelected),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatBubble(
+    text: String,
+    isMe: Boolean,
+    bubbleColor: Color,
+    textColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    color = bubbleColor,
+                    shape = RoundedCornerShape(18.dp)
+                )
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = text,
+                color = textColor,
+                fontSize = 13.sp
+            )
         }
     }
 }
@@ -306,40 +346,32 @@ private fun PricingCard(
     productDetails: ProductDetails?,
     fallbackPrice: String,
     period: String,
-    isRecommended: Boolean,
-    savings: String?,
     features: List<String>,
     isPurchasing: Boolean,
-    onPurchase: () -> Unit
+    onPurchase: () -> Unit,
+    badge: String? = null
 ) {
     val price = productDetails?.subscriptionOfferDetails?.firstOrNull()
         ?.pricingPhases?.pricingPhaseList?.firstOrNull()
         ?.formattedPrice ?: fallbackPrice
 
-    val borderModifier = if (isRecommended) {
-        Modifier.border(2.dp, AccentPink, RoundedCornerShape(16.dp))
-    } else {
-        Modifier
-    }
-
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .then(borderModifier),
+            .fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardBg),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                if (isRecommended) {
+                if (badge != null) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Card(
                         colors = CardDefaults.cardColors(containerColor = AccentPink),
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            "POPULAR",
+                            badge,
                             color = Color.White,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -353,10 +385,6 @@ private fun PricingCard(
                 Text(price, color = AccentPink, fontWeight = FontWeight.Bold, fontSize = 28.sp)
                 Text("/$period", color = AccentPink.copy(alpha = 0.7f), fontSize = 14.sp,
                     modifier = Modifier.padding(bottom = 4.dp))
-            }
-
-            savings?.let {
-                Text(it, color = Color(0xFF4CAF50), fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -383,7 +411,7 @@ private fun PricingCard(
                 onClick = onPurchase,
                 enabled = productDetails != null && !isPurchasing,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecommended) AccentPink else Color(0xFF252542),
+                    containerColor = AccentPink,
                     disabledContainerColor = Color(0xFF252542).copy(alpha = 0.5f)
                 ),
                 shape = RoundedCornerShape(12.dp),
