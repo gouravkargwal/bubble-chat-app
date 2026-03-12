@@ -392,7 +392,7 @@ private fun TrialShowcaseStep(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            "You have 3 days of full Pro access. Here's what you unlocked:",
+            "Never run out of things to say. Get Cookd Pro for unlimited AI wingman replies.",
             color = SubtleText,
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
@@ -424,13 +424,13 @@ private fun TrialShowcaseStep(
                         textAlign = TextAlign.Center
                     )
                     Surface(
-                        color = Gold.copy(alpha = 0.2f),
+                        color = ProPurple.copy(alpha = 0.2f),
                         shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.width(48.dp)
                     ) {
                         Text(
-                            "God Mode",
-                            color = Gold,
+                            "Pro",
+                            color = ProPurple,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,

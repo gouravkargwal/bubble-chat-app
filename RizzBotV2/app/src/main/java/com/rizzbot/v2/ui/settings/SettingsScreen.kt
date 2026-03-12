@@ -192,6 +192,31 @@ fun SettingsScreen(
                             }
                         }
                     }
+
+                    // Active perks for God Mode users
+                    if (state.tier == "premium" || state.tier == "god_mode") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF14142B)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "Your Active Perks ✨",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                Text("• Unlimited Replies", color = Color.Gray, fontSize = 12.sp)
+                                Text("• AI Voice Cloning", color = Color.Gray, fontSize = 12.sp)
+                                Text("• Profile Roaster", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -298,6 +323,45 @@ fun SettingsScreen(
                             result,
                             color = if (result.startsWith("+")) Color(0xFF4CAF50) else Color(0xFFEF5350),
                             fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                val isGodMode = state.tier == "premium" || state.tier == "god_mode"
+                if (isGodMode) {
+                    // Manage subscription entry point for God Mode users
+                    Button(
+                        onClick = {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://play.google.com/store/account/subscriptions")
+                            )
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF252542)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            "Manage Subscription",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = onPremium,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            "Compare Plans & Upgrades",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

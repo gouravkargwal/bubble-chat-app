@@ -3,6 +3,7 @@ package com.rizzbot.v2.ui.premium
 import android.app.Activity
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -39,6 +41,8 @@ import com.rizzbot.v2.data.billing.PurchaseResult
 private val AccentPink = Color(0xFFE91E63)
 private val DarkBg = Color(0xFF0F0F1A)
 private val CardBg = Color(0xFF1A1A2E)
+private val PremiumGold = Color(0xFFFFD700)
+private val PremiumCardBg = Color(0xFF101018)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,25 +79,24 @@ fun PremiumScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (state.isPremium) {
-                Spacer(modifier = Modifier.height(48.dp))
-                Text("\u2728", fontSize = 64.sp)
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    "You're Premium!",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    "Enjoy unlimited replies and all premium features.",
-                    color = Color.Gray,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center
-                )
-            } else if (state.purchaseResult is PurchaseResult.Success) {
+            // Persistent header
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Compare Plans",
+                color = Color.White,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Choose the right wingman: Free, Pro, or God Mode.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+
+            if (state.purchaseResult is PurchaseResult.Success) {
                 VoiceDNACalibrationModal(
                     onDismiss = {
                         viewModel.clearResult()
@@ -106,117 +109,203 @@ fun PremiumScreen(
                     }
                 )
             } else {
-                // Header
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Unlock Unlimited Replies",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
+                val currentTier = state.currentTier.lowercase()
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                VisualHook()
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    "Never run out of replies again",
-                    color = Color.Gray,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Weekly / Monthly toggle
-                BillingPeriodToggle(
-                    isWeekly = state.isWeekly,
-                    onToggle = { viewModel.toggleBillingPeriod(it) }
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Pro tier
-                val proProductDetails = if (state.isWeekly) state.premiumWeekly else state.premiumMonthly
-                PricingCard(
-                    title = "Pro",
-                    productDetails = proProductDetails,
-                    fallbackPrice = if (state.isWeekly) "$4.99" else "$14.99",
-                    period = if (state.isWeekly) "wk" else "mo",
-                    features = listOf(
-                        "Unlimited Replies",
-                        "Unlock all 6 directions",
-                        "Basic Voice DNA (Learns your texting style)",
-                        "Unlimited memory"
-                    ),
-                    isPurchasing = state.isPurchasing,
-                    onPurchase = {
-                        proProductDetails?.let { product ->
-                            activity?.let { viewModel.purchase(it, product) }
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // God Mode tier
-                val godModeProductDetails = if (state.isWeekly) state.proWeekly else state.proMonthly
-                PricingCard(
-                    title = "God Mode",
-                    productDetails = godModeProductDetails,
-                    fallbackPrice = if (state.isWeekly) "$8.99" else "$29.99",
-                    period = if (state.isWeekly) "wk" else "mo",
-                    features = listOf(
-                        "Everything in Pro",
-                        "Deep Persona Sync (Semantic Profiling)",
-                        "AI sounds exactly like you",
-                        "Powered by advanced AI engine"
-                    ),
-                    isPurchasing = state.isPurchasing,
-                    onPurchase = {
-                        godModeProductDetails?.let { product ->
-                            activity?.let { viewModel.purchase(it, product) }
-                        }
-                    },
-                    badge = if (!state.isWeekly) "BEST VALUE" else null
-                )
-
-                // Error message
-                if (state.purchaseResult is PurchaseResult.Error) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                if (currentTier == "premium" || currentTier == "god_mode") {
+                    // Success screen for God Mode / Premium
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Text("\u2728", fontSize = 64.sp)
+                    Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        (state.purchaseResult as PurchaseResult.Error).message,
-                        color = Color(0xFFEF5350),
-                        fontSize = 12.sp,
+                        "GOD MODE ACTIVE",
+                        color = Color(0xFFFFD700),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "You\u2019re fully upgraded. Here\u2019s what you just unlocked:",
+                        color = Color.Gray,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Benefit list
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CardBg, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        BenefitRow("Unlimited AI wingman replies")
+                        BenefitRow("AI Voice Cloning that matches your texting style")
+                        BenefitRow("Profile Roaster for deep-dive psychology reads")
+                        BenefitRow("Semantic profile that learns your humor & slang")
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = onBack,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                    ) {
+                        Text(
+                            "Back to Home",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    VisualHook()
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Weekly / Monthly toggle
+                    BillingPeriodToggle(
+                        isWeekly = state.isWeekly,
+                        onToggle = { viewModel.toggleBillingPeriod(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    val isFreeTier = currentTier == "free"
+                    val isProTier = currentTier == "pro"
+
+                    if (isProTier) {
+                        // Pro banner
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = CardBg),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.WorkspacePremium,
+                                    contentDescription = null,
+                                    tint = Color(0xFF7C4DFF),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        "You are currently on the Pro Plan.",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        "Unlock God Mode to max out your AI wingman.",
+                                        color = Color.Gray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // Pricing cards – Pro as default hero, God Mode as upsell
+                    if (isFreeTier || isProTier) {
+                        // Pro card (shown first as default choice)
+                        val proProductDetails =
+                            if (state.isWeekly) state.premiumWeekly else state.premiumMonthly
+                        PricingCard(
+                            title = "Pro",
+                            productDetails = proProductDetails,
+                            fallbackPrice = if (state.isWeekly) "$4.99" else "$14.99",
+                            period = if (state.isWeekly) "wk" else "mo",
+                            features = listOf(
+                                "⚡ Floating Bubble (Works inside Tinder/Hinge)",
+                                "Unlimited AI Replies",
+                                "Unlock 'Ask Out' & 'Tease' directions",
+                                "Basic Voice Match (Learns your emojis/punctuation)",
+                                "Unlimited conversation memory"
+                            ),
+                            isPurchasing = state.isPurchasing,
+                            onPurchase = {
+                                proProductDetails?.let { product ->
+                                    activity?.let { viewModel.purchase(it, product) }
+                                }
+                            },
+                            badge = if (!state.isWeekly) "MOST POPULAR" else null
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // God Mode card (secondary upsell)
+                        val godModeProductDetails =
+                            if (state.isWeekly) state.proWeekly else state.proMonthly
+                        PricingCard(
+                            title = "God Mode",
+                            productDetails = godModeProductDetails,
+                            fallbackPrice = if (state.isWeekly) "$8.99" else "$29.99",
+                            period = if (state.isWeekly) "wk" else "mo",
+                            features = listOf(
+                                "Everything in Pro, PLUS:",
+                                "AI Clones Your Texting Style (100% Undetectable)",
+                                "Profile Roaster (Upload her pics for psychology reads)",
+                                "God-Tier Flirting & Creativity (Gemini Pro Engine)"
+                            ),
+                            isPurchasing = state.isPurchasing,
+                            onPurchase = {
+                                godModeProductDetails?.let { product ->
+                                    activity?.let { viewModel.purchase(it, product) }
+                                }
+                            },
+                            badge = if (!state.isWeekly) "POWER USER" else null,
+                            ctaLabel = if (isProTier) "Upgrade to God Mode" else "Go God Mode",
+                            isPremiumTier = true
+                        )
+                    }
+
+                    // Error message
+                    if (state.purchaseResult is PurchaseResult.Error) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            (state.purchaseResult as PurchaseResult.Error).message,
+                            color = Color(0xFFEF5350),
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    TextButton(onClick = { viewModel.restorePurchases() }) {
+                        Text("Restore purchases", color = Color.Gray, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    TextButton(onClick = onBack) {
+                        Text("Continue with free plan", color = AccentPink, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        "Auto-renews. Cancel anytime in Play Store.",
+                        color = Color.Gray.copy(alpha = 0.6f),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                TextButton(onClick = { viewModel.restorePurchases() }) {
-                    Text("Restore purchases", color = Color.Gray, fontSize = 13.sp)
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                TextButton(onClick = onBack) {
-                    Text("Continue with free plan", color = AccentPink, fontSize = 13.sp)
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    "Auto-renews. Cancel anytime in Play Store.",
-                    color = Color.Gray.copy(alpha = 0.6f),
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -252,6 +341,26 @@ private fun VisualHook() {
                 textColor = Color.White
             )
         }
+    }
+}
+
+@Composable
+private fun BenefitRow(text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Default.Check,
+            contentDescription = null,
+            tint = Color(0xFF4CAF50),
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text,
+            color = Color.White,
+            fontSize = 14.sp
+        )
     }
 }
 
@@ -349,21 +458,37 @@ private fun PricingCard(
     features: List<String>,
     isPurchasing: Boolean,
     onPurchase: () -> Unit,
-    badge: String? = null
+    badge: String? = null,
+    ctaLabel: String? = null,
+    isPremiumTier: Boolean = false
 ) {
     val price = productDetails?.subscriptionOfferDetails?.firstOrNull()
         ?.pricingPhases?.pricingPhaseList?.firstOrNull()
         ?.formattedPrice ?: fallbackPrice
 
+    val border = if (isPremiumTier) {
+        BorderStroke(1.5.dp, Color(0x80FFD700))
+    } else {
+        null
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        shape = RoundedCornerShape(16.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPremiumTier) PremiumCardBg else CardBg
+        ),
+        shape = RoundedCornerShape(16.dp),
+        border = border
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Text(
+                    title,
+                    color = if (isPremiumTier) PremiumGold else Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
                 if (badge != null) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Card(
@@ -426,7 +551,7 @@ private fun PricingCard(
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 Text(
-                    if (productDetails == null) "Loading..." else "Subscribe",
+                    if (productDetails == null) "Loading..." else (ctaLabel ?: "Subscribe"),
                     fontWeight = FontWeight.Bold
                 )
             }

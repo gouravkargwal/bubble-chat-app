@@ -9,14 +9,8 @@ from app.api.v1.deps import get_current_user
 from app.api.v1.schemas.schemas import CopyTrackRequest, RatingTrackRequest
 from app.domain.conversation import update_conversation_from_analysis
 from app.domain.models import AnalysisResult
-from app.domain.voice_dna import update_voice_dna_stats
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import (
-    Conversation,
-    Interaction,
-    User,
-    UserVoiceDNA,
-)
+from app.infrastructure.database.models import Conversation, Interaction, User
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -28,7 +22,11 @@ async def track_copy(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Track which reply the user copied. Updates Voice DNA."""
+    """Track which reply the user copied.
+
+    IMPORTANT: This endpoint must NOT update Voice DNA. Voice DNA is only updated
+    from organic text extracted from screenshots (see vision endpoints).
+    """
     # Find interaction
     result = await db.execute(
         select(Interaction).where(
@@ -42,23 +40,6 @@ async def track_copy(
 
     # Update copied index
     interaction.copied_index = request.reply_index
-    await db.commit()
-
-    # Get the copied reply text
-    copied_text = getattr(interaction, f"reply_{request.reply_index}", None)
-    if not copied_text:
-        return {"status": "ok"}
-
-    # Update Voice DNA (using copied reply as a proxy for their style, when no organic text yet)
-    voice_result = await db.execute(
-        select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
-    )
-    voice = voice_result.scalar_one_or_none()
-    if voice is None:
-        voice = UserVoiceDNA(user_id=user.id)
-        db.add(voice)
-
-    update_voice_dna_stats(voice, copied_text)
     await db.commit()
 
     # Update conversation context (mark topic as "worked")

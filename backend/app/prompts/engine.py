@@ -58,6 +58,18 @@ class PromptEngine:
         # 5. Direction-specific instructions
         parts.append(get_direction_prompt(direction))
 
+        # Special opener rule to enforce topic diversity and avoid tunnel vision
+        if direction.lower() == "opener":
+            parts.append(
+                """
+CRITICAL RULE FOR OPENERS: Since this is an opener, you MUST provide 4 completely distinct angles. DO NOT focus on the same topic twice. Tie each reply directly to the `analysis.notable_observations` array.
+- Reply 1: Based strictly on observation #1.
+- Reply 2: Based strictly on observation #2 (must be a visual photo detail).
+- Reply 3: Based strictly on observation #3.
+- Reply 4: Based strictly on observation #4.
+Ensure high topic diversity and do not mix observations within a single reply."""
+            )
+
         # 6. Situational playbook (auto-selected based on conversation state)
         if variant.use_playbooks and conversation_context:
             playbook = select_playbook(

@@ -33,11 +33,14 @@ import com.rizzbot.v2.domain.model.UserPreferences
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.rizzbot.v2.ui.premium.VoiceDNACalibrationModal
 
 private val Pink = Color(0xFFE91E63)
 private val DarkBg = Color(0xFF0F0F1A)
 private val CardBg = Color(0xFF1A1A2E)
 private val DividerColor = Color(0xFF252542)
+private val GodModeGold = Color(0xFFFFD700)
+private val GodModeGlow = Color(0xFFFFD700).copy(alpha = 0.15f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +53,10 @@ fun HomeScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
 
+    val isGodMode = state.usage.tier == "premium" || state.usage.tier == "god_mode"
+    val primaryAccent = if (isGodMode) GodModeGold else Pink
+    val heroGlow = if (isGodMode) GodModeGlow else Pink.copy(alpha = 0.05f)
+
     LifecycleResumeEffect(Unit) {
         viewModel.refreshPermissionStatus()
         onPauseOrDispose {}
@@ -58,7 +65,12 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Cookd", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = if (isGodMode) "Cookd ✦" else "Cookd",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
@@ -66,7 +78,7 @@ fun HomeScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DarkBg,
-                    titleContentColor = Color.White
+                    titleContentColor = if (isGodMode) GodModeGold else Color.White
                 )
             )
         },
@@ -80,12 +92,12 @@ fun HomeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 0. TRIAL EXPIRY BANNER
+            // 1. TRIAL EXPIRY BANNER
             if (state.usage.tier != "free" && state.usage.trialDaysRemaining in 0..3) {
                 TrialBanner(daysRemaining = state.usage.trialDaysRemaining)
             }
 
-            // 1. HERO CARD — Service Toggle
+            // 2. HERO CARD — Service Toggle
             HeroCard(
                 isEnabled = state.isServiceEnabled,
                 hasPermission = state.hasOverlayPermission,
@@ -94,64 +106,49 @@ fun HomeScreen(
                     context.startActivity(
                         Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
                     )
-                }
+                },
+                primaryAccent = primaryAccent,
+                heroGlow = heroGlow
             )
 
-            // 1.5 USAGE QUOTA
+            // 3. USAGE QUOTA
             UsageQuotaCard(usage = state.usage)
 
-            // 2. FEATURES ROW
-            Text("Features", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.QuestionAnswer,
-                    title = "Replies",
-                    subtitle = "View history",
-                    accentColor = Pink,
-                    onClick = onNavigateToHistory
-                )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.BarChart,
-                    title = "Stats",
-                    subtitle = "Your style",
-                    accentColor = Color(0xFF9C27B0),
-                    onClick = onNavigateToStats
-                )
-            }
-
-            // 3. STATS ROW
-            StatsRow(
-                generated = state.totalRepliesGenerated,
-                copied = state.totalRepliesCopied
-            )
-
-            // 4. HOW IT WORKS (dismissible)
-            if (state.showHowItWorks) {
-                HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
-            }
-
-            // 5. RECENT REPLIES
-            RecentRepliesSection(
-                replies = state.recentReplies,
-                onSeeAll = onNavigateToHistory
-            )
-
-            // 6. RIZZ PROFILE
+            // 4. RIZZ PROFILE (Digital Twin Status)
             val profile = state.rizzProfile
             if (profile != null && profile.hasEnoughData) {
                 RizzProfileCard(
                     preferences = profile,
                     onSeeFullStats = onNavigateToStats,
-                    isGodMode = state.usage.tier == "god_mode"
+                    isGodMode = state.usage.tier == "god_mode",
+                    onTrainVoiceDNA = { viewModel.showCalibration() },
+                    primaryAccent = primaryAccent
                 )
             }
 
+            // 5. HOW IT WORKS (dismissible)
+            if (state.showHowItWorks) {
+                HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
+            }
+
+            // 6. RECENT REPLIES
+            RecentRepliesSection(
+                replies = state.recentReplies,
+                onSeeAll = onNavigateToHistory,
+                primaryAccent = primaryAccent
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (state.showCalibrationModal) {
+            VoiceDNACalibrationModal(
+                onDismiss = { viewModel.hideCalibration() },
+                onImagesSelected = { uris ->
+                    // TODO: Send URIs to /vision/calibrate endpoint
+                    viewModel.hideCalibration()
+                }
+            )
         }
     }
 }
@@ -195,11 +192,18 @@ private fun HeroCard(
     isEnabled: Boolean,
     hasPermission: Boolean,
     onToggle: (Boolean) -> Unit,
-    onGrantPermission: () -> Unit
+    onGrantPermission: () -> Unit,
+    primaryAccent: Color,
+    heroGlow: Color
 ) {
+    val activeBackground = heroGlow
+
     Card(
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        shape = RoundedCornerShape(20.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (isEnabled) activeBackground else CardBg
+        ),
+        shape = RoundedCornerShape(20.dp),
+        border = if (isEnabled) BorderStroke(1.dp, primaryAccent.copy(alpha = 0.5f)) else null
     ) {
         Column(modifier = Modifier.padding(20.dp).animateContentSize()) {
             Row(
@@ -209,13 +213,14 @@ private fun HeroCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (isEnabled) "Cookd is ACTIVE" else "Cookd is Inactive",
-                        color = if (isEnabled) Pink else Color.Gray,
+                        if (isEnabled) "Floating Wingman Active ✨" else "Cookd is Inactive",
+                        color = if (isEnabled) primaryAccent else Color.Gray,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
                     )
                     Text(
-                        if (isEnabled) "Bubble is floating on screen" else "Tap to start the magic",
+                        if (isEnabled) "Ready to use! Open Tinder, Hinge, or Bumble and tap the bubble to generate replies instantly."
+                        else "Turn on the overlay to get AI replies without ever leaving your dating apps.",
                         color = Color.Gray,
                         fontSize = 13.sp
                     )
@@ -224,7 +229,7 @@ private fun HeroCard(
                     checked = isEnabled,
                     onCheckedChange = onToggle,
                     enabled = hasPermission,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Pink)
+                    colors = SwitchDefaults.colors(checkedTrackColor = primaryAccent)
                 )
             }
 
@@ -250,18 +255,18 @@ private fun HeroCard(
 }
 
 @Composable
-private fun StatsRow(generated: Int, copied: Int) {
+private fun StatsRow(generated: Int, copied: Int, primaryAccent: Color) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        StatCard(modifier = Modifier.weight(1f), value = "$generated", label = "Generated")
-        StatCard(modifier = Modifier.weight(1f), value = "$copied", label = "Copied")
+        StatCard(modifier = Modifier.weight(1f), value = "$generated", label = "Generated", primaryAccent = primaryAccent)
+        StatCard(modifier = Modifier.weight(1f), value = "$copied", label = "Copied", primaryAccent = primaryAccent)
     }
 }
 
 @Composable
-private fun StatCard(modifier: Modifier = Modifier, value: String, label: String) {
+private fun StatCard(modifier: Modifier = Modifier, value: String, label: String, primaryAccent: Color) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = CardBg),
@@ -271,7 +276,7 @@ private fun StatCard(modifier: Modifier = Modifier, value: String, label: String
             modifier = Modifier.padding(16.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(value, color = Pink, fontWeight = FontWeight.Bold, fontSize = 24.sp)
+            Text(value, color = primaryAccent, fontWeight = FontWeight.Bold, fontSize = 24.sp)
             Text(label, color = Color.Gray, fontSize = 12.sp)
         }
     }
@@ -326,7 +331,8 @@ private fun StepItem(number: String, text: String) {
 @Composable
 private fun RecentRepliesSection(
     replies: List<com.rizzbot.v2.data.remote.dto.HistoryItemResponse>,
-    onSeeAll: () -> Unit
+    onSeeAll: () -> Unit,
+    primaryAccent: Color
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = CardBg),
@@ -340,7 +346,7 @@ private fun RecentRepliesSection(
             ) {
                 Text("Recent Replies", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 TextButton(onClick = onSeeAll) {
-                    Text("See all", color = Pink, fontSize = 13.sp)
+                    Text("See all", color = primaryAccent, fontSize = 13.sp)
                 }
             }
 
@@ -399,7 +405,9 @@ private fun ReplyItem(entry: com.rizzbot.v2.data.remote.dto.HistoryItemResponse)
 private fun RizzProfileCard(
     preferences: UserPreferences,
     onSeeFullStats: () -> Unit,
-    isGodMode: Boolean
+    isGodMode: Boolean,
+    onTrainVoiceDNA: () -> Unit,
+    primaryAccent: Color
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = CardBg),
@@ -412,7 +420,7 @@ private fun RizzProfileCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Your Digital Twin Status",
+                    "Your AI Clone Status",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
@@ -427,11 +435,13 @@ private fun RizzProfileCard(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricBar(
                     label = "Emoji Frequency",
-                    value = preferences.emojiFrequency.coerceIn(0f, 1f)
+                    value = preferences.emojiFrequency.coerceIn(0f, 1f),
+                    primaryAccent = primaryAccent
                 )
                 MetricBar(
                     label = "Lowercase Usage",
-                    value = preferences.lowercaseUsage.coerceIn(0f, 1f)
+                    value = preferences.lowercaseUsage.coerceIn(0f, 1f),
+                    primaryAccent = primaryAccent
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -495,13 +505,13 @@ private fun RizzProfileCard(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            "Deep Persona Sync: 🔒",
+                            "AI Voice Cloning: 🔒",
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
                         )
                         Text(
-                            "Upgrade to God Mode to see your exact psychological texting profile.",
+                            "Upgrade to God Mode so the AI learns your exact humor, slang, and texting style.",
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
@@ -518,7 +528,7 @@ private fun RizzProfileCard(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            "Semantic Profile",
+                            "Your Texting Personality 🧠",
                             color = Color(0xFFA5D6A7),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp
@@ -528,6 +538,15 @@ private fun RizzProfileCard(
                             color = Color.White,
                             fontSize = 12.sp
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = onTrainVoiceDNA) {
+                            Text(
+                                text = "🧬 Add Sample Styles",
+                                color = Color(0xFFA5D6A7),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
@@ -536,7 +555,7 @@ private fun RizzProfileCard(
 }
 
 @Composable
-private fun MetricBar(label: String, value: Float) {
+private fun MetricBar(label: String, value: Float, primaryAccent: Color) {
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -552,14 +571,14 @@ private fun MetricBar(label: String, value: Float) {
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp)),
-            color = Pink,
+            color = primaryAccent,
             trackColor = DividerColor
         )
     }
 }
 
 @Composable
-private fun VibeBar(label: String, progress: Float) {
+private fun VibeBar(label: String, progress: Float, primaryAccent: Color) {
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -575,7 +594,7 @@ private fun VibeBar(label: String, progress: Float) {
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp)),
-            color = Pink,
+            color = primaryAccent,
             trackColor = DividerColor
         )
     }

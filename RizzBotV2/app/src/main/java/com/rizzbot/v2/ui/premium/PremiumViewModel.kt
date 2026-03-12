@@ -23,7 +23,7 @@ data class PremiumUiState(
     val proMonthly: ProductDetails? = null,
     val isPurchasing: Boolean = false,
     val purchaseResult: PurchaseResult? = null,
-    val isPremium: Boolean = false,
+    val currentTier: String = "free",
     val isWeekly: Boolean = false
 )
 
@@ -48,7 +48,9 @@ class PremiumViewModel @Inject constructor(
             proMonthly = billing.products.find { it.productId == BillingManager.PRO_MONTHLY },
             isPurchasing = billing.isPurchasing,
             purchaseResult = billing.purchaseResult,
-            isPremium = usage.isPremium,
+            currentTier = usage.tier.ifBlank {
+                if (usage.isPremium) "pro" else "free"
+            }.lowercase(),
             isWeekly = weekly
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PremiumUiState())

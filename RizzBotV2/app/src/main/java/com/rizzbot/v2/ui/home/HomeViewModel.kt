@@ -13,7 +13,11 @@ import com.rizzbot.v2.overlay.OverlayService
 import com.rizzbot.v2.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -25,7 +29,8 @@ data class HomeState(
     val showHowItWorks: Boolean = true,
     val recentReplies: List<HistoryItemResponse> = emptyList(),
     val rizzProfile: UserPreferences? = null,
-    val usage: UsageState = UsageState()
+    val usage: UsageState = UsageState(),
+    val showCalibrationModal: Boolean = false
 )
 
 @HiltViewModel
@@ -133,5 +138,13 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setFirstCaptureDone()
         }
+    }
+
+    fun showCalibration() {
+        _state.update { it.copy(showCalibrationModal = true) }
+    }
+
+    fun hideCalibration() {
+        _state.update { it.copy(showCalibrationModal = false) }
     }
 }

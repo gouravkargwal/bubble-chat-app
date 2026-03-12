@@ -110,6 +110,17 @@ GEMINI_RESPONSE_SCHEMA: dict = {
                     "type": "STRING",
                     "description": "Max 8 words.",
                 },
+                "notable_observations": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "STRING",
+                    },
+                    "description": (
+                        "List exactly 4 completely different details about this person. "
+                        "Include at least 1 text bio detail, 1 background/photo detail, "
+                        "and 1 style/vibe detail. DO NOT repeat topics."
+                    ),
+                },
             },
             "required": [
                 "detected_language_and_vibe",
@@ -122,6 +133,7 @@ GEMINI_RESPONSE_SCHEMA: dict = {
                 "person_name",
                 "key_detail",
                 "what_they_want",
+                "notable_observations",
             ],
         },
         "strategy": {
