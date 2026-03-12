@@ -37,6 +37,13 @@
             android:taskAffinity=""
             android:excludeFromRecents="true" />
 
+        <activity
+            android:name=".overlay.gallery.TransparentGalleryActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:taskAffinity=""
+            android:excludeFromRecents="true" />
+
         <service
             android:name=".overlay.OverlayService"
             android:exported="false"

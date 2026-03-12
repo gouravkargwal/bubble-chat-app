@@ -39,6 +39,8 @@ import com.rizzbot.v2.overlay.ui.theme.OverlayColors
 fun DirectionPicker(
     allowedDirections: List<String>,
     customHintsEnabled: Boolean,
+    isGalleryMode: Boolean,
+    onInputModeChanged: (Boolean) -> Unit,
     onDirectionSelected: (DirectionWithHint) -> Unit,
     onUpgrade: () -> Unit,
     onDismiss: () -> Unit,
@@ -52,6 +54,12 @@ fun DirectionPicker(
             .fillMaxWidth()
             .padding(16.dp)
     ) {
+        InputModeToggle(
+            isGalleryMode = isGalleryMode,
+            onInputModeChanged = onInputModeChanged
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
         ConversationDirection.entries.forEach { direction ->
             val dirKey = direction.name.lowercase()
             val isLocked = allowedDirections.isNotEmpty() && dirKey !in allowedDirections
@@ -168,5 +176,68 @@ fun DirectionPicker(
                 Text("Generate")
             }
         }
+    }
+}
+
+@Composable
+private fun InputModeToggle(
+    isGalleryMode: Boolean,
+    onInputModeChanged: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .padding(2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val liveSelected = !isGalleryMode
+        val gallerySelected = isGalleryMode
+
+        ModeChip(
+            label = "📸 Live Screen",
+            selected = liveSelected,
+            onClick = { if (!liveSelected) onInputModeChanged(false) },
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        ModeChip(
+            label = "🖼️ Gallery",
+            selected = gallerySelected,
+            onClick = { if (!gallerySelected) onInputModeChanged(true) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun ModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val background =
+        if (selected) OverlayColors.AccentPink.copy(alpha = 0.95f)
+        else Color.Transparent
+    val contentColor =
+        if (selected) Color.Black
+        else Color.White.copy(alpha = 0.85f)
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(background)
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = contentColor,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        )
     }
 }

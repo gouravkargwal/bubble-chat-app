@@ -173,4 +173,58 @@ class ScreenCaptureOrchestrator @Inject constructor(
     fun resetResult() {
         _result.value = SuggestionResult.Loading
     }
+
+    /**
+     * Generate a reply from externally provided base64-encoded images (e.g., Gallery picks),
+     * without modifying the internal screenshot buffers.
+     */
+    suspend fun generateFromExternalImages(
+        imagesBase64: List<String>,
+        direction: DirectionWithHint
+    ) {
+        if (imagesBase64.isEmpty()) {
+            _result.value = SuggestionResult.Error(
+                "No image selected. Try again.",
+                SuggestionResult.ErrorType.UNKNOWN
+            )
+            return
+        }
+
+        if (!networkHelper.isConnected()) {
+            _result.value = SuggestionResult.Error(
+                "No internet connection",
+                SuggestionResult.ErrorType.NO_INTERNET
+            )
+            return
+        }
+
+        _result.value = SuggestionResult.Loading
+        analyticsHelper.directionSelected(
+            direction.customHint?.let { "custom" } ?: direction.direction.name
+        )
+
+        try {
+            val startTime = System.currentTimeMillis()
+            val result = generateVisionReplyUseCase(imagesBase64, direction)
+            val latencyMs = System.currentTimeMillis() - startTime
+
+            when (result) {
+                is SuggestionResult.Success -> {
+                    hapticHelper.successTap()
+                    analyticsHelper.replyGenerated("hosted_gallery", latencyMs)
+                }
+                is SuggestionResult.Error -> {
+                    analyticsHelper.replyFailed("hosted_gallery", result.message)
+                }
+                else -> {}
+            }
+
+            _result.value = result
+        } catch (e: Exception) {
+            _result.value = SuggestionResult.Error(
+                "Something went wrong: ${e.message}",
+                SuggestionResult.ErrorType.UNKNOWN
+            )
+        }
+    }
 }

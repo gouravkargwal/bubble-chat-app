@@ -25,6 +25,9 @@ interface HostedRepository {
     // Preferences
     suspend fun getUserPreferences(): UserPreferencesResponse?
 
+    // Voice DNA calibration
+    suspend fun calibrateVoiceDNA(base64Images: List<String>): Result<Int>
+
     // Referral
     suspend fun getReferralInfo(): ReferralInfo?
     suspend fun applyReferralCode(code: String): Result<ApplyReferralResponse>

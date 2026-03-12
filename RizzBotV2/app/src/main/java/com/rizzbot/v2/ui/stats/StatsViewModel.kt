@@ -13,6 +13,7 @@ import javax.inject.Inject
 data class StatsState(
     val totalGenerated: Int = 0,
     val totalCopied: Int = 0,
+    val totalConversationsInfluenced: Int = 0,
     val preferences: UserPreferences = UserPreferences()
 )
 
@@ -48,6 +49,16 @@ class StatsViewModel @Inject constructor(
         
         viewModelScope.launch {
             refreshPreferences()
+        }
+
+        // Pull recent interactions to estimate "conversations influenced"
+        viewModelScope.launch {
+            val history = hostedRepository.getHistory(limit = 200)
+            val conversations = history
+                .mapNotNull { it.personName ?: it.id }
+                .distinct()
+                .size
+            _state.update { it.copy(totalConversationsInfluenced = conversations) }
         }
     }
 

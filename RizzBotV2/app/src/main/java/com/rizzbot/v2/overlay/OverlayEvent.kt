@@ -5,6 +5,7 @@ import com.rizzbot.v2.domain.model.DirectionWithHint
 sealed class OverlayEvent {
     data object ShowBubble : OverlayEvent()
     data object HideBubble : OverlayEvent()
+    data class SetGalleryMode(val isGalleryMode: Boolean) : OverlayEvent()
     data class CaptureRequested(val direction: DirectionWithHint) : OverlayEvent()
     data class ConfirmScreenshot(val direction: DirectionWithHint) : OverlayEvent()
     data object DismissSuggestions : OverlayEvent()

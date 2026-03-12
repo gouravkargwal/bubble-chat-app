@@ -62,6 +62,13 @@ class BubbleManager @Inject constructor(
     private val _isHoveringClose = MutableStateFlow(false)
     private val _dockOnLeft = MutableStateFlow(false)
     val dockOnLeft: StateFlow<Boolean> = _dockOnLeft.asStateFlow()
+    private val _isGalleryMode = MutableStateFlow(false)
+    val isGalleryMode: StateFlow<Boolean> = _isGalleryMode.asStateFlow()
+    /**
+     * When non-null, the user selected a direction while in Gallery mode and we're
+     * waiting for the TransparentGalleryActivity result.
+     */
+    private var pendingGalleryDirection: DirectionWithHint? = null
 
     init {
         // Default position: right edge, vertically centered
@@ -135,6 +142,7 @@ class BubbleManager @Inject constructor(
                     state = _state,
                     usageState = hostedRepository.usageState,
                     dockOnLeft = dockOnLeft,
+                    isGalleryMode = isGalleryMode,
                     onEvent = { handleEvent(it) }
                 )
             }
@@ -308,6 +316,8 @@ class BubbleManager @Inject constructor(
         orchestrator.clearScreenshot()
         currentDirection = null
         pendingAppendDirection = null
+        pendingGalleryDirection = null
+        _isGalleryMode.value = false
         hideCloseTarget()
 
         // Clear service enabled pref so HomeScreen doesn't show stale "active" state
@@ -329,7 +339,7 @@ class BubbleManager @Inject constructor(
     }
 
     fun restoreAfterCapture() {
-        _state.value = BubbleState.Loading
+        _state.value = BubbleState.Loading()
         if (composeView == null) {
             composeView = createAndAttachView()
         }
@@ -390,6 +400,58 @@ class BubbleManager @Inject constructor(
         _isHoveringClose.value = false
     }
 
+    /**
+     * Entry point for the transparent gallery activity to report back a selected image.
+     *
+     * @param imageBase64 Base64-encoded JPEG of the selected image, or null if the user cancelled.
+     */
+    fun handleGalleryResult(imageBase64: String?) {
+        val direction = pendingGalleryDirection
+        // Always clear pending state first so we don't accidentally reuse it.
+        pendingGalleryDirection = null
+
+        if (imageBase64 == null || direction == null) {
+            // User cancelled or we lost the pending direction; nothing to do.
+            return
+        }
+
+        val activeScope = ensureScope()
+        activeScope.launch {
+            // Enter processing state as soon as we have an image + direction
+            _state.value = BubbleState.Loading(isProcessing = true)
+            orchestrator.resetResult()
+            orchestrator.clearScreenshot()
+
+            orchestrator.generateFromExternalImages(listOf(imageBase64), direction)
+            val result = orchestrator.result.value
+            _state.value = when (result) {
+                is SuggestionResult.Success -> BubbleState.Expanded(result)
+                is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, direction)
+                is SuggestionResult.Loading -> BubbleState.Loading()
+            }
+        }
+    }
+
+    private fun launchTransparentGalleryActivity() {
+        // Launch a tiny transparent Activity that owns the system photo picker.
+        try {
+            val intent = android.content.Intent(
+                context,
+                com.rizzbot.v2.overlay.gallery.TransparentGalleryActivity::class.java
+            ).apply {
+                addFlags(
+                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                        android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                )
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to launch TransparentGalleryActivity", e)
+            // Fall back to normal flow by clearing pending state.
+            pendingGalleryDirection = null
+        }
+    }
+
     private fun handleEvent(event: OverlayEvent) {
         val activeScope = ensureScope()
         when (event) {
@@ -445,47 +507,56 @@ class BubbleManager @Inject constructor(
                 }
             }
             is OverlayEvent.HideBubble -> hide()
+            is OverlayEvent.SetGalleryMode -> {
+                _isGalleryMode.value = event.isGalleryMode
+            }
             is OverlayEvent.CaptureRequested -> {
-                activeScope.launch {
-                    // Clear previous screenshots on fresh capture/retake
-                    orchestrator.clearScreenshot()
-                    currentDirection = event.direction
-                    // Hide overlay before capture so it's not in the screenshot
-                    hideForCapture()
-                    kotlinx.coroutines.delay(300)
+                if (_isGalleryMode.value) {
+                    // Save direction and hand off to a transparent gallery activity.
+                    pendingGalleryDirection = event.direction
+                    launchTransparentGalleryActivity()
+                } else {
+                    activeScope.launch {
+                        // Clear previous screenshots on fresh capture/retake
+                        orchestrator.clearScreenshot()
+                        currentDirection = event.direction
+                        // Hide overlay before capture so it's not in the screenshot
+                        hideForCapture()
+                        kotlinx.coroutines.delay(300)
 
-                    try {
-                        orchestrator.captureScreenshot()
-                    } finally {
-                        // Restore overlay to show screenshot preview
-                        if (composeView == null) {
-                            composeView = createAndAttachView()
+                        try {
+                            orchestrator.captureScreenshot()
+                        } finally {
+                            // Restore overlay to show screenshot preview
+                            if (composeView == null) {
+                                composeView = createAndAttachView()
+                            }
                         }
-                    }
 
-                    // Show preview so user can confirm before sending
-                    val previewBitmaps = orchestrator.getPreviewBitmaps()
-                    if (previewBitmaps.isNotEmpty()) {
-                        _state.value = BubbleState.ScreenshotPreview(previewBitmaps, event.direction)
-                    } else {
-                        // Capture failed, result already has the error
-                        val result = orchestrator.result.value
-                        _state.value = when (result) {
-                            is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
-                            else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
+                        // Show preview so user can confirm before sending
+                        val previewBitmaps = orchestrator.getPreviewBitmaps()
+                        if (previewBitmaps.isNotEmpty()) {
+                            _state.value = BubbleState.ScreenshotPreview(previewBitmaps, event.direction)
+                        } else {
+                            // Capture failed, result already has the error
+                            val result = orchestrator.result.value
+                            _state.value = when (result) {
+                                is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                                else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
+                            }
                         }
                     }
                 }
             }
             is OverlayEvent.ConfirmScreenshot -> {
                 activeScope.launch {
-                    _state.value = BubbleState.Loading
+                    _state.value = BubbleState.Loading()
                     orchestrator.generateFromScreenshots(event.direction)
                     val result = orchestrator.result.value
                     _state.value = when (result) {
                         is SuggestionResult.Success -> BubbleState.Expanded(result)
                         is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
-                        is SuggestionResult.Loading -> BubbleState.Loading
+                        is SuggestionResult.Loading -> BubbleState.Loading()
                     }
                 }
             }
@@ -585,13 +656,13 @@ class BubbleManager @Inject constructor(
             }
             is OverlayEvent.Regenerate -> {
                 activeScope.launch {
-                    _state.value = BubbleState.Loading
+                    _state.value = BubbleState.Loading()
                     orchestrator.generateFromScreenshots(event.direction)
                     val result = orchestrator.result.value
                     _state.value = when (result) {
                         is SuggestionResult.Success -> BubbleState.Expanded(result)
                         is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
-                        is SuggestionResult.Loading -> BubbleState.Loading
+                        is SuggestionResult.Loading -> BubbleState.Loading()
                     }
                 }
             }

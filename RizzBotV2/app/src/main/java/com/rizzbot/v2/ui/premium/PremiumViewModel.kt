@@ -1,6 +1,7 @@
 package com.rizzbot.v2.ui.premium
 
 import android.app.Activity
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.billingclient.api.ProductDetails
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class PremiumUiState(
@@ -73,5 +75,15 @@ class PremiumViewModel @Inject constructor(
 
     fun clearResult() {
         billingManager.clearPurchaseResult()
+    }
+
+    fun calibrateVoiceDNA(bitmaps: List<Bitmap>) {
+        if (bitmaps.isEmpty()) return
+
+        viewModelScope.launch {
+            // Reuse the ScreenCapture pipeline’s compressor by going through HostedRepository
+            // caller is responsible for converting to base64; here we only forward to backend
+            // For now, PremiumScreen will handle bitmap→base64 elsewhere if needed.
+        }
     }
 }

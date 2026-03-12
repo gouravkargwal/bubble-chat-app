@@ -39,6 +39,7 @@ import com.rizzbot.v2.overlay.ui.components.panels.BubbleHeader
 import com.rizzbot.v2.overlay.ui.components.panels.DirectionPicker
 import com.rizzbot.v2.overlay.ui.components.panels.ErrorPanel
 import com.rizzbot.v2.overlay.ui.components.panels.LoadingOverlay
+import com.rizzbot.v2.overlay.ui.components.panels.ProcessingOverlay
 import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
 import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
@@ -59,11 +60,13 @@ fun BubbleOverlay(
     state: StateFlow<BubbleState>,
     usageState: StateFlow<UsageState>,
     dockOnLeft: StateFlow<Boolean>,
+    isGalleryMode: StateFlow<Boolean>,
     onEvent: (OverlayEvent) -> Unit
 ) {
     val currentState by state.collectAsState()
     val usage by usageState.collectAsState()
     val dockLeft by dockOnLeft.collectAsState()
+    val galleryMode by isGalleryMode.collectAsState()
 
     val isFullScreen = currentState is BubbleState.DirectionPicker ||
         currentState is BubbleState.ScreenshotPreview ||
@@ -126,6 +129,7 @@ fun BubbleOverlay(
                 FullScreenCard(
                     currentState = currentState,
                     usage = usage,
+                    isGalleryMode = galleryMode,
                     onEvent = onEvent
                 )
             }
@@ -176,6 +180,7 @@ private fun BackgroundScrim(
 private fun FullScreenCard(
     currentState: BubbleState,
     usage: UsageState,
+    isGalleryMode: Boolean,
     onEvent: (OverlayEvent) -> Unit
 ) {
     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -208,6 +213,10 @@ private fun FullScreenCard(
                     is BubbleState.DirectionPicker -> DirectionPicker(
                         allowedDirections = usage.allowedDirections,
                         customHintsEnabled = usage.customHintsEnabled,
+                        isGalleryMode = isGalleryMode,
+                        onInputModeChanged = { isGallery ->
+                            onEvent(OverlayEvent.SetGalleryMode(isGallery))
+                        },
                         onDirectionSelected = { direction ->
                             onEvent(OverlayEvent.CaptureRequested(direction))
                         },
@@ -225,7 +234,13 @@ private fun FullScreenCard(
                         },
                         onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
                     )
-                    is BubbleState.Loading -> LoadingOverlay()
+                    is BubbleState.Loading -> {
+                        if (s.isProcessing) {
+                            ProcessingOverlay()
+                        } else {
+                            LoadingOverlay()
+                        }
+                    }
                     is BubbleState.Expanded -> SuggestionPanel(
                         result = s.result,
                         onCopy = { reply, index ->

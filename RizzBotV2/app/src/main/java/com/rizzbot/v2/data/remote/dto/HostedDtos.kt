@@ -38,6 +38,19 @@ data class VisionGenerateResponse(
     @SerialName("usage_remaining") val usageRemaining: Int
 )
 
+// ── Vision / Calibration (Voice DNA) ──
+
+@Serializable
+data class CalibrationRequest(
+    val images: List<String>
+)
+
+@Serializable
+data class CalibrationResponse(
+    @SerialName("messages_extracted") val messagesExtracted: Int,
+    val success: Boolean
+)
+
 // ── Tracking ──
 
 @Serializable

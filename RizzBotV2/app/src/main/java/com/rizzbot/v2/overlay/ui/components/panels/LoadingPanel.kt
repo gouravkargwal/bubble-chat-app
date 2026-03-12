@@ -45,3 +45,22 @@ fun LoadingOverlay(modifier: Modifier = Modifier) {
         Text("Cooking up replies$dots", color = Color.White)
     }
 }
+
+/**
+ * Processing panel shown specifically while analyzing an uploaded image
+ */
+@Composable
+fun ProcessingOverlay(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator(color = Color(0xFFFFD700))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Analyzing her vibe...", color = Color.White)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Cloning your style...", color = Color.Gray)
+    }
+}
