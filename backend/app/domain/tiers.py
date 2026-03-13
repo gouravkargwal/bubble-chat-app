@@ -43,7 +43,7 @@ TIERS: dict[str, TierConfig] = {
     ),
     "premium": TierConfig(
         name="Premium",
-        daily_limit=50,
+        daily_limit=0,  # unlimited
         allowed_directions=ALL_DIRECTIONS,
         custom_hints=True,
         voice_dna=False,

@@ -22,6 +22,7 @@ import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
 import com.rizzbot.v2.data.remote.dto.VerifyPurchaseResponse
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateResponse
+import com.rizzbot.v2.data.remote.dto.ProfileBlueprintDto
 import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -101,4 +102,8 @@ interface HostedApi {
 
     @GET("api/v1/profile-audit/history")
     suspend fun getProfileAuditHistory(): AuditedPhotoListResponse
+
+    // Profile Optimizer
+    @GET("api/v1/profile-audit/optimize")
+    suspend fun optimizeProfile(): Response<ProfileBlueprintDto>
 }

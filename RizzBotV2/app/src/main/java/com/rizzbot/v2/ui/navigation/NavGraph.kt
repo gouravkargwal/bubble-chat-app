@@ -15,6 +15,7 @@ import com.rizzbot.v2.ui.home.HomeScreen
 import com.rizzbot.v2.ui.onboarding.OnboardingScreen
 import com.rizzbot.v2.ui.profile.ProfileAuditorScreen
 import com.rizzbot.v2.ui.profile.ProfileHistoryScreen
+import com.rizzbot.v2.ui.profile.ProfileOptimizerScreen
 import com.rizzbot.v2.ui.premium.PremiumScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
@@ -115,6 +116,12 @@ fun NavGraph(
         }
         composable(Screen.ProfileHistory.route) {
             ProfileHistoryScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToOptimizer = { navController.navigate(Screen.ProfileOptimization.route) }
+            )
+        }
+        composable(Screen.ProfileOptimization.route) {
+            ProfileOptimizerScreen(
                 onBack = { navController.popBackStack() }
             )
         }

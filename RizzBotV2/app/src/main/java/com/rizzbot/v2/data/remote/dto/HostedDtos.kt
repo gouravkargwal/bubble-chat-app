@@ -228,3 +228,22 @@ data class AuditedPhotoItemDto(
 data class AuditedPhotoListResponse(
     val items: List<AuditedPhotoItemDto>
 )
+
+// ── Profile Optimizer ──
+
+@Serializable
+data class OptimizedSlotDto(
+    @SerialName("storage_url") val photoUrl: String,
+    @SerialName("slot_number") val slotNumber: Int,
+    val role: String,
+    val caption: String,
+    @SerialName("hinge_prompt_question") val hingePromptQuestion: String,
+    @SerialName("hinge_prompt_answer") val hingePromptAnswer: String,
+    @SerialName("coach_reasoning") val coachReasoning: String
+)
+
+@Serializable
+data class ProfileBlueprintDto(
+    @SerialName("overall_theme") val overallTheme: String,
+    val slots: List<OptimizedSlotDto>
+)
