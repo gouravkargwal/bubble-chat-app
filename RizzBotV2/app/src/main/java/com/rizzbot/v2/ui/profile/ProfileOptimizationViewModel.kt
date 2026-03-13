@@ -37,10 +37,13 @@ class ProfileOptimizationViewModel @Inject constructor(
     }
 
     fun addImage(uri: Uri) {
+        android.util.Log.d("ProfileOptim", "Adding image: $uri")
         val current = _state.value.selectedImages.toMutableList()
         if (current.size < 5) {
             current.add(uri)
             _state.value = _state.value.copy(selectedImages = current)
+        } else {
+            android.util.Log.w("ProfileOptim", "Max images reached (5)")
         }
     }
 
@@ -51,15 +54,20 @@ class ProfileOptimizationViewModel @Inject constructor(
     }
 
     fun analyzeProfile(bitmaps: List<Bitmap>) {
-        if (bitmaps.isEmpty()) return
+        android.util.Log.d("ProfileOptim", "analyzeProfile called with ${bitmaps.size} bitmaps")
+        if (bitmaps.isEmpty()) {
+            android.util.Log.w("ProfileOptim", "No bitmaps provided for analysis")
+            return
+        }
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isAnalyzing = true, result = ProfileAnalysisResult.Loading)
             analyticsHelper.logEvent("profile_analysis_started", mapOf("app" to _state.value.selectedApp.name, "image_count" to bitmaps.size))
 
-            val base64Images = bitmaps.map { imageCompressor.bitmapToBase64Jpeg(it) }
-            val result = analyzeProfileUseCase(base64Images, _state.value.selectedApp)
-
+            android.util.Log.d("ProfileOptim", "Calling analyzeProfileUseCase")
+            val result = analyzeProfileUseCase(bitmaps, _state.value.selectedApp)
+            
+            android.util.Log.d("ProfileOptim", "Received result: ${result.javaClass.simpleName}")
             _state.value = _state.value.copy(result = result, isAnalyzing = false)
 
             when (result) {
@@ -67,6 +75,7 @@ class ProfileOptimizationViewModel @Inject constructor(
                     analyticsHelper.logEvent("profile_analysis_completed", mapOf("score" to result.overallScore.toDouble()))
                 }
                 is ProfileAnalysisResult.Error -> {
+                    android.util.Log.e("ProfileOptim", "Analysis error: ${result.message}")
                     analyticsHelper.logEvent("profile_analysis_failed", mapOf("error" to result.message))
                 }
                 else -> {}

@@ -38,7 +38,7 @@ fun SuggestionPanel(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val vibeLabels = listOf("\uD83D\uDD25 Flirty", "\uD83D\uDE0F Witty", "\u2728 Smooth", "\uD83D\uDCAA Bold")
+    val vibeLabels = listOf("🔥 Flirty", "😏 Witty", "✨ Smooth", "💪 Bold")
 
     // Map strategy labels to emojis
     fun getStrategyEmoji(strategyLabel: String): String {
@@ -76,7 +76,7 @@ fun SuggestionPanel(
         Spacer(modifier = Modifier.height(8.dp))
 
         result.replies.forEachIndexed { index, replyOption ->
-            val label = vibeLabels.getOrElse(index) { "\uD83D\uDCAC Reply" }
+            val label = vibeLabels.getOrElse(index) { "💬 Reply" }
 
             // Build the strategy badge text with appropriate emoji
             val strategy =

@@ -2,6 +2,7 @@ package com.rizzbot.v2.domain.repository
 
 import com.rizzbot.v2.data.remote.dto.ApplyPromoResponse
 import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
+import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
 import com.rizzbot.v2.domain.model.DirectionWithHint
@@ -37,4 +38,8 @@ interface HostedRepository {
 
     // Billing
     suspend fun verifyPurchase(purchaseToken: String, productId: String, orderId: String?): Boolean
+
+    // Profile Auditor
+    suspend fun uploadPhotosForAudit(compressedPhotos: List<ByteArray>): Result<AuditResponse>
+    suspend fun getProfileAuditHistory(): List<com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto>
 }

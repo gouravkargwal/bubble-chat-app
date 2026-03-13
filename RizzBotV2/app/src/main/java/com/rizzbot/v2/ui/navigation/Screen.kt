@@ -10,4 +10,6 @@ sealed class Screen(val route: String) {
     data object ProfileOptimization : Screen("profile_optimization")
     data object SyncPerson : Screen("sync_person")
     data object Premium : Screen("premium")
+    data object ProfileAuditor : Screen("profile_auditor")
+    data object ProfileHistory : Screen("profile_history")
 }

@@ -13,6 +13,8 @@ import com.rizzbot.v2.ui.demo.DemoScreen
 import com.rizzbot.v2.ui.history.HistoryScreen
 import com.rizzbot.v2.ui.home.HomeScreen
 import com.rizzbot.v2.ui.onboarding.OnboardingScreen
+import com.rizzbot.v2.ui.profile.ProfileAuditorScreen
+import com.rizzbot.v2.ui.profile.ProfileHistoryScreen
 import com.rizzbot.v2.ui.premium.PremiumScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
@@ -68,7 +70,9 @@ fun NavGraph(
             HomeScreen(
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToHistory = { navController.navigate(Screen.ReplyHistory.route) },
-                onNavigateToStats = { navController.navigate(Screen.Stats.route) }
+                onNavigateToStats = { navController.navigate(Screen.Stats.route) },
+                onNavigateToProfileAuditor = { navController.navigate(Screen.ProfileAuditor.route) },
+                onNavigateToProfileHistory = { navController.navigate(Screen.ProfileHistory.route) }
             )
         }
         composable(Screen.Settings.route) {
@@ -101,6 +105,16 @@ fun NavGraph(
         }
         composable(Screen.Premium.route) {
             PremiumScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.ProfileAuditor.route) {
+            ProfileAuditorScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.ProfileHistory.route) {
+            ProfileHistoryScreen(
                 onBack = { navController.popBackStack() }
             )
         }

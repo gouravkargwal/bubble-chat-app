@@ -4,6 +4,8 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -43,12 +45,14 @@ private val DividerColor = Color(0xFF252542)
 private val GodModeGold = Color(0xFFFFD700)
 private val GodModeGlow = Color(0xFFFFD700).copy(alpha = 0.15f)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToStats: () -> Unit,
+    onNavigateToProfileAuditor: () -> Unit,
+    onNavigateToProfileHistory: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -99,7 +103,7 @@ fun HomeScreen(
                 TrialBanner(daysRemaining = state.usage.trialDaysRemaining)
             }
 
-            // 2. HERO CARD — Service Toggle
+            // 2. HERO CARD — Service Toggle (always visible; not gated by backend loading)
             HeroCard(
                 isEnabled = state.isServiceEnabled,
                 hasPermission = state.hasOverlayPermission,
@@ -113,30 +117,49 @@ fun HomeScreen(
                 heroGlow = heroGlow
             )
 
-            // 3. USAGE QUOTA
-            UsageQuotaCard(usage = state.usage)
-
-            // 4. RIZZ PROFILE (Digital Twin Status)
-            val profile = state.rizzProfile
-            RizzProfileCard(
-                preferences = profile,
-                onSeeFullStats = onNavigateToStats,
+            // 2a. Brutal Profile Auditor entry card
+            BrutalProfileAuditorCard(
+                primaryAccent = primaryAccent,
                 isGodMode = isGodMode,
-                onTrainVoiceDNA = { viewModel.showCalibration() },
-                primaryAccent = primaryAccent
+                onClick = onNavigateToProfileAuditor,
+                onViewHistory = onNavigateToProfileHistory
             )
 
-            // 5. HOW IT WORKS (dismissible)
-            if (state.showHowItWorks) {
-                HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
+            // Core data-driven content: skeleton while usage/history still loading
+            AnimatedContent(
+                targetState = !(state.isLoadingUsage || state.isLoadingHistory),
+                label = "homeContent"
+            ) { isLoaded ->
+                if (!isLoaded) {
+                    HomeSkeleton()
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        // 3. USAGE QUOTA
+                        UsageQuotaCard(usage = state.usage)
+
+                        // 4. RIZZ PROFILE (Digital Twin Status)
+                        RizzProfileCard(
+                            preferences = state.rizzProfile,
+                            onSeeFullStats = onNavigateToStats,
+                            isGodMode = isGodMode,
+                            onTrainVoiceDNA = { viewModel.showCalibration() },
+                            primaryAccent = primaryAccent
+                        )
+
+                        // 5. HOW IT WORKS (dismissible)
+                        if (state.showHowItWorks) {
+                            HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
+                        }
+
+                        // 6. RECENT REPLIES
+                        RecentRepliesSection(
+                            replies = state.recentReplies,
+                            onSeeAll = onNavigateToHistory,
+                            primaryAccent = primaryAccent
+                        )
+                    }
+                }
             }
-
-            // 6. RECENT REPLIES
-            RecentRepliesSection(
-                replies = state.recentReplies,
-                onSeeAll = onNavigateToHistory,
-                primaryAccent = primaryAccent
-            )
 
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -256,6 +279,103 @@ private fun HeroCard(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Overlay permission required. Tap to grant.", color = Color.White, fontSize = 13.sp)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrutalProfileAuditorCard(
+    primaryAccent: Color,
+    isGodMode: Boolean,
+    onClick: () -> Unit,
+    onViewHistory: () -> Unit
+) {
+    val borderColor = if (isGodMode) GodModeGold else primaryAccent
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, borderColor.copy(alpha = 0.7f))
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(borderColor.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        tint = borderColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Stop Getting Ghosted. Run a Zero-BS Photo Audit.",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Upload up to 12 photos. We'll tell you which ones are killing your match rate.",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = borderColor)
+            ) {
+                Text(
+                    text = "Audit My Profile",
+                    color = if (isGodMode) Color.Black else Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onClick,
+                    border = BorderStroke(1.dp, borderColor),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = borderColor
+                    ),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Run New Audit", fontSize = 13.sp)
+                }
+                TextButton(
+                    onClick = onViewHistory,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("View Past Roasts", color = borderColor, fontSize = 13.sp)
                 }
             }
         }
@@ -417,8 +537,6 @@ private fun RizzProfileCard(
     onTrainVoiceDNA: () -> Unit,
     primaryAccent: Color
 ) {
-    val hasEnoughData = preferences?.hasEnoughData == true
-
     Card(
         colors = CardDefaults.cardColors(containerColor = CardBg),
         shape = RoundedCornerShape(16.dp)
@@ -435,176 +553,227 @@ private fun RizzProfileCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
-                TextButton(onClick = onSeeFullStats) {
-                    Text("Full stats", color = Pink, fontSize = 13.sp)
+                if (preferences?.hasEnoughData == true) {
+                    TextButton(onClick = onSeeFullStats) {
+                        Text("Full stats", color = Pink, fontSize = 13.sp)
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (hasEnoughData) {
-                val prefs = preferences!!
+            when {
+                // ── STATE 1: Still loading from backend ──
+                preferences == null -> {
+                    // Skeleton shimmer placeholders
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(if (it == 2) 0.6f else 1f)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(DividerColor)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
 
-                // Voice DNA metrics
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MetricBar(
-                        label = "Emoji Frequency",
-                        value = prefs.emojiFrequency.coerceIn(0f, 1f),
-                        primaryAccent = primaryAccent
-                    )
-                    MetricBar(
-                        label = "Lowercase Usage",
-                        value = prefs.lowercaseUsage.coerceIn(0f, 1f),
-                        primaryAccent = primaryAccent
-                    )
+                // ── STATE 2: Loaded, has enough data → show vibe breakdown from API ──
+                preferences.hasEnoughData -> {
+                    // Vibe breakdown bars from backend data
+                    if (preferences.vibeBreakdown.isNotEmpty()) {
+                        Text(
+                            "Your Vibe Profile",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            preferences.vibeBreakdown.entries
+                                .sortedByDescending { it.value }
+                                .forEach { (vibeName, percentage) ->
+                                    VibeBar(
+                                        label = vibeName,
+                                        progress = percentage.coerceIn(0f, 1f),
+                                        primaryAccent = primaryAccent
+                                    )
+                                }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Preferred length indicator
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Punctuation Style", color = Color.White, fontSize = 13.sp)
+                        Text("Preferred Reply Length", color = Color.White, fontSize = 13.sp)
                         Text(
-                            prefs.punctuationStyle,
+                            when (preferences.preferredLength) {
+                                UserPreferences.PreferredLength.SHORT -> "Short & punchy"
+                                UserPreferences.PreferredLength.LONG -> "Detailed"
+                                else -> "Medium"
+                            },
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
                     }
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                // Top slang chips
-                if (prefs.topSlang.isNotEmpty()) {
-                    Text(
-                        "Top Slang",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // Interactions count
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        prefs.topSlang.forEach { slang ->
-                            Surface(
-                                color = Color.White.copy(alpha = 0.06f),
-                                shape = RoundedCornerShape(999.dp),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                        Text("Total Interactions", color = Color.White, fontSize = 13.sp)
+                        Text(
+                            "${preferences.totalRatings}",
+                            color = primaryAccent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Premium / God Mode messaging
+                    if (!isGodMode) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
-                                    text = slang,
+                                    "AI Voice Cloning: \uD83D\uDD12",
                                     color = Color.White,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
                                 )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Premium / God Mode messaging when we have enough data
-                if (!isGodMode) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                "AI Voice Cloning: 🔒",
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                            Text(
-                                "Upgrade to God Mode so the AI learns your exact humor, slang, and texting style.",
-                                color = Color.Gray,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                } else {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20).copy(alpha = 0.25f)),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                "Your Texting Personality 🧠",
-                                color = Color(0xFFA5D6A7),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                            Text(
-                                "You have a dry, deadpan humor style and prefer short, witty comebacks.",
-                                color = Color.White,
-                                fontSize = 12.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            TextButton(onClick = onTrainVoiceDNA) {
                                 Text(
-                                    text = "🧬 Add Sample Styles",
-                                    color = Color(0xFFA5D6A7),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
+                                    "Upgrade to God Mode so the AI learns your exact humor, slang, and texting style.",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp
                                 )
                             }
                         }
+                    } else {
+                        TextButton(onClick = onTrainVoiceDNA) {
+                            Text(
+                                text = "\uD83E\uDDEC Add Sample Styles to refine your AI Twin",
+                                color = Color(0xFFA5D6A7),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
-            } else {
-                // Learning in progress empty state
-                Text(
-                    text = "Calibrating Your AI Twin 🧬",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Cookd is currently analyzing your texts to learn your unique humor, slang, and vibe.",
-                    color = Color.Gray,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Data collected: Need a few more chats.",
-                    color = Color.White,
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = { 0.33f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = primaryAccent,
-                    trackColor = DividerColor
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onTrainVoiceDNA,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
-                ) {
+
+                // ── STATE 3: Zero data → onboarding CTA (no fake metrics) ──
+                preferences.totalRatings == 0 -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "\uD83E\uDDEC",
+                            fontSize = 36.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Your AI Twin isn't trained yet",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Use Cookd in your chats or upload screenshots so it can learn your humor, slang, and vibe.",
+                            color = Color.Gray,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            lineHeight = 18.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onTrainVoiceDNA,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
+                        ) {
+                            Text(
+                                text = "Upload Chat Screenshots",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // ── STATE 4: Has some data, learning in progress → real progress ──
+                else -> {
+                    val currentRatings = preferences.totalRatings
+                    val targetRatings = 20
+                    val progressFraction = (currentRatings / targetRatings.toFloat()).coerceIn(0f, 1f)
+
                     Text(
-                        text = "Upload Screenshots to Speed Up",
+                        text = "Calibrating Your AI Twin \uD83E\uDDEC",
                         color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Cookd is analyzing your texts to learn your style. Keep chatting!",
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Progress",
+                            color = Color.White,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "$currentRatings / $targetRatings interactions",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { progressFraction },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = primaryAccent,
+                        trackColor = DividerColor
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = onTrainVoiceDNA,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
+                    ) {
+                        Text(
+                            text = "Upload Screenshots to Speed Up",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }

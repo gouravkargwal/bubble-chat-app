@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
     cors_origins: list[str] = ["*"]
+    base_url: str = "https://nonconscientious-annette-saddeningly.ngrok-free.dev"
 
     def validate_production(self) -> None:
         """Fail fast if critical secrets are not configured in production."""
@@ -41,7 +42,7 @@ class Settings(BaseSettings):
             if self.jwt_secret in ("change-me", ""):
                 raise RuntimeError(
                     "JWT_SECRET must be set to a strong random value in production. "
-                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                    'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(64))"'
                 )
             if not self.gemini_api_key:
                 raise RuntimeError("GEMINI_API_KEY must be set in production.")

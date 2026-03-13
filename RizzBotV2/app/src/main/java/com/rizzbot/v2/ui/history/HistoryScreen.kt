@@ -48,6 +48,7 @@ fun HistoryScreen(
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val history by viewModel.history.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
 
     Scaffold(
@@ -67,7 +68,9 @@ fun HistoryScreen(
         },
         containerColor = Color(0xFF0F0F1A)
     ) { padding ->
-        if (history.isEmpty()) {
+        if (isLoading) {
+            HistorySkeleton(modifier = Modifier.padding(padding))
+        } else if (history.isEmpty()) {
             Box(
                 modifier = Modifier
                     .padding(padding)
@@ -147,7 +150,7 @@ private fun HistoryCard(
 ) {
     val context = LocalContext.current
     val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
-    val vibeLabels = listOf("\uD83D\uDD25 Flirty", "\uD83D\uDE0F Witty", "\u2728 Smooth", "\uD83D\uDCAA Bold")
+    val vibeLabels = listOf("🔥 Flirty", "😏 Witty", "✨ Smooth", "💪 Bold")
     var expanded by remember { mutableStateOf(false) }
 
     Card(
@@ -212,7 +215,7 @@ private fun HistoryCard(
                         verticalAlignment = Alignment.Top
                     ) {
                         Text(
-                            vibeLabels.getOrElse(index) { "\uD83D\uDCAC" },
+                            vibeLabels.getOrElse(index) { "💬" },
                             fontSize = 11.sp,
                             modifier = Modifier.width(80.dp)
                         )

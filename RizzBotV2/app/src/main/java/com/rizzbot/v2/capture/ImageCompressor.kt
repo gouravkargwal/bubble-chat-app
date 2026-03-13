@@ -41,4 +41,30 @@ class ImageCompressor @Inject constructor() {
 
         Base64.encodeToString(byteArray, Base64.NO_WRAP)
     }
+
+    suspend fun bitmapToJpegByteArray(
+        bitmap: Bitmap,
+        quality: Int = Constants.IMAGE_QUALITY,
+        maxDimension: Int = 2048
+    ): ByteArray = withContext(Dispatchers.Default) {
+        val longestEdge = max(bitmap.width, bitmap.height)
+        val scaled = if (longestEdge > maxDimension) {
+            val ratio = maxDimension.toFloat() / longestEdge
+            val newWidth = (bitmap.width * ratio).toInt()
+            val newHeight = (bitmap.height * ratio).toInt()
+            Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        } else {
+            bitmap
+        }
+
+        val byteArray = ByteArrayOutputStream().use { stream ->
+            scaled.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+            stream.toByteArray()
+        }
+
+        if (scaled !== bitmap) {
+            scaled.recycle()
+        }
+        byteArray
+    }
 }

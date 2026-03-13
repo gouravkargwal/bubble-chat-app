@@ -1,10 +1,12 @@
 import uuid
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import structlog
 from pyinstrument import Profiler
 
@@ -145,6 +147,11 @@ def create_app() -> FastAPI:
     from app.api.v1.router import v1_router
 
     app.include_router(v1_router, prefix="/api/v1")
+
+    # Static files (for profile audit images, etc.)
+    static_dir = Path("static")
+    static_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @app.get("/health")
     async def health() -> dict[str, str]:

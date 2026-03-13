@@ -1,0 +1,29 @@
+# ── Python cache & compiled files ──
+__pycache__/
+*.py[cod]
+
+# ── Local environment & secrets (backend only) ──
+.env
+.env.*
+!.env.example
+
+# ── Virtual environments (if created inside backend) ──
+.venv/
+venv/
+
+# ── Build / dist artifacts ──
+dist/
+build/
+
+# ── Test / coverage outputs ──
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Local reports & generated assets ──
+profile_results.html
+static/
+
+# ── Alembic caches (keep migration scripts tracked) ──
+alembic/**/__pycache__/
+

@@ -7,8 +7,10 @@ import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
 import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
+import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.data.remote.dto.CalibrationRequest
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
+import com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto
 import com.rizzbot.v2.data.remote.dto.TrackCopyRequest
 import com.rizzbot.v2.data.remote.dto.TrackRatingRequest
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
@@ -24,6 +26,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 import java.net.SocketTimeoutException
 import javax.inject.Inject
@@ -259,6 +264,49 @@ class HostedRepositoryImpl @Inject constructor(
             Result.failure(Exception("Calibration timed out. Try again."))
         } catch (e: Exception) {
             Result.failure(Exception(e.message ?: "Unknown error during calibration"))
+        }
+    }
+
+    override suspend fun uploadPhotosForAudit(
+        compressedPhotos: List<ByteArray>
+    ): Result<AuditResponse> {
+        return try {
+            if (compressedPhotos.isEmpty()) {
+                return Result.failure(IllegalArgumentException("No photos to upload"))
+            }
+
+            val mediaType = "image/jpeg".toMediaType()
+            val parts = compressedPhotos.mapIndexed { index, bytes ->
+                val body = bytes.toRequestBody(mediaType)
+                MultipartBody.Part.createFormData(
+                    name = "images",
+                    filename = "photo_${index + 1}.jpg",
+                    body = body
+                )
+            }
+
+            val response = hostedApi.auditProfilePhotos(parts)
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("Empty response from server"))
+                }
+            } else {
+                Result.failure(Exception("Server error: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getProfileAuditHistory(): List<AuditedPhotoItemDto> {
+        return try {
+            hostedApi.getProfileAuditHistory().items
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "getProfileAuditHistory failed: ${e.message}")
+            emptyList()
         }
     }
 }

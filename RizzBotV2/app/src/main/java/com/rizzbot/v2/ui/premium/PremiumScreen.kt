@@ -2,8 +2,10 @@ package com.rizzbot.v2.ui.premium
 
 import android.app.Activity
 import android.net.Uri
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,8 +29,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -44,7 +46,7 @@ private val CardBg = Color(0xFF1A1A2E)
 private val PremiumGold = Color(0xFFFFD700)
 private val PremiumCardBg = Color(0xFF101018)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun PremiumScreen(
     onBack: () -> Unit,
@@ -166,145 +168,159 @@ fun PremiumScreen(
                 } else {
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    VisualHook()
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Weekly / Monthly toggle
-                    BillingPeriodToggle(
-                        isWeekly = state.isWeekly,
-                        onToggle = { viewModel.toggleBillingPeriod(it) }
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
                     val isFreeTier = currentTier == "free"
                     val isProTier = currentTier == "pro"
 
-                    if (isProTier) {
-                        // Pro banner
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = CardBg),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.WorkspacePremium,
-                                    contentDescription = null,
-                                    tint = Color(0xFF7C4DFF),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        "You are currently on the Pro Plan.",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        "Unlock God Mode to max out your AI wingman.",
-                                        color = Color.Gray,
-                                        fontSize = 12.sp
-                                    )
+                    // Treat products not yet loaded as loading state
+                    val hasProducts =
+                        state.premiumWeekly != null || state.premiumMonthly != null ||
+                            state.proWeekly != null || state.proMonthly != null
+
+                    AnimatedContent(
+                        targetState = state.isReady && hasProducts,
+                        label = "subscriptionContent"
+                    ) { isLoaded ->
+                        if (!isLoaded) {
+                            SubscriptionSkeleton()
+                        } else {
+                            VisualHook()
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Weekly / Monthly toggle
+                            BillingPeriodToggle(
+                                isWeekly = state.isWeekly,
+                                onToggle = { viewModel.toggleBillingPeriod(it) }
+                            )
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            if (isProTier) {
+                                // Pro banner
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = CardBg),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.WorkspacePremium,
+                                            contentDescription = null,
+                                            tint = Color(0xFF7C4DFF),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                "You are currently on the Pro Plan.",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                            Text(
+                                                "Unlock God Mode to max out your AI wingman.",
+                                                color = Color.Gray,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
                                 }
+
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
+
+                            // Pricing cards – Pro as default hero, God Mode as upsell
+                            if (isFreeTier || isProTier) {
+                                // Pro card (shown first as default choice)
+                                val proProductDetails =
+                                    if (state.isWeekly) state.premiumWeekly else state.premiumMonthly
+                                PricingCard(
+                                    title = "Pro",
+                                    productDetails = proProductDetails,
+                                    fallbackPrice = if (state.isWeekly) "$4.99" else "$14.99",
+                                    period = if (state.isWeekly) "wk" else "mo",
+                                    features = listOf(
+                                        "⚡ Floating Bubble (Works inside Tinder/Hinge)",
+                                        "Unlimited AI Replies",
+                                        "Unlock 'Ask Out' & 'Tease' directions",
+                                        "Basic Voice Match (Learns your emojis/punctuation)",
+                                        "Unlimited conversation memory"
+                                    ),
+                                    isPurchasing = state.isPurchasing,
+                                    onPurchase = {
+                                        proProductDetails?.let { product ->
+                                            activity?.let { viewModel.purchase(it, product) }
+                                        }
+                                    },
+                                    badge = if (!state.isWeekly) "MOST POPULAR" else null
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // God Mode card (secondary upsell)
+                                val godModeProductDetails =
+                                    if (state.isWeekly) state.proWeekly else state.proMonthly
+                                PricingCard(
+                                    title = "God Mode",
+                                    productDetails = godModeProductDetails,
+                                    fallbackPrice = if (state.isWeekly) "$8.99" else "$29.99",
+                                    period = if (state.isWeekly) "wk" else "mo",
+                                    features = listOf(
+                                        "Everything in Pro, PLUS:",
+                                        "AI Clones Your Texting Style (100% Undetectable)",
+                                        "Profile Roaster (Upload her pics for psychology reads)",
+                                        "God-Tier Flirting & Creativity (Gemini Pro Engine)"
+                                    ),
+                                    isPurchasing = state.isPurchasing,
+                                    onPurchase = {
+                                        godModeProductDetails?.let { product ->
+                                            activity?.let { viewModel.purchase(it, product) }
+                                        }
+                                    },
+                                    badge = if (!state.isWeekly) "POWER USER" else null,
+                                    ctaLabel = if (isProTier) "Upgrade to God Mode" else "Go God Mode",
+                                    isPremiumTier = true
+                                )
+                            }
+
+                            // Error message
+                            if (state.purchaseResult is PurchaseResult.Error) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    (state.purchaseResult as PurchaseResult.Error).message,
+                                    color = Color(0xFFEF5350),
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            TextButton(onClick = { viewModel.restorePurchases() }) {
+                                Text("Restore purchases", color = Color.Gray, fontSize = 13.sp)
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            TextButton(onClick = onBack) {
+                                Text("Continue with free plan", color = AccentPink, fontSize = 13.sp)
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                "Auto-renews. Cancel anytime in Play Store.",
+                                color = Color.Gray.copy(alpha = 0.6f),
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
-
-                        Spacer(modifier = Modifier.height(16.dp))
                     }
-
-                    // Pricing cards – Pro as default hero, God Mode as upsell
-                    if (isFreeTier || isProTier) {
-                        // Pro card (shown first as default choice)
-                        val proProductDetails =
-                            if (state.isWeekly) state.premiumWeekly else state.premiumMonthly
-                        PricingCard(
-                            title = "Pro",
-                            productDetails = proProductDetails,
-                            fallbackPrice = if (state.isWeekly) "$4.99" else "$14.99",
-                            period = if (state.isWeekly) "wk" else "mo",
-                            features = listOf(
-                                "⚡ Floating Bubble (Works inside Tinder/Hinge)",
-                                "Unlimited AI Replies",
-                                "Unlock 'Ask Out' & 'Tease' directions",
-                                "Basic Voice Match (Learns your emojis/punctuation)",
-                                "Unlimited conversation memory"
-                            ),
-                            isPurchasing = state.isPurchasing,
-                            onPurchase = {
-                                proProductDetails?.let { product ->
-                                    activity?.let { viewModel.purchase(it, product) }
-                                }
-                            },
-                            badge = if (!state.isWeekly) "MOST POPULAR" else null
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // God Mode card (secondary upsell)
-                        val godModeProductDetails =
-                            if (state.isWeekly) state.proWeekly else state.proMonthly
-                        PricingCard(
-                            title = "God Mode",
-                            productDetails = godModeProductDetails,
-                            fallbackPrice = if (state.isWeekly) "$8.99" else "$29.99",
-                            period = if (state.isWeekly) "wk" else "mo",
-                            features = listOf(
-                                "Everything in Pro, PLUS:",
-                                "AI Clones Your Texting Style (100% Undetectable)",
-                                "Profile Roaster (Upload her pics for psychology reads)",
-                                "God-Tier Flirting & Creativity (Gemini Pro Engine)"
-                            ),
-                            isPurchasing = state.isPurchasing,
-                            onPurchase = {
-                                godModeProductDetails?.let { product ->
-                                    activity?.let { viewModel.purchase(it, product) }
-                                }
-                            },
-                            badge = if (!state.isWeekly) "POWER USER" else null,
-                            ctaLabel = if (isProTier) "Upgrade to God Mode" else "Go God Mode",
-                            isPremiumTier = true
-                        )
-                    }
-
-                    // Error message
-                    if (state.purchaseResult is PurchaseResult.Error) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            (state.purchaseResult as PurchaseResult.Error).message,
-                            color = Color(0xFFEF5350),
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    TextButton(onClick = { viewModel.restorePurchases() }) {
-                        Text("Restore purchases", color = Color.Gray, fontSize = 13.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    TextButton(onClick = onBack) {
-                        Text("Continue with free plan", color = AccentPink, fontSize = 13.sp)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        "Auto-renews. Cancel anytime in Play Store.",
-                        color = Color.Gray.copy(alpha = 0.6f),
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }

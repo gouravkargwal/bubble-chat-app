@@ -193,3 +193,38 @@ data class UserPreferencesResponse(
     @SerialName("vibe_breakdown") val vibeBreakdown: List<VibeBreakdownItem>,
     @SerialName("preferred_length") val preferredLength: String = "medium"
 )
+
+// ── Profile Auditor ──
+
+@Serializable
+data class PhotoFeedbackDto(
+    @SerialName("photo_id") val photoId: String,
+    val score: Int,
+    val tier: String,
+    @SerialName("brutal_feedback") val brutalFeedback: String,
+    @SerialName("improvement_tip") val improvementTip: String
+)
+
+@Serializable
+data class AuditResponse(
+    @SerialName("total_analyzed") val totalAnalyzed: Int,
+    @SerialName("passed_count") val passedCount: Int,
+    @SerialName("is_hard_reset") val isHardReset: Boolean,
+    val photos: List<PhotoFeedbackDto>
+)
+
+@Serializable
+data class AuditedPhotoItemDto(
+    val id: String,
+    val score: Int,
+    val tier: String,
+    @SerialName("brutal_feedback") val brutalFeedback: String,
+    @SerialName("improvement_tip") val improvementTip: String,
+    @SerialName("image_url") val imageUrl: String,
+    @SerialName("created_at") val createdAt: Long
+)
+
+@Serializable
+data class AuditedPhotoListResponse(
+    val items: List<AuditedPhotoItemDto>
+)

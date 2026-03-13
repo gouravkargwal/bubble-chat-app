@@ -35,7 +35,9 @@ data class HomeState(
     val recentReplies: List<HistoryItemResponse> = emptyList(),
     val rizzProfile: UserPreferences? = null,
     val usage: UsageState = UsageState(),
-    val showCalibrationModal: Boolean = false
+    val showCalibrationModal: Boolean = false,
+    val isLoadingUsage: Boolean = true,
+    val isLoadingHistory: Boolean = true
 )
 
 @HiltViewModel
@@ -75,14 +77,15 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect usage state immediately (includes totalRepliesGenerated/Copied from backend)
+        // Collect usage state from backend
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
                 _state.update { 
                     it.copy(
                         usage = usage,
                         totalRepliesGenerated = usage.totalRepliesGenerated,
-                        totalRepliesCopied = usage.totalRepliesCopied
+                        totalRepliesCopied = usage.totalRepliesCopied,
+                        isLoadingUsage = false
                     ) 
                 }
             }
@@ -99,28 +102,37 @@ class HomeViewModel @Inject constructor(
             val validHistory = history.filter { item ->
                 item.replies.any { reply -> reply.text.isNotBlank() }
             }
-            _state.update { it.copy(recentReplies = validHistory) }
+            _state.update { it.copy(recentReplies = validHistory, isLoadingHistory = false) }
         }
 
         // Fetch user preferences from backend
         viewModelScope.launch {
-            val prefs = hostedRepository.getUserPreferences()
-            if (prefs != null) {
-                val vibeBreakdown = prefs.vibeBreakdown.associate { it.name to it.percentage }
-                val preferredLength = when (prefs.preferredLength) {
-                    "short" -> UserPreferences.PreferredLength.SHORT
-                    "long" -> UserPreferences.PreferredLength.LONG
-                    else -> UserPreferences.PreferredLength.MEDIUM
-                }
-                _state.update {
-                    it.copy(
-                        rizzProfile = UserPreferences(
-                            totalRatings = prefs.totalRatings,
-                            vibeBreakdown = vibeBreakdown,
-                            preferredLength = preferredLength
+            try {
+                val prefs = hostedRepository.getUserPreferences()
+                if (prefs != null) {
+                    val vibeBreakdown = prefs.vibeBreakdown.associate { it.name to it.percentage }
+                    val preferredLength = when (prefs.preferredLength) {
+                        "short" -> UserPreferences.PreferredLength.SHORT
+                        "long" -> UserPreferences.PreferredLength.LONG
+                        else -> UserPreferences.PreferredLength.MEDIUM
+                    }
+                    _state.update {
+                        it.copy(
+                            rizzProfile = UserPreferences(
+                                totalRatings = prefs.totalRatings,
+                                hasEnoughData = prefs.hasEnoughData,
+                                vibeBreakdown = vibeBreakdown,
+                                preferredLength = preferredLength
+                            )
                         )
-                    )
+                    }
+                } else {
+                    // Backend returned null — set empty defaults so UI can show 0-progress
+                    _state.update { it.copy(rizzProfile = UserPreferences()) }
                 }
+            } catch (e: Exception) {
+                // Network/parse error — leave rizzProfile as null so UI shows loading skeleton
+                // (the user can pull-to-refresh or reopen the app to retry)
             }
         }
     }
@@ -190,6 +202,7 @@ class HomeViewModel @Inject constructor(
                         it.copy(
                             rizzProfile = UserPreferences(
                                 totalRatings = prefs.totalRatings,
+                                hasEnoughData = prefs.hasEnoughData,
                                 vibeBreakdown = vibeBreakdown,
                                 preferredLength = preferredLength
                             )

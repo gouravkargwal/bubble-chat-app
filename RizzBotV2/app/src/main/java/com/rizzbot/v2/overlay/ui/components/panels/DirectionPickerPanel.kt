@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,9 +26,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import com.rizzbot.v2.domain.model.ConversationDirection
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
@@ -48,6 +52,8 @@ fun DirectionPicker(
 ) {
     var customHint by remember { mutableStateOf("") }
     var showCustomInput by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(
         modifier = modifier
@@ -118,7 +124,11 @@ fun DirectionPicker(
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White.copy(alpha = if (customHintsEnabled) 0.05f else 0.02f))
                     .clickable {
-                        if (customHintsEnabled) showCustomInput = true else onUpgrade()
+                        if (customHintsEnabled) {
+                            showCustomInput = true
+                        } else {
+                            onUpgrade()
+                        }
                     }
                     .then(
                         if (!customHintsEnabled) Modifier
@@ -152,11 +162,17 @@ fun DirectionPicker(
                 }
             }
         } else {
+            LaunchedEffect(Unit) {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            }
             OutlinedTextField(
                 value = customHint,
                 onValueChange = { customHint = it },
                 placeholder = { Text("e.g., mention that I also love hiking", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,

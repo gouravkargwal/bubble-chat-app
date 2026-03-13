@@ -85,6 +85,10 @@ dependencies {
     implementation("androidx.compose.animation:animation-graphics:1.7.6")
     debugImplementation(libs.compose.ui.tooling)
 
+    // Images
+    implementation(libs.coil.compose)
+    implementation(libs.exifinterface)
+
     // Lifecycle
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.lifecycle.viewmodel.compose)

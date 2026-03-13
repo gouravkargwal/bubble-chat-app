@@ -178,3 +178,18 @@ class UserPreferencesResponse(BaseModel):
     has_enough_data: bool
     vibe_breakdown: list[VibeBreakdownItem]
     preferred_length: str = "medium"
+
+
+# Profile Auditor History
+class AuditedPhotoItem(BaseModel):
+    id: str
+    score: int
+    tier: str
+    brutal_feedback: str
+    improvement_tip: str
+    image_url: str
+    created_at: int  # unix timestamp
+
+
+class AuditedPhotoListResponse(BaseModel):
+    items: list[AuditedPhotoItem]

@@ -25,13 +25,18 @@ class HistoryViewModel @Inject constructor(
     private val _history = MutableStateFlow<List<HistoryItemResponse>>(emptyList())
     val history: StateFlow<List<HistoryItemResponse>> = _history.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     init {
         viewModelScope.launch {
+            _isLoading.value = true
             val history = hostedRepository.getHistory(limit = 50)
             // Filter out items with no valid replies (by text)
             _history.value = history.filter { item ->
                 item.replies.any { reply -> reply.text.isNotBlank() }
             }
+            _isLoading.value = false
         }
     }
 
