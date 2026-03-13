@@ -32,6 +32,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface HostedApi {
 
@@ -97,7 +98,8 @@ interface HostedApi {
     @Multipart
     @POST("api/v1/profile-audit")
     suspend fun auditProfilePhotos(
-        @Part images: List<MultipartBody.Part>
+        @Part images: List<MultipartBody.Part>,
+        @Query("lang") lang: String? = null
     ): Response<AuditResponse>
 
     @GET("api/v1/profile-audit/history")
@@ -105,5 +107,7 @@ interface HostedApi {
 
     // Profile Optimizer
     @GET("api/v1/profile-audit/optimize")
-    suspend fun optimizeProfile(): Response<ProfileBlueprintDto>
+    suspend fun optimizeProfile(
+        @Query("lang") lang: String? = null
+    ): Response<ProfileBlueprintDto>
 }

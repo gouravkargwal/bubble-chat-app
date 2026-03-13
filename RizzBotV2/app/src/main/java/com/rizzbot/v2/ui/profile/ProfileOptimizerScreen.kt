@@ -248,15 +248,15 @@ private fun IdleOptimizerCard(
                     }
                 }
 
-                Text(
-                    text = "Let Cookd auto-assemble a Hinge-ready profile from your best audited photos.",
+            Text(
+                text = "Let Cookd auto-assemble a cross-app profile from your best audited photos.",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 )
 
-                Text(
-                    text = "We'll pick 6 photos, write prompts, and explain the strategy like a creative director.",
+            Text(
+                text = "We'll pick 6 photos, craft hooks, and explain the strategy like a creative director.",
                     color = Color(0xFFB0B0D0),
                     fontSize = 13.sp,
                     lineHeight = 18.sp
@@ -297,7 +297,7 @@ private fun LoadingState() {
     val phrases = listOf(
         "Analyzing your best angles...",
         "Reordering your lineup like a creative director...",
-        "Writing Hinge prompts that don't sound AI...",
+        "Designing a Tinder/Bumble/Hinge-proof blueprint...",
         "Balancing status, warmth, and fun...",
         "Locking in a first-photo glow-up..."
     )
@@ -487,14 +487,13 @@ private fun SlotCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Hinge Prompt",
+                            text = "Contextual Hook",
                             color = Color(0xFFB0B0D0),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
                         IconButton(onClick = {
-                            val text = "${slot.hingePromptQuestion}\n${slot.hingePromptAnswer}"
-                            onCopy(text)
+                            onCopy(slot.contextualHook)
                         }) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
@@ -504,13 +503,7 @@ private fun SlotCard(
                         }
                     }
                     Text(
-                        text = slot.hingePromptQuestion,
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = slot.hingePromptAnswer,
+                        text = slot.contextualHook,
                         color = Color(0xFFE0FFE8),
                         fontSize = 14.sp,
                         lineHeight = 20.sp

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
@@ -26,13 +26,16 @@ async def profile_audit(
     ),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    lang: str = Query(
+        "English", description="Language/dialect for feedback and roasts"
+    ),
 ) -> AuditResponse:
     """Brutally audit up to 12 dating profile photos."""
     if not images:
         raise HTTPException(status_code=400, detail="At least one image is required.")
 
     try:
-        return await analyze_profile_photos(images=images, user=user, db=db)
+        return await analyze_profile_photos(images=images, user=user, db=db, lang=lang)
     except ValueError as e:
         logger.error("profile_audit_failed", error=str(e))
         raise HTTPException(

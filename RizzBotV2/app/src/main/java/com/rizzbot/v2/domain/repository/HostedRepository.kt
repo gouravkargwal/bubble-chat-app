@@ -40,6 +40,9 @@ interface HostedRepository {
     suspend fun verifyPurchase(purchaseToken: String, productId: String, orderId: String?): Boolean
 
     // Profile Auditor
-    suspend fun uploadPhotosForAudit(compressedPhotos: List<ByteArray>): Result<AuditResponse>
+    suspend fun uploadPhotosForAudit(
+        compressedPhotos: List<ByteArray>,
+        lang: String? = null
+    ): Result<AuditResponse>
     suspend fun getProfileAuditHistory(): List<com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto>
 }

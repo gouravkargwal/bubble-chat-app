@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.domain.repository.HostedRepository
+import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.compressImage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,20 +24,36 @@ data class ProfileAuditorState(
     val selectedUris: List<Uri> = emptyList(),
     val isLoading: Boolean = false,
     val result: AuditResponseUi? = null,
-    val error: String? = null
+    val error: String? = null,
+    val selectedLanguage: String = "English"
 )
 
 @HiltViewModel
 class ProfileAuditorViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val hostedRepository: HostedRepository
+    private val hostedRepository: HostedRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileAuditorState())
     val state: StateFlow<ProfileAuditorState> = _state.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            settingsRepository.roastLanguage.collect { lang ->
+                _state.value = _state.value.copy(selectedLanguage = lang)
+            }
+        }
+    }
+
     fun onPhotosSelected(uris: List<Uri>) {
         _state.value = _state.value.copy(selectedUris = uris.take(12), error = null)
+    }
+
+    fun setLanguage(language: String) {
+        viewModelScope.launch {
+            settingsRepository.setRoastLanguage(language)
+        }
     }
 
     fun analyzePhotos() {
@@ -70,7 +87,11 @@ class ProfileAuditorViewModel @Inject constructor(
 
                 // 2. Upload to backend
                 Log.d("ProfileAuditorVM", "analyzePhotos: calling uploadPhotosForAudit")
-                val result = hostedRepository.uploadPhotosForAudit(compressedBytes)
+                val currentLang = _state.value.selectedLanguage
+                val result = hostedRepository.uploadPhotosForAudit(
+                    compressedBytes,
+                    lang = currentLang
+                )
                 result
                     .onSuccess { dto ->
                         Log.d("ProfileAuditorVM", "analyzePhotos: success, totalAnalyzed=${dto.totalAnalyzed}")

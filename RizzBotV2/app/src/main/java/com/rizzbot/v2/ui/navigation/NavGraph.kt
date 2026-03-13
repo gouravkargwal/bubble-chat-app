@@ -73,7 +73,8 @@ fun NavGraph(
                 onNavigateToHistory = { navController.navigate(Screen.ReplyHistory.route) },
                 onNavigateToStats = { navController.navigate(Screen.Stats.route) },
                 onNavigateToProfileAuditor = { navController.navigate(Screen.ProfileAuditor.route) },
-                onNavigateToProfileHistory = { navController.navigate(Screen.ProfileHistory.route) }
+                onNavigateToProfileHistory = { navController.navigate(Screen.ProfileHistory.route) },
+                onNavigateToProfileOptimizer = { navController.navigate(Screen.ProfileOptimization.route) }
             )
         }
         composable(Screen.Settings.route) {

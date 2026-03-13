@@ -268,7 +268,8 @@ class HostedRepositoryImpl @Inject constructor(
     }
 
     override suspend fun uploadPhotosForAudit(
-        compressedPhotos: List<ByteArray>
+        compressedPhotos: List<ByteArray>,
+        lang: String?
     ): Result<AuditResponse> {
         return try {
             if (compressedPhotos.isEmpty()) {
@@ -285,7 +286,7 @@ class HostedRepositoryImpl @Inject constructor(
                 )
             }
 
-            val response = hostedApi.auditProfilePhotos(parts)
+            val response = hostedApi.auditProfilePhotos(parts, lang)
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null) {

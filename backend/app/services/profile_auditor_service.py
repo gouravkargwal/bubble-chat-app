@@ -94,6 +94,7 @@ async def analyze_profile_photos(
     images: list[UploadFile],
     user: User,
     db: AsyncSession,
+    lang: str = "English",
 ) -> AuditResponse:
     """Analyze up to 12 profile photos and return a brutal audit."""
     if not images:
@@ -119,7 +120,13 @@ async def analyze_profile_photos(
         "- Background: clutter, bathroom mirrors, messy rooms, distracting objects.\n"
         "Be specific and visual in your feedback (e.g. \"You look like you're hiding from the sun in a basement. "
         'Get some natural light and stand up straight."), not generic checklists.\n'
-        "Output must match the JSON schema exactly. Do NOT be polite. Give brutal, actionable feedback."
+        "Output must match the JSON schema exactly. Do NOT be polite. Give brutal, actionable feedback.\n\n"
+        f"IMPORTANT: Generate all feedback, score explanations, and improvement tips in the following "
+        f"language or dialect: {lang}.\n"
+        "If the language is 'Hinglish', use the Latin script and include Indian slang like 'Bhai', 'Mast', "
+        "'Cringe', or 'Chhapri' where it naturally fits the roast.\n"
+        "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
+        "Always match the cultural tone and norms of the requested language/dialect."
     )
 
     image_count = len(base64_images)

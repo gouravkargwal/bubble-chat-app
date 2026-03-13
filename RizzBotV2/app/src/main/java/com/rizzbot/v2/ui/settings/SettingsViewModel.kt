@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.auth.GoogleSignInHelper
 import com.rizzbot.v2.domain.model.ReferralInfo
 import com.rizzbot.v2.domain.repository.HostedRepository
+import com.rizzbot.v2.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,13 +27,15 @@ data class SettingsState(
     val isApplyingReferral: Boolean = false,
     val promoCodeInput: String = "",
     val promoApplyResult: String? = null,
-    val isApplyingPromo: Boolean = false
+    val isApplyingPromo: Boolean = false,
+    val roastLanguage: String = "English"
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val hostedRepository: HostedRepository,
-    private val googleSignInHelper: GoogleSignInHelper
+    private val googleSignInHelper: GoogleSignInHelper,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
@@ -62,6 +65,12 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val info = hostedRepository.getReferralInfo()
             _state.update { it.copy(referral = info) }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.roastLanguage.collect { lang ->
+                _state.update { it.copy(roastLanguage = lang) }
+            }
         }
     }
 
@@ -131,6 +140,12 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
             )
+        }
+    }
+
+    fun setRoastLanguage(language: String) {
+        viewModelScope.launch {
+            settingsRepository.setRoastLanguage(language)
         }
     }
 

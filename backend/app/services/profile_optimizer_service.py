@@ -34,8 +34,7 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
                     },
                     "role": {"type": "STRING"},
                     "caption": {"type": "STRING"},
-                    "hinge_prompt_question": {"type": "STRING"},
-                    "hinge_prompt_answer": {"type": "STRING"},
+                    "contextual_hook": {"type": "STRING"},
                     "coach_reasoning": {"type": "STRING"},
                 },
                 "required": [
@@ -43,15 +42,38 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
                     "slot_number",
                     "role",
                     "caption",
-                    "hinge_prompt_question",
-                    "hinge_prompt_answer",
+                    "contextual_hook",
                     "coach_reasoning",
                 ],
             },
         },
         "overall_theme": {"type": "STRING"},
+        "tinder_bio": {
+            "type": "STRING",
+            "maxLength": 500,
+        },
+        "bumble_bio": {"type": "STRING"},
+        "universal_prompts": {
+            "type": "ARRAY",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "category": {"type": "STRING"},
+                    "suggested_text": {"type": "STRING"},
+                },
+                "required": ["category", "suggested_text"],
+            },
+        },
     },
-    "required": ["slots", "overall_theme"],
+    "required": [
+        "slots",
+        "overall_theme",
+        "tinder_bio",
+        "bumble_bio",
+        "universal_prompts",
+    ],
 }
 
 
@@ -68,7 +90,9 @@ def _get_client() -> GeminiClient:
     return _client
 
 
-async def _fetch_top_audited_photos(user_id: str, db: AsyncSession) -> list[AuditedPhoto]:
+async def _fetch_top_audited_photos(
+    user_id: str, db: AsyncSession
+) -> list[AuditedPhoto]:
     """Fetch up to 10 highest scoring audited photos for a user (score >= 6)."""
     stmt: Select[tuple[AuditedPhoto]] = (
         select(AuditedPhoto)
@@ -81,7 +105,11 @@ async def _fetch_top_audited_photos(user_id: str, db: AsyncSession) -> list[Audi
     return photos
 
 
-async def generate_blueprint(user_id: str, db: AsyncSession) -> ProfileBlueprint:
+async def generate_blueprint(
+    user_id: str,
+    db: AsyncSession,
+    lang: str = "English",
+) -> ProfileBlueprint:
     """Generate a ProfileBlueprint from a user's top audited photos using Gemini.
 
     The LLM receives only previously audited photos, and must select exactly six
@@ -105,13 +133,15 @@ async def generate_blueprint(user_id: str, db: AsyncSession) -> ProfileBlueprint
     photos_json = json.dumps(photo_payload, ensure_ascii=False)
 
     system_prompt = (
-        "You are an elite dating profile creative director. "
-        "Your job is to select exactly 6 photos from the provided list of previously audited photos "
-        "to create a perfectly balanced dating profile. Assign each a slot (1-6). "
-        "Slot 1 MUST be the best clear face shot. Provide a witty, high-status caption and a "
-        "suggested Hinge prompt for each.\n\n"
+        "You are now a Cross-Platform Rizz Architect. Your job is to design a dating profile system that "
+        "works across Tinder, Bumble, and Hinge — not just one app.\n\n"
         "You MUST respond with JSON that strictly matches the provided JSON schema. "
-        "Do not include any commentary outside of the JSON."
+        "Do not include any commentary outside of the JSON.\n\n"
+        f"IMPORTANT: Provide all captions, hooks, bios, prompts, and any other text in the following "
+        f"language or dialect: {lang}.\n"
+        "If the language is 'Hinglish', use a mix of Hindi and English in Latin script and lean extra sassy/savage.\n"
+        "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
+        "Always match the cultural tone and norms of the requested language/dialect."
     )
 
     user_prompt = (
@@ -125,10 +155,17 @@ async def generate_blueprint(user_id: str, db: AsyncSession) -> ProfileBlueprint
         "- Use the brutal_feedback notes as context but feel free to disagree if you have a better framing.\n"
         "- For each chosen photo, write:\n"
         "  * A short, high-status caption that would sit under the photo.\n"
-        "  * A Hinge prompt question that fits this slot and the overall vibe.\n"
-        "  * A Hinge prompt answer in the user's voice that would pair well with the photo.\n"
-        "  * A brief coach_reasoning explaining why you picked this photo for this slot.\n"
-        "- Also include a single-sentence overall_theme summarizing the vibe of the whole profile.\n\n"
+        "  * A single `contextual_hook` string: a versatile hook inspired by this photo that can power many prompts "
+        "across apps (e.g. a suit photo might have a hook about 'Parent Approval' or 'Wedding Plus One').\n"
+        "  * A brief `coach_reasoning` explaining why you picked this photo for this slot.\n"
+        "- Also include:\n"
+        "  * `overall_theme`: one sentence summarizing the vibe of the whole profile.\n"
+        "  * `tinder_bio`: a short, punchy Tinder bio (max 500 characters) that is low-investment and high-status.\n"
+        "  * `bumble_bio`: a playful, approachable Bumble 'About Me' section that includes ~3 specific fun facts.\n"
+        "  * `universal_prompts`: exactly 3 hook objects that could become prompts or answers on ANY app. "
+        "Each must have:\n"
+        "      - `category`: a short label for the hook (e.g. 'Parent Approval', 'Low-Key Flex').\n"
+        "      - `suggested_text`: concrete example text that could be pasted into a prompt field.\n\n"
         "Return ONLY a JSON object that matches the schema. Do not include any extra keys.\n\n"
         "Audited photos JSON:\n"
         f"{photos_json}"
@@ -150,6 +187,13 @@ async def generate_blueprint(user_id: str, db: AsyncSession) -> ProfileBlueprint
             response_schema=PROFILE_BLUEPRINT_SCHEMA,
         )
         latency_ms = int((time.monotonic() - start_time) * 1000)
+        logger.debug(
+            "profile_blueprint_llm_raw",
+            latency_ms=latency_ms,
+            raw_preview=str(raw)[:1000],
+            lang=lang,
+            user_id=user_id,
+        )
         logger.info(
             "profile_blueprint_llm_success",
             latency_ms=latency_ms,
@@ -162,6 +206,13 @@ async def generate_blueprint(user_id: str, db: AsyncSession) -> ProfileBlueprint
 
     try:
         blueprint = ProfileBlueprint(**parsed)
+        logger.info(
+            "profile_blueprint_parsed",
+            user_id=user_id,
+            lang=lang,
+            slots=len(blueprint.slots),
+            overall_theme=blueprint.overall_theme[:120],
+        )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error(
             "profile_blueprint_parse_failed",
@@ -186,4 +237,3 @@ async def generate_blueprint(user_id: str, db: AsyncSession) -> ProfileBlueprint
         slot.storage_url = f"{settings.base_url}/static/{matching.storage_path}"
 
     return blueprint
-

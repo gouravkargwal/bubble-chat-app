@@ -24,13 +24,12 @@ class OptimizedSlot(BaseModel):
         ...,
         description="Witty, high-status caption text to pair with this photo.",
     )
-    hinge_prompt_question: str = Field(
+    contextual_hook: str = Field(
         ...,
-        description="Suggested Hinge prompt question that matches this photo and overall vibe.",
-    )
-    hinge_prompt_answer: str = Field(
-        ...,
-        description="Suggested answer to the Hinge prompt, written in the user's voice.",
+        description=(
+            "A short, versatile hook inspired by this photo that can power many prompts, "
+            "e.g. 'Parent approval', 'Wedding plus one', 'Adventure brag with receipts'."
+        ),
     )
     coach_reasoning: str = Field(
         ...,
@@ -40,6 +39,19 @@ class OptimizedSlot(BaseModel):
     storage_url: str | None = Field(
         default=None,
         description="Absolute URL to the stored image derived from `storage_path`.",
+    )
+
+
+class UniversalPrompt(BaseModel):
+    """Cross-app hook object that can be turned into prompts on any dating app."""
+
+    category: str = Field(
+        ...,
+        description='Short label for the hook, e.g. "Parent Approval", "Low-Key Flex", "Wingman Energy".',
+    )
+    suggested_text: str = Field(
+        ...,
+        description="Concrete example text the user can adapt into any in-app prompt.",
     )
 
 
@@ -55,5 +67,22 @@ class ProfileBlueprint(BaseModel):
     overall_theme: str = Field(
         ...,
         description="Short sentence describing the overarching vibe of this profile.",
+    )
+    tinder_bio: str = Field(
+        ...,
+        max_length=500,
+        description="Short, punchy Tinder bio. Low-investment and high-status.",
+    )
+    bumble_bio: str = Field(
+        ...,
+        description=(
+            "Bumble 'About Me' style text with ~3 fun, specific facts that feel playful and approachable."
+        ),
+    )
+    universal_prompts: list[UniversalPrompt] = Field(
+        ...,
+        min_length=3,
+        max_length=3,
+        description="Three hook objects that can be re-used as prompts or answers across apps.",
     )
 

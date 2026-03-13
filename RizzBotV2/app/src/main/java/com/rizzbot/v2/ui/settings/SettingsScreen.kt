@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -215,6 +216,59 @@ fun SettingsScreen(
                                 Text("• AI Voice Cloning", color = Color.Gray, fontSize = 12.sp)
                                 Text("• Profile Roaster", color = Color.Gray, fontSize = 12.sp)
                             }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Roasting language section
+            Text("ROAST LANGUAGE", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Roasting Language",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Choose how the AI roasts you and writes captions/bios.",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val options = listOf("English", "Hinglish", "Spanish", "Gen-Z Slang", "French")
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        options.forEach { option ->
+                            val isSelected = option == state.roastLanguage
+                            AssistChip(
+                                onClick = { viewModel.setRoastLanguage(option) },
+                                label = {
+                                    Text(
+                                        text = option,
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        fontSize = 12.sp
+                                    )
+                                },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = if (isSelected) Color(0xFFFFD700) else Color(0xFF252542)
+                                )
+                            )
                         }
                     }
                 }

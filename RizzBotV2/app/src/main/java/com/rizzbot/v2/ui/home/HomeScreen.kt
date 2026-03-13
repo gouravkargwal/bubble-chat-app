@@ -53,6 +53,7 @@ fun HomeScreen(
     onNavigateToStats: () -> Unit,
     onNavigateToProfileAuditor: () -> Unit,
     onNavigateToProfileHistory: () -> Unit,
+    onNavigateToProfileOptimizer: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -123,6 +124,12 @@ fun HomeScreen(
                 isGodMode = isGodMode,
                 onClick = onNavigateToProfileAuditor,
                 onViewHistory = onNavigateToProfileHistory
+            )
+
+            // 2b. Direct Auto-Build Profile entry (no need to tap Past Roasts)
+            AutoProfileBuilderCard(
+                primaryAccent = primaryAccent,
+                onClick = onNavigateToProfileOptimizer
             )
 
             // Core data-driven content: skeleton while usage/history still loading
@@ -378,6 +385,82 @@ private fun BrutalProfileAuditorCard(
                     Text("View Past Roasts", color = borderColor, fontSize = 13.sp)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AutoProfileBuilderCard(
+    primaryAccent: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.7f))
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(primaryAccent.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = primaryAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "High-Status Auto Builder",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Let Cookd auto-assemble a Hinge-ready profile from your best audited photos.",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
+            ) {
+                Text(
+                    text = "✨ Auto-Build My Profile",
+                    color = Color.Black,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Uses only photos you've already audited. No new uploads needed.",
+                color = Color(0xFF8080A0),
+                fontSize = 11.sp
+            )
         }
     }
 }

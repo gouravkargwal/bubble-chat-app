@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user
@@ -17,12 +17,12 @@ router = APIRouter(prefix="/profile-audit", tags=["profile-audit"])
 async def optimize_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    lang: str = Query("English", description="Language/dialect for all generated copy"),
 ) -> ProfileBlueprint:
     """Generate an optimized profile blueprint for the current user."""
     try:
-        blueprint = await generate_blueprint(user_id=current_user.id, db=db)
+        blueprint = await generate_blueprint(user_id=current_user.id, db=db, lang=lang)
     except ValueError as exc:
         # Propagate as 400 so clients can handle "no audited photos" gracefully.
         raise HTTPException(status_code=400, detail=str(exc))
     return blueprint
-

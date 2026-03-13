@@ -37,7 +37,8 @@ data class HomeState(
     val usage: UsageState = UsageState(),
     val showCalibrationModal: Boolean = false,
     val isLoadingUsage: Boolean = true,
-    val isLoadingHistory: Boolean = true
+    val isLoadingHistory: Boolean = true,
+    val roastLanguage: String = "English"
 )
 
 @HiltViewModel
@@ -74,6 +75,13 @@ class HomeViewModel @Inject constructor(
                 _state.update { currentState ->
                     currentState.copy(isServiceEnabled = isShown)
                 }
+            }
+        }
+
+        // Roast language preference
+        viewModelScope.launch {
+            settingsRepository.roastLanguage.collect { lang ->
+                _state.update { it.copy(roastLanguage = lang) }
             }
         }
 

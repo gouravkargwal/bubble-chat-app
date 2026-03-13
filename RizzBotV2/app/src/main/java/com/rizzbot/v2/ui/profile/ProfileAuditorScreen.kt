@@ -50,6 +50,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -212,6 +214,30 @@ fun ProfileAuditorScreen(
                     color = Color.Gray,
                     fontSize = 13.sp
                 )
+            }
+
+            // Language selector chips
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val options = listOf("English", "Hinglish", "Gen-Z Slang")
+                options.forEach { option ->
+                    val isSelected = option == state.selectedLanguage
+                    AssistChip(
+                        onClick = { viewModel.setLanguage(option) },
+                        label = {
+                            Text(
+                                text = option,
+                                color = if (isSelected) Color.Black else Color.White,
+                                fontSize = 12.sp
+                            )
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (isSelected) Color(0xFFFFD700) else CardBg
+                        )
+                    )
+                }
             }
 
             // Picker card
