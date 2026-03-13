@@ -31,7 +31,7 @@ data class VisionGenerateRequest(
 
 @Serializable
 data class VisionGenerateResponse(
-    val replies: List<String>,
+    val replies: List<ReplyOption>,
     @SerialName("person_name") val personName: String? = null,
     val stage: String? = null,
     @SerialName("interaction_id") val interactionId: String,
@@ -167,7 +167,7 @@ data class HistoryItemResponse(
     @SerialName("person_name") val personName: String? = null,
     val direction: String,
     @SerialName("custom_hint") val customHint: String? = null,
-    val replies: List<String>,
+    val replies: List<ReplyOption>,
     @SerialName("copied_index") val copiedIndex: Int? = null,
     @SerialName("created_at") val createdAt: Long,
     @SerialName("user_organic_text") val userOrganicText: String? = null

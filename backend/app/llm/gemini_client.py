@@ -192,14 +192,16 @@ class GeminiClient(LlmClient):
             f":generateContent?key={self.api_key}"
         )
 
+        generation_config: dict = {
+            "temperature": temperature,
+            "maxOutputTokens": max_output_tokens,
+            "responseMimeType": "text/plain",
+        }
+
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"parts": [{"text": user_prompt}]}],
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_output_tokens,
-                "responseMimeType": "text/plain",
-            },
+            "generationConfig": generation_config,
         }
 
         response = await self._client.post(url, json=payload)

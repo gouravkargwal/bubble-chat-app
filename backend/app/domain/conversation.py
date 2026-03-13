@@ -124,7 +124,9 @@ async def build_conversation_context(
     )
     recent_interactions = result.scalars().all()
 
-    summaries = []
+    summaries: list[str] = []
+    recent_user_replies: list[str] = []
+
     for interaction in reversed(recent_interactions):
         summary = f"[{interaction.direction}] "
         if interaction.copied_index is not None:
@@ -132,6 +134,8 @@ async def build_conversation_context(
                 interaction, f"reply_{interaction.copied_index}", None
             )
             if copied_reply:
+                # Track the exact replies the user actually sent for freshness routing.
+                recent_user_replies.append(copied_reply)
                 summary += (
                     f'Sent: "{copied_reply[:60]}..."'
                     if len(copied_reply) > 60
@@ -151,4 +155,5 @@ async def build_conversation_context(
         topics_failed=topics_failed,
         interaction_count=conversation.interaction_count,
         recent_summaries=summaries,
+        recent_user_replies=recent_user_replies[-3:],
     )

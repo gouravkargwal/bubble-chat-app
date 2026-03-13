@@ -11,7 +11,12 @@ import re
 
 import structlog
 
-from app.domain.models import AnalysisResult, ParsedLlmResponse, StrategyResult
+from app.domain.models import (
+    AnalysisResult,
+    ParsedLlmResponse,
+    StrategyResult,
+    ReplyOption,
+)
 
 logger = structlog.get_logger()
 
@@ -46,7 +51,8 @@ def _parse_json(text: str) -> ParsedLlmResponse:
             isinstance(item, dict)
             and "side" in item
             and "sender" in item
-            and "message_text" in item
+            and "actual_new_message" in item
+            and "is_reply_to_user" in item
         ):
             from app.domain.models import VisualTranscriptItem
 
@@ -54,7 +60,9 @@ def _parse_json(text: str) -> ParsedLlmResponse:
                 VisualTranscriptItem(
                     side=str(item.get("side")),
                     sender=str(item.get("sender")),
-                    message_text=str(item.get("message_text")),
+                    quoted_context=str(item.get("quoted_context", "")),
+                    actual_new_message=str(item.get("actual_new_message")),
+                    is_reply_to_user=bool(item.get("is_reply_to_user")),
                 )
             )
 
@@ -77,6 +85,10 @@ def _parse_json(text: str) -> ParsedLlmResponse:
         person_name=analysis_data.get("person_name", "unknown"),
         key_detail=analysis_data.get("key_detail", ""),
         what_they_want=analysis_data.get("what_they_want", ""),
+        detected_dialect=analysis_data.get("detected_dialect"),
+        their_actual_new_message=analysis_data.get("their_actual_new_message"),
+        detected_archetype=analysis_data.get("detected_archetype"),
+        archetype_reasoning=analysis_data.get("archetype_reasoning"),
     )
 
     # Parse strategy
@@ -105,30 +117,44 @@ def _parse_json(text: str) -> ParsedLlmResponse:
         first_reply_preview=str(replies[0])[:200] if replies else None,
     )
 
-    # Clean up replies - handle both string and dict formats
-    cleaned = []
+    # Parse replies into structured ReplyOption objects
+    reply_options: list[ReplyOption] = []
     for idx, reply in enumerate(replies[:4]):
-        # Handle dict replies (e.g., {"text": "..."} or {"reply": "..."})
         if isinstance(reply, dict):
-            reply_text = (
-                reply.get("text") or reply.get("reply") or reply.get("content") or ""
-            )
+            text = str(reply.get("text", "")).strip()
+            strategy_label = str(reply.get("strategy_label", "")).strip()
+            is_recommended = bool(reply.get("is_recommended", False))
+            coach_reasoning = str(reply.get("coach_reasoning", "")).strip()
+
             logger.debug(
                 "parse_dict_reply",
                 index=idx,
                 keys=list(reply.keys()),
-                text_preview=reply_text[:100],
+                text_preview=text[:100],
             )
-            reply = str(reply_text).strip()
         else:
-            reply = str(reply).strip()
+            # Defensive fallback: support legacy plain-string replies if Gemini ever ignores schema
+            text = str(reply).strip()
+            strategy_label = ""
+            is_recommended = False
+            coach_reasoning = ""
 
-        # Remove numbered prefixes like "1. " or "Reply 1: "
-        reply = re.sub(r"^(?:\d+[\.\)]\s*|Reply\s*\d+:\s*|[A-Z][a-z]+:\s*)", "", reply)
-        if reply:
-            cleaned.append(reply)
+        # Remove numbered prefixes like "1. " or "Reply 1: " from the visible text only
+        text = re.sub(r"^(?:\d+[\.\)]\s*|Reply\s*\d+:\s*|[A-Z][a-z]+:\s*)", "", text)
 
-    if not cleaned:
+        if not text:
+            continue
+
+        reply_options.append(
+            ReplyOption(
+                text=text,
+                strategy_label=strategy_label,
+                is_recommended=is_recommended,
+                coach_reasoning=coach_reasoning,
+            )
+        )
+
+    if not reply_options:
         logger.error(
             "parse_json_all_empty",
             replies_raw=str(replies)[:500],
@@ -138,13 +164,13 @@ def _parse_json(text: str) -> ParsedLlmResponse:
 
     logger.info(
         "parse_json_success",
-        cleaned_count=len(cleaned),
-        reply_lengths=[len(r) for r in cleaned],
+        cleaned_count=len(reply_options),
+        reply_lengths=[len(r.text) for r in reply_options],
     )
 
     return ParsedLlmResponse(
         visual_transcript=visual_transcript,
         analysis=analysis,
         strategy=strategy,
-        replies=cleaned,
+        replies=reply_options,
     )

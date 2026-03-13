@@ -65,6 +65,10 @@ class AnalysisResult:
     person_name: str = "unknown"
     key_detail: str = ""
     what_they_want: str = ""
+    detected_dialect: str | None = None
+    their_actual_new_message: str | None = None
+    detected_archetype: str | None = None
+    archetype_reasoning: str | None = None
 
 
 @dataclass
@@ -78,7 +82,17 @@ class StrategyResult:
 class VisualTranscriptItem:
     side: str
     sender: str
-    message_text: str
+    quoted_context: str
+    actual_new_message: str
+    is_reply_to_user: bool
+
+
+@dataclass
+class ReplyOption:
+    text: str
+    strategy_label: str
+    is_recommended: bool
+    coach_reasoning: str
 
 
 @dataclass
@@ -86,7 +100,7 @@ class ParsedLlmResponse:
     visual_transcript: list[VisualTranscriptItem]
     analysis: AnalysisResult
     strategy: StrategyResult
-    replies: list[str]
+    replies: list[ReplyOption]
 
 
 @dataclass
@@ -98,6 +112,7 @@ class ConversationContext:
     topics_failed: list[str] = field(default_factory=list)
     interaction_count: int = 0
     recent_summaries: list[str] = field(default_factory=list)
+    recent_user_replies: list[str] = field(default_factory=list)
 
 
 @dataclass

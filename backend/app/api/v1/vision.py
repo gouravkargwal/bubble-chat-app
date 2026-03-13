@@ -12,6 +12,7 @@ from app.api.v1.deps import count_today_interactions, get_current_user
 from app.api.v1.schemas.schemas import (
     CalibrationRequest,
     CalibrationResponse,
+    ReplyOptionPayload,
     VisionRequest,
     VisionResponse,
 )
@@ -52,20 +53,50 @@ GEMINI_RESPONSE_SCHEMA: dict = {
                 "properties": {
                     "side": {
                         "type": "STRING",
-                        "description": "Exactly 'left' or 'right'",
+                        "description": "Exactly 'left' or 'right'.",
                     },
                     "sender": {
                         "type": "STRING",
-                        "description": "'user' if right, 'them' if left",
+                        "description": "'user' if right, 'them' if left.",
                     },
-                    "message_text": {
+                    "quoted_context": {
                         "type": "STRING",
-                        "description": "Max 15 words of the bubble's text.",
+                        "description": (
+                            "If you see a grey/indented box at the top of a bubble, "
+                            "this field MUST contain ONLY the text from that nested box. "
+                            "If there is no quoted box, return an empty string."
+                        ),
+                    },
+                    "actual_new_message": {
+                        "type": "STRING",
+                        "description": (
+                            "The ACTUAL new message text in this bubble. "
+                            "This is the bottom-most text directly typed by the sender, "
+                            "NOT any quoted/previous message."
+                        ),
+                    },
+                    "is_reply_to_user": {
+                        "type": "BOOLEAN",
+                        "description": (
+                            "true if the ACTUAL new message is replying to something "
+                            "the user previously said (e.g., when a quoted box shows "
+                            "the user's older message), otherwise false."
+                        ),
                     },
                 },
-                "required": ["side", "sender", "message_text"],
+                "required": [
+                    "side",
+                    "sender",
+                    "actual_new_message",
+                    "is_reply_to_user",
+                ],
             },
-            "description": "Chronological transcript of the last 3-4 visible chat bubbles.",
+            "description": (
+                "Chronological transcript of the last 3-4 visible chat bubbles. "
+                "For each bubble, separate any nested quoted box text into "
+                "`quoted_context` and put only the bottom-most, fresh text into "
+                "`actual_new_message`."
+            ),
         },
         "analysis": {
             "type": "OBJECT",
@@ -73,6 +104,16 @@ GEMINI_RESPONSE_SCHEMA: dict = {
                 "detected_language_and_vibe": {
                     "type": "STRING",
                     "description": "Max 5 words.",
+                },
+                "detected_dialect": {
+                    "type": "STRING",
+                    "enum": ["ENGLISH", "HINDI", "HINGLISH"],
+                    "description": (
+                        "High-level language bucket for the chat text. "
+                        "Classify based on the dominant style of the ACTUAL messages "
+                        "and Voice DNA: pure English, pure Hindi, or Romanized Hinglish "
+                        "(e.g., 'kya kar rahe ho'). Do NOT translate when deciding this."
+                    ),
                 },
                 "their_last_message": {
                     "type": "STRING",
@@ -121,9 +162,37 @@ GEMINI_RESPONSE_SCHEMA: dict = {
                         "and 1 style/vibe detail. DO NOT repeat topics."
                     ),
                 },
+                "their_actual_new_message": {
+                    "type": "STRING",
+                    "description": (
+                        "The EXACT, verbatim text of her most recent ACTUAL new message "
+                        "from the latest left-side bubble (bottom-most text only, no quoted context)."
+                    ),
+                },
+                "detected_archetype": {
+                    "type": "STRING",
+                    "enum": [
+                        "THE BANTER GIRL",
+                        "THE INTELLECTUAL",
+                        "THE SOFT/TRADITIONAL",
+                        "THE LOW-INVESTMENT",
+                    ],
+                    "description": (
+                        "High-level persona label inferred from her texting style and "
+                        "ACTUAL new message, not the user's. Exactly one of the defined archetypes."
+                    ),
+                },
+                "archetype_reasoning": {
+                    "type": "STRING",
+                    "description": (
+                        "One short sentence explaining WHY you chose that archetype, "
+                        "grounded in her actual new message and recent behavior."
+                    ),
+                },
             },
             "required": [
                 "detected_language_and_vibe",
+                "detected_dialect",
                 "their_last_message",
                 "who_texted_last",
                 "their_tone",
@@ -134,6 +203,9 @@ GEMINI_RESPONSE_SCHEMA: dict = {
                 "key_detail",
                 "what_they_want",
                 "notable_observations",
+                "their_actual_new_message",
+                "detected_archetype",
+                "archetype_reasoning",
             ],
         },
         "strategy": {
@@ -146,8 +218,54 @@ GEMINI_RESPONSE_SCHEMA: dict = {
         },
         "replies": {
             "type": "ARRAY",
-            "items": {"type": "STRING"},
-            "description": "Exactly 4 distinct string replies.",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "text": {
+                        "type": "STRING",
+                        "description": "The reply string to show the user.",
+                    },
+                    "strategy_label": {
+                        "type": "STRING",
+                        "enum": [
+                            "PUSH-PULL",
+                            "FRAME CONTROL",
+                            "SOFT CLOSE",
+                            "VALUE ANCHOR",
+                            "PATTERN INTERRUPT",
+                        ],
+                        "description": "High-level strategy tag describing what this reply is doing.",
+                    },
+                    "is_recommended": {
+                        "type": "BOOLEAN",
+                        "description": (
+                            "Exactly ONE reply in the array must have is_recommended=true. "
+                            "That reply is the Wingman's Choice — the most high-status, "
+                            "context-aware option."
+                        ),
+                    },
+                    "coach_reasoning": {
+                        "type": "STRING",
+                        "description": (
+                            "One-sentence explanation of the psychology, cultural reference, "
+                            "or dating context behind this reply (e.g., explaining an Indian "
+                            "TV reference like Byomkesh Bakshi)."
+                        ),
+                    },
+                },
+                "required": [
+                    "text",
+                    "strategy_label",
+                    "is_recommended",
+                    "coach_reasoning",
+                ],
+            },
+            "description": (
+                "Exactly 4 distinct reply objects. Each must include a strategy_label, "
+                "an is_recommended flag, and a one-sentence coach_reasoning. "
+                "STRICT RULE: exactly ONE reply must have is_recommended=true "
+                "(the Wingman's Choice)."
+            ),
         },
     },
     "required": ["visual_transcript", "analysis", "strategy", "replies"],
@@ -181,7 +299,9 @@ async def calibrate_voice_dna(
                 "items": {"type": "STRING"},
                 "description": (
                     "Extract ONLY the text from the bubbles sent by the user "
-                    "(usually on the right side in blue or green). Ignore the other person's text."
+                    "(usually on the right side in blue or green). Ignore the other person's text. "
+                    "Extract text VERBATIM with no translation: if the message is in Hindi, "
+                    "Devanagari script, or Romanized Hinglish, keep it exactly as shown on screen."
                 ),
             }
         },
@@ -191,7 +311,9 @@ async def calibrate_voice_dna(
     client = _get_client()
     system_prompt = (
         "You are a data extractor. Read the screenshot and extract the exact text of "
-        "the messages sent by the user."
+        "the messages sent by the user. CRITICAL: Extract all text VERBATIM. If the "
+        "text is in Hindi, Devanagari script, or Romanized Hinglish (e.g., 'kya kar rahe ho'), "
+        "DO NOT translate it to English. Extract the exact letters on the screen."
     )
 
     try:
@@ -311,6 +433,49 @@ async def generate_replies(
         variant_id=tier_config.prompt_variant,
     )
 
+    # 9a. Context Threading: inject RECENT HISTORY from the last 5 interactions
+    # for this specific person into the system prompt so the model can maintain
+    # dialect and vibe continuity.
+    if conversation_context and conversation_context.person_name != "unknown":
+        recent_history_block = ""
+        try:
+            history_result = await db.execute(
+                select(Interaction)
+                .where(
+                    Interaction.user_id == user.id,
+                    Interaction.person_name == conversation_context.person_name,
+                )
+                .order_by(Interaction.created_at.desc())
+                .limit(5)
+            )
+            history_items = history_result.scalars().all()
+
+            # Build a compact text block focusing on how the user actually types.
+            lines: list[str] = []
+            for interaction in reversed(history_items):
+                if interaction.user_organic_text:
+                    lines.append(interaction.user_organic_text)
+
+            if lines:
+                recent_history_block = (
+                    "\n\n══════════════════════════════════════\n"
+                    "RECENT HISTORY (user's texting style — maintain this dialect)\n"
+                    "══════════════════════════════════════\n"
+                )
+                for idx, msg in enumerate(lines, start=1):
+                    truncated = msg if len(msg) <= 160 else msg[:157] + "..."
+                    recent_history_block += f"{idx}. {truncated}\n"
+        except Exception as e:  # pragma: no cover - defensive logging only
+            logger.warning(
+                "recent_history_injection_failed",
+                error=str(e),
+                user_id=user.id,
+            )
+            recent_history_block = ""
+
+        if recent_history_block:
+            payload.system_prompt = f"{payload.system_prompt}{recent_history_block}"
+
     # 10. Dynamic temperature routing + call Gemini with retry on JSON truncation
     client = _get_client()
     start = time.monotonic()
@@ -321,21 +486,22 @@ async def generate_replies(
     direction_key = (request.direction or "").lower()
     if custom_hint:
         # User provided a specific angle → medium-high creativity.
-        llm_temperature = 0.7
+        llm_temperature = 0.78
     elif direction_key == "opener":
-        # Cold read → max creativity.
+        # Cold read → max creativity for playful hooks.
         llm_temperature = 0.8
     elif direction_key in ("change_topic", "tease"):
         # Needs high creativity to pivot/joke.
-        llm_temperature = 0.75
+        llm_temperature = 0.78
     elif direction_key == "revive_chat":
-        llm_temperature = 0.6
+        # Needs a fresh, interesting angle without feeling random.
+        llm_temperature = 0.75
     elif direction_key in ("get_number", "ask_out"):
-        # Goal-oriented → lower creativity, more precision.
-        llm_temperature = 0.5
+        # Goal-oriented → still creative, but slightly more controlled.
+        llm_temperature = 0.65
     else:
-        # quick_reply and anything else → strict context matching.
-        llm_temperature = 0.4
+        # quick_reply and anything else → creative but anchored to context.
+        llm_temperature = 0.72
 
     # Dynamic token routing: Give a massive ceiling for the model's 'thought' process
     max_tokens = 8000 + (1000 * len(images))
@@ -380,7 +546,8 @@ async def generate_replies(
             if parsed and parsed.visual_transcript:
                 for msg in reversed(parsed.visual_transcript):
                     if msg.side.lower() == "right" or msg.sender.lower() == "user":
-                        user_organic_text = msg.message_text
+                        # Use ONLY the actual new message text, ignoring any quoted context.
+                        user_organic_text = msg.actual_new_message
                         break
 
             # 2. The Echo Filter: Check if they copied an AI suggestion
@@ -470,8 +637,8 @@ async def generate_replies(
                 "replies_generated",
                 attempt=attempt,
                 replies_count=len(parsed.replies),
-                reply_lengths=[len(r) for r in parsed.replies],
-                reply_previews=[r[:50] for r in parsed.replies],
+                reply_lengths=[len(r.text) for r in parsed.replies],
+                reply_previews=[r.text[:50] for r in parsed.replies],
             )
             break
         except json.JSONDecodeError as e:
@@ -554,7 +721,28 @@ async def generate_replies(
         )
 
     # 13. Save interaction
-    replies = parsed.replies + [""] * (4 - len(parsed.replies))  # pad to 4
+    # Persist the full Wingman Strategy payload for each reply as JSON so we can
+    # reconstruct strategy labels, recommendations, and coach reasoning later.
+    reply_options = parsed.replies[:4]
+    reply_options += [None] * (4 - len(reply_options))
+
+    def _dump_reply_option(opt) -> str:
+        if opt is None:
+            return ""
+        try:
+            return json.dumps(
+                {
+                    "text": opt.text,
+                    "strategy_label": opt.strategy_label,
+                    "is_recommended": opt.is_recommended,
+                    "coach_reasoning": opt.coach_reasoning,
+                },
+                ensure_ascii=False,
+            )
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning("reply_option_serialize_failed", error=str(e))
+            # Fallback to just the text so we never break the pipeline.
+            return opt.text
 
     # Defensive: clamp analysis strings to DB limits (String(255))
     their_tone = parsed.analysis.their_tone
@@ -602,10 +790,10 @@ async def generate_replies(
         person_name=parsed.analysis.person_name,
         key_detail=parsed.analysis.key_detail,
         user_organic_text=user_organic_text,
-        reply_0=replies[0],
-        reply_1=replies[1],
-        reply_2=replies[2],
-        reply_3=replies[3],
+        reply_0=_dump_reply_option(reply_options[0]),
+        reply_1=_dump_reply_option(reply_options[1]),
+        reply_2=_dump_reply_option(reply_options[2]),
+        reply_3=_dump_reply_option(reply_options[3]),
         llm_model=settings.gemini_model,
         prompt_variant=tier_config.prompt_variant,
         temperature_used=llm_temperature,
@@ -639,8 +827,19 @@ async def generate_replies(
         timing_phase_4_db_writes_ms=int((t4 - t3) * 1000),
     )
 
+    reply_payloads: list[ReplyOptionPayload] = []
+    for opt in parsed.replies[:4]:
+        reply_payloads.append(
+            ReplyOptionPayload(
+                text=opt.text,
+                strategy_label=opt.strategy_label,
+                is_recommended=opt.is_recommended,
+                coach_reasoning=opt.coach_reasoning,
+            )
+        )
+
     return VisionResponse(
-        replies=parsed.replies[:4],
+        replies=reply_payloads,
         person_name=(
             parsed.analysis.person_name
             if parsed.analysis.person_name != "unknown"

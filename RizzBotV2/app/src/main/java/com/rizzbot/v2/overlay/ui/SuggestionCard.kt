@@ -1,31 +1,56 @@
 package com.rizzbot.v2.overlay.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val AccentPink = Color(0xFFE91E63)
+private val GodModeGold = Color(0xFFFFD700)
+private val GodModeGlow = Color(0xFFFFD700).copy(alpha = 0.2f)
 private val CardShape = RoundedCornerShape(16.dp)
 
 @Composable
 fun SuggestionCard(
     label: String,
     reply: String,
+    strategyLabel: String,
+    isRecommended: Boolean,
+    coachReasoning: String?,
     onCopy: () -> Unit,
     onThumbsUp: () -> Unit,
     onThumbsDown: () -> Unit,
@@ -34,10 +59,18 @@ fun SuggestionCard(
     var copied by remember { mutableStateOf(false) }
     var rated by remember { mutableStateOf<Boolean?>(null) }
 
+    val borderColor = if (isRecommended) GodModeGold.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.08f)
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, Color.White.copy(alpha = 0.08f), CardShape)
+            .border(
+                BorderStroke(
+                    width = if (isRecommended) 1.5.dp else 1.dp,
+                    color = borderColor
+                ),
+                CardShape
+            )
             .clickable {
                 onCopy()
                 copied = true
@@ -49,18 +82,67 @@ fun SuggestionCard(
         Column(
             modifier = Modifier
                 .drawBehind {
+                    // Left accent bar; for Wingman's Choice, upgrade to a subtle gold glow.
                     drawLine(
-                        color = AccentPink,
+                        color = if (isRecommended) GodModeGold else AccentPink,
                         start = Offset(0f, 0f),
                         end = Offset(0f, size.height),
                         strokeWidth = 3.dp.toPx()
                     )
+
+                    if (isRecommended) {
+                        // Soft radial glow hugging the left edge of the card
+                        drawCircle(
+                            color = GodModeGlow,
+                            radius = size.height * 0.9f,
+                            center = Offset(size.width * 0.1f, size.height / 2f)
+                        )
+                    }
                 }
                 .padding(14.dp)
         ) {
-            Text(label, color = AccentPink, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            // Header: Wingman's Choice badge or original vibe label
+            Text(
+                text = if (isRecommended) "✨ WINGMAN'S CHOICE" else label,
+                color = if (isRecommended) GodModeGold else AccentPink,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+
             Spacer(modifier = Modifier.height(4.dp))
+
+            // Strategy capsule badge
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Start)
+                    .border(
+                        BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+                        shape = RoundedCornerShape(999.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = strategyLabel,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 10.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
             Text(reply, color = Color.White, fontSize = 14.sp)
+
+            // Coach tooltip / reasoning, only for Wingman's Choice
+            if (isRecommended && !coachReasoning.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = coachReasoning,
+                    color = Color.LightGray.copy(alpha = 0.9f),
+                    fontSize = 11.sp,
+                    fontStyle = FontStyle.Italic
+                )
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(

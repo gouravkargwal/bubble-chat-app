@@ -9,36 +9,40 @@ from app.llm.response_parser import parse_llm_response
 
 def test_parse_valid_json():
     """Should parse a well-formed JSON response."""
-    response = json.dumps({
-        "analysis": {
-            "their_last_message": "just got back from a hike",
-            "who_texted_last": "them",
-            "their_tone": "playful",
-            "their_effort": "medium",
-            "conversation_temperature": "warm",
-            "stage": "early_talking",
-            "person_name": "Sarah",
-            "key_detail": "hiking",
-            "what_they_want": "banter",
-        },
-        "strategy": {
-            "wrong_moves": ["being generic", "asking boring questions"],
-            "right_energy": "playful and curious",
-            "hook_point": "the hike",
-        },
-        "replies": [
-            "your legs are dead but the views were worth it right",
-            "okay but did you take the hard trail just to flex",
-            "rip your legs... recovery plan is couch and netflix yeah",
-            "you seem like someone who says almost there for the last hour",
-        ],
-    })
+    response = json.dumps(
+        {
+            "analysis": {
+                "their_last_message": "just got back from a hike",
+                "who_texted_last": "them",
+                "their_tone": "playful",
+                "their_effort": "medium",
+                "conversation_temperature": "warm",
+                "stage": "early_talking",
+                "person_name": "Sarah",
+                "key_detail": "hiking",
+                "what_they_want": "banter",
+            },
+            "strategy": {
+                "wrong_moves": ["being generic", "asking boring questions"],
+                "right_energy": "playful and curious",
+                "hook_point": "the hike",
+            },
+            "replies": [
+                "your legs are dead but the views were worth it right",
+                "okay but did you take the hard trail just to flex",
+                "rip your legs... recovery plan is couch and netflix yeah",
+                "you seem like someone who says almost there for the last hour",
+            ],
+        }
+    )
 
     parsed = parse_llm_response(response)
     assert len(parsed.replies) == 4
     assert parsed.analysis.person_name == "Sarah"
     assert parsed.analysis.stage == "early_talking"
     assert parsed.strategy.hook_point == "the hike"
+    # Verify replies are ReplyOption objects with text
+    assert all(hasattr(r, "text") for r in parsed.replies)
 
 
 def test_parse_json_in_code_block():
@@ -56,6 +60,8 @@ def test_parse_json_in_code_block():
     parsed = parse_llm_response(response)
     assert len(parsed.replies) == 4
     assert parsed.analysis.person_name == "Priya"
+    # Verify replies are ReplyOption objects
+    assert all(hasattr(r, 'text') for r in parsed.replies)
 
 
 def test_parse_delimiter_format():
@@ -73,24 +79,28 @@ CONTEXT: Person name: Aisha. Early conversation about her dog and a cafe. Stage:
     parsed = parse_llm_response(response)
     assert len(parsed.replies) == 4
     assert parsed.analysis.person_name == "Aisha"
+    # Verify replies are ReplyOption objects
+    assert all(hasattr(r, 'text') for r in parsed.replies)
 
 
 def test_parse_strips_reply_labels():
     """Should remove numbered prefixes from replies."""
-    response = json.dumps({
-        "analysis": {"person_name": "unknown"},
-        "strategy": {},
-        "replies": [
-            "1. first reply here",
-            "Reply 2: second reply",
-            "Flirty: third reply text",
-            "4) fourth reply text",
-        ],
-    })
+    response = json.dumps(
+        {
+            "analysis": {"person_name": "unknown"},
+            "strategy": {},
+            "replies": [
+                "1. first reply here",
+                "Reply 2: second reply",
+                "Flirty: third reply text",
+                "4) fourth reply text",
+            ],
+        }
+    )
 
     parsed = parse_llm_response(response)
-    assert not parsed.replies[0].startswith("1.")
-    assert "Reply 2:" not in parsed.replies[1]
+    assert not parsed.replies[0].text.startswith("1.")
+    assert "Reply 2:" not in parsed.replies[1].text
 
 
 def test_parse_error_response():

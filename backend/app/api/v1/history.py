@@ -9,6 +9,7 @@ from app.api.v1.deps import get_current_user
 from app.api.v1.schemas.schemas import (
     HistoryItemResponse,
     HistoryListResponse,
+    ReplyOptionPayload,
     UserPreferencesResponse,
     VibeBreakdownItem,
 )
@@ -36,19 +37,48 @@ async def get_history(
     )
     interactions = result.scalars().all()
 
-    items = [
-        HistoryItemResponse(
-            id=i.id,
-            person_name=i.person_name,
-            direction=i.direction,
-            custom_hint=i.custom_hint,
-            replies=[r for r in [i.reply_0, i.reply_1, i.reply_2, i.reply_3] if r],
-            copied_index=i.copied_index,
-            created_at=int(i.created_at.timestamp()),
-            user_organic_text=i.user_organic_text,
+    items: list[HistoryItemResponse] = []
+    for i in interactions:
+        raw_replies = [i.reply_0, i.reply_1, i.reply_2, i.reply_3]
+        parsed_replies: list[ReplyOptionPayload] = []
+        for raw in raw_replies:
+            if not raw:
+                continue
+            try:
+                import json
+
+                data = json.loads(raw)
+                parsed_replies.append(
+                    ReplyOptionPayload(
+                        text=str(data.get("text", "")).strip(),
+                        strategy_label=str(data.get("strategy_label", "STANDARD")),
+                        is_recommended=bool(data.get("is_recommended", False)),
+                        coach_reasoning=str(data.get("coach_reasoning", "")),
+                    )
+                )
+            except Exception:
+                # Legacy plain-text fallback
+                parsed_replies.append(
+                    ReplyOptionPayload(
+                        text=raw,
+                        strategy_label="STANDARD",
+                        is_recommended=False,
+                        coach_reasoning="",
+                    )
+                )
+
+        items.append(
+            HistoryItemResponse(
+                id=i.id,
+                person_name=i.person_name,
+                direction=i.direction,
+                custom_hint=i.custom_hint,
+                replies=parsed_replies,
+                copied_index=i.copied_index,
+                created_at=int(i.created_at.timestamp()),
+                user_organic_text=i.user_organic_text,
+            )
         )
-        for i in interactions
-    ]
     return HistoryListResponse(items=items)
 
 

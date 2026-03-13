@@ -218,6 +218,13 @@ Their voice > your defaults."""
             for summary in ctx.recent_summaries[-3:]:
                 parts.append(f"- {summary}")
 
+        if ctx.recent_user_replies:
+            parts.append("")
+            parts.append("RECENT TACTICS USED (last 3 things the user actually sent):")
+            for reply in ctx.recent_user_replies[-3:]:
+                preview = reply if len(reply) <= 80 else reply[:77] + "..."
+                parts.append(f"- {preview}")
+
         parts.append("")
         parts.append(
             "Use this history for continuity. Reference earlier topics naturally if relevant."

@@ -39,6 +39,19 @@ fun SuggestionPanel(
     modifier: Modifier = Modifier
 ) {
     val vibeLabels = listOf("\uD83D\uDD25 Flirty", "\uD83D\uDE0F Witty", "\u2728 Smooth", "\uD83D\uDCAA Bold")
+
+    // Map strategy labels to emojis
+    fun getStrategyEmoji(strategyLabel: String): String {
+        return when (strategyLabel.uppercase()) {
+            "PUSH-PULL" -> "🔄"
+            "FRAME CONTROL" -> "🎯"
+            "SOFT CLOSE" -> "☕"
+            "VALUE ANCHOR" -> "💎"
+            "PATTERN INTERRUPT" -> "⚡"
+            else -> "💬"
+        }
+    }
+
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     Column(
         modifier = modifier
@@ -62,13 +75,31 @@ fun SuggestionPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        result.replies.forEachIndexed { index, reply ->
+        result.replies.forEachIndexed { index, replyOption ->
+            val label = vibeLabels.getOrElse(index) { "\uD83D\uDCAC Reply" }
+
+            // Build the strategy badge text with appropriate emoji
+            val strategy =
+                if (replyOption.strategyLabel.isNotBlank() && replyOption.strategyLabel != "STANDARD") {
+                    val emoji = getStrategyEmoji(replyOption.strategyLabel)
+                    "$emoji ${replyOption.strategyLabel.uppercase()}"
+                } else {
+                    "💬 REPLY"
+                }
+            val strategyBadge = "[ $strategy ]"
+
+            val isRecommended = replyOption.isRecommended
+            val coachReasoning = replyOption.coachReasoning.takeIf { it.isNotBlank() }
+
             SuggestionCard(
-                label = vibeLabels.getOrElse(index) { "\uD83D\uDCAC Reply" },
-                reply = reply,
-                onCopy = { onCopy(reply, index) },
-                onThumbsUp = { onRate(index, true, reply) },
-                onThumbsDown = { onRate(index, false, reply) }
+                label = label,
+                reply = replyOption.text,
+                strategyLabel = strategyBadge,
+                isRecommended = isRecommended,
+                coachReasoning = coachReasoning,
+                onCopy = { onCopy(replyOption.text, index) },
+                onThumbsUp = { onRate(index, true, replyOption.text) },
+                onThumbsDown = { onRate(index, false, replyOption.text) }
             )
             if (index < result.replies.lastIndex) {
                 Spacer(modifier = Modifier.height(8.dp))

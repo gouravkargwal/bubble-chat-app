@@ -37,8 +37,15 @@ class VisionRequest(BaseModel):
     conversation_id: str | None = None
 
 
+class ReplyOptionPayload(BaseModel):
+    text: str
+    strategy_label: str
+    is_recommended: bool
+    coach_reasoning: str
+
+
 class VisionResponse(BaseModel):
-    replies: list[str]
+    replies: list[ReplyOptionPayload]
     person_name: str | None = None
     stage: str = "early_talking"
     interaction_id: str
@@ -150,7 +157,7 @@ class HistoryItemResponse(BaseModel):
     person_name: str | None = None
     direction: str
     custom_hint: str | None = None
-    replies: list[str]
+    replies: list[ReplyOptionPayload]
     copied_index: int | None = None
     created_at: int  # unix timestamp
     user_organic_text: str | None = None

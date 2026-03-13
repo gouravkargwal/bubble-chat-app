@@ -97,7 +97,7 @@ class HomeViewModel @Inject constructor(
             val history = hostedRepository.getHistory(limit = 3)
             // Filter out items with no valid replies
             val validHistory = history.filter { item ->
-                item.replies.any { reply -> reply.isNotBlank() }
+                item.replies.any { reply -> reply.text.isNotBlank() }
             }
             _state.update { it.copy(recentReplies = validHistory) }
         }

@@ -400,7 +400,7 @@ private fun ReplyItem(entry: com.rizzbot.v2.data.remote.dto.HistoryItemResponse)
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            entry.replies.firstOrNull() ?: "",
+            entry.replies.firstOrNull()?.text ?: "",
             color = Color.Gray,
             fontSize = 13.sp,
             maxLines = 2,

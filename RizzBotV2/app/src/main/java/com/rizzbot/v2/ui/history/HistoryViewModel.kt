@@ -28,9 +28,9 @@ class HistoryViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val history = hostedRepository.getHistory(limit = 50)
-            // Filter out items with no valid replies
+            // Filter out items with no valid replies (by text)
             _history.value = history.filter { item ->
-                item.replies.any { reply -> reply.isNotBlank() }
+                item.replies.any { reply -> reply.text.isNotBlank() }
             }
         }
     }

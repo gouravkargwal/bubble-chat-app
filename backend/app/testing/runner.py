@@ -195,8 +195,11 @@ class TestRunner:
             # Parse response
             parsed = parse_llm_response(raw)
 
+            # Convert ReplyOption objects to strings for testing evaluators
+            reply_strings = [r.text for r in parsed.replies]
+
             # Rule-based evaluation
-            rule_report = rule_based.evaluate(parsed.replies, scenario.quality_criteria)
+            rule_report = rule_based.evaluate(reply_strings, scenario.quality_criteria)
 
             # LLM judge evaluation (optional)
             judge_report = None
@@ -204,7 +207,7 @@ class TestRunner:
                 try:
                     judge_report = await judge_evaluate(
                         scenario=scenario,
-                        replies=parsed.replies,
+                        replies=reply_strings,
                         judge_client=self.client,
                         judge_model=judge_model or self.model,
                     )
@@ -215,7 +218,7 @@ class TestRunner:
                 scenario_id=scenario.id,
                 variant_id=variant_id,
                 run_index=run_index,
-                replies=parsed.replies,
+                replies=reply_strings,
                 rule_report=rule_report,
                 judge_report=judge_report,
                 latency_ms=latency_ms,

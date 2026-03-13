@@ -2,6 +2,7 @@ package com.rizzbot.v2.data.repository
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
@@ -88,7 +89,8 @@ class HostedRepositoryImpl @Inject constructor(
         } catch (e: SocketTimeoutException) {
             SuggestionResult.Error("Request timed out. Try again.", SuggestionResult.ErrorType.TIMEOUT)
         } catch (e: Exception) {
-            SuggestionResult.Error(e.message ?: "Unknown error", SuggestionResult.ErrorType.UNKNOWN)
+            Log.e("RizzBotAPI", "Serialization failed", e)
+            SuggestionResult.Error("Error: ${e.message ?: "Unknown error"}", SuggestionResult.ErrorType.UNKNOWN)
         }
     }
 

@@ -1,8 +1,10 @@
 package com.rizzbot.v2.domain.model
 
+import com.rizzbot.v2.data.remote.dto.ReplyOption
+
 sealed class SuggestionResult {
     data class Success(
-        val replies: List<String>,
+        val replies: List<ReplyOption>,
         val summary: String,
         val personName: String?,
         val interactionId: String = "",
