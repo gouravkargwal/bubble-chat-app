@@ -5,7 +5,7 @@ object Constants {
     const val MEMORY_EXPIRY_HOURS = 1L
     const val REPLY_HISTORY_MAX_ITEMS = 20
     const val REPLY_HISTORY_EXPIRY_DAYS = 7L
-    const val IMAGE_QUALITY = 85
+    const val IMAGE_QUALITY = 75
     const val IMAGE_MAX_WIDTH = 1080
     const val MAX_RETRIES = 2
     const val RETRY_INITIAL_DELAY_MS = 1000L

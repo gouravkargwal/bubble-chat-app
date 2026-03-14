@@ -18,7 +18,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed class GoogleSignInResult {
-    data class Success(val firebaseIdToken: String) : GoogleSignInResult()
+    data class Success(val firebaseIdToken: String, val isNewUser: Boolean) : GoogleSignInResult()
     data class Error(val message: String) : GoogleSignInResult()
 }
 
@@ -56,11 +56,13 @@ class GoogleSignInHelper @Inject constructor(
                 ?: return GoogleSignInResult.Error("Something went wrong. Please try again.")
 
             // Send Firebase token to our backend to upgrade the account
-            val success = authManager.authenticateFirebase(firebaseIdToken)
-            if (success) {
-                GoogleSignInResult.Success(firebaseIdToken)
-            } else {
-                GoogleSignInResult.Error("Unable to connect to server. Please check your internet and try again.")
+            when (val authResult = authManager.authenticateFirebase(firebaseIdToken)) {
+                is AuthManager.AuthResult.Success -> {
+                    GoogleSignInResult.Success(firebaseIdToken, authResult.isNewUser)
+                }
+                is AuthManager.AuthResult.Error -> {
+                    GoogleSignInResult.Error(authResult.message)
+                }
             }
         } catch (e: GetCredentialCancellationException) {
             GoogleSignInResult.Error("Sign-in was cancelled.")

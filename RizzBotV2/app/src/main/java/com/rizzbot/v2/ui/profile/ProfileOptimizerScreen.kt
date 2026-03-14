@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -214,79 +215,102 @@ private fun IdleOptimizerCard(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                // Header with icon
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(AccentSoft),
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Accent
-                            )
-                            Text(
-                                text = "High-Status Auto Builder",
-                                color = Accent,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Accent,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Profile Auto-Builder",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "AI-powered profile optimization",
+                            color = Color(0xFFB0B0D0),
+                            fontSize = 13.sp
+                        )
                     }
                 }
 
-            Text(
-                text = "Let Cookd auto-assemble a cross-app profile from your best audited photos.",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
-                text = "We'll pick 6 photos, craft hooks, and explain the strategy like a creative director.",
-                    color = Color(0xFFB0B0D0),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
+                // Main description
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "What it does:",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Cookd analyzes your audited photos and automatically creates a complete dating profile blueprint. We'll select your best 6 photos, order them strategically, craft compelling captions, and provide universal hooks that work across Tinder, Bumble, and Hinge.",
+                        color = Color(0xFFB0B0D0),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = "How it works:",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FeatureBullet("Uses only photos you've already audited")
+                        FeatureBullet("AI analyzes photo quality, angles, and appeal")
+                        FeatureBullet("Creates a strategic photo order for maximum impact")
+                        FeatureBullet("Generates captions and hooks tailored to your style")
+                    }
+                }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = onGenerate,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent)
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    contentPadding = PaddingValues(vertical = 16.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Text(
-                            text = "✨ Auto-Build My Profile",
+                            text = "Generate My Profile Blueprint",
                             color = Color.Black,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
-
-                Text(
-                    text = "Uses only photos you've already audited. No new uploads needed.",
-                    color = Color(0xFF8080A0),
-                    fontSize = 11.sp
-                )
             }
         }
     }
@@ -436,7 +460,7 @@ private fun SlotCard(
                     .clip(RoundedCornerShape(18.dp))
             ) {
                 AsyncImage(
-                    model = slot.photoUrl,
+                    model = slot.imageUrl,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -487,13 +511,13 @@ private fun SlotCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Contextual Hook",
+                            text = "Universal Hook",
                             color = Color(0xFFB0B0D0),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
                         IconButton(onClick = {
-                            onCopy(slot.contextualHook)
+                            onCopy(slot.universalHook)
                         }) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
@@ -503,21 +527,36 @@ private fun SlotCard(
                         }
                     }
                     Text(
-                        text = slot.contextualHook,
+                        text = slot.universalHook,
                         color = Color(0xFFE0FFE8),
                         fontSize = 14.sp,
                         lineHeight = 20.sp
                     )
                 }
             }
-
-            Text(
-                text = slot.coachReasoning,
-                color = Color(0xFF9FA8DA),
-                fontSize = 12.sp,
-                lineHeight = 18.sp
-            )
         }
+    }
+}
+
+@Composable
+private fun FeatureBullet(text: String) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(Accent)
+                .padding(top = 6.dp)
+        )
+        Text(
+            text = text,
+            color = Color(0xFFB0B0D0),
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        )
     }
 }
 

@@ -55,6 +55,8 @@ import com.rizzbot.v2.overlay.ui.theme.OverlayColors
 fun ScreenshotPreviewPanel(
     bitmaps: List<Bitmap>,
     maxScreenshots: Int,
+    canGenerate: Boolean = true,
+    isLoading: Boolean = false,
     onConfirm: () -> Unit,
     onAddMore: () -> Unit,
     onRetake: () -> Unit,
@@ -97,7 +99,8 @@ fun ScreenshotPreviewPanel(
                 )
 
                 IconButton(
-                    onClick = { onRemoveScreenshot(selectedIndex) },
+                    onClick = { if (!isLoading) onRemoveScreenshot(selectedIndex) },
+                    enabled = !isLoading,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
@@ -136,7 +139,7 @@ fun ScreenshotPreviewPanel(
                                     Color.White.copy(alpha = 0.04f)
                                 }
                             )
-                            .clickable { selectedIndex = index }
+                            .clickable(enabled = !isLoading) { selectedIndex = index }
                             .padding(2.dp)
                     ) {
                         Image(
@@ -175,6 +178,7 @@ fun ScreenshotPreviewPanel(
         ) {
             OutlinedButton(
                 onClick = onRetake,
+                enabled = !isLoading,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -183,6 +187,7 @@ fun ScreenshotPreviewPanel(
             if (bitmaps.size < maxScreenshots) {
                 OutlinedButton(
                     onClick = onAddMore,
+                    enabled = !isLoading,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -195,11 +200,18 @@ fun ScreenshotPreviewPanel(
 
         Button(
             onClick = onConfirm,
+            enabled = canGenerate && !isLoading,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = OverlayColors.AccentPink),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Generate replies")
+            Text(
+                when {
+                    isLoading -> "Cooking..."
+                    !canGenerate -> "🔒 Out of free replies"
+                    else -> "Generate replies"
+                }
+            )
         }
     }
 }

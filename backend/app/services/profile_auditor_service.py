@@ -5,6 +5,7 @@ needs to base64-encode the received bytes and call Gemini with a strict schema.
 """
 
 import base64
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -12,12 +13,14 @@ from typing import Sequence
 
 import structlog
 from fastapi import UploadFile
+from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.infrastructure.database.models import AuditedPhoto, User
 from app.llm.gemini_client import GeminiClient
-from app.models.profile_auditor import AuditResponse
+from app.models.profile_auditor import AuditResponse, PhotoFeedback
 
 logger = structlog.get_logger()
 
@@ -77,16 +80,18 @@ def _get_client() -> GeminiClient:
     return _client
 
 
-async def _encode_images(images: Sequence[UploadFile]) -> list[tuple[str, bytes]]:
-    """Read and base64 encode uploaded images with size checks, keeping raw bytes."""
-    encoded: list[tuple[str, bytes]] = []
+async def _encode_images(images: Sequence[UploadFile]) -> list[tuple[str, bytes, str]]:
+    """Read and base64 encode uploaded images with size checks, keeping raw bytes and hash."""
+    encoded: list[tuple[str, bytes, str]] = []
     for upload in images:
         data = await upload.read()
         if not data:
             continue
         if len(data) > MAX_FILE_SIZE:
             raise ValueError("Image exceeds 5MB limit.")
-        encoded.append((base64.b64encode(data).decode("utf-8"), data))
+        # Calculate SHA-256 hash
+        image_hash = hashlib.sha256(data).hexdigest()
+        encoded.append((base64.b64encode(data).decode("utf-8"), data, image_hash))
     return encoded
 
 
@@ -104,11 +109,61 @@ async def analyze_profile_photos(
     images = images[:12]
 
     encoded_images = await _encode_images(images)
-    base64_images = [b64 for b64, _ in encoded_images]
+    base64_images = [b64 for b64, _, _ in encoded_images]
+    image_hashes = [img_hash for _, _, img_hash in encoded_images]
+
     logger.info("profile_audit_started", image_count=len(base64_images))
     if not base64_images:
         raise ValueError("Failed to read any image data for profile audit.")
 
+    # Check for duplicate images by hash
+    existing_photos: dict[str, AuditedPhoto] = {}
+    new_image_indices: list[int] = []
+    new_base64_images: list[str] = []
+
+    for idx, img_hash in enumerate(image_hashes):
+        result = await db.execute(
+            select(AuditedPhoto)
+            .where(AuditedPhoto.user_id == user.id, AuditedPhoto.hash == img_hash)
+            .limit(1)
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing_photos[img_hash] = existing
+            logger.info(
+                "profile_audit_duplicate_found",
+                photo_id=existing.id,
+                hash=img_hash[:16],
+            )
+        else:
+            new_image_indices.append(idx)
+            new_base64_images.append(base64_images[idx])
+
+    # If all images are duplicates, return cached results
+    if not new_base64_images:
+        logger.info("profile_audit_all_duplicates", total_images=len(image_hashes))
+
+        cached_photos = []
+        for img_hash in image_hashes:
+            existing = existing_photos[img_hash]
+            cached_photos.append(
+                PhotoFeedback(
+                    photo_id=f"photo_{image_hashes.index(img_hash) + 1}",
+                    score=existing.score,
+                    tier=existing.tier,
+                    brutal_feedback=existing.brutal_feedback,
+                    improvement_tip=existing.improvement_tip,
+                )
+            )
+
+        return AuditResponse(
+            total_analyzed=len(image_hashes),
+            passed_count=sum(1 for p in cached_photos if p.tier == "GOD_TIER"),
+            is_hard_reset=all(p.tier == "GRAVEYARD" for p in cached_photos),
+            photos=cached_photos,
+        )
+
+    # Only call Gemini for new images
     system_prompt = (
         "You are a brutally honest, elite dating profile auditor speaking in first person.\n"
         "Your job is to protect the user from looking desperate or cringey.\n"
@@ -129,12 +184,12 @@ async def analyze_profile_photos(
         "Always match the cultural tone and norms of the requested language/dialect."
     )
 
-    image_count = len(base64_images)
+    new_image_count = len(new_base64_images)
     user_prompt = (
-        f"I am sending you exactly {image_count} dating profile photos.\n"
+        f"I am sending you exactly {new_image_count} dating profile photos.\n"
         "Audit these photos in the order they are provided.\n"
         "Return a JSON object that strictly matches the given schema.\n"
-        f"- `total_analyzed` MUST be {image_count}.\n"
+        f"- `total_analyzed` MUST be {new_image_count}.\n"
         "- The `photos` array MUST contain exactly one object per input image: no more, no fewer.\n"
         "- Use `photo_id` values 'photo_1', 'photo_2', ..., in the same order as the images.\n"
         "- Do NOT invent extra photos, do NOT skip any, and do NOT reuse IDs.\n"
@@ -149,7 +204,7 @@ async def analyze_profile_photos(
         raw = await client.vision_generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            base64_images=base64_images,
+            base64_images=new_base64_images,
             temperature=0.2,
             model=settings.gemini_model,
             max_output_tokens=8192,
@@ -160,30 +215,113 @@ async def analyze_profile_photos(
             "profile_audit_llm_success",
             latency_ms=latency_ms,
             raw_length=len(raw),
+            new_images=new_image_count,
+            cached_images=len(existing_photos),
         )
-        parsed = json.loads(raw)
     except Exception as e:  # pragma: no cover - defensive logging
-        logger.error("profile_audit_gemini_failed", error=str(e))
+        logger.error(
+            "profile_audit_gemini_failed",
+            error=str(e),
+            raw_preview=str(raw)[:500] if "raw" in locals() else "N/A",
+        )
         raise ValueError("Failed to audit profile photos") from e
 
+    # Parse JSON response
     try:
-        parsed_response = AuditResponse(**parsed)
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.error(
+            "profile_audit_json_parse_failed",
+            error=str(e),
+            raw_preview=str(raw)[:500],
+        )
+        raise ValueError("Failed to parse JSON response from AI") from e
 
-        # Persist audit results and images for history viewing
-        STATIC_ROOT.mkdir(parents=True, exist_ok=True)
-        audits_root = STATIC_ROOT / "audits" / user.id
-        audits_root.mkdir(parents=True, exist_ok=True)
+    # Parse and validate Pydantic model
+    try:
+        new_parsed_response = AuditResponse(**parsed)
+    except ValidationError as e:
+        logger.error(
+            "profile_audit_pydantic_validation_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            raw_preview=str(parsed)[:500],
+        )
+        raise ValueError("Failed to validate audit response structure") from e
+    except Exception as e:
+        logger.error(
+            "profile_audit_parse_unexpected_error",
+            error=str(e),
+            error_type=type(e).__name__,
+            raw_preview=str(parsed)[:500] if "parsed" in locals() else "N/A",
+        )
+        raise ValueError("Failed to parse audit response") from e
 
-        for photo_feedback in parsed_response.photos:
-            # Map photo_id like "photo_1" back to the original image bytes
-            try:
-                idx = int(str(photo_feedback.photo_id).replace("photo_", "")) - 1
-            except ValueError:
+    # Merge cached and new results
+    all_photos = []
+    photo_idx = 0
+    for idx, img_hash in enumerate(image_hashes):
+        if img_hash in existing_photos:
+            # Use cached result
+            existing = existing_photos[img_hash]
+            all_photos.append(
+                PhotoFeedback(
+                    photo_id=f"photo_{idx + 1}",
+                    score=existing.score,
+                    tier=existing.tier,
+                    brutal_feedback=existing.brutal_feedback,
+                    improvement_tip=existing.improvement_tip,
+                )
+            )
+        else:
+            # Use new result (map back to original index)
+            new_photo = new_parsed_response.photos[photo_idx]
+            all_photos.append(
+                PhotoFeedback(
+                    photo_id=f"photo_{idx + 1}",
+                    score=new_photo.score,
+                    tier=new_photo.tier,
+                    brutal_feedback=new_photo.brutal_feedback,
+                    improvement_tip=new_photo.improvement_tip,
+                )
+            )
+            photo_idx += 1
+
+    parsed_response = AuditResponse(
+        total_analyzed=len(image_hashes),
+        passed_count=sum(1 for p in all_photos if p.tier == "GOD_TIER"),
+        is_hard_reset=all(p.tier == "GRAVEYARD" for p in all_photos),
+        photos=all_photos,
+    )
+
+    # Persist audit results and images for history viewing
+    STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+    audits_root = STATIC_ROOT / "audits" / user.id
+    audits_root.mkdir(parents=True, exist_ok=True)
+
+    # Only save new photos (skip duplicates)
+    photo_idx = 0
+    for idx, img_hash in enumerate(image_hashes):
+        if img_hash in existing_photos:
+            # Skip - already exists
+            continue
+
+        # This is a new photo - save it
+        try:
+            original_idx = new_image_indices[photo_idx]
+            _, raw_bytes, _ = encoded_images[original_idx]
+
+            # Find corresponding feedback from merged results
+            photo_feedback = None
+            for pf in parsed_response.photos:
+                if pf.photo_id == f"photo_{idx + 1}":
+                    photo_feedback = pf
+                    break
+
+            if not photo_feedback:
+                photo_idx += 1
                 continue
-            if idx < 0 or idx >= len(encoded_images):
-                continue
 
-            _, raw_bytes = encoded_images[idx]
             filename = f"{photo_feedback.photo_id}_{int(time.time() * 1000)}.jpg"
             storage_rel_path = f"audits/{user.id}/{filename}"
             file_path = STATIC_ROOT / storage_rel_path
@@ -194,31 +332,29 @@ async def analyze_profile_photos(
                 AuditedPhoto(
                     user_id=user.id,
                     storage_path=storage_rel_path,
+                    hash=img_hash,
                     score=photo_feedback.score,
                     tier=photo_feedback.tier,
                     brutal_feedback=photo_feedback.brutal_feedback,
                     improvement_tip=photo_feedback.improvement_tip,
                 )
             )
+            photo_idx += 1
+        except (IndexError, ValueError) as e:
+            logger.warning("profile_audit_save_skip", error=str(e), idx=idx)
+            continue
 
-        await db.commit()
+    await db.commit()
 
-        score_summary = [
-            {"id": p.photo_id, "score": p.score, "tier": p.tier}
-            for p in parsed_response.photos
-        ]
-        logger.info(
-            "profile_audit_complete",
-            total=parsed_response.total_analyzed,
-            passed=parsed_response.passed_count,
-            is_hard_reset=parsed_response.is_hard_reset,
-            scores=score_summary,
-        )
-        return parsed_response
-    except Exception as e:  # pragma: no cover - defensive logging
-        logger.error(
-            "profile_audit_parse_failed",
-            error=str(e),
-            raw_preview=str(parsed)[:500],
-        )
-        raise ValueError("Failed to parse profile audit response") from e
+    score_summary = [
+        {"id": p.photo_id, "score": p.score, "tier": p.tier}
+        for p in parsed_response.photos
+    ]
+    logger.info(
+        "profile_audit_complete",
+        total=parsed_response.total_analyzed,
+        passed=parsed_response.passed_count,
+        is_hard_reset=parsed_response.is_hard_reset,
+        scores=score_summary,
+    )
+    return parsed_response

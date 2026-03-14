@@ -16,7 +16,8 @@ data class AuthResponse(
     @SerialName("user_id") val userId: String,
     @SerialName("expires_at") val expiresAt: Long,
     val email: String? = null,
-    @SerialName("display_name") val displayName: String? = null
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("is_new_user") val isNewUser: Boolean = false
 )
 
 // ── Vision / Generate ──
@@ -72,15 +73,22 @@ data class TrackRatingRequest(
 data class UsageResponse(
     @SerialName("daily_limit") val dailyLimit: Int,
     @SerialName("daily_used") val dailyUsed: Int,
+    @SerialName("weekly_used") val weeklyUsed: Int = 0,
+    @SerialName("monthly_used") val monthlyUsed: Int = 0,
+    @SerialName("weekly_audits_used") val weeklyAuditsUsed: Int = 0,
     @SerialName("is_premium") val isPremium: Boolean,
     val tier: String = "free",
     @SerialName("allowed_directions") val allowedDirections: List<String> = emptyList(),
     @SerialName("max_screenshots") val maxScreenshots: Int = 1,
     @SerialName("custom_hints") val customHints: Boolean = false,
     @SerialName("tier_expires_at") val tierExpiresAt: Long? = null,
+    @SerialName("god_mode_expires_at") val godModeExpiresAt: Long? = null,
     @SerialName("bonus_replies") val bonusReplies: Int = 0,
     @SerialName("total_replies_generated") val totalRepliesGenerated: Int = 0,
-    @SerialName("total_replies_copied") val totalRepliesCopied: Int = 0
+    @SerialName("total_replies_copied") val totalRepliesCopied: Int = 0,
+    val limits: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+    val features: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+    @SerialName("billing_period") val billingPeriod: String = "daily"
 )
 
 // ── Conversations ──
@@ -96,7 +104,10 @@ data class ConversationItem(
 
 @Serializable
 data class ConversationListResponse(
-    val conversations: List<ConversationItem>
+    val items: List<ConversationItem>,
+    @SerialName("total_count") val totalCount: Int,
+    val limit: Int,
+    val offset: Int
 )
 
 // ── Referral ──
@@ -111,7 +122,8 @@ data class ReferralInfoResponse(
 
 @Serializable
 data class ApplyReferralRequest(
-    val code: String
+    val code: String,
+    @SerialName("device_id") val deviceId: String? = null
 )
 
 @Serializable
@@ -145,20 +157,6 @@ data class BillingStatusResponse(
     @SerialName("auto_renewing") val autoRenewing: Boolean = false
 )
 
-// ── Promo ──
-
-@Serializable
-data class ApplyPromoRequest(
-    val code: String
-)
-
-@Serializable
-data class ApplyPromoResponse(
-    @SerialName("tier_granted") val tierGranted: String,
-    @SerialName("duration_days") val durationDays: Int,
-    @SerialName("expires_at") val expiresAt: Long
-)
-
 // ── History ──
 
 @Serializable
@@ -175,7 +173,10 @@ data class HistoryItemResponse(
 
 @Serializable
 data class HistoryListResponse(
-    val items: List<HistoryItemResponse>
+    val items: List<HistoryItemResponse>,
+    @SerialName("total_count") val totalCount: Int,
+    val limit: Int,
+    val offset: Int
 )
 
 // ── User Preferences ──
@@ -226,19 +227,23 @@ data class AuditedPhotoItemDto(
 
 @Serializable
 data class AuditedPhotoListResponse(
-    val items: List<AuditedPhotoItemDto>
+    val items: List<AuditedPhotoItemDto>,
+    @SerialName("total_count") val totalCount: Int,
+    val limit: Int,
+    val offset: Int
 )
 
 // ── Profile Optimizer ──
 
 @Serializable
 data class OptimizedSlotDto(
-    @SerialName("storage_url") val photoUrl: String,
+    val id: String,
+    @SerialName("photo_id") val photoId: String,
+    @SerialName("image_url") val imageUrl: String,
     @SerialName("slot_number") val slotNumber: Int,
     val role: String,
     val caption: String,
-    @SerialName("contextual_hook") val contextualHook: String,
-    @SerialName("coach_reasoning") val coachReasoning: String
+    @SerialName("universal_hook") val universalHook: String
 )
 
 @Serializable
@@ -249,9 +254,20 @@ data class UniversalPromptDto(
 
 @Serializable
 data class ProfileBlueprintDto(
+    val id: String,
+    @SerialName("user_id") val userId: String,
     @SerialName("overall_theme") val overallTheme: String,
     @SerialName("tinder_bio") val tinderBio: String,
     @SerialName("bumble_bio") val bumbleBio: String,
-    @SerialName("universal_prompts") val universalPrompts: List<UniversalPromptDto>,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("universal_prompts") val universalPrompts: List<UniversalPromptDto>? = null,
     val slots: List<OptimizedSlotDto>
+)
+
+@Serializable
+data class ProfileBlueprintListResponse(
+    val items: List<ProfileBlueprintDto>,
+    @SerialName("total_count") val totalCount: Int,
+    val limit: Int,
+    val offset: Int
 )

@@ -18,6 +18,13 @@ data class SettingsState(
     val isPremium: Boolean = false,
     val tier: String = "free",
     val dailyLimit: Int = 5,
+    val dailyUsed: Int = 0,
+    val weeklyUsed: Int = 0,
+    val monthlyUsed: Int = 0,
+    val billingPeriod: String = "daily",
+    val profileAuditsPerWeek: Int = 1,
+    val weeklyAuditsUsed: Int = 0,
+    val godModeExpiresAt: java.time.Instant? = null,
     val userName: String? = null,
     val userEmail: String? = null,
     val signedOut: Boolean = false,
@@ -25,9 +32,6 @@ data class SettingsState(
     val referralCodeInput: String = "",
     val referralApplyResult: String? = null,
     val isApplyingReferral: Boolean = false,
-    val promoCodeInput: String = "",
-    val promoApplyResult: String? = null,
-    val isApplyingPromo: Boolean = false,
     val roastLanguage: String = "English"
 )
 
@@ -50,13 +54,20 @@ class SettingsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            hostedRepository.refreshUsage()
+            hostedRepository.refreshUsage(force = false) // Use cache if available
             hostedRepository.usageState.collect { usage ->
                 _state.update {
                     it.copy(
                         isPremium = usage.isPremium,
                         tier = usage.tier,
-                        dailyLimit = usage.dailyLimit
+                        dailyLimit = usage.dailyLimit,
+                        dailyUsed = usage.dailyUsed,
+                        weeklyUsed = usage.weeklyUsed,
+                        monthlyUsed = usage.monthlyUsed,
+                        billingPeriod = usage.billingPeriod,
+                        profileAuditsPerWeek = usage.profileAuditsPerWeek,
+                        weeklyAuditsUsed = usage.weeklyAuditsUsed,
+                        godModeExpiresAt = usage.godModeExpiresAt
                     )
                 }
             }
@@ -109,40 +120,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onPromoCodeChanged(code: String) {
-        _state.update { it.copy(promoCodeInput = code, promoApplyResult = null) }
-    }
-
-    fun applyPromoCode() {
-        val code = _state.value.promoCodeInput.trim()
-        if (code.isEmpty()) return
-
-        viewModelScope.launch {
-            _state.update { it.copy(isApplyingPromo = true, promoApplyResult = null) }
-            val result = hostedRepository.applyPromoCode(code)
-            result.fold(
-                onSuccess = { response ->
-                    hostedRepository.refreshUsage()
-                    _state.update {
-                        it.copy(
-                            isApplyingPromo = false,
-                            promoApplyResult = "${response.tierGranted.replaceFirstChar { c -> c.uppercase() }} unlocked for ${response.durationDays} days!",
-                            promoCodeInput = ""
-                        )
-                    }
-                },
-                onFailure = { e ->
-                    _state.update {
-                        it.copy(
-                            isApplyingPromo = false,
-                            promoApplyResult = e.message
-                        )
-                    }
-                }
-            )
-        }
-    }
-
     fun setRoastLanguage(language: String) {
         viewModelScope.launch {
             settingsRepository.setRoastLanguage(language)
@@ -152,5 +129,19 @@ class SettingsViewModel @Inject constructor(
     fun signOut() {
         googleSignInHelper.signOut()
         _state.update { it.copy(signedOut = true) }
+    }
+
+    fun deleteAllData(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val result = hostedRepository.deleteAllUserData()
+            result.fold(
+                onSuccess = {
+                    onSuccess()
+                },
+                onFailure = { e ->
+                    onError(e.message ?: "Failed to delete data. Please try again.")
+                }
+            )
+        }
     }
 }

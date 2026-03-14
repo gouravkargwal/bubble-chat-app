@@ -38,13 +38,9 @@ class StatsViewModel @Inject constructor(
             }
         }
         
-        // Refresh both usage and preferences on init
-        refresh()
-    }
-
-    fun refresh() {
+        // Refresh both usage and preferences on init (use cache if available)
         viewModelScope.launch {
-            hostedRepository.refreshUsage()
+            hostedRepository.refreshUsage(force = false)
         }
         
         viewModelScope.launch {
@@ -53,7 +49,27 @@ class StatsViewModel @Inject constructor(
 
         // Pull recent interactions to estimate "conversations influenced"
         viewModelScope.launch {
-            val history = hostedRepository.getHistory(limit = 200)
+            val history = hostedRepository.getHistory(limit = 200, offset = 0)
+            val conversations = history
+                .mapNotNull { it.personName ?: it.id }
+                .distinct()
+                .size
+            _state.update { it.copy(totalConversationsInfluenced = conversations) }
+        }
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            hostedRepository.refreshUsage(force = true) // Force refresh on manual pull-to-refresh
+        }
+        
+        viewModelScope.launch {
+            refreshPreferences()
+        }
+
+        // Pull recent interactions to estimate "conversations influenced"
+        viewModelScope.launch {
+            val history = hostedRepository.getHistory(limit = 200, offset = 0)
             val conversations = history
                 .mapNotNull { it.personName ?: it.id }
                 .distinct()

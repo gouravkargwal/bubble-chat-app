@@ -51,7 +51,11 @@ fun ProfileStrategyScreen(
     val clipboard = LocalClipboardManager.current
 
     val selectedTab = remember { mutableIntStateOf(0) }
-    val tabs = listOf("Tinder", "Bumble", "Hinge")
+    val tabs = listOf("Tinder", "Bumble", "Hinge", "History")
+    
+    LaunchedEffect(Unit) {
+        viewModel.loadHistory()
+    }
 
     Scaffold(
         topBar = {
@@ -117,7 +121,9 @@ fun ProfileStrategyScreen(
                             clipboard.setText(AnnotatedString(s.blueprint.bumbleBio))
                         })
 
-                        else -> HingeTab(blueprint = s.blueprint)
+                        2 -> HingeTab(blueprint = s.blueprint)
+                        
+                        else -> HistoryTab(viewModel = viewModel)
                     }
                 }
 
@@ -138,18 +144,23 @@ fun ProfileStrategyScreen(
                 }
 
                 else -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Run the Profile Optimizer first to generate a strategy.",
-                            color = Color(0xFFB0B0D0),
-                            fontSize = 13.sp
-                        )
+                    when (selectedTab.intValue) {
+                        3 -> HistoryTab(viewModel = viewModel)
+                        else -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Run the Profile Optimizer first to generate a strategy.",
+                                    color = Color(0xFFB0B0D0),
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -243,7 +254,7 @@ private fun BumbleTab(
                 fontWeight = FontWeight.SemiBold
             )
 
-            blueprint.universalPrompts.forEach { hook ->
+            blueprint.universalPrompts?.forEach { hook ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF151528)),
@@ -317,7 +328,7 @@ private fun HingeTab(
                         fontSize = 14.sp
                     )
                     Text(
-                        text = slot.contextualHook,
+                        text = slot.universalHook,
                         color = Color(0xFFE0FFE8),
                         fontSize = 13.sp,
                         lineHeight = 19.sp
@@ -328,3 +339,122 @@ private fun HingeTab(
     }
 }
 
+@Composable
+private fun HistoryTab(
+    viewModel: ProfileOptimizerViewModel
+) {
+    val historyState by viewModel.historyState.collectAsState()
+
+    when (val state = historyState) {
+        is BlueprintHistoryState.Loading -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Loading past strategies...",
+                    color = Color.White,
+                    fontSize = 14.sp
+                )
+            }
+        }
+
+        is BlueprintHistoryState.Success -> {
+            if (state.blueprints.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No past strategies found.",
+                        color = Color(0xFFB0B0D0),
+                        fontSize = 13.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentPadding = PaddingValues(bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(
+                        items = state.blueprints,
+                        key = { it.id }
+                    ) { blueprint ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF111122)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = blueprint.overallTheme,
+                                    color = Color(0xFFFFD700),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Tinder: ${blueprint.tinderBio.take(100)}...",
+                                    color = Color(0xFFE0E0FF),
+                                    fontSize = 12.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Bumble: ${blueprint.bumbleBio.take(100)}...",
+                                    color = Color(0xFFE0FFE8),
+                                    fontSize = 12.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "${blueprint.slots.size} slots • ${blueprint.createdAt}",
+                                    color = Color(0xFF8080A0),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        is BlueprintHistoryState.Error -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = state.message,
+                    color = Color(0xFFFF6B6B),
+                    fontSize = 13.sp
+                )
+            }
+        }
+
+        else -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Tap to load past strategies.",
+                    color = Color(0xFFB0B0D0),
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+}

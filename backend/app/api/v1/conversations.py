@@ -1,7 +1,7 @@
 """Conversation management endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user
@@ -14,19 +14,35 @@ router = APIRouter()
 
 @router.get("/conversations", response_model=ConversationListResponse)
 async def list_conversations(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationListResponse:
-    """List all active conversations for the user."""
+    """List active conversations for the user with pagination."""
+    # Get total count
+    count_result = await db.execute(
+        select(func.count(Conversation.id)).where(
+            Conversation.user_id == user.id,
+            Conversation.is_active == True,  # noqa: E712
+        )
+    )
+    total_count = count_result.scalar_one()
+
+    # Get paginated results
     result = await db.execute(
         select(Conversation)
-        .where(Conversation.user_id == user.id, Conversation.is_active == True)  # noqa: E712
-        .order_by(Conversation.last_interaction_at.desc())
+        .where(
+            Conversation.user_id == user.id, Conversation.is_active == True
+        )  # noqa: E712
+        .order_by(Conversation.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     convos = result.scalars().all()
 
     return ConversationListResponse(
-        conversations=[
+        items=[
             ConversationItem(
                 id=c.id,
                 person_name=c.person_name,
@@ -35,7 +51,10 @@ async def list_conversations(
                 interaction_count=c.interaction_count,
             )
             for c in convos
-        ]
+        ],
+        total_count=total_count,
+        limit=limit,
+        offset=offset,
     )
 
 

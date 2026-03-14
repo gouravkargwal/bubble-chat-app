@@ -98,14 +98,14 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
-        // Refresh in background to ensure latest data from backend
+        // Refresh in background to ensure latest data from backend (use cache if available)
         viewModelScope.launch {
-            hostedRepository.refreshUsage()
+            hostedRepository.refreshUsage(force = false)
         }
 
         // Fetch recent history from backend
         viewModelScope.launch {
-            val history = hostedRepository.getHistory(limit = 3)
+            val history = hostedRepository.getHistory(limit = 3, offset = 0)
             // Filter out items with no valid replies
             val validHistory = history.filter { item ->
                 item.replies.any { reply -> reply.text.isNotBlank() }

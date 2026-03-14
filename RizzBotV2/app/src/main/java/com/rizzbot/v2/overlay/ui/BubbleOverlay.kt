@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -44,6 +45,7 @@ import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
 import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
 import com.rizzbot.v2.overlay.ui.theme.OverlayShapes
+import com.rizzbot.v2.ui.paywall.PaywallDialog
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -61,7 +63,9 @@ fun BubbleOverlay(
     usageState: StateFlow<UsageState>,
     dockOnLeft: StateFlow<Boolean>,
     isGalleryMode: StateFlow<Boolean>,
-    onEvent: (OverlayEvent) -> Unit
+    onEvent: (OverlayEvent) -> Unit,
+    showPaywall: Boolean = false,
+    onDismissPaywall: () -> Unit = {}
 ) {
     val currentState by state.collectAsState()
     val usage by usageState.collectAsState()
@@ -130,7 +134,9 @@ fun BubbleOverlay(
                     currentState = currentState,
                     usage = usage,
                     isGalleryMode = galleryMode,
-                    onEvent = onEvent
+                    onEvent = onEvent,
+                    showPaywall = showPaywall,
+                    onDismissPaywall = onDismissPaywall
                 )
             }
         }
@@ -181,12 +187,17 @@ private fun FullScreenCard(
     currentState: BubbleState,
     usage: UsageState,
     isGalleryMode: Boolean,
-    onEvent: (OverlayEvent) -> Unit
+    onEvent: (OverlayEvent) -> Unit,
+    showPaywall: Boolean = false,
+    onDismissPaywall: () -> Unit = {}
 ) {
+    val isLoading = currentState is BubbleState.Loading
+    
     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.6f) // Constrain height to 60% of screen to avoid blocking dating app UI
                 .animateContentSize(
                     animationSpec = spring(
                         dampingRatio = 0.85f,
@@ -214,26 +225,53 @@ private fun FullScreenCard(
                         allowedDirections = usage.allowedDirections,
                         customHintsEnabled = usage.customHintsEnabled,
                         isGalleryMode = isGalleryMode,
+                        isLoading = isLoading,
                         onInputModeChanged = { isGallery ->
-                            onEvent(OverlayEvent.SetGalleryMode(isGallery))
+                            if (!isLoading) {
+                                onEvent(OverlayEvent.SetGalleryMode(isGallery))
+                            }
                         },
                         onDirectionSelected = { direction ->
-                            onEvent(OverlayEvent.CaptureRequested(direction))
+                            if (!isLoading) {
+                                onEvent(OverlayEvent.CaptureRequested(direction))
+                            }
                         },
                         onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
                         onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
                     )
-                    is BubbleState.ScreenshotPreview -> ScreenshotPreviewPanel(
-                        bitmaps = s.bitmaps,
-                        maxScreenshots = usage.maxScreenshots,
-                        onConfirm = { onEvent(OverlayEvent.ConfirmScreenshot(s.direction)) },
-                        onAddMore = { onEvent(OverlayEvent.AddMoreScreenshots(s.direction)) },
-                        onRetake = { onEvent(OverlayEvent.RetakeLastScreenshot(s.direction)) },
-                        onRemoveScreenshot = { index ->
-                            onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
-                        },
-                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                    )
+                    is BubbleState.ScreenshotPreview -> {
+                        val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
+                        val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
+                        val canGenerate = isGodMode || hasRepliesLeft
+                        
+                        ScreenshotPreviewPanel(
+                            bitmaps = s.bitmaps,
+                            maxScreenshots = usage.maxScreenshots,
+                            canGenerate = canGenerate && !isLoading,
+                            isLoading = isLoading,
+                            onConfirm = { 
+                                if (!isLoading) {
+                                    onEvent(OverlayEvent.ConfirmScreenshot(s.direction))
+                                }
+                            },
+                            onAddMore = { 
+                                if (!isLoading) {
+                                    onEvent(OverlayEvent.AddMoreScreenshots(s.direction))
+                                }
+                            },
+                            onRetake = { 
+                                if (!isLoading) {
+                                    onEvent(OverlayEvent.RetakeLastScreenshot(s.direction))
+                                }
+                            },
+                            onRemoveScreenshot = { index ->
+                                if (!isLoading) {
+                                    onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
+                                }
+                            },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        )
+                    }
                     is BubbleState.Loading -> {
                         if (s.isProcessing) {
                             ProcessingOverlay()
@@ -266,6 +304,13 @@ private fun FullScreenCard(
                     else -> {}
                 }
             }
+        }
+
+        // Paywall Dialog
+        if (showPaywall) {
+            PaywallDialog(
+                onDismiss = onDismissPaywall
+            )
         }
     }
 }

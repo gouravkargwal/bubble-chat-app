@@ -1,5 +1,6 @@
 """Main reply generation endpoint — the core product."""
 
+import copy
 import json
 import time
 
@@ -21,7 +22,8 @@ from app.domain.conversation import (
     build_conversation_context,
     find_or_create_conversation,
 )
-from app.domain.tiers import get_effective_tier, get_tier_config
+from app.core.tier_config import TIER_CONFIG
+from app.domain.tiers import get_effective_tier
 from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import (
@@ -365,12 +367,13 @@ async def generate_replies(
     """Analyze screenshot and generate 4 reply suggestions."""
     # 1. Resolve tier and feature config
     effective_tier = get_effective_tier(user)
-    tier_config = get_tier_config(effective_tier)
+    tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
 
     # 2. Check daily rate limit (0 = unlimited)
     daily_used = await count_today_interactions(user.id, db)
-    effective_limit = tier_config.daily_limit + user.bonus_replies
-    if tier_config.daily_limit > 0 and daily_used >= effective_limit:
+    daily_limit = tier_config["limits"]["chat_generations_per_day"]
+    effective_limit = daily_limit + user.bonus_replies
+    if daily_limit > 0 and daily_used >= effective_limit:
         raise HTTPException(
             status_code=429,
             detail="Daily limit reached. Upgrade to Premium for more replies.",
@@ -388,22 +391,31 @@ async def generate_replies(
         )
 
     # 4. Enforce max screenshots per tier
-    if len(images) > tier_config.max_screenshots:
-        images = images[-tier_config.max_screenshots :]  # keep most recent
+    max_screenshots = tier_config["limits"]["max_screenshots_per_request"]
+    if len(images) > max_screenshots:
+        images = images[-max_screenshots:]  # keep most recent
 
     # 5. Validate direction against tier's allowed directions
-    if request.direction not in tier_config.allowed_directions:
+    allowed_directions = tier_config["features"]["allowed_ui_directions"]
+    if request.direction.value not in allowed_directions:
         raise HTTPException(
             status_code=403,
-            detail=f"Direction '{request.direction}' requires a higher tier.",
+            detail="This chat direction is locked for your current plan. Please upgrade.",
         )
 
-    # 6. Strip custom hint if tier doesn't support it
-    custom_hint = request.custom_hint if tier_config.custom_hints else None
+    # 6. Strip custom hint if tier doesn't support it, and enforce max length
+    max_hint_chars = tier_config["limits"]["max_custom_hint_chars"]
+    if not tier_config["features"]["custom_hints_enabled"]:
+        custom_hint = None
+    elif request.custom_hint and len(request.custom_hint) > max_hint_chars:
+        # Truncate if over limit
+        custom_hint = request.custom_hint[:max_hint_chars]
+    else:
+        custom_hint = request.custom_hint
 
     # 7. Load Voice DNA only if tier supports it
     voice_dna = None
-    if tier_config.voice_dna:
+    if tier_config["features"]["voice_dna_enabled"]:
         result = await db.execute(
             select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
         )
@@ -413,7 +425,10 @@ async def generate_replies(
 
     # 8. Load conversation context only if tier supports memory and a conversation_id is provided
     conversation_context = None
-    if tier_config.conversation_memory and request.conversation_id:
+    if (
+        tier_config["features"]["chemistry_tracking_enabled"]
+        and request.conversation_id
+    ):
         convo_result = await db.execute(
             select(Conversation).where(
                 Conversation.id == request.conversation_id,
@@ -425,20 +440,22 @@ async def generate_replies(
             conversation_context = await build_conversation_context(convo, db)
 
     # 9. Build prompt using tier's variant
+    # Use default variant for now (can be extended in tier config if needed)
     payload = prompt_engine.build(
-        direction=request.direction,
+        direction=request.direction.value,
         custom_hint=custom_hint,
         voice_dna=voice_dna,
         conversation_context=conversation_context,
-        variant_id=tier_config.prompt_variant,
+        variant_id="default",
     )
 
-    # 9a. Context Threading: inject RECENT HISTORY from the last 5 interactions
+    # 9a. Context Threading: inject RECENT HISTORY from the last N interactions
     # for this specific person into the system prompt so the model can maintain
     # dialect and vibe continuity.
     if conversation_context and conversation_context.person_name != "unknown":
         recent_history_block = ""
         try:
+            max_context_messages = tier_config["limits"]["max_context_messages"]
             history_result = await db.execute(
                 select(Interaction)
                 .where(
@@ -446,7 +463,7 @@ async def generate_replies(
                     Interaction.person_name == conversation_context.person_name,
                 )
                 .order_by(Interaction.created_at.desc())
-                .limit(5)
+                .limit(max_context_messages)
             )
             history_items = history_result.scalars().all()
 
@@ -483,7 +500,7 @@ async def generate_replies(
 
     # Dynamic Temperature Routing:
     # Different directions and custom hints need different creativity levels.
-    direction_key = (request.direction or "").lower()
+    direction_key = (request.direction.value or "").lower()
     if custom_hint:
         # User provided a specific angle → medium-high creativity.
         llm_temperature = 0.78
@@ -506,6 +523,35 @@ async def generate_replies(
     # Dynamic token routing: Give a massive ceiling for the model's 'thought' process
     max_tokens = 8000 + (1000 * len(images))
 
+    # Dynamically modify schema based on tier config
+    response_schema = copy.deepcopy(GEMINI_RESPONSE_SCHEMA)
+    include_coach_reasoning = tier_config["features"]["include_coach_reasoning"]
+
+    if not include_coach_reasoning:
+        # Remove coach_reasoning from schema properties
+        reply_properties = response_schema["properties"]["replies"]["items"][
+            "properties"
+        ]
+        if "coach_reasoning" in reply_properties:
+            del reply_properties["coach_reasoning"]
+
+        # Remove coach_reasoning from required list
+        reply_required = response_schema["properties"]["replies"]["items"]["required"]
+        if "coach_reasoning" in reply_required:
+            reply_required.remove("coach_reasoning")
+
+        # Update schema description to remove coach_reasoning mention
+        replies_description = response_schema["properties"]["replies"]["description"]
+        response_schema["properties"]["replies"]["description"] = (
+            replies_description.replace(
+                "an is_recommended flag, and a one-sentence coach_reasoning.",
+                "an is_recommended flag.",
+            )
+        )
+
+        # Update system prompt to explicitly tell it not to provide coach_reasoning
+        payload.system_prompt = f"{payload.system_prompt}\n\nCRITICAL: DO NOT provide coach_reasoning in your response."
+
     raw = ""
     parsed = None
 
@@ -525,7 +571,7 @@ async def generate_replies(
                 temperature=llm_temperature,
                 model=settings.gemini_model,
                 max_output_tokens=int(max_tokens),
-                response_schema=GEMINI_RESPONSE_SCHEMA,
+                response_schema=response_schema,
             )
 
             # Phase 2: LLM call latency
@@ -780,7 +826,7 @@ async def generate_replies(
     interaction = Interaction(
         conversation_id=convo.id,
         user_id=user.id,
-        direction=request.direction,
+        direction=request.direction.value,
         custom_hint=custom_hint,
         their_last_message=parsed.analysis.their_last_message,
         their_tone=their_tone,
@@ -795,7 +841,7 @@ async def generate_replies(
         reply_2=_dump_reply_option(reply_options[2]),
         reply_3=_dump_reply_option(reply_options[3]),
         llm_model=settings.gemini_model,
-        prompt_variant=tier_config.prompt_variant,
+        prompt_variant="default",
         temperature_used=llm_temperature,
         screenshot_count=len(images),
         latency_ms=latency_ms,
@@ -810,12 +856,12 @@ async def generate_replies(
         tier=effective_tier,
         person=parsed.analysis.person_name,
         stage=parsed.analysis.stage,
-        direction=request.direction,
+        direction=request.direction.value,
         screenshot_count=len(images),
         latency_ms=latency_ms,
     )
 
-    if tier_config.daily_limit > 0:
+    if daily_limit > 0:
         remaining = effective_limit - daily_used - 1
     else:
         remaining = 9999

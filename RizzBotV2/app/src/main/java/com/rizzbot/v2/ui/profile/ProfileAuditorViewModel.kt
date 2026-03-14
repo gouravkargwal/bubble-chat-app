@@ -16,6 +16,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -24,8 +25,14 @@ data class ProfileAuditorState(
     val selectedUris: List<Uri> = emptyList(),
     val isLoading: Boolean = false,
     val result: AuditResponseUi? = null,
+    val resultPhotoIdToUri: Map<String, Uri> = emptyMap(), // Preserve URIs for result display
     val error: String? = null,
-    val selectedLanguage: String = "English"
+    val selectedLanguage: String = "English",
+    val maxPhotosPerAudit: Int = 3,
+    val showPaywall: Boolean = false,
+    val tier: String = "free",
+    val weeklyAuditsUsed: Int = 0,
+    val profileAuditsPerWeek: Int = 1
 )
 
 @HiltViewModel
@@ -40,14 +47,35 @@ class ProfileAuditorViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            settingsRepository.roastLanguage.collect { lang ->
-                _state.value = _state.value.copy(selectedLanguage = lang)
-            }
+            combine(
+                settingsRepository.roastLanguage,
+                hostedRepository.usageState
+            ) { lang, usage ->
+                _state.value = _state.value.copy(
+                    selectedLanguage = lang,
+                    maxPhotosPerAudit = usage.maxPhotosPerAudit,
+                    tier = usage.tier,
+                    weeklyAuditsUsed = usage.weeklyAuditsUsed,
+                    profileAuditsPerWeek = usage.profileAuditsPerWeek
+                )
+            }.collect {}
         }
     }
 
     fun onPhotosSelected(uris: List<Uri>) {
-        _state.value = _state.value.copy(selectedUris = uris.take(12), error = null)
+        val maxPhotos = _state.value.maxPhotosPerAudit
+        val selectedPhotos = uris.take(maxPhotos)
+        val exceededLimit = uris.size > maxPhotos
+        
+        _state.value = _state.value.copy(
+            selectedUris = selectedPhotos,
+            error = null,
+            showPaywall = exceededLimit && !hostedRepository.usageState.value.isPremium
+        )
+    }
+    
+    fun dismissPaywall() {
+        _state.value = _state.value.copy(showPaywall = false)
     }
 
     fun setLanguage(language: String) {
@@ -85,7 +113,12 @@ class ProfileAuditorViewModel @Inject constructor(
                     return@launch
                 }
 
-                // 2. Upload to backend
+                // 2. Create photoIdToUri mapping before clearing selectedUris
+                val photoIdToUri = uris.mapIndexed { index, uri ->
+                    "photo_${index + 1}" to uri
+                }.toMap()
+
+                // 3. Upload to backend
                 Log.d("ProfileAuditorVM", "analyzePhotos: calling uploadPhotosForAudit")
                 val currentLang = _state.value.selectedLanguage
                 val result = hostedRepository.uploadPhotosForAudit(
@@ -97,7 +130,9 @@ class ProfileAuditorViewModel @Inject constructor(
                         Log.d("ProfileAuditorVM", "analyzePhotos: success, totalAnalyzed=${dto.totalAnalyzed}")
                         _state.value = _state.value.copy(
                             isLoading = false,
-                            result = dto.toUiModel()
+                            result = dto.toUiModel(),
+                            resultPhotoIdToUri = photoIdToUri, // Preserve URIs for result display
+                            selectedUris = emptyList() // Clear selected photos after successful audit
                         )
                     }
                     .onFailure { e ->

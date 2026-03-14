@@ -5,12 +5,13 @@ import com.rizzbot.v2.data.remote.dto.ProfileBlueprintDto
 import com.rizzbot.v2.data.remote.dto.UniversalPromptDto
 
 data class OptimizedSlot(
-    val photoUrl: String,
+    val id: String,
+    val photoId: String,
+    val imageUrl: String,
     val slotNumber: Int,
     val role: String,
     val caption: String,
-    val contextualHook: String,
-    val coachReasoning: String
+    val universalHook: String
 )
 
 data class UniversalPrompt(
@@ -19,30 +20,37 @@ data class UniversalPrompt(
 )
 
 data class ProfileBlueprint(
+    val id: String,
+    val userId: String,
     val overallTheme: String,
     val tinderBio: String,
     val bumbleBio: String,
-    val universalPrompts: List<UniversalPrompt>,
+    val createdAt: String,
+    val universalPrompts: List<UniversalPrompt>?,
     val slots: List<OptimizedSlot>
 )
 
 fun ProfileBlueprintDto.toUi(): ProfileBlueprint =
     ProfileBlueprint(
+        id = id,
+        userId = userId,
         overallTheme = overallTheme,
         tinderBio = tinderBio,
         bumbleBio = bumbleBio,
-        universalPrompts = universalPrompts.map { it.toUi() },
+        createdAt = createdAt,
+        universalPrompts = universalPrompts?.map { it.toUi() },
         slots = slots.map { it.toUi() }
     )
 
 fun OptimizedSlotDto.toUi(): OptimizedSlot =
     OptimizedSlot(
-        photoUrl = photoUrl,
+        id = id,
+        photoId = photoId,
+        imageUrl = imageUrl,
         slotNumber = slotNumber,
         role = role,
         caption = caption,
-        contextualHook = contextualHook,
-        coachReasoning = coachReasoning
+        universalHook = universalHook
     )
 
 fun UniversalPromptDto.toUi(): UniversalPrompt =

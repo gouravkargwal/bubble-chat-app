@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from app.models.enums import ConversationDirection
+
 
 # Auth
 class AuthResponse(BaseModel):
@@ -11,7 +13,6 @@ class AuthResponse(BaseModel):
     email: str | None = None
     display_name: str | None = None
     is_new_user: bool = False
-    trial_tier: str | None = None
 
 
 class FirebaseAuthRequest(BaseModel):
@@ -32,7 +33,7 @@ class VisionRequest(BaseModel):
     images: list[str] | None = Field(
         default=None, description="Multiple base64 screenshots"
     )
-    direction: str = Field(default="quick_reply")
+    direction: ConversationDirection = Field(default=ConversationDirection.QUICK_REPLY)
     custom_hint: str | None = Field(default=None, max_length=200)
     conversation_id: str | None = None
 
@@ -41,7 +42,7 @@ class ReplyOptionPayload(BaseModel):
     text: str
     strategy_label: str
     is_recommended: bool
-    coach_reasoning: str
+    coach_reasoning: str = ""  # Empty string for free tier users
 
 
 class VisionResponse(BaseModel):
@@ -78,15 +79,25 @@ class RatingTrackRequest(BaseModel):
 class UsageResponse(BaseModel):
     daily_limit: int  # 0 = unlimited
     daily_used: int
+    weekly_used: int = 0  # Usage in current week
+    monthly_used: int = 0  # Usage in current month
+    weekly_audits_used: int = 0  # Profile audits used this week
     is_premium: bool
     tier: str = "free"
     allowed_directions: list[str] = []
     max_screenshots: int = 1
     custom_hints: bool = False
     tier_expires_at: int | None = None
+    god_mode_expires_at: int | None = None  # UTC timestamp for 24-hour referral reward
     bonus_replies: int = 0
     total_replies_generated: int = 0  # Total interactions created by this user
     total_replies_copied: int = 0  # Total interactions where user copied a reply
+    # New tier config structure
+    limits: dict[str, int] = {}
+    features: dict[str, bool | list[str]] = {}
+    billing_period: str = (
+        "daily"  # "daily", "weekly", or "monthly" - extracted from product_id
+    )
 
 
 # Conversations
@@ -99,7 +110,10 @@ class ConversationItem(BaseModel):
 
 
 class ConversationListResponse(BaseModel):
-    conversations: list[ConversationItem]
+    items: list[ConversationItem]
+    total_count: int
+    limit: int
+    offset: int
 
 
 # Referral
@@ -112,12 +126,13 @@ class ReferralInfoResponse(BaseModel):
 
 class ApplyReferralRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=8)
+    device_id: str | None = None  # Android device ID for anti-fraud check
 
 
 class ApplyReferralResponse(BaseModel):
     tier_granted: str
     duration_hours: int
-    expires_at: int  # unix timestamp
+    expires_at: int | None = None  # unix timestamp (UTC)
 
 
 # Billing
@@ -140,17 +155,6 @@ class BillingStatusResponse(BaseModel):
     auto_renewing: bool = False
 
 
-# Promo
-class ApplyPromoRequest(BaseModel):
-    code: str = Field(..., min_length=1, max_length=30)
-
-
-class ApplyPromoResponse(BaseModel):
-    tier_granted: str
-    duration_days: int
-    expires_at: int  # unix timestamp
-
-
 # History
 class HistoryItemResponse(BaseModel):
     id: str
@@ -165,6 +169,9 @@ class HistoryItemResponse(BaseModel):
 
 class HistoryListResponse(BaseModel):
     items: list[HistoryItemResponse]
+    total_count: int
+    limit: int
+    offset: int
 
 
 # User Preferences
@@ -193,3 +200,6 @@ class AuditedPhotoItem(BaseModel):
 
 class AuditedPhotoListResponse(BaseModel):
     items: list[AuditedPhotoItem]
+    total_count: int
+    limit: int
+    offset: int

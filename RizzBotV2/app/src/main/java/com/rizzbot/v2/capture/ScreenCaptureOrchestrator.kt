@@ -175,6 +175,18 @@ class ScreenCaptureOrchestrator @Inject constructor(
     }
 
     /**
+     * Clear all state: screenshots, hints, vibes, and results.
+     * Used for "Task Complete" auto-wipe and manual clear operations.
+     */
+    fun clearAllState() {
+        base64Screenshots.clear()
+        synchronized(previewBitmaps) {
+            previewBitmaps.clear()
+        }
+        _result.value = SuggestionResult.Loading
+    }
+
+    /**
      * Generate a reply from externally provided base64-encoded images (e.g., Gallery picks),
      * without modifying the internal screenshot buffers.
      */

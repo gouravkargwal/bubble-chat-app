@@ -104,27 +104,59 @@ async def apply_referral(
             status_code=400, detail="This referral code has reached its maximum uses."
         )
 
-    # 5. Grant 24 hours of premium ("God Mode") to both
-    from datetime import datetime, timedelta
+    # 5. Anti-fraud guardrail: Check if device_id has been used before (silent fail)
+    should_grant_reward = True
+    if body.device_id:
+        existing_device_user = await db.execute(
+            select(User).where(User.android_device_id == body.device_id)
+        )
+        if existing_device_user.scalar_one_or_none() is not None:
+            # Device ID already exists - silently fail (don't grant reward to referrer)
+            should_grant_reward = False
+            logger.warning(
+                "referral_fraud_detected",
+                device_id=body.device_id,
+                user_id=user.id,
+                referrer_id=referrer.id,
+                code=code,
+            )
+        else:
+            # Store device_id for future checks
+            user.android_device_id = body.device_id
+
+    # 6. Grant 24 hours of premium ("God Mode") to both - stack time if already active
+    from datetime import datetime, timedelta, timezone
 
     user.referred_by = referrer.id
-    now = datetime.utcnow()
-    expires_at = now + timedelta(hours=24)
+    now = datetime.now(timezone.utc)
+    
+    # Stack time for referee (user applying the code)
+    if user.god_mode_expires_at and user.god_mode_expires_at > now:
+        user.god_mode_expires_at = user.god_mode_expires_at + timedelta(hours=24)
+    else:
+        user.god_mode_expires_at = now + timedelta(hours=24)
+    
+    # Stack time for referrer (user who owns the code) - only if not fraud
+    if should_grant_reward:
+        if referrer.god_mode_expires_at and referrer.god_mode_expires_at > now:
+            referrer.god_mode_expires_at = referrer.god_mode_expires_at + timedelta(hours=24)
+        else:
+            referrer.god_mode_expires_at = now + timedelta(hours=24)
 
-    user.tier = "premium"
-    user.tier_expires_at = expires_at
-    user.tier_source = "referral"
-
-    referrer.tier = "premium"
-    referrer.tier_expires_at = expires_at
-    referrer.tier_source = "referral"
-
-    referral = Referral(
-        referrer_id=referrer.id,
-        referee_id=user.id,
-        bonus_granted=BONUS_PER_REFERRAL,
-    )
-    db.add(referral)
+        referral = Referral(
+            referrer_id=referrer.id,
+            referee_id=user.id,
+            bonus_granted=BONUS_PER_REFERRAL,
+        )
+        db.add(referral)
+    else:
+        # Still create referral record but without granting reward to referrer
+        referral = Referral(
+            referrer_id=referrer.id,
+            referee_id=user.id,
+            bonus_granted=0,  # No bonus granted due to fraud detection
+        )
+        db.add(referral)
 
     try:
         await db.commit()
@@ -139,12 +171,15 @@ async def apply_referral(
         "referral_applied",
         referee_id=user.id,
         referrer_id=referrer.id,
-        tier="premium",
+        referee_god_mode_expires_at=int(user.god_mode_expires_at.timestamp()) if user.god_mode_expires_at else None,
+        referrer_god_mode_expires_at=int(referrer.god_mode_expires_at.timestamp()) if referrer.god_mode_expires_at else None,
         duration_hours=24,
+        fraud_detected=not should_grant_reward,
+        device_id=body.device_id,
     )
 
     return ApplyReferralResponse(
         tier_granted="premium",
         duration_hours=24,
-        expires_at=int(expires_at.timestamp()),
+        expires_at=int(user.god_mode_expires_at.timestamp()) if user.god_mode_expires_at else None,
     )

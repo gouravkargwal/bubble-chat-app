@@ -24,6 +24,8 @@ data class OnboardingState(
     val isAuthenticating: Boolean = false,
     val authError: String? = null,
     val onboardingDone: Boolean = false,
+    val showPaywall: Boolean = false,
+    val isNewUser: Boolean = false,
     val userName: String? = null,
     val referralCode: String = "",
     val referralApplying: Boolean = false,
@@ -65,15 +67,32 @@ class OnboardingViewModel @Inject constructor(
             when (val result = googleSignInHelper.signIn(activityContext)) {
                 is GoogleSignInResult.Success -> {
                     analyticsHelper.authCompleted()
-                    // Refresh usage so the app knows the user's actual tier
-                    hostedRepository.refreshUsage()
+                    // Refresh usage so the app knows the user's actual tier (force after auth)
+                    hostedRepository.refreshUsage(force = true)
                     _state.update {
                         it.copy(
                             isAuthenticating = false,
                             userName = googleSignInHelper.getCurrentUserName()
                         )
                     }
-                    nextStep()
+                    
+                    // Smart routing based on isNewUser
+                    if (result.isNewUser) {
+                        // New user: proceed to Vibe Check (Step 1)
+                        _state.update { it.copy(isNewUser = true) }
+                        nextStep()
+                    } else {
+                        // Returning user: skip Vibe Check and Demo
+                        refreshPermissions()
+                        val hasPermission = permissionHelper.canDrawOverlays()
+                        if (hasPermission) {
+                            // Already has permissions: go straight to Home
+                            _state.update { it.copy(onboardingDone = true) }
+                        } else {
+                            // Needs to re-grant permissions: go to TrustAndTechStep (Step 3)
+                            _state.update { it.copy(currentStep = 3, isNewUser = false) }
+                        }
+                    }
                 }
                 is GoogleSignInResult.Error -> {
                     _state.update {
@@ -118,9 +137,30 @@ class OnboardingViewModel @Inject constructor(
 
     fun completeOnboarding() {
         viewModelScope.launch {
+            // For new users, show paywall instead of completing onboarding
+            if (_state.value.isNewUser) {
+                // New user: show paywall
+                _state.update { it.copy(showPaywall = true) }
+            } else {
+                // Returning user: complete onboarding
+                settingsRepository.setOnboardingCompleted(true)
+                analyticsHelper.onboardingCompleted()
+                _state.update { it.copy(onboardingDone = true) }
+            }
+        }
+    }
+    
+    fun onPaywallDismissed() {
+        viewModelScope.launch {
+            // After paywall is dismissed (purchased or skipped), complete onboarding
             settingsRepository.setOnboardingCompleted(true)
             analyticsHelper.onboardingCompleted()
-            _state.update { it.copy(onboardingDone = true) }
+            _state.update { 
+                it.copy(
+                    showPaywall = false,
+                    onboardingDone = true
+                )
+            }
         }
     }
 }

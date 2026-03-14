@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     google_play_service_account: str = ""
     google_play_package_name: str = "com.cookd.app"
 
+    # RevenueCat
+    revenuecat_webhook_secret: str = ""
+
     # Signup trial — promo code auto-applied to new users (empty = no trial)
     signup_promo_code: str = "WELCOME"
 

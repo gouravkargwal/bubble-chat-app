@@ -12,49 +12,11 @@ from app.api.v1.schemas.schemas import AuthResponse, FirebaseAuthRequest
 from app.config import settings
 from app.infrastructure.auth.jwt import create_token
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import Promo, PromoRedemption, User
+from app.infrastructure.database.models import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-async def _apply_signup_promo(user: User, db: AsyncSession) -> str | None:
-    """Auto-apply the signup promo code to a new user. Returns tier granted or None."""
-    if not settings.signup_promo_code:
-        return None
-
-    result = await db.execute(
-        select(Promo).where(
-            Promo.code == settings.signup_promo_code,
-            Promo.is_active == True,
-        )
-    )
-    promo = result.scalar_one_or_none()
-    if not promo:
-        logger.warning("Signup promo code '%s' not found or inactive", settings.signup_promo_code)
-        return None
-
-    # Check max uses (0 = unlimited)
-    if promo.max_uses > 0 and promo.current_uses >= promo.max_uses:
-        logger.warning("Signup promo code '%s' has reached max uses", settings.signup_promo_code)
-        return None
-
-    # Apply tier from promo
-    now = datetime.utcnow()
-    user.tier = promo.tier_grant
-    user.tier_expires_at = now + timedelta(days=promo.duration_days)
-    user.tier_source = "promo"
-
-    promo.current_uses += 1
-
-    db.add(PromoRedemption(promo_id=promo.id, user_id=user.id))
-
-    logger.info(
-        "Applied signup promo '%s' to user %s: %s for %d days",
-        promo.code, user.id, promo.tier_grant, promo.duration_days,
-    )
-    return promo.tier_grant
 
 
 @router.post("/auth/firebase", response_model=AuthResponse)
@@ -70,8 +32,7 @@ async def firebase_auth(
       3. If not found but ``device_id`` was provided, try to migrate the
          anonymous user (link their data to the Firebase account).
       4. Otherwise create a brand-new user.
-      5. Auto-apply signup promo if configured.
-      6. Return our own JWT for subsequent API calls.
+      5. Return our own JWT for subsequent API calls.
     """
     from app.infrastructure.auth.firebase import verify_firebase_token
 
@@ -85,12 +46,9 @@ async def firebase_auth(
     display_name: str | None = decoded.get("name")
 
     is_new_user = False
-    trial_tier: str | None = None
 
     # --- 1. Existing Firebase user? -----------------------------------------
-    result = await db.execute(
-        select(User).where(User.firebase_uid == firebase_uid)
-    )
+    result = await db.execute(select(User).where(User.firebase_uid == firebase_uid))
     user = result.scalar_one_or_none()
 
     if user is not None:
@@ -131,14 +89,11 @@ async def firebase_auth(
                 referral_code=generate_referral_code(),
             )
             db.add(user)
-            await db.flush()  # get user.id before applying promo
-
-            # --- 4. Auto-apply signup promo ---------------------------------
-            trial_tier = await _apply_signup_promo(user, db)
+            await db.flush()  # get user.id
 
             await db.commit()
             await db.refresh(user)
-            logger.info("Created new Firebase user %s (trial_tier=%s)", user.id, trial_tier)
+            logger.info("Created new Firebase user %s", user.id)
 
     token, expires_at = create_token(user.id, user.device_id)
 
@@ -149,5 +104,4 @@ async def firebase_auth(
         email=user.email,
         display_name=user.display_name,
         is_new_user=is_new_user,
-        trial_tier=trial_tier,
     )

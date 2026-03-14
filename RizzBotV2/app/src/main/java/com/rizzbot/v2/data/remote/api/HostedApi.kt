@@ -1,7 +1,5 @@
 package com.rizzbot.v2.data.remote.api
 
-import com.rizzbot.v2.data.remote.dto.ApplyPromoRequest
-import com.rizzbot.v2.data.remote.dto.ApplyPromoResponse
 import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
 import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
 import com.rizzbot.v2.data.remote.dto.AuditResponse
@@ -23,6 +21,7 @@ import com.rizzbot.v2.data.remote.dto.VerifyPurchaseResponse
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateResponse
 import com.rizzbot.v2.data.remote.dto.ProfileBlueprintDto
+import com.rizzbot.v2.data.remote.dto.ProfileBlueprintListResponse
 import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -60,7 +59,10 @@ interface HostedApi {
 
     // Conversations
     @GET("api/v1/conversations")
-    suspend fun getConversations(): ConversationListResponse
+    suspend fun getConversations(
+        @Query("limit") limit: Int = 20,
+        @Query("offset") offset: Int = 0
+    ): ConversationListResponse
 
     @DELETE("api/v1/conversations/{id}")
     suspend fun deleteConversation(@Path("id") id: String)
@@ -79,13 +81,12 @@ interface HostedApi {
     @GET("api/v1/billing/status")
     suspend fun getBillingStatus(): BillingStatusResponse
 
-    // Promo
-    @POST("api/v1/promo/apply")
-    suspend fun applyPromo(@Body request: ApplyPromoRequest): ApplyPromoResponse
-
     // History
     @GET("api/v1/history")
-    suspend fun getHistory(@retrofit2.http.Query("limit") limit: Int = 20): HistoryListResponse
+    suspend fun getHistory(
+        @Query("limit") limit: Int = 20,
+        @Query("offset") offset: Int = 0
+    ): HistoryListResponse
 
     @DELETE("api/v1/history/{id}")
     suspend fun deleteHistoryItem(@Path("id") id: String)
@@ -103,11 +104,27 @@ interface HostedApi {
     ): Response<AuditResponse>
 
     @GET("api/v1/profile-audit/history")
-    suspend fun getProfileAuditHistory(): AuditedPhotoListResponse
+    suspend fun getProfileAuditHistory(
+        @Query("limit") limit: Int = 20,
+        @Query("offset") offset: Int = 0
+    ): AuditedPhotoListResponse
+
+    @DELETE("api/v1/profile-audit/{photo_id}")
+    suspend fun deleteProfileAuditPhoto(@Path("photo_id") photoId: String)
 
     // Profile Optimizer
-    @GET("api/v1/profile-audit/optimize")
+    @POST("api/v1/profile-audit/optimize")
     suspend fun optimizeProfile(
         @Query("lang") lang: String? = null
     ): Response<ProfileBlueprintDto>
+
+    @GET("api/v1/profile-audit/blueprints")
+    suspend fun getProfileBlueprints(
+        @Query("limit") limit: Int = 20,
+        @Query("offset") offset: Int = 0
+    ): Response<ProfileBlueprintListResponse>
+
+    // User Data Management
+    @DELETE("api/v1/users/me/data")
+    suspend fun deleteAllUserData()
 }

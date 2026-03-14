@@ -5,14 +5,17 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.FirebaseAuthRequest
+import com.rizzbot.v2.data.subscription.SubscriptionManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.Lazy
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AuthManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val hostedApi: dagger.Lazy<HostedApi>
+    private val hostedApi: dagger.Lazy<HostedApi>,
+    private val subscriptionManager: Lazy<SubscriptionManager>
 ) {
     private companion object {
         const val PREFS_NAME = "cookd_auth"
@@ -45,16 +48,27 @@ class AuthManager @Inject constructor(
         return null
     }
 
-    suspend fun authenticateFirebase(firebaseIdToken: String): Boolean {
+    fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
+
+    suspend fun authenticateFirebase(firebaseIdToken: String): AuthResult {
         return try {
             val response = hostedApi.get().authenticateFirebase(
                 FirebaseAuthRequest(firebaseIdToken)
             )
             saveAuth(response.token, response.userId, response.expiresAt)
-            true
+            
+            // Sync RevenueCat user ID after authentication
+            subscriptionManager.get().setUserId(response.userId)
+            
+            AuthResult.Success(response.isNewUser)
         } catch (e: Exception) {
-            false
+            AuthResult.Error(e.message ?: "Authentication failed")
         }
+    }
+    
+    sealed class AuthResult {
+        data class Success(val isNewUser: Boolean) : AuthResult()
+        data class Error(val message: String) : AuthResult()
     }
 
     fun clearAuth() {

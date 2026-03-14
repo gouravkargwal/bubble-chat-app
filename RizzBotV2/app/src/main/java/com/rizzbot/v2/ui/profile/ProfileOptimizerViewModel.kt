@@ -19,6 +19,13 @@ sealed class OptimizerState {
     data class Error(val message: String) : OptimizerState()
 }
 
+sealed class BlueprintHistoryState {
+    data object Idle : BlueprintHistoryState()
+    data object Loading : BlueprintHistoryState()
+    data class Success(val blueprints: List<ProfileBlueprint>) : BlueprintHistoryState()
+    data class Error(val message: String) : BlueprintHistoryState()
+}
+
 @HiltViewModel
 class ProfileOptimizerViewModel @Inject constructor(
     private val api: HostedApi,
@@ -27,6 +34,9 @@ class ProfileOptimizerViewModel @Inject constructor(
 
     private val _state = MutableStateFlow<OptimizerState>(OptimizerState.Idle)
     val state: StateFlow<OptimizerState> = _state.asStateFlow()
+
+    private val _historyState = MutableStateFlow<BlueprintHistoryState>(BlueprintHistoryState.Idle)
+    val historyState: StateFlow<BlueprintHistoryState> = _historyState.asStateFlow()
 
     private val selectedLanguage = MutableStateFlow("English")
 
@@ -89,6 +99,34 @@ class ProfileOptimizerViewModel @Inject constructor(
 
     fun reset() {
         _state.value = OptimizerState.Idle
+    }
+
+    fun loadHistory() {
+        if (_historyState.value is BlueprintHistoryState.Loading) return
+
+        _historyState.value = BlueprintHistoryState.Loading
+
+        viewModelScope.launch {
+            try {
+                val response = api.getProfileBlueprints()
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body != null) {
+                        val blueprints = body.items.map { it.toUi() }
+                        _historyState.value = BlueprintHistoryState.Success(blueprints)
+                    } else {
+                        _historyState.value = BlueprintHistoryState.Error("Empty response from server")
+                    }
+                } else {
+                    _historyState.value = BlueprintHistoryState.Error("Server error: ${response.code()}")
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileOptimizerVM", "loadHistory: error", e)
+                _historyState.value = BlueprintHistoryState.Error(
+                    e.message ?: "Network error. Please check your connection."
+                )
+            }
+        }
     }
 }
 

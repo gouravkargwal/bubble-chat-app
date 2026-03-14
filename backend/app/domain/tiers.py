@@ -80,15 +80,23 @@ def _utc_now_naive() -> "datetime":
 
 
 def get_effective_tier(user) -> str:
-    """Get user's effective tier, considering expiration."""
+    """Get user's effective tier, considering expiration and God Mode."""
+    from datetime import datetime, timezone
+
+    # Check God Mode first (24-hour referral reward) - uses timezone-aware UTC
+    now = datetime.now(timezone.utc)
+    if user.god_mode_expires_at and user.god_mode_expires_at > now:
+        return "premium"
+
+    # Otherwise, check underlying tier
     tier = user.tier or "free"
     if tier == "free":
         return tier
 
-    now = _utc_now_naive()
+    now_naive = _utc_now_naive()
 
-    # Check tier expiry (trial, promo, or subscription)
-    if user.tier_expires_at and user.tier_expires_at < now:
+    # Check tier expiry (subscription)
+    if user.tier_expires_at and user.tier_expires_at < now_naive:
         return "free"
 
     return tier

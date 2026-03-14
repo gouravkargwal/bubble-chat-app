@@ -25,15 +25,24 @@ VIBE_NAMES = ["Flirty", "Witty", "Smooth", "Bold"]
 @router.get("/history", response_model=HistoryListResponse)
 async def get_history(
     limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> HistoryListResponse:
-    """Return user's recent interaction history."""
+    """Return user's recent interaction history with pagination."""
+    # Get total count
+    count_result = await db.execute(
+        select(func.count(Interaction.id)).where(Interaction.user_id == user.id)
+    )
+    total_count = count_result.scalar_one()
+
+    # Get paginated results
     result = await db.execute(
         select(Interaction)
         .where(Interaction.user_id == user.id)
         .order_by(Interaction.created_at.desc())
         .limit(limit)
+        .offset(offset)
     )
     interactions = result.scalars().all()
 
@@ -79,7 +88,9 @@ async def get_history(
                 user_organic_text=i.user_organic_text,
             )
         )
-    return HistoryListResponse(items=items)
+    return HistoryListResponse(
+        items=items, total_count=total_count, limit=limit, offset=offset
+    )
 
 
 @router.delete("/history/{interaction_id}")

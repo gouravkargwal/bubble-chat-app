@@ -17,6 +17,13 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
+// Load local.properties for RevenueCat API key
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
 android {
     namespace = "com.rizzbot.v2"
     compileSdk = 35
@@ -31,6 +38,9 @@ android {
         // Set via gradle.properties or Firebase Console → Authentication → Google
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: ""}\"")
         buildConfigField("String", "BACKEND_URL", "\"${project.findProperty("BACKEND_URL") ?: "https://api.cookd.app/"}\"")
+        
+        // RevenueCat Public API Key from local.properties
+        buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"${localProperties.getProperty("REVENUE_CAT_PUBLIC_KEY") ?: ""}\"")
     }
 
     signingConfigs {
@@ -140,6 +150,8 @@ dependencies {
     implementation(libs.credentials.play.services)
     implementation(libs.googleid)
 
-    // Google Play Billing
-    implementation(libs.billing.ktx)
+    // RevenueCat
+    // NOTE: Keep these versions in sync with a version that exists on Maven Central
+    implementation("com.revenuecat.purchases:purchases:8.10.1")
+    implementation("com.revenuecat.purchases:purchases-ui:8.10.1")
 }

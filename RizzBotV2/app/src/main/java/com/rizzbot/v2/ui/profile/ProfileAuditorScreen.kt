@@ -10,8 +10,10 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,11 +38,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.rizzbot.v2.ui.paywall.PaywallDialog
 import kotlinx.coroutines.delay
 
 enum class PhotoTier {
@@ -101,12 +106,19 @@ private val WarningBg = Color(0xFFFFA726).copy(alpha = 0.18f)
 @Composable
 fun ProfileAuditorScreen(
     onBack: () -> Unit,
+    onShowPaywall: () -> Unit = {},
     viewModel: ProfileAuditorViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val maxPhotos = state.maxPhotosPerAudit
+    
+    // Calculate if user can audit
+    val isGodMode = state.tier == "premium" || state.tier == "god_mode"
+    val hasAuditsLeft = state.weeklyAuditsUsed < state.profileAuditsPerWeek
+    val canAudit = isGodMode || hasAuditsLeft
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(12)
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxPhotos)
     ) { uris ->
         viewModel.onPhotosSelected(uris)
     }
@@ -147,9 +159,19 @@ fun ProfileAuditorScreen(
                 ) {
                     Button(
                         onClick = {
-                            viewModel.analyzePhotos()
+                            if (!canAudit) {
+                                onShowPaywall()
+                            } else {
+                                viewModel.analyzePhotos()
+                            }
                         },
-                        enabled = state.selectedUris.isNotEmpty() && !state.isLoading,
+                        enabled = if (state.isLoading) {
+                            false
+                        } else if (!canAudit) {
+                            true
+                        } else {
+                            state.selectedUris.isNotEmpty()
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp),
@@ -158,25 +180,52 @@ fun ProfileAuditorScreen(
                             containerColor = Color(0xFFFFD700)
                         )
                     ) {
-                        Text(
-                            text = "Analyze Photos",
-                            color = Color.Black,
-                            fontSize = 15.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            if (state.isLoading) {
+                                Text(
+                                    text = "Analyzing...",
+                                    color = Color.Black,
+                                    fontSize = 15.sp
+                                )
+                            } else if (!canAudit) {
+                                Icon(
+                                    imageVector = Icons.Filled.Lock,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Unlock Unlimited Audits",
+                                    color = Color.Black,
+                                    fontSize = 15.sp
+                                )
+                            } else {
+                                Text(
+                                    text = "Analyze Photos",
+                                    color = Color.Black,
+                                    fontSize = 15.sp
+                                )
+                            }
+                        }
                     }
                 }
             }
         },
         containerColor = DarkBg
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // Warning banner
             Card(
                 colors = CardDefaults.cardColors(containerColor = WarningBg),
@@ -210,7 +259,7 @@ fun ProfileAuditorScreen(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = "Pick up to 12 photos from your camera roll. We'll tell you which ones are GOD_TIER, FILLER, or belong in the graveyard.",
+                    text = "Pick up to ${maxPhotos} photos from your camera roll. We'll tell you which ones are GOD_TIER, FILLER, or belong in the graveyard.",
                     color = Color.Gray,
                     fontSize = 13.sp
                 )
@@ -225,7 +274,12 @@ fun ProfileAuditorScreen(
                 options.forEach { option ->
                     val isSelected = option == state.selectedLanguage
                     AssistChip(
-                        onClick = { viewModel.setLanguage(option) },
+                        onClick = { 
+                            if (!state.isLoading) {
+                                viewModel.setLanguage(option)
+                            }
+                        },
+                        enabled = !state.isLoading,
                         label = {
                             Text(
                                 text = option,
@@ -242,14 +296,20 @@ fun ProfileAuditorScreen(
 
             // Picker card
             Card(
-                onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                },
-                colors = CardDefaults.cardColors(containerColor = CardBg),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        enabled = !state.isLoading,
+                        onClick = {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (state.isLoading) CardBg.copy(alpha = 0.5f) else CardBg
+                ),
+                shape = RoundedCornerShape(18.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -265,7 +325,7 @@ fun ProfileAuditorScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${state.selectedUris.size} of 12 selected",
+                            text = "${state.selectedUris.size} of ${maxPhotos} selected",
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
@@ -273,16 +333,20 @@ fun ProfileAuditorScreen(
                 }
             }
 
-            // Map photo_id -> Uri so we can render thumbnails in the results UI.
-            val photoIdToUri = remember(state.selectedUris) {
-                state.selectedUris.mapIndexed { index, uri ->
-                    "photo_${index + 1}" to uri
-                }.toMap()
+            // Use preserved URIs from result if available, otherwise map from selectedUris
+            val photoIdToUri = if (state.result != null && state.resultPhotoIdToUri.isNotEmpty()) {
+                state.resultPhotoIdToUri
+            } else {
+                remember(state.selectedUris) {
+                    state.selectedUris.mapIndexed { index, uri ->
+                        "photo_${index + 1}" to uri
+                    }.toMap()
+                }
             }
 
             when {
                 state.isLoading -> {
-                    ProfileAuditLoadingSkeleton()
+                    ProfileAuditorSkeleton()
                 }
                 state.result != null -> {
                     val result = state.result
@@ -307,7 +371,7 @@ fun ProfileAuditorScreen(
                             .heightIn(min = 120.dp, max = 420.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        userScrollEnabled = true
+                        userScrollEnabled = !state.isLoading
                     ) {
                         items(state.selectedUris, key = { it.toString() }) { uri ->
                             AsyncImage(
@@ -325,86 +389,115 @@ fun ProfileAuditorScreen(
             }
 
             Spacer(modifier = Modifier.height(80.dp))
+            }
+        }
+    }
+    
+    // Paywall Dialog
+    if (state.showPaywall) {
+        PaywallDialog(
+            onDismiss = { viewModel.dismissPaywall() }
+        )
+    }
+}
+
+@Composable
+private fun Modifier.shimmerEffect(): Modifier {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmer_alpha"
+    )
+    return this.background(Color(0xFF252542).copy(alpha = alpha))
+}
+
+@Composable
+private fun SkeletonTextLines(modifier: Modifier = Modifier, lines: Int = 3) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(lines) { index ->
+            val widthFraction = when (index) {
+                0 -> 1f // First line full width
+                lines - 1 -> 0.6f // Last line shortest
+                else -> 0.85f // Middle lines slightly shorter
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(widthFraction)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect()
+            )
         }
     }
 }
 
 @Composable
-private fun ProfileAuditLoadingSkeleton() {
-    val messages = listOf(
-        "Scanning facial symmetry...",
-        "Checking social proof...",
-        "Flagging dirty mirrors and bad lighting...",
-        "Calculating competitive match rate...",
-        "Finalizing brutal feedback..."
-    )
-
-    var messageIndex by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1500)
-            messageIndex = (messageIndex + 1) % messages.size
+private fun ProfileAuditorSkeleton() {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Header skeleton
+        Box(
+            modifier = Modifier
+                .width(120.dp)
+                .height(24.dp)
+                .shimmerEffect()
+        )
+        
+        // Skeleton audit cards
+        repeat(3) {
+            SkeletonAuditCard()
         }
     }
+}
 
-    val baseColor = CardBg
-    val highlightColor = Color(0xFF2A2A40)
-
-    val transition = rememberInfiniteTransition(label = "auditSkeleton")
-    val progress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1100, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "auditSkeletonProgress"
-    )
-
-    val shimmerBrush = Brush.linearGradient(
-        colors = listOf(baseColor, highlightColor, baseColor),
-        start = Offset(0f, 0f),
-        end = Offset(400f * progress, 400f * progress)
-    )
-
+@Composable
+private fun SkeletonAuditCard() {
     Card(
-        colors = CardDefaults.cardColors(containerColor = baseColor),
-        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(0.5.dp, Color(0xFF252542)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Progress headline
-            Text(
-                text = "Running deep-dive photo audit...",
-                color = Color.White,
-                fontSize = 14.sp
+            // Left: Photo skeleton
+            Box(
+                modifier = Modifier
+                    .width(100.dp)
+                    .height(130.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .shimmerEffect()
             )
-
-            // Skeleton lines
-            repeat(3) { idx ->
+            
+            // Right: Content skeleton
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Score badge skeleton (circle)
                 Box(
                     modifier = Modifier
-                        .height(14.dp)
-                        .fillMaxWidth(if (idx == 2) 0.5f else 1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(shimmerBrush)
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .shimmerEffect()
                 )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                // Text line skeletons
+                SkeletonTextLines(lines = 4)
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Rotating status text
-            Text(
-                text = messages[messageIndex],
-                color = Color(0xFFFFD700),
-                fontSize = 13.sp
-            )
         }
     }
 }

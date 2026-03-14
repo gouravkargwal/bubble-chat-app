@@ -26,7 +26,8 @@ class User(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    device_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    device_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)  # Primary device ID (unique)
+    android_device_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)  # Android device ID for anti-fraud
     firebase_uid: Mapped[str | None] = mapped_column(
         String(128), unique=True, nullable=True, index=True
     )
@@ -36,7 +37,11 @@ class User(Base):
     tier_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     tier_source: Mapped[str] = mapped_column(
         String(20), default="signup"
-    )  # signup, trial, purchase, promo, admin
+    )  # signup, trial, purchase, admin
+    # God Mode (24-hour referral reward) - stacks time, uses UTC
+    god_mode_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Referral
     referral_code: Mapped[str | None] = mapped_column(
         String(8), unique=True, nullable=True, index=True
@@ -51,6 +56,9 @@ class User(Base):
 
     # Relationships
     audited_photos: Mapped[list["AuditedPhoto"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    profile_blueprints: Mapped[list["ProfileBlueprint"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -181,47 +189,18 @@ class Purchase(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
-class Promo(Base):
-    __tablename__ = "promos"
-
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    code: Mapped[str] = mapped_column(String(30), unique=True, index=True)
-    tier_grant: Mapped[str] = mapped_column(String(20))  # premium or pro
-    duration_days: Mapped[int] = mapped_column(Integer, default=7)  # trial length
-    max_uses: Mapped[int] = mapped_column(Integer, default=100)
-    current_uses: Mapped[int] = mapped_column(Integer, default=0)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    new_users_only: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-
-class PromoRedemption(Base):
-    __tablename__ = "promo_redemptions"
-    __table_args__ = (
-        UniqueConstraint("user_id", "promo_id", name="uq_promo_redemption_user_promo"),
-    )
-
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    promo_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("promos.id"), index=True
-    )
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-
 class AuditedPhoto(Base):
     __tablename__ = "audited_photos"
+    __table_args__ = (
+        Index("ix_audited_photos_user_hash", "user_id", "hash", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     storage_path: Mapped[str] = mapped_column(String(500))
+    hash: Mapped[str] = mapped_column(String(64), index=True)  # SHA-256 hex digest
     score: Mapped[int] = mapped_column(Integer)
     tier: Mapped[str] = mapped_column(String(20))
     brutal_feedback: Mapped[str] = mapped_column(Text)
@@ -229,3 +208,41 @@ class AuditedPhoto(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="audited_photos")
+
+
+class ProfileBlueprint(Base):
+    __tablename__ = "profile_blueprints"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    overall_theme: Mapped[str] = mapped_column(String(500))
+    tinder_bio: Mapped[str] = mapped_column(Text)
+    bumble_bio: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="profile_blueprints")
+    slots: Mapped[list["BlueprintSlot"]] = relationship(
+        back_populates="blueprint", cascade="all, delete-orphan"
+    )
+
+
+class BlueprintSlot(Base):
+    __tablename__ = "blueprint_slots"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    blueprint_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("profile_blueprints.id"), index=True
+    )
+    photo_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("audited_photos.id"), nullable=True, index=True
+    )
+    slot_number: Mapped[int] = mapped_column(Integer)
+    role: Mapped[str] = mapped_column(String(200))
+    caption: Mapped[str] = mapped_column(String(500))
+    universal_hook: Mapped[str] = mapped_column(String(500))
+
+    blueprint: Mapped[ProfileBlueprint] = relationship(back_populates="slots")

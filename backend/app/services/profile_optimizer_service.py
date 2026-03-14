@@ -6,12 +6,18 @@ from typing import Any
 
 import structlog
 from sqlalchemy import Select, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.infrastructure.database.models import AuditedPhoto
+from app.infrastructure.database.models import (
+    AuditedPhoto,
+    BlueprintSlot,
+    ProfileBlueprint as ProfileBlueprintDB,
+)
 from app.llm.gemini_client import GeminiClient
 from app.models.profile_optimizer import ProfileBlueprint
+from app.schemas.profile_blueprint import ProfileBlueprintResponse
 
 logger = structlog.get_logger()
 
@@ -109,7 +115,7 @@ async def generate_blueprint(
     user_id: str,
     db: AsyncSession,
     lang: str = "English",
-) -> ProfileBlueprint:
+) -> ProfileBlueprintResponse:
     """Generate a ProfileBlueprint from a user's top audited photos using Gemini.
 
     The LLM receives only previously audited photos, and must select exactly six
@@ -236,4 +242,81 @@ async def generate_blueprint(
         # Build absolute URL so the Android app can render images directly.
         slot.storage_url = f"{settings.base_url}/static/{matching.storage_path}"
 
-    return blueprint
+    # Save to database
+    db_blueprint = ProfileBlueprintDB(
+        user_id=user_id,
+        overall_theme=blueprint.overall_theme,
+        tinder_bio=blueprint.tinder_bio,
+        bumble_bio=blueprint.bumble_bio,
+    )
+    db.add(db_blueprint)
+    await db.flush()  # Flush to get the blueprint.id
+
+    # Create BlueprintSlot records
+    for slot in blueprint.slots:
+        matching_photo = photos_by_id.get(slot.photo_id)
+        if not matching_photo:
+            continue  # Skip invalid photo references
+
+        db_slot = BlueprintSlot(
+            blueprint_id=db_blueprint.id,
+            photo_id=slot.photo_id,
+            slot_number=slot.slot_number,
+            role=slot.role,
+            caption=slot.caption,
+            universal_hook=slot.contextual_hook,  # Map contextual_hook to universal_hook
+        )
+        db.add(db_slot)
+
+    await db.commit()
+
+    # Reload blueprint with slots relationship
+    result = await db.execute(
+        select(ProfileBlueprintDB)
+        .where(ProfileBlueprintDB.id == db_blueprint.id)
+        .options(selectinload(ProfileBlueprintDB.slots))
+    )
+    db_blueprint = result.scalar_one()
+
+    # Build response schema (excludes coach_reasoning and other internal fields)
+    base_static = settings.base_url.rstrip("/") + "/static/"
+    slot_responses = []
+    for db_slot in db_blueprint.slots:
+        matching_photo = photos_by_id.get(db_slot.photo_id)
+        if not matching_photo:
+            continue
+
+        image_url = base_static + matching_photo.storage_path.lstrip("/")
+        slot_responses.append(
+            {
+                "id": db_slot.id,
+                "photo_id": db_slot.photo_id,
+                "slot_number": db_slot.slot_number,
+                "role": db_slot.role,
+                "caption": db_slot.caption,
+                "universal_hook": db_slot.universal_hook,
+                "image_url": image_url,
+            }
+        )
+
+    # Sort slots by slot_number
+    slot_responses.sort(key=lambda x: x["slot_number"])
+
+    # Include universal_prompts from the LLM response (not saved to DB)
+    universal_prompts_response = None
+    if blueprint.universal_prompts:
+        universal_prompts_response = [
+            {"category": prompt.category, "suggested_text": prompt.suggested_text}
+            for prompt in blueprint.universal_prompts
+        ]
+
+    return ProfileBlueprintResponse(
+        id=db_blueprint.id,
+        user_id=db_blueprint.user_id,
+        overall_theme=db_blueprint.overall_theme,
+        tinder_bio=db_blueprint.tinder_bio,
+        bumble_bio=db_blueprint.bumble_bio,
+        created_at=db_blueprint.created_at,
+        slots=slot_responses,
+        universal_prompts=universal_prompts_response,
+    )

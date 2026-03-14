@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +55,7 @@ fun HomeScreen(
     onNavigateToProfileAuditor: () -> Unit,
     onNavigateToProfileHistory: () -> Unit,
     onNavigateToProfileOptimizer: () -> Unit,
+    onShowPaywall: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -99,12 +101,8 @@ fun HomeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. TRIAL EXPIRY BANNER
-            if (state.usage.tier != "free" && state.usage.trialDaysRemaining in 0..3) {
-                TrialBanner(daysRemaining = state.usage.trialDaysRemaining)
-            }
-
-            // 2. HERO CARD — Service Toggle (always visible; not gated by backend loading)
+            // ── PRIMARY ACTIONS ──
+            SectionHeader(title = "Primary Actions", icon = "🎯")
             HeroCard(
                 isEnabled = state.isServiceEnabled,
                 hasPermission = state.hasOverlayPermission,
@@ -118,18 +116,26 @@ fun HomeScreen(
                 heroGlow = heroGlow
             )
 
-            // 2a. Brutal Profile Auditor entry card
+            // ── PROFILE TOOLS ──
+            SectionDivider()
+            SectionHeader(title = "Profile Tools", icon = "📸")
             BrutalProfileAuditorCard(
                 primaryAccent = primaryAccent,
                 isGodMode = isGodMode,
+                maxPhotosPerAudit = state.usage.maxPhotosPerAudit,
                 onClick = onNavigateToProfileAuditor,
                 onViewHistory = onNavigateToProfileHistory
             )
-
-            // 2b. Direct Auto-Build Profile entry (no need to tap Past Roasts)
             AutoProfileBuilderCard(
                 primaryAccent = primaryAccent,
-                onClick = onNavigateToProfileOptimizer
+                isGodMode = isGodMode,
+                onClick = {
+                    if (isGodMode) {
+                        onNavigateToProfileOptimizer()
+                    } else {
+                        onShowPaywall()
+                    }
+                }
             )
 
             // Core data-driven content: skeleton while usage/history still loading
@@ -141,15 +147,20 @@ fun HomeScreen(
                     HomeSkeleton()
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        // 3. USAGE QUOTA
-                        UsageQuotaCard(usage = state.usage)
-
-                        // 4. RIZZ PROFILE (Digital Twin Status)
+                        // ── YOUR STATS ──
+                        SectionDivider()
+                        SectionHeader(title = "Your Stats", icon = "📊")
                         RizzProfileCard(
                             preferences = state.rizzProfile,
                             onSeeFullStats = onNavigateToStats,
                             isGodMode = isGodMode,
-                            onTrainVoiceDNA = { viewModel.showCalibration() },
+                            onTrainVoiceDNA = {
+                                if (isGodMode) {
+                                    viewModel.showCalibration()
+                                } else {
+                                    onShowPaywall()
+                                }
+                            },
                             primaryAccent = primaryAccent
                         )
 
@@ -158,7 +169,11 @@ fun HomeScreen(
                             HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
                         }
 
-                        // 6. RECENT REPLIES
+                        // ── RECENT ACTIVITY ──
+                        if (state.recentReplies.isNotEmpty()) {
+                            SectionDivider()
+                            SectionHeader(title = "Recent Activity", icon = "📝")
+                        }
                         RecentRepliesSection(
                             replies = state.recentReplies,
                             onSeeAll = onNavigateToHistory,
@@ -293,9 +308,42 @@ private fun HeroCard(
 }
 
 @Composable
+private fun SectionHeader(title: String, icon: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = icon,
+            fontSize = 18.sp
+        )
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
+        )
+    }
+}
+
+@Composable
+private fun SectionDivider() {
+    HorizontalDivider(
+        color = DividerColor.copy(alpha = 0.5f),
+        thickness = 1.dp,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
+}
+
+@Composable
 private fun BrutalProfileAuditorCard(
     primaryAccent: Color,
     isGodMode: Boolean,
+    maxPhotosPerAudit: Int,
     onClick: () -> Unit,
     onViewHistory: () -> Unit
 ) {
@@ -304,87 +352,87 @@ private fun BrutalProfileAuditorCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = CardBg),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, borderColor.copy(alpha = 0.7f))
+        border = BorderStroke(0.5.dp, primaryAccent.copy(alpha = 0.3f))
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF1A1A2E),
+                            primaryAccent.copy(alpha = 0.05f)
+                        )
+                    )
+                )
         ) {
             Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(borderColor.copy(alpha = 0.18f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PhotoCamera,
-                        contentDescription = null,
-                        tint = borderColor,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Stop Getting Ghosted. Run a Zero-BS Photo Audit.",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Upload up to 12 photos. We'll tell you which ones are killing your match rate.",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Button(
-                onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = borderColor)
+            // Left: Icon
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(borderColor.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Audit My Profile",
-                    color = if (isGodMode) Color.Black else Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
+                Icon(
+                    imageVector = Icons.Default.PhotoCamera,
+                    contentDescription = null,
+                    tint = borderColor,
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Middle: Title and Subtitle
+            Column(
+                modifier = Modifier.weight(1f)
             ) {
-                OutlinedButton(
-                    onClick = onClick,
-                    border = BorderStroke(1.dp, borderColor),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = borderColor
-                    ),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Run New Audit", fontSize = 13.sp)
-                }
-                TextButton(
-                    onClick = onViewHistory,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("View Past Roasts", color = borderColor, fontSize = 13.sp)
-                }
+                Text(
+                    text = "Stop Getting Ghosted. Run a Zero-BS Photo Audit.",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Upload up to $maxPhotosPerAudit photos. We'll tell you which ones are killing your match rate.",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
             }
+
+            // Right: History button and Chevron
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconButton(
+                    onClick = onViewHistory,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = "View Past Roasts",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = primaryAccent,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
         }
     }
 }
@@ -392,75 +440,86 @@ private fun BrutalProfileAuditorCard(
 @Composable
 private fun AutoProfileBuilderCard(
     primaryAccent: Color,
+    isGodMode: Boolean,
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.7f))
+        border = BorderStroke(0.5.dp, primaryAccent.copy(alpha = 0.3f))
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF1A1A2E),
+                            primaryAccent.copy(alpha = 0.05f)
+                        )
+                    )
+                )
         ) {
             Row(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(primaryAccent.copy(alpha = 0.18f)),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(primaryAccent.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = primaryAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Auto-Build Profile",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "AI-powered profile builder",
+                            color = Color.Gray,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                if (!isGodMode) {
                     Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = primaryAccent,
-                        modifier = Modifier.size(22.dp)
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Premium Feature",
+                        tint = GodModeGold,
+                        modifier = Modifier.size(20.dp)
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "High-Status Auto Builder",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Let Cookd auto-assemble a Hinge-ready profile from your best audited photos.",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Button(
-                onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
-            ) {
-                Text(
-                    text = "✨ Auto-Build My Profile",
-                    color = Color.Black,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Open",
+                    tint = primaryAccent.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp)
                 )
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "Uses only photos you've already audited. No new uploads needed.",
-                color = Color(0xFF8080A0),
-                fontSize = 11.sp
-            )
         }
     }
 }
@@ -791,7 +850,7 @@ private fun RizzProfileCard(
                             colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
                         ) {
                             Text(
-                                text = "Upload Chat Screenshots",
+                                text = if (isGodMode) "Upload Chat Screenshots" else "🔒 Unlock AI Voice DNA",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -851,7 +910,7 @@ private fun RizzProfileCard(
                         colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
                     ) {
                         Text(
-                            text = "Upload Screenshots to Speed Up",
+                            text = if (isGodMode) "Upload Screenshots to Speed Up" else "🔒 Unlock AI Voice DNA",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -906,107 +965,5 @@ private fun VibeBar(label: String, progress: Float, primaryAccent: Color) {
             color = primaryAccent,
             trackColor = DividerColor
         )
-    }
-}
-
-@Composable
-private fun TrialBanner(daysRemaining: Int) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFF8F00).copy(alpha = 0.15f)
-        ),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.Timer,
-                contentDescription = null,
-                tint = Color(0xFFFF8F00),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    when (daysRemaining) {
-                        0 -> "Your Pro trial expires today!"
-                        1 -> "Your Pro trial expires tomorrow"
-                        else -> "Pro trial: $daysRemaining days remaining"
-                    },
-                    color = Color.White,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp
-                )
-                Text(
-                    "Upgrade to keep unlimited replies",
-                    color = Color(0xFFFF8F00),
-                    fontSize = 11.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun UsageQuotaCard(usage: UsageState) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Daily Usage", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                if (usage.isPremium) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50)),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Text(
-                            "UNLIMITED",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
-                    }
-                } else {
-                    Text(
-                        "${usage.dailyUsed} of ${usage.dailyLimit} used",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-            if (!usage.isPremium) {
-                Spacer(modifier = Modifier.height(8.dp))
-                val progress = if (usage.dailyLimit > 0) usage.dailyUsed.toFloat() / usage.dailyLimit else 0f
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = if (progress >= 0.8f) Color(0xFFEF5350) else Pink,
-                    trackColor = DividerColor
-                )
-                if (usage.dailyRemaining <= 1 && usage.dailyRemaining >= 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        if (usage.dailyRemaining == 0) "Limit reached! Upgrade for unlimited replies."
-                        else "1 reply left today",
-                        color = Color(0xFFEF5350),
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
     }
 }

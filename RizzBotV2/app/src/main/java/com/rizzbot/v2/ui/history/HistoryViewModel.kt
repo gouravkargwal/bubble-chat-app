@@ -28,15 +28,56 @@ class HistoryViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+
+    private val _hasMore = MutableStateFlow(true)
+    val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
+
+    private var currentOffset = 0
+    private val pageSize = 20
+
     init {
+        loadInitial()
+    }
+
+    private fun loadInitial() {
         viewModelScope.launch {
             _isLoading.value = true
-            val history = hostedRepository.getHistory(limit = 50)
-            // Filter out items with no valid replies (by text)
-            _history.value = history.filter { item ->
-                item.replies.any { reply -> reply.text.isNotBlank() }
+            currentOffset = 0
+            try {
+                val history = hostedRepository.getHistory(limit = pageSize, offset = 0)
+                // Filter out items with no valid replies (by text)
+                val filtered = history.filter { item ->
+                    item.replies.any { reply -> reply.text.isNotBlank() }
+                }
+                _history.value = filtered
+                _hasMore.value = filtered.size == pageSize
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
+        }
+    }
+
+    fun loadMore() {
+        if (_isLoadingMore.value || !_hasMore.value) return
+
+        viewModelScope.launch {
+            _isLoadingMore.value = true
+            try {
+                currentOffset += pageSize
+                val newItems = hostedRepository.getHistory(limit = pageSize, offset = currentOffset)
+                val filtered = newItems.filter { item ->
+                    item.replies.any { reply -> reply.text.isNotBlank() }
+                }
+                _history.value = _history.value + filtered
+                _hasMore.value = filtered.size == pageSize
+            } catch (e: Exception) {
+                android.util.Log.e("HistoryVM", "loadMore failed: ${e.message}")
+                currentOffset -= pageSize // Rollback on error
+            } finally {
+                _isLoadingMore.value = false
+            }
         }
     }
 

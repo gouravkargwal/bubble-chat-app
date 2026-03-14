@@ -1,6 +1,5 @@
 package com.rizzbot.v2.domain.repository
 
-import com.rizzbot.v2.data.remote.dto.ApplyPromoResponse
 import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
 import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
@@ -17,10 +16,10 @@ interface HostedRepository {
     suspend fun generateReply(base64Images: List<String>, direction: DirectionWithHint): SuggestionResult
     suspend fun trackCopy(interactionId: String, replyIndex: Int)
     suspend fun trackRating(interactionId: String, replyIndex: Int, isPositive: Boolean)
-    suspend fun refreshUsage()
+    suspend fun refreshUsage(force: Boolean = false)
 
     // History
-    suspend fun getHistory(limit: Int = 20): List<HistoryItemResponse>
+    suspend fun getHistory(limit: Int = 20, offset: Int = 0): List<HistoryItemResponse>
     suspend fun deleteHistoryItem(id: String)
 
     // Preferences
@@ -33,9 +32,6 @@ interface HostedRepository {
     suspend fun getReferralInfo(): ReferralInfo?
     suspend fun applyReferralCode(code: String): Result<ApplyReferralResponse>
 
-    // Promo
-    suspend fun applyPromoCode(code: String): Result<ApplyPromoResponse>
-
     // Billing
     suspend fun verifyPurchase(purchaseToken: String, productId: String, orderId: String?): Boolean
 
@@ -44,5 +40,7 @@ interface HostedRepository {
         compressedPhotos: List<ByteArray>,
         lang: String? = null
     ): Result<AuditResponse>
-    suspend fun getProfileAuditHistory(): List<com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto>
+    suspend fun getProfileAuditHistory(limit: Int = 20, offset: Int = 0): List<com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto>
+    suspend fun deleteProfileAuditPhoto(photoId: String): Result<Unit>
+    suspend fun deleteAllUserData(): Result<Unit>
 }

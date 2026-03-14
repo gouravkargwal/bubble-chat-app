@@ -54,6 +54,7 @@ class BubbleManager @Inject constructor(
     private var bubbleX: Int
     private var bubbleY = 400
     private var stateCollectorJob: Job? = null
+    private var timeoutJob: Job? = null
     private var currentDirection: DirectionWithHint? = null
     // When non-null, we're in "add more screenshots" mode and the next bubble tap
     // should append a screenshot for this direction instead of reopening the picker.
@@ -79,6 +80,9 @@ class BubbleManager @Inject constructor(
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Hidden)
     val state: StateFlow<BubbleState> = _state.asStateFlow()
 
+    private val _showPaywall = MutableStateFlow(false)
+    val showPaywall: StateFlow<Boolean> = _showPaywall.asStateFlow()
+
     // Public flow for UI to check if bubble is actually visible (not just pref = true)
     val isActuallyShown: StateFlow<Boolean> = MutableStateFlow(false).also { flow ->
         ensureScope().launch {
@@ -91,10 +95,11 @@ class BubbleManager @Inject constructor(
     private fun ensureScope(): CoroutineScope {
         return scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main).also {
             scope = it
-            // Start state collector for window layout updates
+            // Start state collector for window layout updates and timeout management
             stateCollectorJob = it.launch {
                 _state.collect { state ->
                     updateWindowForState(state)
+                    handleStateChangeForTimeout(state)
                 }
             }
         }
@@ -111,6 +116,7 @@ class BubbleManager @Inject constructor(
             else
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE,
+            // Always use FLAG_NOT_FOCUSABLE to prevent stealing keyboard focus from dating apps
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -134,16 +140,46 @@ class BubbleManager @Inject constructor(
         }
     }
 
+    /**
+     * Handle state changes for session timeout management.
+     * When collapsed, start 3-minute timer. When expanded, cancel timer.
+     */
+    private fun handleStateChangeForTimeout(state: BubbleState) {
+        val activeScope = ensureScope()
+        
+        when {
+            state is BubbleState.RizzButton || state is BubbleState.RizzButtonAddMore -> {
+                // Collapsed state: Start 3-minute timeout timer
+                timeoutJob?.cancel()
+                timeoutJob = activeScope.launch {
+                    kotlinx.coroutines.delay(3 * 60 * 1000L) // 3 minutes
+                    orchestrator.clearAllState()
+                    currentDirection = null
+                    pendingAppendDirection = null
+                    Log.d(TAG, "Session timeout: Cleared all state after 3 minutes of inactivity")
+                }
+            }
+            state.isExpandedState() -> {
+                // Expanded state: Cancel timeout (user is actively using the overlay)
+                timeoutJob?.cancel()
+                timeoutJob = null
+            }
+        }
+    }
+
     private fun createAndAttachView(): ComposeView {
         val params = createParams(isFullScreenState(_state.value))
         val view = ComposeView(context).apply {
             setContent {
+                val showPaywallState by _showPaywall.collectAsState()
                 BubbleOverlay(
                     state = _state,
                     usageState = hostedRepository.usageState,
                     dockOnLeft = dockOnLeft,
                     isGalleryMode = isGalleryMode,
-                    onEvent = { handleEvent(it) }
+                    onEvent = { handleEvent(it) },
+                    showPaywall = showPaywallState,
+                    onDismissPaywall = { _showPaywall.value = false }
                 )
             }
         }
@@ -176,7 +212,8 @@ class BubbleManager @Inject constructor(
                         TAG,
                         "ACTION_DOWN at raw=(${event.rawX}, ${event.rawY}) lp=(${lp.x}, ${lp.y})"
                     )
-                    // We handle the full gesture (tap or drag) here
+                    // We need to consume ACTION_DOWN to track drags, but we'll check state on ACTION_UP
+                    // to decide whether to handle the tap or let Compose handle it
                     return@setOnTouchListener true
                 }
 
@@ -233,7 +270,7 @@ class BubbleManager @Inject constructor(
                         if (droppedOnClose) {
                             hide()
                         } else {
-                            // Snap to nearest Left or Right edge
+                            // Snap to nearest Left or Right edge with spring animation
                             val dm = context.resources.displayMetrics
                             val midX = dm.widthPixels / 2
                             val bubbleCenterX = lp.x + (view.width / 2)
@@ -242,9 +279,10 @@ class BubbleManager @Inject constructor(
                             // Leave some margin so bubble doesn't go completely off-screen
                             val targetX = if (dockLeft) 8 else dm.widthPixels - view.width - 8
 
+                            // Use spring animation for smoother, more natural edge snapping
                             android.animation.ValueAnimator.ofInt(lp.x, targetX).apply {
-                                duration = 200 // Fast, smooth snap
-                                interpolator = android.view.animation.DecelerateInterpolator()
+                                duration = 300 // Slightly longer for smoother feel
+                                interpolator = android.view.animation.OvershootInterpolator(0.5f)
                                 addUpdateListener { animator ->
                                     val newX = animator.animatedValue as Int
                                     lp.x = newX
@@ -262,10 +300,64 @@ class BubbleManager @Inject constructor(
                         dragParams = null
                         return@setOnTouchListener true
                     } else {
-                        // No significant movement: treat as a simple tap anywhere in the small overlay.
+                        // No significant movement: this was a tap
                         dragParams = null
-                        Log.d(TAG, "ACTION_UP without drag, treating as tap")
-                        handleEvent(OverlayEvent.ShowBubble)
+                        val currentState = _state.value
+                        val isCollapsedState = currentState is BubbleState.RizzButton || 
+                                             currentState is BubbleState.RizzButtonAddMore
+                        
+                        if (isCollapsedState) {
+                            // In collapsed state, we should NOT handle taps here to avoid conflicts.
+                            // The RizzButton's onTap handler (via Compose) should handle it.
+                            // However, since we consumed ACTION_DOWN, Compose won't receive the event.
+                            // So we need to manually trigger the correct behavior: just expand the bubble
+                            // WITHOUT checking daily limits or launching MainActivity.
+                            // We'll directly set the state to show the picker/expanded view.
+                            Log.d(TAG, "ACTION_UP without drag in collapsed state - expanding bubble directly")
+                            
+                            val appendDirection = pendingAppendDirection
+                            if (appendDirection != null) {
+                                // We're in "add more screenshots" mode: append another capture
+                                pendingAppendDirection = null
+                                ensureScope().launch {
+                                    hideForCapture()
+                                    kotlinx.coroutines.delay(300)
+                                    try {
+                                        orchestrator.captureScreenshot()
+                                    } finally {
+                                        if (composeView == null) {
+                                            composeView = createAndAttachView()
+                                        }
+                                    }
+                                    val previewBitmaps = orchestrator.getPreviewBitmaps()
+                                    if (previewBitmaps.isNotEmpty()) {
+                                        _state.value = BubbleState.ScreenshotPreview(previewBitmaps, appendDirection)
+                                    } else {
+                                        val result = orchestrator.result.value
+                                        _state.value = when (result) {
+                                            is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                                            else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Restore prior state if any, otherwise show picker
+                                val result = orchestrator.result.value
+                                val previews = orchestrator.getPreviewBitmaps()
+                                _state.value = when {
+                                    result is SuggestionResult.Success -> BubbleState.Expanded(result)
+                                    previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
+                                        previews,
+                                        currentDirection ?: DirectionWithHint()
+                                    )
+                                    else -> BubbleState.DirectionPicker
+                                }
+                            }
+                        } else {
+                            // In full-screen states, handle the tap normally
+                            Log.d(TAG, "ACTION_UP without drag in full-screen state - handling tap")
+                            handleEvent(OverlayEvent.ShowBubble)
+                        }
                         return@setOnTouchListener true
                     }
                 }
@@ -296,9 +388,11 @@ class BubbleManager @Inject constructor(
     }
 
     fun hide() {
-        // Cancel all pending coroutines (LLM calls, tracking, etc.)
+        // Cancel all pending coroutines (LLM calls, tracking, timeout, etc.)
         stateCollectorJob?.cancel()
         stateCollectorJob = null
+        timeoutJob?.cancel()
+        timeoutJob = null
         scope?.cancel()
         scope = null
 
@@ -313,7 +407,7 @@ class BubbleManager @Inject constructor(
         }
         composeView = null
         _state.value = BubbleState.Hidden
-        orchestrator.clearScreenshot()
+        orchestrator.clearAllState() // Clear all state when service is hidden
         currentDirection = null
         pendingAppendDirection = null
         pendingGalleryDirection = null
@@ -452,57 +546,65 @@ class BubbleManager @Inject constructor(
         }
     }
 
+    private fun launchPaywallIntent() {
+        // Launch MainActivity with intent to show paywall
+        try {
+            val intent = android.content.Intent(context, com.rizzbot.v2.ui.MainActivity::class.java).apply {
+                action = "SHOW_PAYWALL"
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                        android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to launch MainActivity for paywall", e)
+        }
+    }
+
     private fun handleEvent(event: OverlayEvent) {
         val activeScope = ensureScope()
         when (event) {
             is OverlayEvent.ShowBubble -> {
-                val usage = hostedRepository.usageState.value
-                if (usage.dailyRemaining <= 0 && usage.bonusReplies <= 0 && !usage.isPremium) {
-                    _state.value = BubbleState.Error(
-                        "Daily free limit reached",
-                        SuggestionResult.ErrorType.QUOTA_EXCEEDED
-                    )
+                // Always show the direction picker when bubble is tapped
+                // Daily limits are checked later when user tries to generate replies
+                val appendDirection = pendingAppendDirection
+                if (appendDirection != null) {
+                    // We're in "add more screenshots" mode: append another capture
+                    // without clearing previous ones, after the user tapped the bubble again.
+                    pendingAppendDirection = null
+                    activeScope.launch {
+                        hideForCapture()
+                        kotlinx.coroutines.delay(300)
+
+                        try {
+                            orchestrator.captureScreenshot()
+                        } finally {
+                            if (composeView == null) {
+                                composeView = createAndAttachView()
+                            }
+                        }
+
+                        val previewBitmaps = orchestrator.getPreviewBitmaps()
+                        if (previewBitmaps.isNotEmpty()) {
+                            _state.value = BubbleState.ScreenshotPreview(previewBitmaps, appendDirection)
+                        } else {
+                            val result = orchestrator.result.value
+                            _state.value = when (result) {
+                                is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                                else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
+                            }
+                        }
+                    }
                 } else {
-                    val appendDirection = pendingAppendDirection
-                    if (appendDirection != null) {
-                        // We're in "add more screenshots" mode: append another capture
-                        // without clearing previous ones, after the user tapped the bubble again.
-                        pendingAppendDirection = null
-                        activeScope.launch {
-                            hideForCapture()
-                            kotlinx.coroutines.delay(300)
-
-                            try {
-                                orchestrator.captureScreenshot()
-                            } finally {
-                                if (composeView == null) {
-                                    composeView = createAndAttachView()
-                                }
-                            }
-
-                            val previewBitmaps = orchestrator.getPreviewBitmaps()
-                            if (previewBitmaps.isNotEmpty()) {
-                                _state.value = BubbleState.ScreenshotPreview(previewBitmaps, appendDirection)
-                            } else {
-                                val result = orchestrator.result.value
-                                _state.value = when (result) {
-                                    is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
-                                    else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
-                                }
-                            }
-                        }
-                    } else {
-                        // Restore prior state if any, otherwise show picker
-                        val result = orchestrator.result.value
-                        val previews = orchestrator.getPreviewBitmaps()
-                        _state.value = when {
-                            result is SuggestionResult.Success -> BubbleState.Expanded(result)
-                            previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
-                                previews,
-                                currentDirection ?: DirectionWithHint()
-                            )
-                            else -> BubbleState.DirectionPicker
-                        }
+                    // Restore prior state if any, otherwise show picker
+                    val result = orchestrator.result.value
+                    val previews = orchestrator.getPreviewBitmaps()
+                    _state.value = when {
+                        result is SuggestionResult.Success -> BubbleState.Expanded(result)
+                        previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
+                            previews,
+                            currentDirection ?: DirectionWithHint()
+                        )
+                        else -> BubbleState.DirectionPicker
                     }
                 }
             }
@@ -549,14 +651,25 @@ class BubbleManager @Inject constructor(
                 }
             }
             is OverlayEvent.ConfirmScreenshot -> {
-                activeScope.launch {
-                    _state.value = BubbleState.Loading()
-                    orchestrator.generateFromScreenshots(event.direction)
-                    val result = orchestrator.result.value
-                    _state.value = when (result) {
-                        is SuggestionResult.Success -> BubbleState.Expanded(result)
-                        is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
-                        is SuggestionResult.Loading -> BubbleState.Loading()
+                val usage = hostedRepository.usageState.value
+                val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
+                val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
+                
+                if (!isGodMode && !hasRepliesLeft) {
+                    // User hit their daily limit - redirect to paywall
+                    launchPaywallIntent()
+                    // Collapse the bubble
+                    _state.value = BubbleState.RizzButton
+                } else {
+                    activeScope.launch {
+                        _state.value = BubbleState.Loading()
+                        orchestrator.generateFromScreenshots(event.direction)
+                        val result = orchestrator.result.value
+                        _state.value = when (result) {
+                            is SuggestionResult.Success -> BubbleState.Expanded(result)
+                            is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
+                            is SuggestionResult.Loading -> BubbleState.Loading()
+                        }
                     }
                 }
             }
@@ -606,8 +719,10 @@ class BubbleManager @Inject constructor(
                 }
             }
             is OverlayEvent.DismissSuggestions -> {
+                // Remove aggressive collapse wiping - keep data alive for "peeking"
+                // The 3-minute timeout will handle stale data cleanup
+                pendingAppendDirection = null
                 _state.value = BubbleState.RizzButton
-                // We intentionally DO NOT clear screenshots here to maintain state
             }
             is OverlayEvent.CopyReply -> {
                 clipboardHelper.copyToClipboard(event.reply)
@@ -621,6 +736,16 @@ class BubbleManager @Inject constructor(
                             Log.w(TAG, "Failed to track copy", e)
                         }
                     }
+                    
+                    // Task Complete Auto-Wipe: Keep UI open for 1.5 seconds so they see success state,
+                    // then collapse the bubble AND wipe all state (they're moving on)
+                    kotlinx.coroutines.delay(1500L)
+                    orchestrator.clearAllState()
+                    currentDirection = null
+                    pendingAppendDirection = null
+                    timeoutJob?.cancel() // Cancel timeout since we're manually clearing
+                    timeoutJob = null
+                    _state.value = BubbleState.RizzButton
                 }
             }
             is OverlayEvent.RateReply -> {
@@ -636,40 +761,53 @@ class BubbleManager @Inject constructor(
             }
             is OverlayEvent.UpgradeTapped -> {
                 val usage = hostedRepository.usageState.value
-                // If user is not yet premium, send them to the upgrade screen.
-                // If they're already premium, just dismiss the error instead of
-                // taking them to a screen that says "you're already premium".
+                // If user is not yet premium, launch MainActivity to show paywall
+                // ModalBottomSheet doesn't work in overlay windows, so we launch the Activity instead
                 if (!usage.isPremium) {
-                    val intent = android.content.Intent(
-                        context,
-                        com.rizzbot.v2.ui.MainActivity::class.java
-                    ).apply {
-                        putExtra("navigate_to", "premium")
-                        addFlags(
-                            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                                android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
-                        )
-                    }
-                    context.startActivity(intent)
+                    launchPaywallIntent()
+                    // Collapse the bubble - user will see paywall in MainActivity
+                    _state.value = BubbleState.RizzButton
+                } else {
+                    // Already premium, just dismiss
+                    _state.value = BubbleState.RizzButton
                 }
-                _state.value = BubbleState.RizzButton
             }
             is OverlayEvent.Regenerate -> {
-                activeScope.launch {
-                    _state.value = BubbleState.Loading()
-                    orchestrator.generateFromScreenshots(event.direction)
-                    val result = orchestrator.result.value
-                    _state.value = when (result) {
-                        is SuggestionResult.Success -> BubbleState.Expanded(result)
-                        is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
-                        is SuggestionResult.Loading -> BubbleState.Loading()
+                val usage = hostedRepository.usageState.value
+                val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
+                val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
+                
+                if (!isGodMode && !hasRepliesLeft) {
+                    // User hit their daily limit - collapse FIRST, then redirect to paywall
+                    _state.value = BubbleState.RizzButton
+                    orchestrator.resetResult()
+                    currentDirection = null
+                    pendingAppendDirection = null
+                    // Small delay to ensure collapse animation completes
+                    activeScope.launch {
+                        kotlinx.coroutines.delay(100)
+                        launchPaywallIntent()
+                    }
+                } else {
+                    activeScope.launch {
+                        _state.value = BubbleState.Loading()
+                        orchestrator.generateFromScreenshots(event.direction)
+                        val result = orchestrator.result.value
+                        _state.value = when (result) {
+                            is SuggestionResult.Success -> BubbleState.Expanded(result)
+                            is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
+                            is SuggestionResult.Loading -> BubbleState.Loading()
+                        }
                     }
                 }
             }
             is OverlayEvent.ClearAndStartOver -> {
-                orchestrator.clearScreenshot()
+                // Manual clear: User wants to start over (e.g., moved to new chat without copying)
+                orchestrator.clearAllState()
                 currentDirection = null
                 pendingAppendDirection = null
+                timeoutJob?.cancel() // Cancel timeout since we're manually clearing
+                timeoutJob = null
                 _state.value = BubbleState.DirectionPicker
             }
             is OverlayEvent.Back -> {

@@ -15,37 +15,105 @@ class ProfileHistoryViewModel @Inject constructor(
     private val repository: HostedRepository,
 ) : ViewModel() {
 
-    private val _items = MutableStateFlow<List<HistoryItem>>(emptyList())
-    val items: StateFlow<List<HistoryItem>> = _items.asStateFlow()
+    private val _audits = MutableStateFlow<List<HistoryItem>>(emptyList())
+    val audits: StateFlow<List<HistoryItem>> = _audits.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private var currentOffset = 0
+    private var isLastPage = false
+    private var isLoading = false
+
+    // Expose isLoading as StateFlow for UI
+    private val _isLoadingState = MutableStateFlow(false)
+    val isLoadingState: StateFlow<Boolean> = _isLoadingState.asStateFlow()
+
+    private val pageSize = 20
 
     init {
-        refresh()
+        fetchNextPage()
+    }
+
+    fun fetchNextPage() {
+        if (isLoading || isLastPage) return
+
+        viewModelScope.launch {
+            isLoading = true
+            _isLoadingState.value = true
+            try {
+                val dtoItems = repository.getProfileAuditHistory(limit = pageSize, offset = currentOffset)
+                val mapped = dtoItems.map {
+                    HistoryItem(
+                        id = it.id,
+                        imageUrl = it.imageUrl,
+                        score = it.score,
+                        tier = it.tier,
+                        brutalFeedback = it.brutalFeedback,
+                        improvementTip = it.improvementTip,
+                        createdAt = it.createdAt,
+                    )
+                }
+                _audits.value = _audits.value + mapped.sortedByDescending { it.score }
+                currentOffset += pageSize
+                if (dtoItems.size < pageSize) {
+                    isLastPage = true
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileHistoryVM", "fetchNextPage failed: ${e.message}")
+                // Rollback offset on error
+                currentOffset = (_audits.value.size / pageSize) * pageSize
+            } finally {
+                isLoading = false
+                _isLoadingState.value = false
+            }
+        }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _isLoading.value = true
+            isLoading = true
+            _isLoadingState.value = true
+            currentOffset = 0
+            isLastPage = false
+            _audits.value = emptyList()
             try {
-                val dtoItems = repository.getProfileAuditHistory()
-                _items.value = dtoItems
-                    .map {
-                        HistoryItem(
-                            id = it.id,
-                            imageUrl = it.imageUrl,
-                            score = it.score,
-                            tier = it.tier,
-                            brutalFeedback = it.brutalFeedback,
-                            improvementTip = it.improvementTip,
-                            createdAt = it.createdAt,
-                        )
-                    }
-                    .sortedByDescending { it.score }
+                val dtoItems = repository.getProfileAuditHistory(limit = pageSize, offset = 0)
+                val mapped = dtoItems.map {
+                    HistoryItem(
+                        id = it.id,
+                        imageUrl = it.imageUrl,
+                        score = it.score,
+                        tier = it.tier,
+                        brutalFeedback = it.brutalFeedback,
+                        improvementTip = it.improvementTip,
+                        createdAt = it.createdAt,
+                    )
+                }
+                _audits.value = mapped.sortedByDescending { it.score }
+                currentOffset = pageSize
+                if (dtoItems.size < pageSize) {
+                    isLastPage = true
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ProfileHistoryVM", "refresh failed: ${e.message}")
             } finally {
-                _isLoading.value = false
+                isLoading = false
+                _isLoadingState.value = false
             }
+        }
+    }
+
+    fun deletePhoto(photoId: String) {
+        viewModelScope.launch {
+            val result = repository.deleteProfileAuditPhoto(photoId)
+            result.fold(
+                onSuccess = {
+                    // Remove from local state
+                    _audits.value = _audits.value.filter { it.id != photoId }
+                },
+                onFailure = {
+                    // Error handling could be added here if needed
+                    android.util.Log.e("ProfileHistoryVM", "Failed to delete photo: ${it.message}")
+                }
+            )
         }
     }
 }

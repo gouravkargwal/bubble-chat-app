@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +46,7 @@ fun DirectionPicker(
     allowedDirections: List<String>,
     customHintsEnabled: Boolean,
     isGalleryMode: Boolean,
+    isLoading: Boolean = false,
     onInputModeChanged: (Boolean) -> Unit,
     onDirectionSelected: (DirectionWithHint) -> Unit,
     onUpgrade: () -> Unit,
@@ -54,19 +57,24 @@ fun DirectionPicker(
     var showCustomInput by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
         InputModeToggle(
             isGalleryMode = isGalleryMode,
+            isLoading = isLoading,
             onInputModeChanged = onInputModeChanged
         )
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Show all 7 directions - locked ones will show with lock icon
         ConversationDirection.entries.forEach { direction ->
+            // Match enum name (e.g., "REVIVE_CHAT") to backend format (e.g., "revive_chat")
             val dirKey = direction.name.lowercase()
             val isLocked = allowedDirections.isNotEmpty() && dirKey !in allowedDirections
 
@@ -79,7 +87,7 @@ fun DirectionPicker(
                         if (isLocked) Color(0xFFE91E63).copy(alpha = 0.05f)
                         else Color.White.copy(alpha = 0.05f)
                     )
-                    .clickable {
+                    .clickable(enabled = !isLoading) {
                         if (isLocked) onUpgrade() else onDirectionSelected(DirectionWithHint(direction))
                     }
                     .then(
@@ -123,7 +131,7 @@ fun DirectionPicker(
                     .padding(vertical = 2.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White.copy(alpha = if (customHintsEnabled) 0.05f else 0.02f))
-                    .clickable {
+                    .clickable(enabled = !isLoading) {
                         if (customHintsEnabled) {
                             showCustomInput = true
                         } else {
@@ -186,10 +194,11 @@ fun DirectionPicker(
                 onClick = {
                     onDirectionSelected(DirectionWithHint(customHint = customHint))
                 },
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(containerColor = OverlayColors.AccentPink),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Generate")
+                Text(if (isLoading) "Cooking..." else "Generate")
             }
         }
     }
@@ -198,6 +207,7 @@ fun DirectionPicker(
 @Composable
 private fun InputModeToggle(
     isGalleryMode: Boolean,
+    isLoading: Boolean = false,
     onInputModeChanged: (Boolean) -> Unit
 ) {
     Row(
@@ -214,6 +224,7 @@ private fun InputModeToggle(
         ModeChip(
             label = "📸 Live Screen",
             selected = liveSelected,
+            enabled = !isLoading,
             onClick = { if (!liveSelected) onInputModeChanged(false) },
             modifier = Modifier.weight(1f)
         )
@@ -221,6 +232,7 @@ private fun InputModeToggle(
         ModeChip(
             label = "🖼️ Gallery",
             selected = gallerySelected,
+            enabled = !isLoading,
             onClick = { if (!gallerySelected) onInputModeChanged(true) },
             modifier = Modifier.weight(1f)
         )
@@ -231,6 +243,7 @@ private fun InputModeToggle(
 private fun ModeChip(
     label: String,
     selected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -245,13 +258,13 @@ private fun ModeChip(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
             .background(background)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 6.dp, horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
-            color = contentColor,
+            color = if (enabled) contentColor else contentColor.copy(alpha = 0.5f),
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
