@@ -28,8 +28,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 private val DarkBg = Color(0xFF0F0F1A)
 private val CardBg = Color(0xFF1A1A2E)
 private val Pink = Color(0xFFE91E63)
-private val GodModeGold = Color(0xFFFFD700)
-private val FreeTrialGreen = Color(0xFF4CAF50)
 
 @Composable
 fun PaywallScreen(
@@ -71,36 +69,12 @@ fun PaywallScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Pulsing Emoji
-                val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                val scale by infiniteTransition.animateFloat(
-                    initialValue = 0.9f,
-                    targetValue = 1.1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1000, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "scale"
-                )
-
-                Text(
-                    "👑",
-                    fontSize = 64.sp,
-                    modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                        }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
                 // Headline
                 Text(
-                    "Unlock God Mode",
-                    color = GodModeGold,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold,
+                    "Unlock Cookd Pro & Premium",
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
 
@@ -108,8 +82,8 @@ fun PaywallScreen(
 
                 // Subheadline
                 Text(
-                    "Stop guessing. Start matching. Let Cookd's AI take over your dating life.",
-                    color = Color.White.copy(alpha = 0.8f),
+                    "Get unlimited AI-powered replies, profile optimization, and more",
+                    color = Color.White.copy(alpha = 0.7f),
                     fontSize = 16.sp,
                     textAlign = TextAlign.Center,
                     lineHeight = 24.sp
@@ -123,48 +97,86 @@ fun PaywallScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                FeatureRow("Unlimited AI Chat Replies")
-                FeatureRow("Deep Voice DNA Cloning")
-                FeatureRow("Brutal Profile Audits")
+                FeatureRow("Unlimited AI Chat")
+                FeatureRow("Profile Auditor")
+                FeatureRow("AI Twin")
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             // Package Selector
-            if (state.isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = GodModeGold)
-                }
-            } else if (state.packages.isNotEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    state.packages.forEach { packageItem ->
-                        PackageCard(
-                            packageItem = packageItem,
-                            isSelected = state.selectedPackage?.identifier == packageItem.identifier,
-                            onClick = { viewModel.selectPackage(packageItem) }
-                        )
+            when (val uiState = state.uiState) {
+                is PaywallUiState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Pink)
                     }
                 }
-            } else {
-                // No packages available
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = CardBg)
-                ) {
-                    Text(
-                        "No packages available",
-                        color = Color.White,
-                        modifier = Modifier.padding(16.dp),
-                        textAlign = TextAlign.Center
-                    )
+                is PaywallUiState.Success -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Pro Plans Section
+                        if (state.proPackages.isNotEmpty()) {
+                            Text(
+                                "Pro Plans",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            
+                            state.proPackages.forEach { packageItem ->
+                                PackageCard(
+                                    packageItem = packageItem,
+                                    isSelected = state.selectedPackage?.identifier == packageItem.identifier,
+                                    isBestValue = false,
+                                    onClick = { viewModel.selectPackage(packageItem) }
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        
+                        // Premium Plans Section
+                        if (state.premiumPackages.isNotEmpty()) {
+                            Text(
+                                "Premium Plans",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            
+                            state.premiumPackages.forEach { packageItem ->
+                                val isBestValue = packageItem.identifier == "premium_monthly"
+                                PackageCard(
+                                    packageItem = packageItem,
+                                    isSelected = state.selectedPackage?.identifier == packageItem.identifier,
+                                    isBestValue = isBestValue,
+                                    onClick = { viewModel.selectPackage(packageItem) }
+                                )
+                            }
+                        }
+                    }
+                }
+                is PaywallUiState.Error -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = CardBg)
+                    ) {
+                        Text(
+                            uiState.message,
+                            color = Color.White,
+                            modifier = Modifier.padding(16.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
 
@@ -186,35 +198,20 @@ fun PaywallScreen(
             // CTA Button
             val selectedPackage = state.selectedPackage
             if (selectedPackage != null && activity != null) {
-                // Pulsing animation for CTA
-                val infiniteTransition = rememberInfiniteTransition(label = "ctaPulse")
-                val ctaScale by infiniteTransition.animateFloat(
-                    initialValue = 1f,
-                    targetValue = 1.02f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1500, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "ctaScale"
-                )
-
                 Button(
                     onClick = {
-                        viewModel.makePurchase(activity, selectedPackage, onPurchaseSuccess)
+                        viewModel.purchasePackage(activity, selectedPackage, onPurchaseSuccess)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = GodModeGold),
+                    colors = ButtonDefaults.buttonColors(containerColor = Pink),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .graphicsLayer {
-                            scaleX = ctaScale
-                            scaleY = ctaScale
-                        },
-                    shape = RoundedCornerShape(16.dp)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = state.purchaseError == null && !state.purchaseSuccess
                 ) {
                     Text(
-                        "Start 3-Day Free Trial",
-                        color = Color.Black,
+                        "Subscribe Now",
+                        color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -295,25 +292,23 @@ private fun FeatureRow(text: String) {
 private fun PackageCard(
     packageItem: com.revenuecat.purchases.Package,
     isSelected: Boolean,
+    isBestValue: Boolean,
     onClick: () -> Unit
 ) {
-    val isMonthly = packageItem.identifier.contains("monthly", ignoreCase = true) ||
-                    packageItem.identifier.contains("month", ignoreCase = true)
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .then(
                 if (isSelected) {
-                    Modifier.border(2.dp, GodModeGold, RoundedCornerShape(16.dp))
+                    Modifier.border(2.dp, Pink, RoundedCornerShape(16.dp))
                 } else {
-                    Modifier
+                    Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
                 }
             ),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) {
-                CardBg.copy(alpha = 0.8f)
+                CardBg.copy(alpha = 0.9f)
             } else {
                 CardBg
             }
@@ -328,8 +323,8 @@ private fun PackageCard(
                         Modifier.background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    GodModeGold.copy(alpha = 0.1f),
-                                    GodModeGold.copy(alpha = 0.05f)
+                                    Pink.copy(alpha = 0.15f),
+                                    Pink.copy(alpha = 0.05f)
                                 )
                             )
                         )
@@ -346,32 +341,45 @@ private fun PackageCard(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        // Package name
                         Text(
-                            packageItem.product.title,
+                            text = when (packageItem.identifier) {
+                                "Weekly" -> "Pro Weekly"
+                                "Monthly" -> "Pro Monthly"
+                                "premium_weekly" -> "Premium Weekly"
+                                "premium_monthly" -> "Premium Monthly"
+                                else -> packageItem.product.title
+                            },
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        // Period description
+                        val periodText = when {
+                            packageItem.identifier.contains("weekly", ignoreCase = true) -> "Billed weekly"
+                            packageItem.identifier.contains("monthly", ignoreCase = true) -> "Billed monthly"
+                            else -> packageItem.product.description
+                        }
                         Text(
-                            packageItem.product.description,
+                            periodText,
                             color = Color.White.copy(alpha = 0.7f),
                             fontSize = 14.sp
                         )
                     }
                     
-                    // Free Trial Badge for Monthly
-                    if (isMonthly) {
+                    // Best Value Badge
+                    if (isBestValue) {
                         Surface(
-                            color = FreeTrialGreen,
+                            color = Pink,
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.padding(start = 8.dp)
                         ) {
                             Text(
-                                "3-Day Free Trial",
+                                "Best Value",
                                 color = Color.White,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -385,10 +393,8 @@ private fun PackageCard(
                 
                 // Format price - RevenueCat Product has price property
                 val priceText = try {
-                    // Try to get formatted price
                     packageItem.product.price.formatted
                 } catch (e: Exception) {
-                    // Fallback: use product title or identifier
                     try {
                         packageItem.product.title
                     } catch (e2: Exception) {
@@ -398,7 +404,7 @@ private fun PackageCard(
                 
                 Text(
                     priceText,
-                    color = GodModeGold,
+                    color = Pink,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )

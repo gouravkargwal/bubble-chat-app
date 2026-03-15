@@ -1,5 +1,6 @@
 package com.rizzbot.v2.data.auth
 
+import android.accounts.AccountManager
 import android.content.Context
 import android.util.Log
 import androidx.credentials.CredentialManager
@@ -42,7 +43,29 @@ class GoogleSignInHelper @Inject constructor(
                 getGoogleIdToken(activityContext, webClientId, filterByAuthorized = true)
             } catch (e: NoCredentialException) {
                 // No previously authorized account — show full account picker
-                getGoogleIdToken(activityContext, webClientId, filterByAuthorized = false)
+                try {
+                    getGoogleIdToken(activityContext, webClientId, filterByAuthorized = false)
+                } catch (e2: NoCredentialException) {
+                    // This means no accounts are available or OAuth client is misconfigured
+                    Log.e("GoogleSignIn", "NoCredentialException: ${e2.message}", e2)
+                    // Check if device has Google accounts
+                    val hasAccounts = AccountManager.get(context)
+                        .getAccountsByType("com.google")
+                        .isNotEmpty()
+                    
+                    if (!hasAccounts) {
+                        return GoogleSignInResult.Error("No Google account found on this device. Please add one in Settings.")
+                    } else {
+                        // Device has accounts but Credential Manager can't access them
+                        // This usually means OAuth client is not properly configured for this package
+                        val packageName = context.packageName
+                        Log.e("GoogleSignIn", "Device has Google accounts but sign-in failed. Package: $packageName, WebClientId: $webClientId")
+                        return GoogleSignInResult.Error(
+                            "Google Sign-In is not properly configured for this app. " +
+                            "Please ensure the Android OAuth client is set up in Firebase Console for package: $packageName"
+                        )
+                    }
+                }
             }
 
             if (idToken == null) {
@@ -66,8 +89,6 @@ class GoogleSignInHelper @Inject constructor(
             }
         } catch (e: GetCredentialCancellationException) {
             GoogleSignInResult.Error("Sign-in was cancelled.")
-        } catch (e: NoCredentialException) {
-            GoogleSignInResult.Error("No Google account found on this device. Please add one in Settings.")
         } catch (e: Exception) {
             Log.e("GoogleSignIn", "Sign-in failed", e)
             GoogleSignInResult.Error("Something went wrong. Please try again.")

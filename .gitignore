@@ -15,6 +15,7 @@ Thumbs.db
 !.env.example
 *.jks
 *.keystore
+keystore.properties
 firebase-service-account.json
 google-services.json
 

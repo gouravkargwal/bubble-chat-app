@@ -37,18 +37,36 @@ android {
 
         // Set via gradle.properties or Firebase Console → Authentication → Google
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: ""}\"")
-        buildConfigField("String", "BACKEND_URL", "\"${project.findProperty("BACKEND_URL") ?: "https://api.cookd.app/"}\"")
-        
-        // RevenueCat Public API Key from local.properties
-        buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"${localProperties.getProperty("REVENUE_CAT_PUBLIC_KEY") ?: ""}\"")
+    }
+
+    flavorDimensions += "environment"
+
+    productFlavors {
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".stg"
+            resValue("string", "app_name", "Cookd (Staging)")
+            buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
+            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_eHYaPMyFAlAhSKcANHwynxRPImy\"")
+        }
+
+        create("production") {
+            dimension = "environment"
+            // Production uses default app_name from strings.xml: "Cookd"
+            buildConfigField("String", "BACKEND_URL", "\"https://api.cookd.app/\"")
+            // TODO: Replace with your production RevenueCat API key (starts with "goog_" for Google Play)
+            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"REPLACE_WITH_PRODUCTION_KEY\"")
+        }
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("../${keystoreProperties["storeFile"]}")
-            storePassword = keystoreProperties["storePassword"] as? String
-            keyAlias = keystoreProperties["keyAlias"] as? String
-            keyPassword = keystoreProperties["keyPassword"] as? String
+        if (keystorePropertiesFile.exists() && keystoreProperties.containsKey("storeFile")) {
+            create("release") {
+                storeFile = file("../${keystoreProperties["storeFile"]}")
+                storePassword = keystoreProperties["storePassword"] as? String
+                keyAlias = keystoreProperties["keyAlias"] as? String
+                keyPassword = keystoreProperties["keyPassword"] as? String
+            }
         }
     }
 
@@ -60,7 +78,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Only apply signing config if keystore exists
+            if (keystorePropertiesFile.exists() && keystoreProperties.containsKey("storeFile")) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
