@@ -27,11 +27,15 @@ sealed class PaywallUiState {
     data class Error(val message: String) : PaywallUiState()
 }
 
+enum class PaywallTier {
+    Pro, Premium
+}
+
 data class PaywallState(
     val uiState: PaywallUiState = PaywallUiState.Loading,
-    val packages: List<Package> = emptyList(),
     val proPackages: List<Package> = emptyList(),
     val premiumPackages: List<Package> = emptyList(),
+    val selectedTier: PaywallTier = PaywallTier.Premium,
     val selectedPackage: Package? = null,
     val purchaseError: String? = null,
     val purchaseSuccess: Boolean = false
@@ -72,34 +76,22 @@ class PaywallViewModel @Inject constructor(
                         return
                     }
 
-                    // Extract the 4 specific packages
-                    val weeklyPackage = defaultOffering.availablePackages.find { 
-                        it.identifier == "Weekly" 
-                    }
-                    val monthlyPackage = defaultOffering.availablePackages.find { 
-                        it.identifier == "Monthly" 
-                    }
-                    val premiumWeeklyPackage = defaultOffering.availablePackages.find { 
-                        it.identifier == "premium_weekly" 
-                    }
-                    val premiumMonthlyPackage = defaultOffering.availablePackages.find { 
-                        it.identifier == "premium_monthly" 
-                    }
-
-                    val allPackages = listOfNotNull(
-                        weeklyPackage,
-                        monthlyPackage,
-                        premiumWeeklyPackage,
-                        premiumMonthlyPackage
-                    )
+                    // Use the correct accessors for Pro packages
+                    // RevenueCat Offering has weekly and monthly properties for standard packages
+                    val weeklyPackage = defaultOffering.weekly
+                    val monthlyPackage = defaultOffering.monthly
+                    
+                    // Use getPackage for Premium packages (custom package identifiers)
+                    val premiumWeeklyPackage = defaultOffering.getPackage("premium_weekly")
+                    val premiumMonthlyPackage = defaultOffering.getPackage("premium_monthly")
 
                     val proPackages = listOfNotNull(weeklyPackage, monthlyPackage)
                     val premiumPackages = listOfNotNull(premiumWeeklyPackage, premiumMonthlyPackage)
 
-                    // Default to Premium Monthly as "Best Value"
-                    val defaultSelected = premiumMonthlyPackage ?: allPackages.firstOrNull()
+                    // Default to Premium Monthly
+                    val defaultSelected = premiumMonthlyPackage ?: premiumPackages.firstOrNull()
 
-                    if (allPackages.isEmpty()) {
+                    if (proPackages.isEmpty() && premiumPackages.isEmpty()) {
                         _state.update {
                             it.copy(
                                 uiState = PaywallUiState.Error("No packages found in default offering")
@@ -108,10 +100,10 @@ class PaywallViewModel @Inject constructor(
                     } else {
                         _state.update {
                             it.copy(
-                                uiState = PaywallUiState.Success(allPackages),
-                                packages = allPackages,
+                                uiState = PaywallUiState.Success(proPackages + premiumPackages),
                                 proPackages = proPackages,
                                 premiumPackages = premiumPackages,
+                                selectedTier = PaywallTier.Premium,
                                 selectedPackage = defaultSelected
                             )
                         }
@@ -128,6 +120,24 @@ class PaywallViewModel @Inject constructor(
                 }
             }
         )
+    }
+
+    fun selectTier(tier: PaywallTier) {
+        _state.update {
+            val packages = when (tier) {
+                PaywallTier.Pro -> it.proPackages
+                PaywallTier.Premium -> it.premiumPackages
+            }
+            val defaultPackage = packages.firstOrNull { 
+                it.identifier.contains("monthly", ignoreCase = true) 
+            } ?: packages.firstOrNull()
+            
+            it.copy(
+                selectedTier = tier,
+                selectedPackage = defaultPackage,
+                purchaseError = null
+            )
+        }
     }
 
     fun selectPackage(packageToSelect: Package) {
