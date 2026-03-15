@@ -16,6 +16,7 @@ import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.PurchasesError
 import com.revenuecat.purchases.interfaces.LogInCallback
+import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.rizzbot.v2.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
@@ -176,19 +177,33 @@ class GoogleSignInHelper @Inject constructor(
 
     fun signOut() {
         Log.d("GoogleSignIn", "Signing out user...")
-        
+
         // Log out from RevenueCat to clear subscription cache
-        Purchases.sharedInstance.logOut { error ->
-            if (error != null) {
-                Log.e("GoogleSignIn", "RevenueCat logout failed: ${error.message}")
-            } else {
-                Log.d("GoogleSignIn", "RevenueCat logout successful")
-            }
+        try {
+            Purchases.sharedInstance.logOut(
+                object : ReceiveCustomerInfoCallback {
+                    override fun onReceived(customerInfo: CustomerInfo) {
+                        Log.d(
+                            "GoogleSignIn",
+                            "RevenueCat logout successful. Active entitlements after logout: ${customerInfo.entitlements.active.keys}"
+                        )
+                    }
+
+                    override fun onError(error: PurchasesError) {
+                        Log.e(
+                            "GoogleSignIn",
+                            "RevenueCat logout failed: ${error.message} (Code: ${error.code})"
+                        )
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("GoogleSignIn", "Exception during RevenueCat logout: ${e.message}", e)
         }
-        
+
         firebaseAuth.signOut()
         authManager.clearAuth()
-        
+
         Log.d("GoogleSignIn", "Sign out completed")
     }
     
