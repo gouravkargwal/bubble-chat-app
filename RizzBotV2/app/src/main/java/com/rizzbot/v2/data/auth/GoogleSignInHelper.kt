@@ -12,8 +12,15 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.revenuecat.purchases.Purchases
+import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.PurchasesError
+import com.revenuecat.purchases.interfaces.LogInCallback
 import com.rizzbot.v2.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,16 +40,28 @@ class GoogleSignInHelper @Inject constructor(
 
     suspend fun signIn(activityContext: Context): GoogleSignInResult {
         val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
+        val packageName = context.packageName
+        
+        // Log configuration details for debugging
+        Log.d("GoogleSignIn", "=== Google Sign-In Configuration ===")
+        Log.d("GoogleSignIn", "Package Name: $packageName")
+        Log.d("GoogleSignIn", "Web Client ID: $webClientId")
+        Log.d("GoogleSignIn", "BuildConfig.BACKEND_URL: ${BuildConfig.BACKEND_URL}")
+        Log.d("GoogleSignIn", "=====================================")
+        
         if (webClientId.isBlank()) {
+            Log.e("GoogleSignIn", "Web Client ID is blank or not configured")
             return GoogleSignInResult.Error("Google Sign-In is not configured yet.")
         }
 
         return try {
             // First try authorized accounts for faster sign-in
+            Log.d("GoogleSignIn", "Attempting sign-in with authorized accounts first...")
             val idToken = try {
                 getGoogleIdToken(activityContext, webClientId, filterByAuthorized = true)
             } catch (e: NoCredentialException) {
                 // No previously authorized account — show full account picker
+                Log.d("GoogleSignIn", "No authorized account found, trying full account picker...")
                 try {
                     getGoogleIdToken(activityContext, webClientId, filterByAuthorized = false)
                 } catch (e2: NoCredentialException) {
@@ -53,12 +72,13 @@ class GoogleSignInHelper @Inject constructor(
                         .getAccountsByType("com.google")
                         .isNotEmpty()
                     
+                    Log.d("GoogleSignIn", "Device has Google accounts: $hasAccounts")
+                    
                     if (!hasAccounts) {
                         return GoogleSignInResult.Error("No Google account found on this device. Please add one in Settings.")
                     } else {
                         // Device has accounts but Credential Manager can't access them
                         // This usually means OAuth client is not properly configured for this package
-                        val packageName = context.packageName
                         Log.e("GoogleSignIn", "Device has Google accounts but sign-in failed. Package: $packageName, WebClientId: $webClientId")
                         return GoogleSignInResult.Error(
                             "Google Sign-In is not properly configured for this app. " +
@@ -69,22 +89,37 @@ class GoogleSignInHelper @Inject constructor(
             }
 
             if (idToken == null) {
+                Log.e("GoogleSignIn", "Failed to retrieve Google ID token")
                 return GoogleSignInResult.Error("Could not retrieve your Google account. Please try again.")
             }
 
+            Log.d("GoogleSignIn", "Successfully retrieved Google ID token, signing in to Firebase...")
             // Sign in to Firebase with the Google credential
             val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
             val firebaseIdToken = authResult.user?.getIdToken(false)?.await()?.token
                 ?: return GoogleSignInResult.Error("Something went wrong. Please try again.")
+            
+            val firebaseUserId = authResult.user?.uid
+            Log.d("GoogleSignIn", "Firebase sign-in successful, user ID: $firebaseUserId")
 
             // Send Firebase token to our backend to upgrade the account
-            when (val authResult = authManager.authenticateFirebase(firebaseIdToken)) {
+            when (val backendAuthResult = authManager.authenticateFirebase(firebaseIdToken)) {
                 is AuthManager.AuthResult.Success -> {
-                    GoogleSignInResult.Success(firebaseIdToken, authResult.isNewUser)
+                    // Get the backend user ID (preferred) or fall back to Firebase UID
+                    val userId = authManager.getUserId() ?: firebaseUserId ?: ""
+                    
+                    if (userId.isNotEmpty()) {
+                        // Sync user identity with RevenueCat (non-blocking)
+                        syncRevenueCatUser(userId)
+                    } else {
+                        Log.w("GoogleSignIn", "No user ID available for RevenueCat sync")
+                    }
+                    
+                    GoogleSignInResult.Success(firebaseIdToken, backendAuthResult.isNewUser)
                 }
                 is AuthManager.AuthResult.Error -> {
-                    GoogleSignInResult.Error(authResult.message)
+                    GoogleSignInResult.Error(backendAuthResult.message)
                 }
             }
         } catch (e: GetCredentialCancellationException) {
@@ -100,6 +135,8 @@ class GoogleSignInHelper @Inject constructor(
         webClientId: String,
         filterByAuthorized: Boolean
     ): String? {
+        Log.d("GoogleSignIn", "getGoogleIdToken called - filterByAuthorized: $filterByAuthorized, webClientId: $webClientId")
+        
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(filterByAuthorized)
             .setServerClientId(webClientId)
@@ -109,14 +146,19 @@ class GoogleSignInHelper @Inject constructor(
             .addCredentialOption(googleIdOption)
             .build()
 
+        Log.d("GoogleSignIn", "Requesting credential from CredentialManager...")
         val result = credentialManager.getCredential(activityContext, request)
         val credential = result.credential
 
         if (credential is CustomCredential &&
             credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
         ) {
-            return GoogleIdTokenCredential.createFrom(credential.data).idToken
+            val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+            Log.d("GoogleSignIn", "Successfully retrieved Google ID token")
+            return idToken
         }
+        
+        Log.w("GoogleSignIn", "Credential is not a Google ID token credential. Type: ${credential::class.simpleName}")
         return null
     }
 
@@ -133,7 +175,55 @@ class GoogleSignInHelper @Inject constructor(
     }
 
     fun signOut() {
+        Log.d("GoogleSignIn", "Signing out user...")
+        
+        // Log out from RevenueCat to clear subscription cache
+        Purchases.sharedInstance.logOut { error ->
+            if (error != null) {
+                Log.e("GoogleSignIn", "RevenueCat logout failed: ${error.message}")
+            } else {
+                Log.d("GoogleSignIn", "RevenueCat logout successful")
+            }
+        }
+        
         firebaseAuth.signOut()
         authManager.clearAuth()
+        
+        Log.d("GoogleSignIn", "Sign out completed")
+    }
+    
+    /**
+     * Sync user identity with RevenueCat after successful authentication.
+     * This is called asynchronously and doesn't block the main UI flow.
+     */
+    private fun syncRevenueCatUser(userId: String) {
+        // Launch in IO dispatcher to avoid blocking UI
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Log.d("GoogleSignIn", "Syncing RevenueCat user ID: $userId")
+                
+                Purchases.sharedInstance.logIn(
+                    userId,
+                    object : LogInCallback {
+                        override fun onReceived(customerInfo: CustomerInfo, created: Boolean) {
+                            Log.d(
+                                "GoogleSignIn",
+                                "RevenueCat logIn successful. User ID: $userId, Created: $created, " +
+                                "Active Entitlements: ${customerInfo.entitlements.active.keys}"
+                            )
+                        }
+
+                        override fun onError(error: PurchasesError) {
+                            Log.e(
+                                "GoogleSignIn",
+                                "RevenueCat logIn failed for user ID: $userId. Error: ${error.message} (Code: ${error.code})"
+                            )
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e("GoogleSignIn", "Exception during RevenueCat sync: ${e.message}", e)
+            }
+        }
     }
 }

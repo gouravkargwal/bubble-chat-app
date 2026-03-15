@@ -47,6 +47,7 @@ android {
             applicationIdSuffix = ".stg"
             resValue("string", "app_name", "Cookd (Staging)")
             buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"645560481637-cav634qu16j1061eajmstapob2ih01hr.apps.googleusercontent.com\"")
             buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_eHYaPMyFAlAhSKcANHwynxRPImy\"")
         }
 
