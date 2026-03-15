@@ -26,4 +26,5 @@ static/
 
 # ── Alembic caches (keep migration scripts tracked) ──
 alembic/**/__pycache__/
+firebase/
 

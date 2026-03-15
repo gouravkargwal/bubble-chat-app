@@ -1,8 +1,14 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env.dev", env_file_encoding="utf-8")
+    # Allow overriding the env file via ENV_FILE so we can have clean staging/prod configs.
+    # Defaults to .env.dev for local development.
+    model_config = SettingsConfigDict(
+        env_file=os.getenv("ENV_FILE", ".env.dev"),
+        env_file_encoding="utf-8",
+    )
 
     # Database
     database_url: str = "postgresql+asyncpg://cookd:cookd@localhost:5432/cookd"
