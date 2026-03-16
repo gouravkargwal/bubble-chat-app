@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.capture.ImageCompressor
+import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.domain.model.UserPreferences
 import com.rizzbot.v2.domain.model.UsageState
@@ -38,7 +39,10 @@ data class HomeState(
     val showCalibrationModal: Boolean = false,
     val isLoadingUsage: Boolean = true,
     val isLoadingHistory: Boolean = true,
-    val roastLanguage: String = "English"
+    val roastLanguage: String = "English",
+    val latestBlueprintTheme: String? = null,
+    val latestBlueprintSlotCount: Int = 0,
+    val latestBlueprintDate: String? = null
 )
 
 @HiltViewModel
@@ -48,7 +52,8 @@ class HomeViewModel @Inject constructor(
     private val hostedRepository: HostedRepository,
     private val permissionHelper: PermissionHelper,
     private val bubbleManager: dagger.Lazy<com.rizzbot.v2.overlay.manager.BubbleManager>,
-    private val imageCompressor: ImageCompressor
+    private val imageCompressor: ImageCompressor,
+    private val hostedApi: HostedApi
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
@@ -140,8 +145,26 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 // Network/parse error — leave rizzProfile as null so UI shows loading skeleton
-                // (the user can pull-to-refresh or reopen the app to retry)
             }
+        }
+
+        // Fetch latest profile blueprint for home card preview
+        viewModelScope.launch {
+            try {
+                val response = hostedApi.getProfileBlueprints(limit = 1)
+                if (response.isSuccessful) {
+                    val blueprint = response.body()?.items?.firstOrNull()
+                    if (blueprint != null) {
+                        _state.update {
+                            it.copy(
+                                latestBlueprintTheme = blueprint.overallTheme,
+                                latestBlueprintSlotCount = blueprint.slots.size,
+                                latestBlueprintDate = blueprint.createdAt.take(10)
+                            )
+                        }
+                    }
+                }
+            } catch (_: Exception) { }
         }
     }
 

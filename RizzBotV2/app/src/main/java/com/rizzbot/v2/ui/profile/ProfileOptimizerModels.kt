@@ -11,7 +11,9 @@ data class OptimizedSlot(
     val slotNumber: Int,
     val role: String,
     val caption: String,
-    val universalHook: String
+    val universalHook: String,
+    val hingePrompt: String,
+    val aislePrompt: String
 )
 
 data class UniversalPrompt(
@@ -23,8 +25,7 @@ data class ProfileBlueprint(
     val id: String,
     val userId: String,
     val overallTheme: String,
-    val tinderBio: String,
-    val bumbleBio: String,
+    val bio: String,
     val createdAt: String,
     val universalPrompts: List<UniversalPrompt>?,
     val slots: List<OptimizedSlot>
@@ -35,8 +36,7 @@ fun ProfileBlueprintDto.toUi(): ProfileBlueprint =
         id = id,
         userId = userId,
         overallTheme = overallTheme,
-        tinderBio = tinderBio,
-        bumbleBio = bumbleBio,
+        bio = bio,
         createdAt = createdAt,
         universalPrompts = universalPrompts?.map { it.toUi() },
         slots = slots.map { it.toUi() }
@@ -50,7 +50,9 @@ fun OptimizedSlotDto.toUi(): OptimizedSlot =
         slotNumber = slotNumber,
         role = role,
         caption = caption,
-        universalHook = universalHook
+        universalHook = universalHook,
+        hingePrompt = hingePrompt,
+        aislePrompt = aislePrompt
     )
 
 fun UniversalPromptDto.toUi(): UniversalPrompt =

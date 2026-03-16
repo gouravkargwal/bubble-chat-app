@@ -13,6 +13,7 @@ import com.revenuecat.purchases.interfaces.PurchaseCallback
 import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.revenuecat.purchases.interfaces.ReceiveOfferingsCallback
 import com.rizzbot.v2.data.subscription.SubscriptionManager
+import com.rizzbot.v2.domain.repository.HostedRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,12 +41,15 @@ data class PaywallState(
     val activeTier: PaywallTier? = null,
     val activeProductId: String? = null,
     val purchaseError: String? = null,
-    val purchaseSuccess: Boolean = false
+    val purchaseSuccess: Boolean = false,
+    val isRefreshingAfterPurchase: Boolean = false,
+    val readyToNavigate: Boolean = false
 )
 
 @HiltViewModel
 class PaywallViewModel @Inject constructor(
-    private val subscriptionManager: SubscriptionManager
+    private val subscriptionManager: SubscriptionManager,
+    private val hostedRepository: HostedRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PaywallState())
@@ -202,30 +206,13 @@ class PaywallViewModel @Inject constructor(
                     storeTransaction: StoreTransaction,
                     customerInfo: com.revenuecat.purchases.CustomerInfo
                 ) {
-                    // Check entitlements and update user tier
+                    // Show success screen immediately — no network wait for the user
+                    _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
+
+                    // Sync tier in background so it's ready before "Start Exploring" navigates away
                     viewModelScope.launch {
-                        val tier = when {
-                            customerInfo.entitlements["premium"]?.isActive == true -> {
-                                // Premium entitlement active -> God Mode (premium tier)
-                                "premium"
-                            }
-                            customerInfo.entitlements["pro"]?.isActive == true -> {
-                                // Pro entitlement active -> Pro
-                                "pro"
-                            }
-                            else -> "free"
-                        }
-                        
-                        // Update tier via SubscriptionManager
                         subscriptionManager.updateUserTier()
-                        
-                        Log.d("PaywallViewModel", "Purchase successful. Tier: $tier")
-                        _state.update { 
-                            it.copy(
-                                purchaseError = null,
-                                purchaseSuccess = true
-                            ) 
-                        }
+                        Log.d("PaywallViewModel", "Purchase tier sync complete")
                     }
                 }
 
@@ -287,15 +274,19 @@ class PaywallViewModel @Inject constructor(
     }
 
     /**
-     * Explicitly refresh the user's tier and usage state from the backend.
-     * Useful to ensure the app picks up webhook-driven changes (e.g. after tapping "Start Exploring").
+     * Force-refresh tier and usage from the backend, bypassing the cache.
+     * Sets readyToNavigate=true when done so the UI navigates only after data is fresh.
      */
     fun refreshUserTierFromBackend() {
+        _state.update { it.copy(isRefreshingAfterPurchase = true, readyToNavigate = false) }
         viewModelScope.launch {
             try {
                 subscriptionManager.updateUserTier()
+                hostedRepository.refreshUsage(force = true)
             } catch (e: Exception) {
                 Log.w("PaywallViewModel", "Failed to refresh user tier from backend", e)
+            } finally {
+                _state.update { it.copy(isRefreshingAfterPurchase = false, readyToNavigate = true) }
             }
         }
     }

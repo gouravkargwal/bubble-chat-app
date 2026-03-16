@@ -4,10 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_current_user
-from app.config import settings
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import (
-    AuditedPhoto,
     ProfileBlueprint as ProfileBlueprintDB,
     User,
 )
@@ -73,33 +71,21 @@ async def list_profile_blueprints(
     # Build response with storage paths from audited_photos
     items = []
     for db_blueprint in db_blueprints:
-        # Fetch all photo IDs to get storage paths
-        photo_ids = [slot.photo_id for slot in db_blueprint.slots]
-        if photo_ids:
-            photos_result = await db.execute(
-                select(AuditedPhoto).where(AuditedPhoto.id.in_(photo_ids))
-            )
-            photos_by_id = {photo.id: photo for photo in photos_result.scalars().all()}
-        else:
-            photos_by_id = {}
-
-        base_static = settings.base_url.rstrip("/") + "/static/"
         slot_responses = []
         for db_slot in db_blueprint.slots:
-            photo = photos_by_id.get(db_slot.photo_id)
-            if photo:
-                image_url = base_static + photo.storage_path.lstrip("/")
-                slot_responses.append(
-                    {
-                        "id": db_slot.id,
-                        "photo_id": db_slot.photo_id,
-                        "slot_number": db_slot.slot_number,
-                        "role": db_slot.role,
-                        "caption": db_slot.caption,
-                        "universal_hook": db_slot.universal_hook,
-                        "image_url": image_url,
-                    }
-                )
+            slot_responses.append(
+                {
+                    "id": db_slot.id,
+                    "photo_id": db_slot.photo_id,
+                    "slot_number": db_slot.slot_number,
+                    "role": db_slot.role,
+                    "caption": db_slot.caption,
+                    "universal_hook": db_slot.universal_hook,
+                    "hinge_prompt": db_slot.hinge_prompt,
+                    "aisle_prompt": db_slot.aisle_prompt,
+                    "image_url": db_slot.image_url,
+                }
+            )
 
         # Sort slots by slot_number
         slot_responses.sort(key=lambda x: x["slot_number"])
@@ -109,8 +95,7 @@ async def list_profile_blueprints(
                 id=db_blueprint.id,
                 user_id=db_blueprint.user_id,
                 overall_theme=db_blueprint.overall_theme,
-                tinder_bio=db_blueprint.tinder_bio,
-                bumble_bio=db_blueprint.bumble_bio,
+                bio=db_blueprint.bio,
                 created_at=db_blueprint.created_at,
                 slots=slot_responses,
             )

@@ -55,6 +55,7 @@ fun HomeScreen(
     onNavigateToProfileAuditor: () -> Unit,
     onNavigateToProfileHistory: () -> Unit,
     onNavigateToProfileOptimizer: () -> Unit,
+    onNavigateToProfileStrategy: () -> Unit = {},
     onShowPaywall: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -132,12 +133,18 @@ fun HomeScreen(
                 primaryAccent = primaryAccent,
                 isGodMode = isGodMode,
                 isProOrAbove = isProOrAbove,
+                latestBlueprintTheme = state.latestBlueprintTheme,
+                latestBlueprintSlotCount = state.latestBlueprintSlotCount,
+                latestBlueprintDate = state.latestBlueprintDate,
                 onClick = {
                     if (isProOrAbove) {
                         onNavigateToProfileOptimizer()
                     } else {
                         onShowPaywall()
                     }
+                },
+                onViewLastBlueprint = {
+                    if (isProOrAbove) onNavigateToProfileStrategy() else onShowPaywall()
                 }
             )
 
@@ -446,12 +453,14 @@ private fun AutoProfileBuilderCard(
     primaryAccent: Color,
     isGodMode: Boolean,
     isProOrAbove: Boolean,
-    onClick: () -> Unit
+    latestBlueprintTheme: String?,
+    latestBlueprintSlotCount: Int,
+    latestBlueprintDate: String?,
+    onClick: () -> Unit,
+    onViewLastBlueprint: () -> Unit = {}
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(0.5.dp, primaryAccent.copy(alpha = 0.3f))
@@ -468,62 +477,112 @@ private fun AutoProfileBuilderCard(
                     )
                 )
         ) {
-            Row(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column {
+                // Main tappable row
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .clickable { onClick() }
+                        .padding(16.dp)
+                        .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(primaryAccent.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(primaryAccent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = primaryAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Auto-Build Profile",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "AI-powered profile builder",
+                                color = Color.Gray,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    if (!isProOrAbove) {
                         Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = primaryAccent,
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Pro Feature",
+                            tint = GodModeGold,
                             modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Auto-Build Profile",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "AI-powered profile builder",
-                            color = Color.Gray,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-                if (!isProOrAbove) {
                     Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Pro Feature",
-                        tint = GodModeGold,
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Open",
+                        tint = primaryAccent.copy(alpha = 0.7f),
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
                 }
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "Open",
-                    tint = primaryAccent.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
-                )
+
+                // Latest blueprint preview
+                if (latestBlueprintTheme != null) {
+                    HorizontalDivider(
+                        color = primaryAccent.copy(alpha = 0.1f),
+                        thickness = 0.5.dp
+                    )
+                    Row(
+                        modifier = Modifier
+                            .clickable { onViewLastBlueprint() }
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Last blueprint",
+                                color = Color.Gray,
+                                fontSize = 10.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = latestBlueprintTheme,
+                                color = primaryAccent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (latestBlueprintDate != null) {
+                                Text(
+                                    text = "$latestBlueprintSlotCount photos • $latestBlueprintDate",
+                                    color = Color.Gray,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                        Text(
+                            text = "View →",
+                            color = primaryAccent.copy(alpha = 0.8f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
         }
     }

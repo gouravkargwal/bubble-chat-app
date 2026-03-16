@@ -27,7 +27,7 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
     "properties": {
         "slots": {
             "type": "ARRAY",
-            "minItems": 6,
+            "minItems": 1,
             "maxItems": 6,
             "items": {
                 "type": "OBJECT",
@@ -41,6 +41,8 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
                     "role": {"type": "STRING"},
                     "caption": {"type": "STRING"},
                     "contextual_hook": {"type": "STRING"},
+                    "hinge_prompt": {"type": "STRING"},
+                    "aisle_prompt": {"type": "STRING"},
                     "coach_reasoning": {"type": "STRING"},
                 },
                 "required": [
@@ -49,16 +51,17 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
                     "role",
                     "caption",
                     "contextual_hook",
+                    "hinge_prompt",
+                    "aisle_prompt",
                     "coach_reasoning",
                 ],
             },
         },
         "overall_theme": {"type": "STRING"},
-        "tinder_bio": {
+        "bio": {
             "type": "STRING",
             "maxLength": 500,
         },
-        "bumble_bio": {"type": "STRING"},
         "universal_prompts": {
             "type": "ARRAY",
             "minItems": 3,
@@ -76,8 +79,7 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
     "required": [
         "slots",
         "overall_theme",
-        "tinder_bio",
-        "bumble_bio",
+        "bio",
         "universal_prompts",
     ],
 }
@@ -138,9 +140,10 @@ async def generate_blueprint(
     ]
     photos_json = json.dumps(photo_payload, ensure_ascii=False)
 
+    available_count = len(photos)
     system_prompt = (
         "You are now a Cross-Platform Rizz Architect. Your job is to design a dating profile system that "
-        "works across Tinder, Bumble, and Hinge — not just one app.\n\n"
+        "works across Tinder, Bumble, Hinge, and Aisle — not just one app.\n\n"
         "You MUST respond with JSON that strictly matches the provided JSON schema. "
         "Do not include any commentary outside of the JSON.\n\n"
         f"IMPORTANT: Provide all captions, hooks, bios, prompts, and any other text in the following "
@@ -152,26 +155,30 @@ async def generate_blueprint(
 
     user_prompt = (
         "You are given a JSON array of previously audited dating profile photos.\n"
-        "- Each object has fields: id, score (1-10), tier (e.g. GOD_TIER / FILLER / GRAVEYARD), "
+        "- Each object has fields: id, score (1-10), tier (GOD_TIER / FILLER / GRAVEYARD), "
         "and brutal_feedback written by another coach.\n"
-        "- You MUST select exactly 6 distinct photos using the `id` field.\n"
-        "- `slot_number` must be 1 through 6 with no gaps or duplicates.\n"
+        f"- You have exactly {available_count} photo(s). Use ALL of them — one slot per photo, no repeats.\n"
+        f"- `slot_number` must be 1 through {available_count} with no gaps or duplicates.\n"
         "- Slot 1 MUST be the single best clear face shot for first impression.\n"
         "- Optimize for status, charisma, social proof, and variety of settings while avoiding try-hard energy.\n"
         "- Use the brutal_feedback notes as context but feel free to disagree if you have a better framing.\n"
-        "- For each chosen photo, write:\n"
-        "  * A short, high-status caption that would sit under the photo.\n"
-        "  * A single `contextual_hook` string: a versatile hook inspired by this photo that can power many prompts "
-        "across apps (e.g. a suit photo might have a hook about 'Parent Approval' or 'Wedding Plus One').\n"
-        "  * A brief `coach_reasoning` explaining why you picked this photo for this slot.\n"
+        "- For each photo, write:\n"
+        "  * `caption`: A short, high-status caption to sit under the photo.\n"
+        "  * `contextual_hook`: A short hook label for this photo (e.g. 'Parent Approval', 'Adventure Flex').\n"
+        "  * `hinge_prompt`: A ready-to-paste Hinge prompt answer inspired by this photo (max 150 chars). "
+        "Make it conversational and invite a reply. Include the prompt question and answer, e.g. "
+        "'My most controversial opinion → Brunch is just breakfast for people who overslept.'\n"
+        "  * `aisle_prompt`: A ready-to-paste Aisle prompt answer for this photo. "
+        "Aisle is relationship-focused — be warm, genuine, show depth. "
+        "e.g. 'A story behind this photo → Solo trip to Kyoto. Came back knowing I want someone to share the next one with.'\n"
+        "  * `coach_reasoning`: Brief explanation of why this photo gets this slot.\n"
         "- Also include:\n"
         "  * `overall_theme`: one sentence summarizing the vibe of the whole profile.\n"
-        "  * `tinder_bio`: a short, punchy Tinder bio (max 500 characters) that is low-investment and high-status.\n"
-        "  * `bumble_bio`: a playful, approachable Bumble 'About Me' section that includes ~3 specific fun facts.\n"
-        "  * `universal_prompts`: exactly 3 hook objects that could become prompts or answers on ANY app. "
-        "Each must have:\n"
-        "      - `category`: a short label for the hook (e.g. 'Parent Approval', 'Low-Key Flex').\n"
-        "      - `suggested_text`: concrete example text that could be pasted into a prompt field.\n\n"
+        "  * `bio`: a single punchy bio (max 500 chars) that works across Tinder, Bumble, Hinge, and Aisle. "
+        "Blend 2-3 specific fun facts with a confident, low-investment tone. No cringe, no desperation.\n"
+        "  * `universal_prompts`: exactly 3 hook objects usable on ANY app. Each has:\n"
+        "      - `category`: short label (e.g. 'Parent Approval', 'Low-Key Flex', 'Wingman Energy').\n"
+        "      - `suggested_text`: concrete text ready to paste into any prompt field.\n\n"
         "Return ONLY a JSON object that matches the schema. Do not include any extra keys.\n\n"
         "Audited photos JSON:\n"
         f"{photos_json}"
@@ -227,44 +234,35 @@ async def generate_blueprint(
         )
         raise ValueError("Failed to parse profile blueprint response") from exc
 
-    # Enrich slots with storage URLs derived from audited_photos.
+    # Build lookup map for storage URL construction
     photos_by_id = {photo.id: photo for photo in photos}
-    for slot in blueprint.slots:
-        matching = photos_by_id.get(slot.photo_id)
-        if not matching:
-            # If LLM referenced a non-existent id, leave storage_url empty but log it.
-            logger.warning(
-                "profile_blueprint_missing_photo",
-                photo_id=slot.photo_id,
-                user_id=user_id,
-            )
-            continue
-        # Build absolute URL so the Android app can render images directly.
-        slot.storage_url = f"{settings.base_url}/static/{matching.storage_path}"
 
     # Save to database
     db_blueprint = ProfileBlueprintDB(
         user_id=user_id,
         overall_theme=blueprint.overall_theme,
-        tinder_bio=blueprint.tinder_bio,
-        bumble_bio=blueprint.bumble_bio,
+        bio=blueprint.bio,
     )
     db.add(db_blueprint)
     await db.flush()  # Flush to get the blueprint.id
 
-    # Create BlueprintSlot records
+    # Create BlueprintSlot records (store image_url so history is recreatable even if photo is deleted)
     for slot in blueprint.slots:
         matching_photo = photos_by_id.get(slot.photo_id)
         if not matching_photo:
             continue  # Skip invalid photo references
 
+        stored_image_url = f"{settings.base_url.rstrip('/')}/static/{matching_photo.storage_path.lstrip('/')}"
         db_slot = BlueprintSlot(
             blueprint_id=db_blueprint.id,
             photo_id=slot.photo_id,
             slot_number=slot.slot_number,
             role=slot.role,
             caption=slot.caption,
-            universal_hook=slot.contextual_hook,  # Map contextual_hook to universal_hook
+            universal_hook=slot.contextual_hook,
+            hinge_prompt=slot.hinge_prompt,
+            aisle_prompt=slot.aisle_prompt,
+            image_url=stored_image_url,
         )
         db.add(db_slot)
 
@@ -279,14 +277,8 @@ async def generate_blueprint(
     db_blueprint = result.scalar_one()
 
     # Build response schema (excludes coach_reasoning and other internal fields)
-    base_static = settings.base_url.rstrip("/") + "/static/"
     slot_responses = []
     for db_slot in db_blueprint.slots:
-        matching_photo = photos_by_id.get(db_slot.photo_id)
-        if not matching_photo:
-            continue
-
-        image_url = base_static + matching_photo.storage_path.lstrip("/")
         slot_responses.append(
             {
                 "id": db_slot.id,
@@ -295,7 +287,9 @@ async def generate_blueprint(
                 "role": db_slot.role,
                 "caption": db_slot.caption,
                 "universal_hook": db_slot.universal_hook,
-                "image_url": image_url,
+                "hinge_prompt": db_slot.hinge_prompt,
+                "aisle_prompt": db_slot.aisle_prompt,
+                "image_url": db_slot.image_url,
             }
         )
 
@@ -314,8 +308,7 @@ async def generate_blueprint(
         id=db_blueprint.id,
         user_id=db_blueprint.user_id,
         overall_theme=db_blueprint.overall_theme,
-        tinder_bio=db_blueprint.tinder_bio,
-        bumble_bio=db_blueprint.bumble_bio,
+        bio=db_blueprint.bio,
         created_at=db_blueprint.created_at,
         slots=slot_responses,
         universal_prompts=universal_prompts_response,

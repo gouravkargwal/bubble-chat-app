@@ -1,38 +1,48 @@
 package com.rizzbot.v2.ui.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +50,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+
+private val BgColor = Color(0xFF050510)
+private val CardColor = Color(0xFF0D0D22)
+private val AccentGold = Color(0xFFFFD700)
+private val TextPrimary = Color.White
+private val TextSecondary = Color(0xFFB0B0D0)
+private val TextMuted = Color(0xFF606080)
+private val HingeColor = Color(0xFFFF6B6B)
+private val AisleColor = Color(0xFF6BDDFF)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,12 +67,12 @@ fun ProfileStrategyScreen(
     onBack: () -> Unit,
     viewModel: ProfileOptimizerViewModel = hiltViewModel()
 ) {
-    val state by viewModel.state.collectAsState()
+    val historyState by viewModel.historyState.collectAsState()
     val clipboard = LocalClipboardManager.current
 
-    val selectedTab = remember { mutableIntStateOf(0) }
-    val tabs = listOf("Tinder", "Bumble", "Hinge", "History")
-    
+    // null = list view; non-null = detail view for that blueprint
+    var detailBlueprint by remember { mutableStateOf<ProfileBlueprint?>(null) }
+
     LaunchedEffect(Unit) {
         viewModel.loadHistory()
     }
@@ -62,399 +82,371 @@ fun ProfileStrategyScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Profile Strategy",
+                        text = if (detailBlueprint != null) "Blueprint Detail" else "Profile Blueprints",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White
+                        color = TextPrimary
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (detailBlueprint != null) detailBlueprint = null else onBack()
+                    }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = TextPrimary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF050510),
-                    titleContentColor = Color.White
+                    containerColor = BgColor,
+                    titleContentColor = TextPrimary
                 )
             )
         },
-        containerColor = Color(0xFF050510)
+        containerColor = BgColor
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-        ) {
-            TabRow(
-                selectedTabIndex = selectedTab.intValue,
-                containerColor = Color(0xFF050510),
-                contentColor = Color.White
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab.intValue == index,
-                        onClick = { selectedTab.intValue = index },
-                        text = {
-                            Text(
-                                text = title,
-                                fontSize = 14.sp,
-                                fontWeight = if (selectedTab.intValue == index) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        }
-                    )
-                }
-            }
-
-            when (val s = state) {
-                is OptimizerState.Success -> {
-                    when (selectedTab.intValue) {
-                        0 -> TinderTab(blueprint = s.blueprint, onCopy = {
-                            clipboard.setText(AnnotatedString(s.blueprint.tinderBio))
-                        })
-
-                        1 -> BumbleTab(blueprint = s.blueprint, onCopy = {
-                            clipboard.setText(AnnotatedString(s.blueprint.bumbleBio))
-                        })
-
-                        2 -> HingeTab(blueprint = s.blueprint)
-                        
-                        else -> HistoryTab(viewModel = viewModel)
-                    }
-                }
-
-                is OptimizerState.Loading -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "Building your cross-app strategy...",
-                            color = Color.White,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-
-                else -> {
-                    when (selectedTab.intValue) {
-                        3 -> HistoryTab(viewModel = viewModel)
-                        else -> {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(24.dp),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Run the Profile Optimizer first to generate a strategy.",
-                                    color = Color(0xFFB0B0D0),
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+        val currentDetail = detailBlueprint
+        if (currentDetail != null) {
+            BlueprintDetailView(
+                blueprint = currentDetail,
+                modifier = Modifier.padding(padding),
+                onCopy = { text -> clipboard.setText(AnnotatedString(text)) }
+            )
+        } else {
+            BlueprintHistoryListView(
+                historyState = historyState,
+                modifier = Modifier.padding(padding),
+                onBlueprintClick = { blueprint -> detailBlueprint = blueprint }
+            )
         }
     }
 }
 
 @Composable
-private fun TinderTab(
-    blueprint: ProfileBlueprint,
-    onCopy: () -> Unit
+private fun BlueprintHistoryListView(
+    historyState: BlueprintHistoryState,
+    modifier: Modifier = Modifier,
+    onBlueprintClick: (ProfileBlueprint) -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentPadding = PaddingValues(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Text(
-                text = "Tinder Bio",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF111122)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = blueprint.tinderBio,
-                        color = Color(0xFFE0E0FF),
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Tap and hold to copy in your dating app.",
-                        color = Color(0xFF8080A0),
-                        fontSize = 11.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BumbleTab(
-    blueprint: ProfileBlueprint,
-    onCopy: () -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentPadding = PaddingValues(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Text(
-                text = "Bumble About Me",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF111122)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = blueprint.bumbleBio,
-                        color = Color(0xFFE0FFE8),
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Universal Hooks",
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            blueprint.universalPrompts?.forEach { hook ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF151528)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = hook.category,
-                            color = Color(0xFFFFD700),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = hook.suggestedText,
-                            color = Color(0xFFE0E0FF),
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HingeTab(
-    blueprint: ProfileBlueprint
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        contentPadding = PaddingValues(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            Text(
-                text = "Photo Hooks",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        items(
-            items = blueprint.slots.sortedBy { it.slotNumber },
-            key = { it.slotNumber }
-        ) { slot ->
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF111122)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Slot ${slot.slotNumber}: ${slot.role}",
-                        color = Color(0xFFFFD700),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = slot.caption,
-                        color = Color.White,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = slot.universalHook,
-                        color = Color(0xFFE0FFE8),
-                        fontSize = 13.sp,
-                        lineHeight = 19.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HistoryTab(
-    viewModel: ProfileOptimizerViewModel
-) {
-    val historyState by viewModel.historyState.collectAsState()
-
-    when (val state = historyState) {
+    when (historyState) {
         is BlueprintHistoryState.Loading -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Loading past strategies...",
-                    color = Color.White,
-                    fontSize = 14.sp
-                )
+                Text("Loading blueprints...", color = TextSecondary, fontSize = 14.sp)
             }
         }
 
         is BlueprintHistoryState.Success -> {
-            if (state.blueprints.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
+            if (historyState.blueprints.isEmpty()) {
+                Box(
+                    modifier = modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No past strategies found.",
-                        color = Color(0xFFB0B0D0),
+                        "No blueprints yet.\nRun the Profile Optimizer to generate one.",
+                        color = TextSecondary,
                         fontSize = 13.sp
                     )
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentPadding = PaddingValues(bottom = 32.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(
-                        items = state.blueprints,
+                        items = historyState.blueprints.sortedByDescending { it.createdAt },
                         key = { it.id }
                     ) { blueprint ->
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF111122)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = blueprint.overallTheme,
-                                    color = Color(0xFFFFD700),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Tinder: ${blueprint.tinderBio.take(100)}...",
-                                    color = Color(0xFFE0E0FF),
-                                    fontSize = 12.sp
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Bumble: ${blueprint.bumbleBio.take(100)}...",
-                                    color = Color(0xFFE0FFE8),
-                                    fontSize = 12.sp
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "${blueprint.slots.size} slots • ${blueprint.createdAt}",
-                                    color = Color(0xFF8080A0),
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
+                        val index = historyState.blueprints
+                            .sortedByDescending { it.createdAt }
+                            .indexOf(blueprint)
+                        BlueprintListCard(
+                            label = "Blueprint ${index + 1}",
+                            blueprint = blueprint,
+                            onClick = { onBlueprintClick(blueprint) }
+                        )
                     }
                 }
             }
         }
 
         is BlueprintHistoryState.Error -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = state.message,
-                    color = Color(0xFFFF6B6B),
-                    fontSize = 13.sp
-                )
+                Text(historyState.message, color = Color(0xFFFF6B6B), fontSize = 13.sp)
             }
         }
 
         else -> {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
+                Text("Loading...", color = TextSecondary, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BlueprintListCard(
+    label: String,
+    blueprint: ProfileBlueprint,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardColor),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = label,
+                color = AccentGold,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = blueprint.overallTheme,
+                color = TextPrimary,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "${blueprint.slots.size} photos · ${blueprint.createdAt.take(10)}",
+                color = TextMuted,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun BlueprintDetailView(
+    blueprint: ProfileBlueprint,
+    modifier: Modifier = Modifier,
+    onCopy: (String) -> Unit
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 40.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Overall theme
+        item {
+            Text(
+                text = blueprint.overallTheme,
+                color = AccentGold,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 20.sp
+            )
+        }
+
+        // Photo slots
+        items(
+            items = blueprint.slots.sortedBy { it.slotNumber },
+            key = { it.id }
+        ) { slot ->
+            SlotDetailCard(slot = slot, onCopy = onCopy)
+        }
+
+        // Bio section
+        if (blueprint.bio.isNotBlank()) {
+            item {
+                HorizontalDivider(
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                BioCard(bio = blueprint.bio, onCopy = { onCopy(blueprint.bio) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun SlotDetailCard(slot: OptimizedSlot, onCopy: (String) -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardColor),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Slot header
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Tap to load past strategies.",
-                    color = Color(0xFFB0B0D0),
-                    fontSize = 13.sp
+                    text = "Slot ${slot.slotNumber}",
+                    color = AccentGold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = slot.role,
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
+
+            // Photo + caption
+            if (slot.imageUrl.isNotBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                AsyncImage(
+                    model = slot.imageUrl,
+                    contentDescription = "Slot ${slot.slotNumber} photo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(4f / 5f)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            }
+
+            if (slot.caption.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = slot.caption,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp
+                )
+            }
+
+            // Hinge prompt
+            if (slot.hingePrompt.isNotBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Hinge",
+                            color = HingeColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = slot.hingePrompt,
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp
+                        )
+                    }
+                    IconButton(
+                        onClick = { onCopy(slot.hingePrompt) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = "Copy Hinge prompt",
+                            tint = HingeColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            // Aisle prompt
+            if (slot.aislePrompt.isNotBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Aisle",
+                            color = AisleColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = slot.aislePrompt,
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp
+                        )
+                    }
+                    IconButton(
+                        onClick = { onCopy(slot.aislePrompt) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = "Copy Aisle prompt",
+                            tint = AisleColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BioCard(bio: String, onCopy: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardColor),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Bio",
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(
+                    onClick = onCopy,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        text = "Copy",
+                        color = AccentGold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = bio,
+                color = TextSecondary,
+                fontSize = 14.sp,
+                lineHeight = 21.sp
+            )
         }
     }
 }

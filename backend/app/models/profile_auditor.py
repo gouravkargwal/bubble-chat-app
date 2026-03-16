@@ -18,7 +18,7 @@ class PhotoFeedback(BaseModel):
 
     photo_id: str
     score: int = Field(..., ge=1, le=10)
-    tier: PhotoTier
+    tier: PhotoTier | None = None  # computed server-side; not returned by LLM
     brutal_feedback: str
     improvement_tip: str
 

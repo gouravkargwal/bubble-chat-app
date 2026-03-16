@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -82,6 +83,7 @@ private val AccentSoft = Accent.copy(alpha = 0.16f)
 @Composable
 fun ProfileOptimizerScreen(
     onBack: () -> Unit,
+    onViewStrategy: () -> Unit = {},
     viewModel: ProfileOptimizerViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -109,6 +111,15 @@ fun ProfileOptimizerScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
+                            tint = Color.White
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onViewStrategy) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = "History",
                             tint = Color.White
                         )
                     }
@@ -175,13 +186,13 @@ fun ProfileOptimizerScreen(
                         blueprint = s.blueprint,
                         onCopy = { text ->
                             clipboardManager.setText(AnnotatedString(text))
-                            // Use a light success haptic if available
                             HapticHelper(context).successTap()
                             scope.launch {
                                 snackbarHostState.showSnackbar("Copied to clipboard")
                             }
                         },
-                        onRecalibrate = { viewModel.generateBlueprint() }
+                        onRecalibrate = { viewModel.generateBlueprint() },
+                        onViewStrategy = onViewStrategy
                     )
                 }
 
@@ -385,7 +396,8 @@ private fun LoadingState() {
 private fun SuccessState(
     blueprint: ProfileBlueprint,
     onCopy: (String) -> Unit,
-    onRecalibrate: () -> Unit
+    onRecalibrate: () -> Unit,
+    onViewStrategy: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -407,6 +419,20 @@ private fun SuccessState(
                 color = Color(0xFFB0B0D0),
                 fontSize = 14.sp
             )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onViewStrategy,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A33)),
+                contentPadding = PaddingValues(vertical = 14.dp)
+            ) {
+                Text(
+                    text = "View Blueprints & History",
+                    color = Accent,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
 
         items(
@@ -495,45 +521,69 @@ private fun SlotCard(
                 fontWeight = FontWeight.SemiBold
             )
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF17172A)),
-                shape = RoundedCornerShape(14.dp),
+            if (slot.hingePrompt.isNotBlank()) {
+                PlatformPromptCard(
+                    label = "Hinge Prompt",
+                    labelColor = Color(0xFFFF6B6B),
+                    text = slot.hingePrompt,
+                    onCopy = { onCopy(slot.hingePrompt) }
+                )
+            }
+            if (slot.aislePrompt.isNotBlank()) {
+                PlatformPromptCard(
+                    label = "Aisle Prompt",
+                    labelColor = Color(0xFF6BDDFF),
+                    text = slot.aislePrompt,
+                    onCopy = { onCopy(slot.aislePrompt) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlatformPromptCard(
+    label: String,
+    labelColor: Color,
+    text: String,
+    onCopy: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D22)),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                Text(
+                    text = label,
+                    color = labelColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                IconButton(
+                    onClick = onCopy,
+                    modifier = Modifier.size(28.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Universal Hook",
-                            color = Color(0xFFB0B0D0),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        IconButton(onClick = {
-                            onCopy(slot.universalHook)
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy prompt",
-                                tint = Color(0xFFDDDDFF)
-                            )
-                        }
-                    }
-                    Text(
-                        text = slot.universalHook,
-                        color = Color(0xFFE0FFE8),
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copy",
+                        tint = labelColor.copy(alpha = 0.8f),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = text,
+                color = Color(0xFFD0D0F0),
+                fontSize = 13.sp,
+                lineHeight = 19.sp
+            )
         }
     }
 }

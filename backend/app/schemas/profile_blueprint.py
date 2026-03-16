@@ -14,6 +14,8 @@ class BlueprintSlotResponse(BaseModel):
     role: str
     caption: str
     universal_hook: str
+    hinge_prompt: str = ""
+    aisle_prompt: str = ""
     image_url: str = Field(description="Full URL to the image")
 
 
@@ -30,8 +32,7 @@ class ProfileBlueprintResponse(BaseModel):
     id: str
     user_id: str
     overall_theme: str
-    tinder_bio: str
-    bumble_bio: str
+    bio: str = ""
     created_at: datetime
     slots: list[BlueprintSlotResponse]
     universal_prompts: list[UniversalPromptResponse] | None = None

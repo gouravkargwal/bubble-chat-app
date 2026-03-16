@@ -101,6 +101,30 @@ class ProfileOptimizerViewModel @Inject constructor(
         _state.value = OptimizerState.Idle
     }
 
+    fun loadBlueprint(blueprint: ProfileBlueprint) {
+        _state.value = OptimizerState.Success(blueprint)
+    }
+
+    fun loadLatestBlueprint() {
+        if (_state.value is OptimizerState.Success || _state.value is OptimizerState.Loading) return
+
+        viewModelScope.launch {
+            try {
+                val response = api.getProfileBlueprints(limit = 1)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    val first = body?.items?.firstOrNull()
+                    if (first != null) {
+                        _state.value = OptimizerState.Success(first.toUi())
+                    }
+                    // If empty list, keep Idle — user hasn't generated one yet
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileOptimizerVM", "loadLatestBlueprint: error", e)
+            }
+        }
+    }
+
     fun loadHistory() {
         if (_historyState.value is BlueprintHistoryState.Loading) return
 

@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -196,7 +194,6 @@ private fun FullScreenCard(
     val isLoading = currentState is BubbleState.Loading
     
     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-        val scrollState = rememberScrollState()
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -222,14 +219,8 @@ private fun FullScreenCard(
 
                 Divider(color = Color.White.copy(alpha = 0.08f))
 
-                // Scrollable body so content (screenshots, replies) can extend without hiding actions
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState)
-                ) {
-                    // Route to appropriate panel based on current state
-                    when (val s = currentState) {
+                // Route to appropriate panel based on current state
+                when (val s = currentState) {
                     is BubbleState.DirectionPicker -> DirectionPicker(
                         allowedDirections = usage.allowedDirections,
                         customHintsEnabled = usage.customHintsEnabled,
@@ -311,7 +302,6 @@ private fun FullScreenCard(
                         onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
                     )
                     else -> {}
-                }
                 }
             }
         }

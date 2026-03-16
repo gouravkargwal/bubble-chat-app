@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.infrastructure.database.models import AuditedPhoto, User
 from app.llm.gemini_client import GeminiClient
-from app.models.profile_auditor import AuditResponse, PhotoFeedback
+from app.models.profile_auditor import AuditResponse, PhotoFeedback, PhotoTier
 
 logger = structlog.get_logger()
 
@@ -45,17 +45,12 @@ PROFILE_AUDIT_SCHEMA: dict = {
                         "minimum": 1,
                         "maximum": 10,
                     },
-                    "tier": {
-                        "type": "STRING",
-                        "enum": ["GOD_TIER", "FILLER", "GRAVEYARD"],
-                    },
                     "brutal_feedback": {"type": "STRING"},
                     "improvement_tip": {"type": "STRING"},
                 },
                 "required": [
                     "photo_id",
                     "score",
-                    "tier",
                     "brutal_feedback",
                     "improvement_tip",
                 ],
@@ -64,6 +59,15 @@ PROFILE_AUDIT_SCHEMA: dict = {
     },
     "required": ["total_analyzed", "passed_count", "is_hard_reset", "photos"],
 }
+
+
+def _score_to_tier(score: int) -> PhotoTier:
+    """Deterministic score → tier mapping. Keeps tier consistent across runs."""
+    if score >= 8:
+        return PhotoTier.GOD_TIER
+    if score >= 6:
+        return PhotoTier.FILLER
+    return PhotoTier.GRAVEYARD
 
 
 _client: GeminiClient | None = None
@@ -181,7 +185,14 @@ async def analyze_profile_photos(
         "If the language is 'Hinglish', use the Latin script and include Indian slang like 'Bhai', 'Mast', "
         "'Cringe', or 'Chhapri' where it naturally fits the roast.\n"
         "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
-        "Always match the cultural tone and norms of the requested language/dialect."
+        "Always match the cultural tone and norms of the requested language/dialect.\n\n"
+        "Score each photo on a strict 1-10 integer scale using this rubric:\n"
+        "  1-3: Face not visible, blurry, heavy filter, or group shot where subject is unclear.\n"
+        "  4-5: Visible face but poor lighting, bad background, unflattering angle, or low effort.\n"
+        "  6-7: Acceptable photo — decent lighting and background, presentable but nothing stands out.\n"
+        "  8-9: Strong photo — good lighting, clear face, confident body language, clean background.\n"
+        "  10: Exceptional — professional feel, magnetic presence, would make anyone stop scrolling.\n"
+        "Apply this rubric consistently. Do NOT output a tier field — only output the score."
     )
 
     new_image_count = len(new_base64_images)
@@ -205,7 +216,7 @@ async def analyze_profile_photos(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             base64_images=new_base64_images,
-            temperature=0.2,
+            temperature=0.0,
             model=settings.gemini_model,
             max_output_tokens=8192,
             response_schema=PROFILE_AUDIT_SCHEMA,
@@ -240,6 +251,8 @@ async def analyze_profile_photos(
     # Parse and validate Pydantic model
     try:
         new_parsed_response = AuditResponse(**parsed)
+        for photo in new_parsed_response.photos:
+            photo.tier = _score_to_tier(photo.score)
     except ValidationError as e:
         logger.error(
             "profile_audit_pydantic_validation_failed",
@@ -280,7 +293,7 @@ async def analyze_profile_photos(
                 PhotoFeedback(
                     photo_id=f"photo_{idx + 1}",
                     score=new_photo.score,
-                    tier=new_photo.tier,
+                    tier=_score_to_tier(new_photo.score),
                     brutal_feedback=new_photo.brutal_feedback,
                     improvement_tip=new_photo.improvement_tip,
                 )

@@ -218,8 +218,7 @@ class ProfileBlueprint(Base):
     )
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     overall_theme: Mapped[str] = mapped_column(String(500))
-    tinder_bio: Mapped[str] = mapped_column(Text)
-    bumble_bio: Mapped[str] = mapped_column(Text)
+    bio: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="profile_blueprints")
@@ -244,5 +243,8 @@ class BlueprintSlot(Base):
     role: Mapped[str] = mapped_column(String(200))
     caption: Mapped[str] = mapped_column(String(500))
     universal_hook: Mapped[str] = mapped_column(String(500))
+    hinge_prompt: Mapped[str] = mapped_column(String(500), default="")
+    aisle_prompt: Mapped[str] = mapped_column(String(500), default="")
+    image_url: Mapped[str] = mapped_column(String(1000), default="")
 
     blueprint: Mapped[ProfileBlueprint] = relationship(back_populates="slots")

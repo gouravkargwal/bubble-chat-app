@@ -20,6 +20,7 @@ import com.rizzbot.v2.ui.onboarding.OnboardingScreen
 import com.rizzbot.v2.ui.profile.ProfileAuditorScreen
 import com.rizzbot.v2.ui.profile.ProfileHistoryScreen
 import com.rizzbot.v2.ui.profile.ProfileOptimizerScreen
+import com.rizzbot.v2.ui.profile.ProfileStrategyScreen
 import com.rizzbot.v2.ui.paywall.PaywallScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
@@ -92,6 +93,7 @@ fun NavGraph(
                 onNavigateToProfileAuditor = { navController.navigate(Screen.ProfileAuditor.route) },
                 onNavigateToProfileHistory = { navController.navigate(Screen.ProfileHistory.route) },
                 onNavigateToProfileOptimizer = { navController.navigate(Screen.ProfileOptimization.route) },
+                onNavigateToProfileStrategy = { navController.navigate(Screen.ProfileStrategy.route) },
                 onShowPaywall = { navController.navigate(Screen.Premium.route) }
             )
         }
@@ -166,6 +168,12 @@ fun NavGraph(
         }
         composable(Screen.ProfileOptimization.route) {
             ProfileOptimizerScreen(
+                onBack = { navController.popBackStack() },
+                onViewStrategy = { navController.navigate(Screen.ProfileStrategy.route) }
+            )
+        }
+        composable(Screen.ProfileStrategy.route) {
+            ProfileStrategyScreen(
                 onBack = { navController.popBackStack() }
             )
         }

@@ -243,7 +243,9 @@ data class OptimizedSlotDto(
     @SerialName("slot_number") val slotNumber: Int,
     val role: String,
     val caption: String,
-    @SerialName("universal_hook") val universalHook: String
+    @SerialName("universal_hook") val universalHook: String,
+    @SerialName("hinge_prompt") val hingePrompt: String = "",
+    @SerialName("aisle_prompt") val aislePrompt: String = ""
 )
 
 @Serializable
@@ -257,8 +259,7 @@ data class ProfileBlueprintDto(
     val id: String,
     @SerialName("user_id") val userId: String,
     @SerialName("overall_theme") val overallTheme: String,
-    @SerialName("tinder_bio") val tinderBio: String,
-    @SerialName("bumble_bio") val bumbleBio: String,
+    val bio: String = "",
     @SerialName("created_at") val createdAt: String,
     @SerialName("universal_prompts") val universalPrompts: List<UniversalPromptDto>? = null,
     val slots: List<OptimizedSlotDto>

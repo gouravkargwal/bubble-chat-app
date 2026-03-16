@@ -27,8 +27,24 @@ class OptimizedSlot(BaseModel):
     contextual_hook: str = Field(
         ...,
         description=(
-            "A short, versatile hook inspired by this photo that can power many prompts, "
+            "A short hook label inspired by this photo, "
             "e.g. 'Parent approval', 'Wedding plus one', 'Adventure brag with receipts'."
+        ),
+    )
+    hinge_prompt: str = Field(
+        ...,
+        description=(
+            "A ready-to-paste Hinge prompt answer for this photo (max 150 chars). "
+            "Hinge prompts are conversational and invite a reply. "
+            "e.g. 'The one thing I'll never shut up about' → 'Finding the best hole-in-the-wall spots in every city I visit.'"
+        ),
+    )
+    aisle_prompt: str = Field(
+        ...,
+        description=(
+            "A ready-to-paste Aisle prompt answer for this photo. "
+            "Aisle skews relationship-focused — be warm, genuine, show depth. "
+            "e.g. 'A story behind this photo' → 'Spent a week solo in Kyoto. Came back knowing I want someone to share the next one with.'"
         ),
     )
     coach_reasoning: str = Field(
@@ -60,23 +76,21 @@ class ProfileBlueprint(BaseModel):
 
     slots: list[OptimizedSlot] = Field(
         ...,
-        description="Exactly six optimized slots in final display order.",
-        min_length=6,
+        description="Optimized slots in final display order — one per available photo (max 6).",
+        min_length=1,
         max_length=6,
     )
     overall_theme: str = Field(
         ...,
         description="Short sentence describing the overarching vibe of this profile.",
     )
-    tinder_bio: str = Field(
+    bio: str = Field(
         ...,
         max_length=500,
-        description="Short, punchy Tinder bio. Low-investment and high-status.",
-    )
-    bumble_bio: str = Field(
-        ...,
         description=(
-            "Bumble 'About Me' style text with ~3 fun, specific facts that feel playful and approachable."
+            "A punchy, high-status bio (max 500 chars) that works across all dating apps. "
+            "Blend 2-3 specific fun facts with a confident, low-investment tone. "
+            "No cringe, no desperation."
         ),
     )
     universal_prompts: list[UniversalPrompt] = Field(
@@ -85,4 +99,3 @@ class ProfileBlueprint(BaseModel):
         max_length=3,
         description="Three hook objects that can be re-used as prompts or answers across apps.",
     )
-

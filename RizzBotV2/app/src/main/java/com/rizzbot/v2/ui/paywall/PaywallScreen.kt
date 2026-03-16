@@ -59,6 +59,11 @@ fun PaywallScreen(
             showSuccessIcon = false
         }
     }
+    LaunchedEffect(state.readyToNavigate) {
+        if (state.readyToNavigate) {
+            onPurchaseSuccess()
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -67,13 +72,14 @@ fun PaywallScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(horizontal = 24.dp)
         ) {
             // Top Bar - Close Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp),
+                    .padding(top = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.End
             ) {
                 IconButton(onClick = onDismiss) {
@@ -328,29 +334,34 @@ fun PaywallScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 24.dp, bottom = 16.dp)
+                    .navigationBarsPadding()
+                    .padding(top = 16.dp, bottom = 12.dp)
             ) {
                 if (state.purchaseSuccess) {
-                    // Success primary CTA
+                    // Success primary CTA — refreshes backend data before navigating
                     Button(
-                        onClick = {
-                            // Force a fresh sync from backend so app sees the new plan immediately,
-                            // then let the host handle navigation.
-                            viewModel.refreshUserTierFromBackend()
-                            onPurchaseSuccess()
-                        },
+                        onClick = { viewModel.refreshUserTierFromBackend() },
+                        enabled = !state.isRefreshingAfterPurchase,
                         colors = ButtonDefaults.buttonColors(containerColor = Pink),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(
-                            "Start Exploring 🚀",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (state.isRefreshingAfterPurchase) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                "Start Exploring 🚀",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 } else {
                     // Purchase CTA
@@ -394,9 +405,19 @@ fun PaywallScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    // "I'll try first" dismiss button
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "I'll try first",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 14.sp
+                        )
+                    }
 
-                    // Footer (hidden on success)
+                    // Footer
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
