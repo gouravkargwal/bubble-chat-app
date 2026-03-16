@@ -1,6 +1,7 @@
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query
 from pathlib import Path
-from sqlalchemy import select
+from sqlalchemy import cast, Date, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
@@ -10,6 +11,8 @@ from app.api.v1.schemas.schemas import (
     AuditedPhotoListResponse,
 )
 from app.config import settings
+from app.core.tier_config import TIER_CONFIG
+from app.domain.tiers import get_effective_tier
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import AuditedPhoto, BlueprintSlot, User
 from app.models.profile_auditor import AuditResponse
@@ -35,6 +38,35 @@ async def profile_audit(
     """Brutally audit up to 12 dating profile photos."""
     if not images:
         raise HTTPException(status_code=400, detail="At least one image is required.")
+
+    effective_tier = get_effective_tier(user)
+    tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
+    audits_per_week = tier_config["limits"]["profile_audits_per_week"]
+
+    now = datetime.now(timezone.utc)
+    monday_midnight = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
+    )
+    plan_start = user.plan_period_start
+    if plan_start is not None:
+        plan_start_naive = plan_start.replace(tzinfo=None) if plan_start.tzinfo else plan_start
+        week_start = max(monday_midnight, plan_start_naive)
+    else:
+        week_start = monday_midnight
+
+    weekly_audits_result = await db.execute(
+        select(func.count(func.distinct(cast(AuditedPhoto.created_at, Date)))).where(
+            AuditedPhoto.user_id == user.id,
+            AuditedPhoto.created_at >= week_start,
+        )
+    )
+    weekly_audits_used = weekly_audits_result.scalar() or 0
+
+    if weekly_audits_used >= audits_per_week:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Weekly profile audit limit reached ({audits_per_week}/week). Resets on Monday.",
+        )
 
     try:
         return await analyze_profile_photos(images=images, user=user, db=db, lang=lang)

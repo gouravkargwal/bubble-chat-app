@@ -18,4 +18,5 @@ sealed class OverlayEvent {
     data object ClearAndStartOver : OverlayEvent()
     data object UpgradeTapped : OverlayEvent()
     data object Back : OverlayEvent()
+    data class SetKeyboardFocus(val enabled: Boolean) : OverlayEvent()
 }

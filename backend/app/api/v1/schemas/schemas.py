@@ -82,6 +82,7 @@ class UsageResponse(BaseModel):
     weekly_used: int = 0  # Usage in current week
     monthly_used: int = 0  # Usage in current month
     weekly_audits_used: int = 0  # Profile audits used this week
+    weekly_blueprints_used: int = 0  # Profile blueprints generated this week
     is_premium: bool
     tier: str = "free"
     allowed_directions: list[str] = []

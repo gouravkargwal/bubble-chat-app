@@ -84,7 +84,7 @@ Instead of asking boring questions, use one of these 3 Opener Frameworks:
 
 2. THE "US" FRAME: Playfully frame you and them as an old married couple or instant enemies.
    - Example: "our dogs would definitely hate each other. we cant make this work"
-   - Example: "i was going to say hi but you put pineapple on pizza so i guess we are getting a divorce"
+   - Example: "i was going to say hi but then i saw your taste in music and now im reconsidering everything"
 
 3. THE CONTRARIAN TAKE: Take a strong, funny stance on a normal detail in their profile.
    - Example: (If they like hiking) "everyone on here loves hiking. im looking for someone to rot on the couch and watch terrible reality tv with"

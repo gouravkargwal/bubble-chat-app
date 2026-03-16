@@ -51,6 +51,7 @@ fun DirectionPicker(
     onDirectionSelected: (DirectionWithHint) -> Unit,
     onUpgrade: () -> Unit,
     onDismiss: () -> Unit,
+    onKeyboardFocus: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var customHint by remember { mutableStateOf("") }
@@ -134,6 +135,7 @@ fun DirectionPicker(
                     .clickable(enabled = !isLoading) {
                         if (customHintsEnabled) {
                             showCustomInput = true
+                            onKeyboardFocus(true)
                         } else {
                             onUpgrade()
                         }
@@ -192,6 +194,8 @@ fun DirectionPicker(
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
+                    keyboardController?.hide()
+                    onKeyboardFocus(false)
                     onDirectionSelected(DirectionWithHint(customHint = customHint))
                 },
                 enabled = !isLoading,

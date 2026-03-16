@@ -51,6 +51,9 @@ class User(Base):
         String(36), ForeignKey("users.id"), nullable=True
     )
     prompt_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Set to the purchase timestamp whenever a new paid plan activates (INITIAL_PURCHASE / RENEWAL).
+    # Usage counters use MAX(week_start, plan_period_start) so limits reset with each new period.
+    plan_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

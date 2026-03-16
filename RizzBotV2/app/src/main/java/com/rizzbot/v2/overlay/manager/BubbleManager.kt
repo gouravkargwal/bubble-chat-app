@@ -810,6 +810,20 @@ class BubbleManager @Inject constructor(
                 timeoutJob = null
                 _state.value = BubbleState.DirectionPicker
             }
+            is OverlayEvent.SetKeyboardFocus -> {
+                val view = composeView ?: return
+                val lp = view.layoutParams as? WindowManager.LayoutParams ?: return
+                if (event.enabled) {
+                    lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                } else {
+                    lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                }
+                try {
+                    windowManager.updateViewLayout(view, lp)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to update focusable flag", e)
+                }
+            }
             is OverlayEvent.Back -> {
                 val previews = orchestrator.getPreviewBitmaps()
                 when (_state.value) {

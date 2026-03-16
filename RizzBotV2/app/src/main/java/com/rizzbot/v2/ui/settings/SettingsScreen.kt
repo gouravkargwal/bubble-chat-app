@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,9 +41,11 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showDeleteAllDataDialog by remember { mutableStateOf(false) }
     var isDeletingData by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.signedOut) {
         if (state.signedOut) onSignedOut()
@@ -138,9 +142,20 @@ fun SettingsScreen(
         },
         containerColor = Color(0xFF0F0F1A)
     ) { padding ->
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                coroutineScope.launch {
+                    isRefreshing = true
+                    viewModel.refresh()
+                    delay(800L)
+                    isRefreshing = false
+                }
+            },
+            modifier = Modifier.padding(padding)
+        ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
@@ -232,7 +247,8 @@ fun SettingsScreen(
                         isPremium = state.isPremium,
                         weeklyAuditsLimit = state.profileAuditsPerWeek,
                         weeklyAuditsUsed = state.weeklyAuditsUsed,
-                        weeklyBlueprintsLimit = state.profileBlueprintsPerWeek
+                        weeklyBlueprintsLimit = state.profileBlueprintsPerWeek,
+                        weeklyBlueprintsUsed = state.weeklyBlueprintsUsed
                     )
                 }
             }
@@ -441,6 +457,7 @@ fun SettingsScreen(
                 textAlign = TextAlign.Center
             )
         }
+        } // PullToRefreshBox
     }
 }
 
@@ -454,7 +471,8 @@ private fun UsageLimitsDisplay(
     isPremium: Boolean,
     weeklyAuditsLimit: Int,
     weeklyAuditsUsed: Int,
-    weeklyBlueprintsLimit: Int
+    weeklyBlueprintsLimit: Int,
+    weeklyBlueprintsUsed: Int = 0
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Label and usage count row
@@ -573,18 +591,39 @@ private fun UsageLimitsDisplay(
                     color = Color.White,
                     fontSize = 14.sp
                 )
+                if (isPremium && weeklyBlueprintsLimit == 0) {
+                    Text(
+                        "UNLIMITED",
+                        color = Color(0xFF4CAF50),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else {
+                    Text(
+                        "$weeklyBlueprintsUsed of $weeklyBlueprintsLimit used",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            if (!(isPremium && weeklyBlueprintsLimit == 0)) {
+                val progress = if (weeklyBlueprintsLimit > 0) (weeklyBlueprintsUsed.toFloat() / weeklyBlueprintsLimit).coerceIn(0f, 1f) else 0f
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = if (progress >= 1f) Color(0xFFEF5350) else Color(0xFFE91E63),
+                    trackColor = Color(0xFF252542)
+                )
                 Text(
-                    "$weeklyBlueprintsLimit available",
+                    "Resets every Monday.",
                     color = Color.Gray,
-                    fontSize = 12.sp
+                    fontSize = 11.sp
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                "Resets every Monday.",
-                color = Color.Gray,
-                fontSize = 11.sp
-            )
         }
     }
 }

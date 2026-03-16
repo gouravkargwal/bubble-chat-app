@@ -25,6 +25,7 @@ data class SettingsState(
     val profileAuditsPerWeek: Int = 1,
     val weeklyAuditsUsed: Int = 0,
     val profileBlueprintsPerWeek: Int = 0,
+    val weeklyBlueprintsUsed: Int = 0,
     val godModeExpiresAt: java.time.Instant? = null,
     val userName: String? = null,
     val userEmail: String? = null,
@@ -55,7 +56,7 @@ class SettingsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            hostedRepository.refreshUsage(force = false) // Use cache if available
+            hostedRepository.refreshUsage(force = true) // Always fetch fresh data when opening settings
             hostedRepository.usageState.collect { usage ->
                 _state.update {
                     it.copy(
@@ -69,6 +70,7 @@ class SettingsViewModel @Inject constructor(
                         profileAuditsPerWeek = usage.profileAuditsPerWeek,
                         weeklyAuditsUsed = usage.weeklyAuditsUsed,
                         profileBlueprintsPerWeek = usage.profileBlueprintsPerWeek,
+                        weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
                         godModeExpiresAt = usage.godModeExpiresAt
                     )
                 }
@@ -84,6 +86,14 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.roastLanguage.collect { lang ->
                 _state.update { it.copy(roastLanguage = lang) }
             }
+        }
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            hostedRepository.refreshUsage(force = true)
+            val info = hostedRepository.getReferralInfo()
+            _state.update { it.copy(referral = info) }
         }
     }
 

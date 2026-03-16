@@ -1,6 +1,7 @@
 """Webhook endpoints for external services."""
 
 import structlog
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,10 +82,14 @@ async def revenuecat_webhook(
     # Start from current values
     new_tier: str = user.tier
     new_source: str | None = user.tier_source
+    new_plan_period_start: datetime | None = user.plan_period_start
 
     # Helper: does this event affect a given entitlement id?
     def affects(entitlement_id: str) -> bool:
         return entitlement_id in affected_entitlements
+
+    # purchased_at_ms is the start of the new billing period (from RevenueCat)
+    purchased_at_ms = event_data.get("purchased_at_ms")
 
     # 1) Upgrades / renewals / restores / product changes
     if event_type in (
@@ -102,19 +107,29 @@ async def revenuecat_webhook(
             new_tier = "pro"
             new_source = "purchase"
 
+        # Reset usage window to the start of this new billing period
+        if purchased_at_ms:
+            new_plan_period_start = datetime.fromtimestamp(
+                purchased_at_ms / 1000, tz=timezone.utc
+            )
+        else:
+            new_plan_period_start = datetime.now(timezone.utc)
+
     # 2) Expiration: only downgrade if the expiring entitlement matches current tier
     elif event_type == "EXPIRATION":
         if user.tier == "premium" and affects("premium"):
             new_tier = "free"
             new_source = None
+            new_plan_period_start = None
         elif user.tier == "pro" and affects("pro"):
             new_tier = "free"
             new_source = None
+            new_plan_period_start = None
 
     # 3) CANCELLATION: ignore for tier changes; access remains until EXPIRATION
 
     # Optimization: if nothing changed, return early
-    if new_tier == user.tier and new_source == user.tier_source:
+    if new_tier == user.tier and new_source == user.tier_source and new_plan_period_start == user.plan_period_start:
         logger.info(
             "revenuecat_webhook_tier_unchanged",
             app_user_id=app_user_id,
@@ -138,6 +153,7 @@ async def revenuecat_webhook(
     user.tier_source = new_source or "free"
     # RevenueCat manages expiration; we do not track an explicit expiry timestamp
     user.tier_expires_at = None
+    user.plan_period_start = new_plan_period_start
 
     await db.commit()
     await db.refresh(user)

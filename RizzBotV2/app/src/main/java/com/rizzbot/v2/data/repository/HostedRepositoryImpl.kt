@@ -202,6 +202,7 @@ class HostedRepositoryImpl @Inject constructor(
                 totalRepliesCopied = usage.totalRepliesCopied,
                 maxPhotosPerAudit = maxPhotosPerAudit,
                 profileBlueprintsPerWeek = profileBlueprintsPerWeek,
+                weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
                 billingPeriod = usage.billingPeriod
             )
             
@@ -354,7 +355,12 @@ class HostedRepositoryImpl @Inject constructor(
                     Result.failure(Exception("Empty response from server"))
                 }
             } else {
-                Result.failure(Exception("Server error: ${response.code()}"))
+                val message = when (response.code()) {
+                    429 -> "You've used your weekly profile audit limit. It resets every Monday — come back then!"
+                    403 -> "Profile audits aren't available on your current plan. Please upgrade."
+                    else -> "Server error: ${response.code()}"
+                }
+                Result.failure(Exception(message))
             }
         } catch (e: Exception) {
             Result.failure(e)

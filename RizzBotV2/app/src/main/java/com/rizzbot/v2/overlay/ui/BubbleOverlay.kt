@@ -237,7 +237,8 @@ private fun FullScreenCard(
                             }
                         },
                         onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
+                        onKeyboardFocus = { enabled -> onEvent(OverlayEvent.SetKeyboardFocus(enabled)) }
                     )
                     is BubbleState.ScreenshotPreview -> {
                         val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"

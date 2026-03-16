@@ -4,15 +4,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select, cast, Date
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import structlog
 from app.api.v1.deps import count_today_interactions, get_current_user
 from datetime import datetime, timedelta, timezone
 from app.api.v1.schemas.schemas import UsageResponse
 from app.core.tier_config import TIER_CONFIG
 from app.domain.tiers import get_effective_tier
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import AuditedPhoto, Interaction, Purchase, User
+from app.infrastructure.database.models import AuditedPhoto, Interaction, ProfileBlueprint, Purchase, User
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 
 @router.get("/usage", response_model=UsageResponse)
@@ -31,8 +33,17 @@ async def get_usage(
     # Calculate weekly and monthly usage for period-based plans
     now = datetime.now(timezone.utc)
     # Week starts on Monday (weekday() returns 0 for Monday)
-    week_start = (now - timedelta(days=now.weekday())).replace(tzinfo=None)
+    monday_midnight = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+
+    # If a new plan period started after Monday, use that as the window so usage
+    # resets when a user buys or renews a plan mid-week.
+    plan_start = user.plan_period_start
+    if plan_start is not None:
+        plan_start_naive = plan_start.replace(tzinfo=None) if plan_start.tzinfo else plan_start
+        week_start = max(monday_midnight, plan_start_naive)
+    else:
+        week_start = monday_midnight
 
     weekly_used_result = await db.execute(
         select(func.count(Interaction.id)).where(
@@ -56,6 +67,15 @@ async def get_usage(
         )
     )
     weekly_audits_used = weekly_audits_result.scalar() or 0
+
+    # Count weekly profile blueprints generated this week
+    weekly_blueprints_result = await db.execute(
+        select(func.count(ProfileBlueprint.id)).where(
+            ProfileBlueprint.user_id == user.id,
+            ProfileBlueprint.created_at >= week_start,
+        )
+    )
+    weekly_blueprints_used = weekly_blueprints_result.scalar() or 0
 
     # Count total interactions created by this user
     total_generated_result = await db.execute(
@@ -88,12 +108,32 @@ async def get_usage(
             elif "monthly" in product_id:
                 billing_period = "monthly"
 
+    logger.info(
+        "usage_response",
+        user_id=user.id,
+        tier=effective_tier,
+        billing_period=billing_period,
+        week_start=week_start.isoformat(),
+        month_start=month_start.isoformat(),
+        daily_limit=daily_limit,
+        effective_limit=effective_limit,
+        bonus_replies=user.bonus_replies,
+        daily_used=daily_used,
+        weekly_used=weekly_used,
+        monthly_used=monthly_used,
+        weekly_audits_used=weekly_audits_used,
+        weekly_blueprints_used=weekly_blueprints_used,
+        total_replies_generated=total_generated,
+        total_replies_copied=total_copied,
+    )
+
     return UsageResponse(
         daily_limit=effective_limit if daily_limit > 0 else 0,
         daily_used=daily_used,
         weekly_used=weekly_used,
         monthly_used=monthly_used,
         weekly_audits_used=weekly_audits_used,
+        weekly_blueprints_used=weekly_blueprints_used,
         is_premium=effective_tier != "free",
         tier=effective_tier,
         allowed_directions=tier_config["features"]["allowed_ui_directions"],

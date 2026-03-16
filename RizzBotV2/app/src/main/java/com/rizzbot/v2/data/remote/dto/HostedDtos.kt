@@ -76,6 +76,7 @@ data class UsageResponse(
     @SerialName("weekly_used") val weeklyUsed: Int = 0,
     @SerialName("monthly_used") val monthlyUsed: Int = 0,
     @SerialName("weekly_audits_used") val weeklyAuditsUsed: Int = 0,
+    @SerialName("weekly_blueprints_used") val weeklyBlueprintsUsed: Int = 0,
     @SerialName("is_premium") val isPremium: Boolean,
     val tier: String = "free",
     @SerialName("allowed_directions") val allowedDirections: List<String> = emptyList(),

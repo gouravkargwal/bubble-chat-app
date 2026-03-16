@@ -7,9 +7,9 @@ A "fork" is something in your reply that makes it EASY and FUN for them to respo
 
 Fork types — use a DIFFERENT type for each of the 4 replies:
 
-1. PLAYFUL ASSUMPTION — guess something about them, they confirm or deny
-   "you seem like the type who has strong opinions about pineapple on pizza"
+1. PLAYFUL ASSUMPTION — guess something about them, they confirm or deny. Base it on something specific from the conversation, NOT food.
    "i bet you were the kid who reminded the teacher about homework"
+   "you seem like the type who has a very specific opinion about the correct way to fold clothes"
 
 2. FALSE DILEMMA — give two funny options to pick from
    "okay but are you team morning person or team snooze button 47 times"
