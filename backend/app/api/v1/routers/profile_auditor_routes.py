@@ -127,6 +127,9 @@ async def list_profile_audits(
                 tier=row.tier,
                 brutal_feedback=row.brutal_feedback,
                 improvement_tip=row.improvement_tip,
+                archetype_title=row.archetype_title,
+                roast_summary=row.roast_summary,
+                share_card_color=row.share_card_color,
                 image_url=image_url,
                 created_at=int(row.created_at.timestamp()),
             )

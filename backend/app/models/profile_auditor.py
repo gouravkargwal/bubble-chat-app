@@ -29,4 +29,9 @@ class AuditResponse(BaseModel):
     total_analyzed: int
     passed_count: int
     is_hard_reset: bool
+    # Archetype + roast are per-audit, not per-photo, used for viral share cards.
+    archetype_title: str | None = None
+    roast_summary: str | None = None
+    # Hex color (e.g. #FF0000) suggested by the AI that matches the overall vibe.
+    share_card_color: str | None = None
     photos: list[PhotoFeedback]

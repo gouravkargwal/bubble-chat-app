@@ -288,6 +288,10 @@ class AuditedPhoto(Base):
     tier: Mapped[str] = mapped_column(String(20))
     brutal_feedback: Mapped[str] = mapped_column(Text)
     improvement_tip: Mapped[str] = mapped_column(Text)
+    # Optional per-audit vibe metadata used for history + share-card surfaces.
+    archetype_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    roast_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    share_card_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

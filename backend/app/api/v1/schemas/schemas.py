@@ -202,6 +202,10 @@ class AuditedPhotoItem(BaseModel):
     tier: str
     brutal_feedback: str
     improvement_tip: str
+    # Optional archetype + roast metadata from the audit session for viral share surfaces.
+    archetype_title: str | None = None
+    roast_summary: str | None = None
+    share_card_color: str | None = None
     image_url: str
     created_at: int  # unix timestamp
 

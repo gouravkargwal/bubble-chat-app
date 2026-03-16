@@ -34,6 +34,18 @@ PROFILE_AUDIT_SCHEMA: dict = {
             "type": "BOOLEAN",
             "description": "True if passed_count is 0.",
         },
+        "archetype_title": {
+            "type": "STRING",
+            "description": "A bold, 2-4 word dating archetype title (e.g., 'The Corporate NPC').",
+        },
+        "roast_summary": {
+            "type": "STRING",
+            "description": "A single savage sentence summarizing the user's overall dating vibe.",
+        },
+        "share_card_color": {
+            "type": "STRING",
+            "description": "Hex color code (e.g., #FF0055) that matches the overall archetype vibe.",
+        },
         "photos": {
             "type": "ARRAY",
             "items": {
@@ -57,7 +69,15 @@ PROFILE_AUDIT_SCHEMA: dict = {
             },
         },
     },
-    "required": ["total_analyzed", "passed_count", "is_hard_reset", "photos"],
+    "required": [
+        "total_analyzed",
+        "passed_count",
+        "is_hard_reset",
+        "archetype_title",
+        "roast_summary",
+        "share_card_color",
+        "photos",
+    ],
 }
 
 
@@ -160,10 +180,16 @@ async def analyze_profile_photos(
                 )
             )
 
+        # Use archetype/roast metadata from the most recent matching photo if available.
+        # This keeps the viral share-card experience consistent for duplicate uploads.
+        latest_existing = list(existing_photos.values())[-1]
         return AuditResponse(
             total_analyzed=len(image_hashes),
             passed_count=sum(1 for p in cached_photos if p.tier == "GOD_TIER"),
             is_hard_reset=all(p.tier == "GRAVEYARD" for p in cached_photos),
+            archetype_title=latest_existing.archetype_title,
+            roast_summary=latest_existing.roast_summary,
+            share_card_color=latest_existing.share_card_color,
             photos=cached_photos,
         )
 
@@ -186,6 +212,28 @@ async def analyze_profile_photos(
         "'Cringe', or 'Chhapri' where it naturally fits the roast.\n"
         "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
         "Always match the cultural tone and norms of the requested language/dialect.\n\n"
+        "THE ROAST MASTER PROTOCOL\n"
+        "After analyzing the photos, you must categorize the user into a single overall DATING ARCHETYPE.\n"
+        "Tone: 8/10 Savage. Be brutally honest, funny, and use 2026 internet subcultures "
+        "(e.g., 'LinkedIn-maxing', 'Beige Flag Final Boss', 'Gym-Mirror Philosopher').\n"
+        "Humor over politeness: the goal is to make the user laugh or feel called out enough to share this "
+        "on social media.\n"
+        "Archetype logic examples (use them as inspiration, not a strict list):\n"
+        "- High effort but cringey posing or over-editing → label them some version of a 'Try-Hard'.\n"
+        "- Zero effort, blurry pics, or chaotic lighting → label them some version of 'Witness Protection Program'.\n"
+        "- Mostly or only gym shots → label them some version of 'Protein-Shake Narcissus' or 'Gym-Mirror Philosopher'.\n"
+        "If the photos are genuinely excellent across the board, the archetype should feel like a "
+        "'Backhanded Compliment' (e.g., 'The Ego Trip', 'Main Character Energy').\n"
+        "ARACHETYPE_TITLE RULES:\n"
+        "- Must be a bold, 2-4 word title (e.g., 'The Corporate NPC', 'Red Flag Legend', 'The Main Character').\n"
+        "- Lean into meme-able, shareable phrasing.\n"
+        "ROAST_SUMMARY RULES:\n"
+        '- Write a single, punchy sentence that would make an influencer\'s audience go "OOF".\n'
+        "- 8/10 savage, but still playful and entertaining, not bullying.\n"
+        "SHARE_CARD_COLOR RULES:\n"
+        "- Return a single hex color code (e.g., #FF0055) that matches the overall vibe.\n"
+        "- Examples: neon red for chaotic red-flag energy, gold for 'unintentional rizz', cold blue for "
+        "LinkedIn-maxxing energy, pastel for beige flag vibes.\n\n"
         "Score each photo on a strict 1-10 integer scale using this rubric:\n"
         "  1-3: Face not visible, blurry, heavy filter, or group shot where subject is unclear.\n"
         "  4-5: Visible face but poor lighting, bad background, unflattering angle, or low effort.\n"
@@ -304,6 +352,9 @@ async def analyze_profile_photos(
         total_analyzed=len(image_hashes),
         passed_count=sum(1 for p in all_photos if p.tier == "GOD_TIER"),
         is_hard_reset=all(p.tier == "GRAVEYARD" for p in all_photos),
+        archetype_title=new_parsed_response.archetype_title,
+        roast_summary=new_parsed_response.roast_summary,
+        share_card_color=new_parsed_response.share_card_color,
         photos=all_photos,
     )
 
@@ -350,6 +401,9 @@ async def analyze_profile_photos(
                     tier=photo_feedback.tier,
                     brutal_feedback=photo_feedback.brutal_feedback,
                     improvement_tip=photo_feedback.improvement_tip,
+                    archetype_title=new_parsed_response.archetype_title,
+                    roast_summary=new_parsed_response.roast_summary,
+                    share_card_color=new_parsed_response.share_card_color,
                 )
             )
             photo_idx += 1
