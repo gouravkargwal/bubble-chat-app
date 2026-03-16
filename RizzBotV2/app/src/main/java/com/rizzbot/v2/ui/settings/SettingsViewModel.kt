@@ -24,6 +24,7 @@ data class SettingsState(
     val billingPeriod: String = "daily",
     val profileAuditsPerWeek: Int = 1,
     val weeklyAuditsUsed: Int = 0,
+    val profileBlueprintsPerWeek: Int = 0,
     val godModeExpiresAt: java.time.Instant? = null,
     val userName: String? = null,
     val userEmail: String? = null,
@@ -67,6 +68,7 @@ class SettingsViewModel @Inject constructor(
                         billingPeriod = usage.billingPeriod,
                         profileAuditsPerWeek = usage.profileAuditsPerWeek,
                         weeklyAuditsUsed = usage.weeklyAuditsUsed,
+                        profileBlueprintsPerWeek = usage.profileBlueprintsPerWeek,
                         godModeExpiresAt = usage.godModeExpiresAt
                     )
                 }

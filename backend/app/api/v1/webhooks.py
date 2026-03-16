@@ -43,11 +43,13 @@ async def revenuecat_webhook(
     # Parse request body
     try:
         body = await request.json()
+        # Log full raw payload for debugging entitlements / tiers (staging only)
+        logger.info("revenuecat_webhook_raw_body", body=body)
     except Exception as e:
         logger.error("revenuecat_webhook_invalid_json", error=str(e))
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    # Extract event data - RevenueCat webhooks can have different structures
+    # Extract event data - RevenueCat webhooks can have different structures / versions
     event_data = body.get("event", {})
     event_type = event_data.get("type") or body.get("type")
     app_user_id = event_data.get("app_user_id") or body.get("app_user_id")
@@ -70,28 +72,49 @@ async def revenuecat_webhook(
         logger.warning("revenuecat_webhook_user_not_found", app_user_id=app_user_id)
         return {"status": "ignored", "reason": "User not found"}
 
-    # Source of Truth: Always use entitlements dictionary to determine tier
-    entitlements = event_data.get("entitlements", {})
+    # ---- Tier mapping logic ----
+    # Webhooks send an array of entitlement_ids (e.g. ["pro"], ["premium"])
+    affected_entitlements = event_data.get("entitlement_ids") or []
+    if not isinstance(affected_entitlements, list):
+        affected_entitlements = []
 
-    # Extract active entitlement IDs (where is_active is explicitly True)
-    active_entitlement_ids = []
-    if isinstance(entitlements, dict):
-        active_entitlement_ids = [
-            eid
-            for eid, ent_data in entitlements.items()
-            if isinstance(ent_data, dict) and ent_data.get("is_active") is True
-        ]
+    # Start from current values
+    new_tier: str = user.tier
+    new_source: str | None = user.tier_source
 
-    # Determine tier based on priority: premium > pro > free
-    # This naturally handles upgrades (premium takes precedence) and expirations (no active = free)
-    new_tier = "free"
-    if "premium" in active_entitlement_ids:
-        new_tier = "premium"
-    elif "pro" in active_entitlement_ids:
-        new_tier = "pro"
+    # Helper: does this event affect a given entitlement id?
+    def affects(entitlement_id: str) -> bool:
+        return entitlement_id in affected_entitlements
 
-    # Optimization: Skip database update if tier hasn't changed
-    if user.tier == new_tier:
+    # 1) Upgrades / renewals / restores / product changes
+    if event_type in (
+        "INITIAL_PURCHASE",
+        "RENEWAL",
+        "RESTORE",
+        "UNCANCELLATION",
+        "PRODUCT_CHANGE",
+    ):
+        # Priority: premium > pro
+        if affects("premium"):
+            new_tier = "premium"
+            new_source = "purchase"
+        elif affects("pro"):
+            new_tier = "pro"
+            new_source = "purchase"
+
+    # 2) Expiration: only downgrade if the expiring entitlement matches current tier
+    elif event_type == "EXPIRATION":
+        if user.tier == "premium" and affects("premium"):
+            new_tier = "free"
+            new_source = None
+        elif user.tier == "pro" and affects("pro"):
+            new_tier = "free"
+            new_source = None
+
+    # 3) CANCELLATION: ignore for tier changes; access remains until EXPIRATION
+
+    # Optimization: if nothing changed, return early
+    if new_tier == user.tier and new_source == user.tier_source:
         logger.info(
             "revenuecat_webhook_tier_unchanged",
             app_user_id=app_user_id,
@@ -106,17 +129,15 @@ async def revenuecat_webhook(
             "message": "Tier unchanged",
         }
 
-    # Update user tier
+    # Persist changes
     old_tier = user.tier
-    user.tier = new_tier
+    old_source = user.tier_source
 
-    # Clear tier_expires_at for RevenueCat-managed subscriptions
-    # (RevenueCat handles expiration, so we don't need to track it separately)
-    if event_type in ("INITIAL_PURCHASE", "RENEWAL", "RESTORE"):
-        user.tier_expires_at = None
-        user.tier_source = "purchase"
-    elif event_type in ("EXPIRATION", "CANCELLATION"):
-        user.tier_expires_at = None
+    user.tier = new_tier
+    # DB column is NOT NULL, so fall back to a sentinel when clearing source
+    user.tier_source = new_source or "free"
+    # RevenueCat manages expiration; we do not track an explicit expiry timestamp
+    user.tier_expires_at = None
 
     await db.commit()
     await db.refresh(user)
@@ -126,6 +147,8 @@ async def revenuecat_webhook(
         app_user_id=app_user_id,
         old_tier=old_tier,
         new_tier=new_tier,
+        old_source=old_source,
+        new_source=new_source,
         event_type=event_type,
     )
 
@@ -134,4 +157,5 @@ async def revenuecat_webhook(
         "user_id": app_user_id,
         "old_tier": old_tier,
         "new_tier": new_tier,
+        "tier_source": new_source,
     }

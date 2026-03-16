@@ -30,5 +30,23 @@ services:
       retries: 3
     restart: unless-stopped
 
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    environment:
+      DB_SQLITE_FILE: "/data/database.sqlite"
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    depends_on:
+      api:
+        condition: service_started
+
 volumes:
   pgdata_prod:
+  npm_data:
+  npm_letsencrypt:

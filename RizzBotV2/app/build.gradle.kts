@@ -48,7 +48,7 @@ android {
             resValue("string", "app_name", "Cookd (Staging)")
             buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"226210127602-opgeg6boua6o6jvrksbjq1hpf898gcf9.apps.googleusercontent.com\"")
-            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_eHYaPMyFAlAhSKcANHwynxRPImy\"")
+            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_mvwllCzumJLbCSLXWVnFtqKIZqd\"")
         }
 
         create("production") {

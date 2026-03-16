@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -194,10 +196,11 @@ private fun FullScreenCard(
     val isLoading = currentState is BubbleState.Loading
     
     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+        val scrollState = rememberScrollState()
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.6f) // Constrain height to 60% of screen to avoid blocking dating app UI
+                .fillMaxHeight(0.7f) // Constrain height to ~70% to avoid excess empty space
                 .animateContentSize(
                     animationSpec = spring(
                         dampingRatio = 0.85f,
@@ -219,8 +222,14 @@ private fun FullScreenCard(
 
                 Divider(color = Color.White.copy(alpha = 0.08f))
 
-                // Route to appropriate panel based on current state
-                when (val s = currentState) {
+                // Scrollable body so content (screenshots, replies) can extend without hiding actions
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                ) {
+                    // Route to appropriate panel based on current state
+                    when (val s = currentState) {
                     is BubbleState.DirectionPicker -> DirectionPicker(
                         allowedDirections = usage.allowedDirections,
                         customHintsEnabled = usage.customHintsEnabled,
@@ -302,6 +311,7 @@ private fun FullScreenCard(
                         onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
                     )
                     else -> {}
+                }
                 }
             }
         }

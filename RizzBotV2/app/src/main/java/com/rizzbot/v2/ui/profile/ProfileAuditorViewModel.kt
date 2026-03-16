@@ -70,7 +70,7 @@ class ProfileAuditorViewModel @Inject constructor(
         _state.value = _state.value.copy(
             selectedUris = selectedPhotos,
             error = null,
-            showPaywall = exceededLimit && !hostedRepository.usageState.value.isPremium
+            showPaywall = exceededLimit && hostedRepository.usageState.value.tier == "free"
         )
     }
     

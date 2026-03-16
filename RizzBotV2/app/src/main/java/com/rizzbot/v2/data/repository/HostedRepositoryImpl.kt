@@ -158,14 +158,24 @@ class HostedRepositoryImpl @Inject constructor(
             
             // Extract profile_audits_per_week from limits map
             val profileAuditsPerWeek = usage.limits["profile_audits_per_week"]
-                ?.let { 
+                ?.let {
                     if (it is JsonPrimitive) {
                         it.content.toIntOrNull() ?: 1
                     } else {
                         1
                     }
                 } ?: 1
-            
+
+            // Extract profile_blueprints_per_week from limits map
+            val profileBlueprintsPerWeek = usage.limits["profile_blueprints_per_week"]
+                ?.let {
+                    if (it is JsonPrimitive) {
+                        it.content.toIntOrNull() ?: 0
+                    } else {
+                        0
+                    }
+                } ?: 0
+
             _usageState.value = UsageState(
                 dailyLimit = usage.dailyLimit,
                 dailyUsed = usage.dailyUsed,
@@ -191,6 +201,7 @@ class HostedRepositoryImpl @Inject constructor(
                 totalRepliesGenerated = usage.totalRepliesGenerated,
                 totalRepliesCopied = usage.totalRepliesCopied,
                 maxPhotosPerAudit = maxPhotosPerAudit,
+                profileBlueprintsPerWeek = profileBlueprintsPerWeek,
                 billingPeriod = usage.billingPeriod
             )
             

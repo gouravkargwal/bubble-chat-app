@@ -13,7 +13,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +50,15 @@ fun PaywallScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val activity = context as? Activity
+    // Local animation flag for the success checkmark
+    var showSuccessIcon by remember { mutableStateOf(false) }
+    LaunchedEffect(state.purchaseSuccess) {
+        if (state.purchaseSuccess) {
+            showSuccessIcon = true
+        } else {
+            showSuccessIcon = false
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -74,11 +92,77 @@ fun PaywallScreen(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState)
-                ) {
+                AnimatedContent(
+                    targetState = state.purchaseSuccess,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(300)) togetherWith
+                            fadeOut(animationSpec = tween(300))
+                    },
+                    label = "paywallSuccessContent"
+                ) { isSuccess ->
+                    if (isSuccess) {
+                        // Post-purchase success UX
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            AnimatedVisibility(
+                                visible = showSuccessIcon,
+                                enter = fadeIn(animationSpec = tween(350)) +
+                                    scaleIn(
+                                        initialScale = 0.7f,
+                                        animationSpec = tween(350, easing = FastOutSlowInEasing)
+                                    ),
+                                exit = fadeOut(animationSpec = tween(200))
+                            ) {
+                                Surface(
+                                    color = Pink.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(999.dp),
+                                    modifier = Modifier
+                                        .size(88.dp)
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Premium unlocked",
+                                            tint = Pink,
+                                            modifier = Modifier.size(40.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                "You’re in. Welcome to Premium 🎉",
+                                color = Color.White,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                "Your account has been upgraded. Enjoy higher limits and all premium features right away.",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 16.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 24.sp
+                            )
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(scrollState)
+                        ) {
                 // Hero Section
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -112,6 +196,7 @@ fun PaywallScreen(
                     is PaywallUiState.Success -> {
                         TierTabs(
                             selectedTier = state.selectedTier,
+                            activeTier = state.activeTier,
                             onTierSelected = { viewModel.selectTier(it) }
                         )
                         
@@ -175,6 +260,8 @@ fun PaywallScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
+                                val isCurrentTier = state.activeTier == tier
+
                                 packages.forEach { packageItem ->
                                     val isMonthly = packageItem.identifier.contains("monthly", ignoreCase = true)
                                     val savingsPercentage = if (isMonthly && packages.size >= 2) {
@@ -184,6 +271,7 @@ fun PaywallScreen(
                                     PackageCard(
                                         packageItem = packageItem,
                                         isSelected = state.selectedPackage?.identifier == packageItem.identifier,
+                                        isDisabled = isCurrentTier,
                                         savingsPercentage = savingsPercentage,
                                         onClick = { viewModel.selectPackage(packageItem) }
                                     )
@@ -216,21 +304,23 @@ fun PaywallScreen(
                     }
                 }
 
-                    // Error message
-                    val errorMessage = state.purchaseError
-                    if (errorMessage != null) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            errorMessage,
-                            color = Color(0xFFEF5350),
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                            // Error message
+                            val errorMessage = state.purchaseError
+                            if (errorMessage != null) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    errorMessage,
+                                    color = Color(0xFFEF5350),
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            // Add bottom padding to ensure content doesn't get cut off
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
                     }
-                    
-                    // Add bottom padding to ensure content doesn't get cut off
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
 
@@ -240,69 +330,109 @@ fun PaywallScreen(
                     .fillMaxWidth()
                     .padding(top = 24.dp, bottom = 16.dp)
             ) {
-                // CTA Button
-                val selectedPackage = state.selectedPackage
-                if (selectedPackage != null && activity != null) {
+                if (state.purchaseSuccess) {
+                    // Success primary CTA
                     Button(
                         onClick = {
-                            viewModel.purchasePackage(activity, selectedPackage, onPurchaseSuccess)
+                            // Force a fresh sync from backend so app sees the new plan immediately,
+                            // then let the host handle navigation.
+                            viewModel.refreshUserTierFromBackend()
+                            onPurchaseSuccess()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Pink),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        enabled = state.purchaseError == null && !state.purchaseSuccess
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Text(
-                            "Subscribe Now",
+                            "Start Exploring 🚀",
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
-                }
+                } else {
+                    // Purchase CTA
+                    val selectedPackage = state.selectedPackage
+                    if (selectedPackage != null && activity != null) {
+                        val isUpgradeToPremium =
+                            state.activeTier == PaywallTier.Pro && state.selectedTier == PaywallTier.Premium
+                        val isCurrentTier = state.activeTier == state.selectedTier
 
-                Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = {
+                                viewModel.purchasePackage(activity, selectedPackage, onPurchaseSuccess)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Pink,
+                                disabledContainerColor = CardBg.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            enabled = state.purchaseError == null && !isCurrentTier
+                        ) {
+                            val buttonText = when {
+                                isCurrentTier -> "Current Plan"
+                                isUpgradeToPremium -> "Upgrade to Premium"
+                                else -> "Subscribe Now"
+                            }
+                            val textColor = if (isCurrentTier) {
+                                Color.White.copy(alpha = 0.5f)
+                            } else {
+                                Color.White
+                            }
 
-                // Footer
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = {
-                        viewModel.restorePurchases(onPurchaseSuccess)
-                    }) {
-                        Text(
-                            "Restore Purchases",
-                            color = Color.Gray,
-                            fontSize = 12.sp
-                        )
+                            Text(
+                                buttonText,
+                                color = textColor,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
-                    Text(
-                        " | ",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                    TextButton(onClick = { /* TODO: Open Terms */ }) {
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Footer (hidden on success)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { viewModel.restorePurchases(onPurchaseSuccess) }) {
+                            Text(
+                                "Restore Purchases",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
                         Text(
-                            "Terms",
+                            " | ",
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
-                    }
-                    Text(
-                        " | ",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                    TextButton(onClick = { /* TODO: Open Privacy */ }) {
+                        TextButton(onClick = { /* TODO: Open Terms */ }) {
+                            Text(
+                                "Terms",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
                         Text(
-                            "Privacy",
+                            " | ",
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
+                        TextButton(onClick = { /* TODO: Open Privacy */ }) {
+                            Text(
+                                "Privacy",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             }
@@ -335,6 +465,7 @@ private fun FeatureRow(text: String) {
 @Composable
 private fun TierTabs(
     selectedTier: PaywallTier,
+    activeTier: PaywallTier?,
     onTierSelected: (PaywallTier) -> Unit
 ) {
     Surface(
@@ -349,7 +480,7 @@ private fun TierTabs(
         ) {
             // Pro Tab
             TabButton(
-                text = "Pro",
+                text = if (activeTier == PaywallTier.Pro) "Pro (Current)" else "Pro",
                 isSelected = selectedTier == PaywallTier.Pro,
                 onClick = { onTierSelected(PaywallTier.Pro) },
                 modifier = Modifier.weight(1f)
@@ -435,13 +566,17 @@ private fun calculateSavingsPercentage(packages: List<com.revenuecat.purchases.P
 private fun PackageCard(
     packageItem: com.revenuecat.purchases.Package,
     isSelected: Boolean,
+    isDisabled: Boolean,
     savingsPercentage: Int?,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .graphicsLayer { alpha = if (isDisabled) 0.5f else 1f }
+            .then(
+                if (!isDisabled) Modifier.clickable(onClick = onClick) else Modifier
+            )
             .then(
                 if (isSelected) {
                     Modifier.border(2.dp, Pink, RoundedCornerShape(16.dp))

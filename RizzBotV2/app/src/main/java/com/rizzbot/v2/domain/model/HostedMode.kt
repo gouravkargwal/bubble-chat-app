@@ -20,6 +20,8 @@ data class UsageState(
     val totalRepliesGenerated: Int = 0,  // Total from backend
     val totalRepliesCopied: Int = 0,  // Total from backend
     val maxPhotosPerAudit: Int = 3,  // Default to free tier limit
+    val profileBlueprintsPerWeek: Int = 0,  // From limits map; 0 = no access
+    val weeklyBlueprintsUsed: Int = 0,  // From backend
     val billingPeriod: String = "daily"  // "daily", "weekly", or "monthly"
 ) {
     val dailyRemaining: Int

@@ -37,6 +37,8 @@ data class PaywallState(
     val premiumPackages: List<Package> = emptyList(),
     val selectedTier: PaywallTier = PaywallTier.Premium,
     val selectedPackage: Package? = null,
+    val activeTier: PaywallTier? = null,
+    val activeProductId: String? = null,
     val purchaseError: String? = null,
     val purchaseSuccess: Boolean = false
 )
@@ -51,6 +53,40 @@ class PaywallViewModel @Inject constructor(
 
     init {
         fetchOfferings()
+        observeActiveTier()
+    }
+
+    private fun observeActiveTier() {
+        // Read current entitlements from RevenueCat to infer active tier
+        Purchases.sharedInstance.getCustomerInfo(
+            object : ReceiveCustomerInfoCallback {
+                override fun onReceived(customerInfo: com.revenuecat.purchases.CustomerInfo) {
+                    val premiumEntitlement = customerInfo.entitlements["premium"]
+                    val proEntitlement = customerInfo.entitlements["pro"]
+
+                    val hasPremium = premiumEntitlement?.isActive == true
+                    val hasPro = proEntitlement?.isActive == true
+
+                    val tier = when {
+                        hasPremium -> PaywallTier.Premium
+                        hasPro -> PaywallTier.Pro
+                        else -> null
+                    }
+
+                    val activeId = when {
+                        hasPremium -> premiumEntitlement?.productIdentifier
+                        hasPro -> proEntitlement?.productIdentifier
+                        else -> null
+                    }
+
+                    _state.update { it.copy(activeTier = tier, activeProductId = activeId) }
+                }
+
+                override fun onError(error: PurchasesError) {
+                    // Non-fatal for UI; leave activeTier as-is
+                }
+            }
+        )
     }
 
     private fun fetchOfferings() {
@@ -156,6 +192,8 @@ class PaywallViewModel @Inject constructor(
     ) {
         _state.update { it.copy(purchaseError = null, purchaseSuccess = false) }
         
+        // For now, use the standard purchase flow. RevenueCat + Google Play will handle
+        // subscription replacement with their default proration behavior when upgrading.
         val purchaseParams = PurchaseParams.Builder(activity, packageToBuy).build()
         Purchases.sharedInstance.purchase(
             purchaseParams,
@@ -188,7 +226,6 @@ class PaywallViewModel @Inject constructor(
                                 purchaseSuccess = true
                             ) 
                         }
-                        onSuccess()
                     }
                 }
 
@@ -231,8 +268,7 @@ class PaywallViewModel @Inject constructor(
                         
                         val hasActiveEntitlements = customerInfo.entitlements.active.isNotEmpty()
                         if (hasActiveEntitlements) {
-                            _state.update { it.copy(purchaseError = null) }
-                            onSuccess()
+                            _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
                         } else {
                             _state.update {
                                 it.copy(purchaseError = "No active subscriptions found")
@@ -248,5 +284,19 @@ class PaywallViewModel @Inject constructor(
                 }
             }
         )
+    }
+
+    /**
+     * Explicitly refresh the user's tier and usage state from the backend.
+     * Useful to ensure the app picks up webhook-driven changes (e.g. after tapping "Start Exploring").
+     */
+    fun refreshUserTierFromBackend() {
+        viewModelScope.launch {
+            try {
+                subscriptionManager.updateUserTier()
+            } catch (e: Exception) {
+                Log.w("PaywallViewModel", "Failed to refresh user tier from backend", e)
+            }
+        }
     }
 }

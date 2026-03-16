@@ -63,6 +63,8 @@ fun HomeScreen(
 
     // Treat both "premium" and "god_mode" tiers as God Mode for UI purposes
     val isGodMode = state.usage.tier == "premium" || state.usage.tier == "god_mode"
+    // Pro and above can access voice DNA and auto profile builder (profile_blueprints_per_week > 0)
+    val isProOrAbove = state.usage.tier == "pro" || isGodMode
     val primaryAccent = if (isGodMode) GodModeGold else Pink
     val heroGlow = if (isGodMode) GodModeGlow else Pink.copy(alpha = 0.05f)
 
@@ -129,8 +131,9 @@ fun HomeScreen(
             AutoProfileBuilderCard(
                 primaryAccent = primaryAccent,
                 isGodMode = isGodMode,
+                isProOrAbove = isProOrAbove,
                 onClick = {
-                    if (isGodMode) {
+                    if (isProOrAbove) {
                         onNavigateToProfileOptimizer()
                     } else {
                         onShowPaywall()
@@ -154,8 +157,9 @@ fun HomeScreen(
                             preferences = state.rizzProfile,
                             onSeeFullStats = onNavigateToStats,
                             isGodMode = isGodMode,
+                            isProOrAbove = isProOrAbove,
                             onTrainVoiceDNA = {
-                                if (isGodMode) {
+                                if (isProOrAbove) {
                                     viewModel.showCalibration()
                                 } else {
                                     onShowPaywall()
@@ -441,6 +445,7 @@ private fun BrutalProfileAuditorCard(
 private fun AutoProfileBuilderCard(
     primaryAccent: Color,
     isGodMode: Boolean,
+    isProOrAbove: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -504,10 +509,10 @@ private fun AutoProfileBuilderCard(
                         )
                     }
                 }
-                if (!isGodMode) {
+                if (!isProOrAbove) {
                     Icon(
                         imageVector = Icons.Default.Lock,
-                        contentDescription = "Premium Feature",
+                        contentDescription = "Pro Feature",
                         tint = GodModeGold,
                         modifier = Modifier.size(20.dp)
                     )
@@ -676,6 +681,7 @@ private fun RizzProfileCard(
     preferences: UserPreferences?,
     onSeeFullStats: () -> Unit,
     isGodMode: Boolean,
+    isProOrAbove: Boolean,
     onTrainVoiceDNA: () -> Unit,
     primaryAccent: Color
 ) {
@@ -782,8 +788,8 @@ private fun RizzProfileCard(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Premium / God Mode messaging
-                    if (!isGodMode) {
+                    // Pro / God Mode messaging
+                    if (!isProOrAbove) {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
                             shape = RoundedCornerShape(14.dp),
@@ -800,7 +806,7 @@ private fun RizzProfileCard(
                                     fontSize = 13.sp
                                 )
                                 Text(
-                                    "Upgrade to God Mode so the AI learns your exact humor, slang, and texting style.",
+                                    "Upgrade to Pro so the AI learns your exact humor, slang, and texting style.",
                                     color = Color.Gray,
                                     fontSize = 12.sp
                                 )
@@ -850,7 +856,7 @@ private fun RizzProfileCard(
                             colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
                         ) {
                             Text(
-                                text = if (isGodMode) "Upload Chat Screenshots" else "🔒 Unlock AI Voice DNA",
+                                text = if (isProOrAbove) "Upload Chat Screenshots" else "🔒 Unlock AI Voice DNA",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -910,7 +916,7 @@ private fun RizzProfileCard(
                         colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
                     ) {
                         Text(
-                            text = if (isGodMode) "Upload Screenshots to Speed Up" else "🔒 Unlock AI Voice DNA",
+                            text = if (isProOrAbove) "Upload Screenshots to Speed Up" else "🔒 Unlock AI Voice DNA",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold

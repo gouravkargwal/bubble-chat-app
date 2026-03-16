@@ -231,7 +231,8 @@ fun SettingsScreen(
                         billingPeriod = state.billingPeriod,
                         isPremium = state.isPremium,
                         weeklyAuditsLimit = state.profileAuditsPerWeek,
-                        weeklyAuditsUsed = state.weeklyAuditsUsed
+                        weeklyAuditsUsed = state.weeklyAuditsUsed,
+                        weeklyBlueprintsLimit = state.profileBlueprintsPerWeek
                     )
                 }
             }
@@ -452,7 +453,8 @@ private fun UsageLimitsDisplay(
     billingPeriod: String,
     isPremium: Boolean,
     weeklyAuditsLimit: Int,
-    weeklyAuditsUsed: Int
+    weeklyAuditsUsed: Int,
+    weeklyBlueprintsLimit: Int
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Label and usage count row
@@ -548,6 +550,36 @@ private fun UsageLimitsDisplay(
             )
             
             // Reset text
+            Text(
+                "Resets every Monday.",
+                color = Color.Gray,
+                fontSize = 11.sp
+            )
+        }
+
+        if (weeklyBlueprintsLimit > 0) {
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = Color(0xFF252542))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Weekly Profile Blueprints (Auto Profile Builder)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Weekly Profile Blueprints",
+                    color = Color.White,
+                    fontSize = 14.sp
+                )
+                Text(
+                    "$weeklyBlueprintsLimit available",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Resets every Monday.",
                 color = Color.Gray,
