@@ -26,15 +26,26 @@ class User(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    device_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)  # Primary device ID (unique)
-    android_device_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)  # Android device ID for anti-fraud
+    # Stable cross-device identifier for Google accounts, used for quota tracking.
+    # This comes from Firebase providerData[].uid where providerId == "google.com".
+    google_provider_id: Mapped[str | None] = mapped_column(
+        String(128), unique=True, nullable=True, index=True
+    )
+    device_id: Mapped[str] = mapped_column(
+        String(255), unique=True, index=True
+    )  # Primary device ID (unique)
+    android_device_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )  # Android device ID for anti-fraud
     firebase_uid: Mapped[str | None] = mapped_column(
         String(128), unique=True, nullable=True, index=True
     )
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tier: Mapped[str] = mapped_column(String(20), default="free")  # free, premium, pro
-    tier_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tier_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     tier_source: Mapped[str] = mapped_column(
         String(20), default="signup"
     )  # signup, trial, purchase, admin
@@ -53,9 +64,15 @@ class User(Base):
     prompt_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Set to the purchase timestamp whenever a new paid plan activates (INITIAL_PURCHASE / RENEWAL).
     # Usage counters use MAX(week_start, plan_period_start) so limits reset with each new period.
-    plan_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    plan_period_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     # Relationships
     audited_photos: Mapped[list["AuditedPhoto"]] = relationship(
@@ -63,6 +80,49 @@ class User(Base):
     )
     profile_blueprints: Mapped[list["ProfileBlueprint"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    conversations: Mapped[list["Conversation"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    interactions: Mapped[list["Interaction"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    voice_dna: Mapped["UserVoiceDNA"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class UserQuota(Base):
+    """Per-user quota counters keyed by stable Google provider ID.
+
+    CRITICAL: This table must NOT be wiped on account deletion so we can
+    preserve historical usage limits even if the user nukes their profile.
+    """
+
+    __tablename__ = "user_quotas"
+
+    # Primary key is the stable Google provider ID, NOT the temporary firebase_uid.
+    google_provider_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    # Simple integer counters — we do NOT derive limits from history tables.
+    # Chat (vision reply generations)
+    daily_usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    weekly_usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Profile audits (per week)
+    weekly_audits_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Profile blueprints (per week)
+    weekly_blueprints_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Reset timestamps (UTC). When "now" passes these we reset and roll them forward.
+    daily_reset_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    weekly_reset_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    weekly_audits_reset_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    weekly_blueprints_reset_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
@@ -81,9 +141,13 @@ class Conversation(Base):
     interaction_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_interaction_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now()
+        DateTime(timezone=True), server_default=func.now()
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="conversations")
 
 
 class Interaction(Base):
@@ -125,7 +189,11 @@ class Interaction(Base):
     temperature_used: Mapped[float] = mapped_column(Float)
     screenshot_count: Mapped[int] = mapped_column(Integer, default=1)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="interactions")
 
 
 class UserVoiceDNA(Base):
@@ -154,7 +222,11 @@ class UserVoiceDNA(Base):
         Text, default="[]"
     )  # JSON array
     semantic_profile: Mapped[str | None] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="voice_dna")
 
 
 class Referral(Base):
@@ -170,7 +242,9 @@ class Referral(Base):
         String(36), ForeignKey("users.id"), index=True
     )
     bonus_granted: Mapped[int] = mapped_column(Integer, default=5)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class Purchase(Base):
@@ -186,10 +260,16 @@ class Purchase(Base):
     status: Mapped[str] = mapped_column(
         String(30), default="active"
     )  # active, cancelled, expired, refunded
-    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     auto_renewing: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class AuditedPhoto(Base):
@@ -208,7 +288,9 @@ class AuditedPhoto(Base):
     tier: Mapped[str] = mapped_column(String(20))
     brutal_feedback: Mapped[str] = mapped_column(Text)
     improvement_tip: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     user: Mapped[User] = relationship(back_populates="audited_photos")
 
@@ -222,7 +304,9 @@ class ProfileBlueprint(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     overall_theme: Mapped[str] = mapped_column(String(500))
     bio: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     user: Mapped[User] = relationship(back_populates="profile_blueprints")
     slots: Mapped[list["BlueprintSlot"]] = relationship(

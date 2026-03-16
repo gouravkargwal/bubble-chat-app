@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import count_today_interactions, get_current_user
+from app.api.v1.deps import get_current_user
 from app.api.v1.schemas.schemas import (
     CalibrationRequest,
     CalibrationResponse,
@@ -32,6 +32,7 @@ from app.infrastructure.database.models import (
     User,
     UserVoiceDNA,
 )
+from app.services.quota_manager import QuotaExceededException, QuotaManager
 from app.domain.voice_dna import update_voice_dna_stats
 from app.services.voice_dna import generate_semantic_profile_background
 from app.llm.gemini_client import GeminiClient
@@ -369,15 +370,27 @@ async def generate_replies(
     effective_tier = get_effective_tier(user)
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
 
-    # 2. Check daily rate limit (0 = unlimited)
-    daily_used = await count_today_interactions(user.id, db)
+    # 2. Check daily/weekly rate limits via QuotaManager (0 = unlimited).
     daily_limit = tier_config["limits"]["chat_generations_per_day"]
     effective_limit = daily_limit + user.bonus_replies
-    if daily_limit > 0 and daily_used >= effective_limit:
-        raise HTTPException(
-            status_code=429,
-            detail="Daily limit reached. Upgrade to Premium for more replies.",
-        )
+
+    daily_used = 0
+    if user.google_provider_id:
+        quota_manager = QuotaManager(db)
+        try:
+            daily_used, _ = await quota_manager.check_and_increment(
+                user.google_provider_id,
+                daily_limit=effective_limit,
+                weekly_limit=None,
+            )
+        except QuotaExceededException:
+            raise HTTPException(
+                status_code=429,
+                detail="Daily limit reached. Upgrade to Premium for more replies.",
+            )
+    else:
+        # If we don't have a stable Google ID (anonymous/legacy), fall back to no quota.
+        daily_used = 0
 
     # 3. Resolve images (support both `image` and `images` fields)
     images: list[str] = []
@@ -862,7 +875,7 @@ async def generate_replies(
     )
 
     if daily_limit > 0:
-        remaining = effective_limit - daily_used - 1
+        remaining = max(0, effective_limit - daily_used)
     else:
         remaining = 9999
 

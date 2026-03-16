@@ -7,7 +7,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class FirebaseAuthRequest(
-    @SerialName("firebase_token") val firebaseToken: String
+    @SerialName("firebase_token") val firebaseToken: String,
+    // Stable Google provider ID taken from FirebaseUser.providerData where providerId == "google.com".
+    // This is the primary key for the server-side user_quotas table and MUST remain stable even if
+    // the Firebase UID or account on this device changes.
+    @SerialName("google_provider_id") val googleProviderId: String? = null
 )
 
 @Serializable

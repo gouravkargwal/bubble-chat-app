@@ -1,17 +1,18 @@
 """Usage tracking endpoint."""
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select, cast, Date
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import structlog
-from app.api.v1.deps import count_today_interactions, get_current_user
+from app.api.v1.deps import get_current_user
 from datetime import datetime, timedelta, timezone
 from app.api.v1.schemas.schemas import UsageResponse
 from app.core.tier_config import TIER_CONFIG
 from app.domain.tiers import get_effective_tier
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import AuditedPhoto, Interaction, ProfileBlueprint, Purchase, User
+from app.infrastructure.database.models import Purchase, User
+from app.services.quota_manager import QuotaManager
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -26,70 +27,28 @@ async def get_usage(
     effective_tier = get_effective_tier(user)
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
 
-    daily_used = await count_today_interactions(user.id, db)
     daily_limit = tier_config["limits"]["chat_generations_per_day"]
     effective_limit = daily_limit + user.bonus_replies
 
-    # Calculate weekly and monthly usage for period-based plans
-    now = datetime.now(timezone.utc)
-    # Week starts on Monday (weekday() returns 0 for Monday)
-    monday_midnight = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-
-    # If a new plan period started after Monday, use that as the window so usage
-    # resets when a user buys or renews a plan mid-week.
-    plan_start = user.plan_period_start
-    if plan_start is not None:
-        plan_start_naive = plan_start.replace(tzinfo=None) if plan_start.tzinfo else plan_start
-        week_start = max(monday_midnight, plan_start_naive)
+    # 1. Read ALL usage from quota table when we have a stable Google ID.
+    if user.google_provider_id:
+        qm = QuotaManager(db)
+        (
+            daily_used,
+            weekly_used,
+            weekly_audits_used,
+            weekly_blueprints_used,
+        ) = await qm.get_usage(user.google_provider_id)
     else:
-        week_start = monday_midnight
+        daily_used = 0
+        weekly_used = 0
+        weekly_audits_used = 0
+        weekly_blueprints_used = 0
 
-    weekly_used_result = await db.execute(
-        select(func.count(Interaction.id)).where(
-            Interaction.user_id == user.id, Interaction.created_at >= week_start
-        )
-    )
-    weekly_used = weekly_used_result.scalar() or 0
-
-    monthly_used_result = await db.execute(
-        select(func.count(Interaction.id)).where(
-            Interaction.user_id == user.id, Interaction.created_at >= month_start
-        )
-    )
-    monthly_used = monthly_used_result.scalar() or 0
-
-    # Count weekly profile audits (distinct audit sessions this week)
-    # We count unique dates when audits were created this week
-    weekly_audits_result = await db.execute(
-        select(func.count(func.distinct(cast(AuditedPhoto.created_at, Date)))).where(
-            AuditedPhoto.user_id == user.id, AuditedPhoto.created_at >= week_start
-        )
-    )
-    weekly_audits_used = weekly_audits_result.scalar() or 0
-
-    # Count weekly profile blueprints generated this week
-    weekly_blueprints_result = await db.execute(
-        select(func.count(ProfileBlueprint.id)).where(
-            ProfileBlueprint.user_id == user.id,
-            ProfileBlueprint.created_at >= week_start,
-        )
-    )
-    weekly_blueprints_used = weekly_blueprints_result.scalar() or 0
-
-    # Count total interactions created by this user
-    total_generated_result = await db.execute(
-        select(func.count(Interaction.id)).where(Interaction.user_id == user.id)
-    )
-    total_generated = total_generated_result.scalar() or 0
-
-    # Count total interactions where user copied a reply (copied_index is not null)
-    total_copied_result = await db.execute(
-        select(func.count(Interaction.id)).where(
-            Interaction.user_id == user.id, Interaction.copied_index.isnot(None)
-        )
-    )
-    total_copied = total_copied_result.scalar() or 0
+    # With quota-backed tracking, we no longer derive usage stats from history tables.
+    monthly_used = 0
+    total_generated = 0
+    total_copied = 0
 
     # Get billing period from active purchase product_id
     billing_period = "daily"  # default
@@ -113,8 +72,6 @@ async def get_usage(
         user_id=user.id,
         tier=effective_tier,
         billing_period=billing_period,
-        week_start=week_start.isoformat(),
-        month_start=month_start.isoformat(),
         daily_limit=daily_limit,
         effective_limit=effective_limit,
         bonus_replies=user.bonus_replies,
@@ -143,7 +100,9 @@ async def get_usage(
             int(user.tier_expires_at.timestamp()) if user.tier_expires_at else None
         ),
         god_mode_expires_at=(
-            int(user.god_mode_expires_at.timestamp()) if user.god_mode_expires_at else None
+            int(user.god_mode_expires_at.timestamp())
+            if user.god_mode_expires_at
+            else None
         ),
         bonus_replies=user.bonus_replies,
         total_replies_generated=total_generated,

@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+import structlog
 
 from app.api.v1.deps import get_current_user
 from app.core.tier_config import TIER_CONFIG
@@ -13,6 +12,7 @@ from app.infrastructure.database.models import (
     ProfileBlueprint as ProfileBlueprintDB,
     User,
 )
+from app.services.quota_manager import QuotaExceededException, QuotaManager
 from app.schemas.profile_blueprint import (
     ProfileBlueprintListResponse,
     ProfileBlueprintResponse,
@@ -20,6 +20,7 @@ from app.schemas.profile_blueprint import (
 from app.services.profile_optimizer_service import generate_blueprint
 
 router = APIRouter(prefix="/profile-audit", tags=["profile-audit"])
+logger = structlog.get_logger()
 
 
 @router.post(
@@ -42,36 +43,54 @@ async def optimize_profile(
             detail="Profile blueprints are not available on your current plan. Please upgrade.",
         )
 
-    now = datetime.now(timezone.utc)
-    monday_midnight = (now - timedelta(days=now.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
-    )
-    plan_start = current_user.plan_period_start
-    if plan_start is not None:
-        plan_start_naive = plan_start.replace(tzinfo=None) if plan_start.tzinfo else plan_start
-        week_start = max(monday_midnight, plan_start_naive)
-    else:
-        week_start = monday_midnight
+    # 1. Enforce quota and acquire row lock on the quota row.
+    if blueprints_per_week > 0 and current_user.google_provider_id:
+        qm = QuotaManager(db)
+        try:
+            await qm.check_and_increment_blueprints(
+                current_user.google_provider_id,
+                weekly_limit=blueprints_per_week,
+            )
+        except QuotaExceededException:
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"Weekly blueprint limit reached ({blueprints_per_week}/week). "
+                    "Resets on Monday."
+                ),
+            )
 
-    weekly_count_result = await db.execute(
-        select(func.count(ProfileBlueprintDB.id)).where(
-            ProfileBlueprintDB.user_id == current_user.id,
-            ProfileBlueprintDB.created_at >= week_start,
-        )
-    )
-    weekly_used = weekly_count_result.scalar() or 0
-
-    if weekly_used >= blueprints_per_week:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Weekly blueprint limit reached ({blueprints_per_week}/week). Resets on Monday.",
-        )
-
+    # 2. Execute the heavy AI generation with explicit transaction control.
     try:
         blueprint = await generate_blueprint(user_id=current_user.id, db=db, lang=lang)
+        # 3. SUCCESS: commit blueprint + quota increment and release locks.
+        await db.commit()
     except ValueError as exc:
-        # Propagate as 400 so clients can handle "no audited photos" gracefully.
+        # Known, user-facing error (e.g. no photos) — rollback to refund quota.
+        await db.rollback()
+        logger.warning(
+            "profile_blueprint_generation_failed",
+            user_id=current_user.id,
+            error=str(exc),
+        )
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        # Unexpected failure (LLM crash, timeout, DB error) — rollback so user
+        # is not charged for a failed generation.
+        await db.rollback()
+        logger.error(
+            "profile_blueprint_generation_critical_failure",
+            user_id=current_user.id,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Our AI is currently overloaded. Your blueprint was not saved and "
+                "your quota was not charged. Please try again."
+            ),
+        )
+
     return blueprint
 
 

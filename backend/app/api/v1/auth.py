@@ -12,7 +12,7 @@ from app.api.v1.schemas.schemas import AuthResponse, FirebaseAuthRequest
 from app.config import settings
 from app.infrastructure.auth.jwt import create_token
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import User
+from app.infrastructure.database.models import User, UserQuota
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +28,15 @@ async def firebase_auth(
 
     Flow:
       1. Verify the Firebase token via Admin SDK.
-      2. Look up an existing user by ``firebase_uid``.
-      3. If not found but ``device_id`` was provided, try to migrate the
+      2. If a stable ``google_provider_id`` is provided, look up user by that
+         first (this is the canonical cross-device identifier).
+      3. If not found, fall back to existing ``firebase_uid`` lookup.
+      4. If still not found but ``device_id`` was provided, try to migrate the
          anonymous user (link their data to the Firebase account).
-      4. Otherwise create a brand-new user.
-      5. Return our own JWT for subsequent API calls.
+      5. Otherwise create a brand-new user.
+      6. Ensure a UserQuota row exists for this google_provider_id so the rest
+         of the app can assume quotas are initialized.
+      7. Return our own JWT for subsequent API calls.
     """
     from app.infrastructure.auth.firebase import verify_firebase_token
 
@@ -44,21 +48,35 @@ async def firebase_auth(
     firebase_uid: str = decoded["uid"]
     email: str | None = decoded.get("email")
     display_name: str | None = decoded.get("name")
+    google_provider_id: str | None = body.google_provider_id
 
     is_new_user = False
 
-    # --- 1. Existing Firebase user? -----------------------------------------
-    result = await db.execute(select(User).where(User.firebase_uid == firebase_uid))
-    user = result.scalar_one_or_none()
+    user: User | None = None
+
+    # --- 1. Prefer lookup by stable google_provider_id -----------------------
+    if google_provider_id:
+        result = await db.execute(
+            select(User).where(User.google_provider_id == google_provider_id)
+        )
+        user = result.scalar_one_or_none()
+
+    # --- 2. Fallback to existing Firebase user by uid -----------------------
+    if user is None:
+        result = await db.execute(select(User).where(User.firebase_uid == firebase_uid))
+        user = result.scalar_one_or_none()
 
     if user is not None:
-        # Update profile fields in case they changed on the Firebase side
+        # Existing account — update profile fields and keep device linkage.
         user.email = email
         user.display_name = display_name
+        if google_provider_id:
+            user.google_provider_id = google_provider_id
+        user.firebase_uid = firebase_uid
         await db.commit()
         await db.refresh(user)
     else:
-        # --- 2. Try migrating an anonymous user by device_id ----------------
+        # --- 3. Try migrating an anonymous user by device_id ----------------
         if body.device_id:
             result = await db.execute(
                 select(User).where(User.device_id == body.device_id)
@@ -66,10 +84,12 @@ async def firebase_auth(
             user = result.scalar_one_or_none()
 
         if user is not None:
-            # Link the anonymous account to Firebase
+            # Link the anonymous account to Firebase + stable Google ID
             user.firebase_uid = firebase_uid
             user.email = email
             user.display_name = display_name
+            if google_provider_id:
+                user.google_provider_id = google_provider_id
             await db.commit()
             await db.refresh(user)
             logger.info(
@@ -78,7 +98,7 @@ async def firebase_auth(
                 firebase_uid,
             )
         else:
-            # --- 3. Brand-new user ------------------------------------------
+            # --- 4. Brand-new user ------------------------------------------
             is_new_user = True
             device_id = body.device_id or f"firebase:{firebase_uid}"
             user = User(
@@ -87,6 +107,7 @@ async def firebase_auth(
                 email=email,
                 display_name=display_name,
                 referral_code=generate_referral_code(),
+                google_provider_id=google_provider_id,
             )
             db.add(user)
             await db.flush()  # get user.id
@@ -94,6 +115,16 @@ async def firebase_auth(
             await db.commit()
             await db.refresh(user)
             logger.info("Created new Firebase user %s", user.id)
+
+    # --- 5. Ensure UserQuota row exists for this google_provider_id ----------
+    if google_provider_id:
+        quota_result = await db.execute(
+            select(UserQuota).where(UserQuota.google_provider_id == google_provider_id)
+        )
+        quota = quota_result.scalar_one_or_none()
+        if quota is None:
+            db.add(UserQuota(google_provider_id=google_provider_id))
+            await db.commit()
 
     token, expires_at = create_token(user.id, user.device_id)
 

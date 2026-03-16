@@ -23,6 +23,13 @@ class FirebaseAuthRequest(BaseModel):
         default=None,
         description="Optional device ID to migrate anonymous data to the Firebase account",
     )
+    google_provider_id: str | None = Field(
+        default=None,
+        description=(
+            "Stable Google provider ID from Firebase providerData[].uid where "
+            "providerId == 'google.com'. Used as the primary key for user_quotas."
+        ),
+    )
 
 
 # Vision

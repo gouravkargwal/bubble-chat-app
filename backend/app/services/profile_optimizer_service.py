@@ -237,7 +237,7 @@ async def generate_blueprint(
     # Build lookup map for storage URL construction
     photos_by_id = {photo.id: photo for photo in photos}
 
-    # Save to database
+    # Save to database (within the caller's transaction)
     db_blueprint = ProfileBlueprintDB(
         user_id=user_id,
         overall_theme=blueprint.overall_theme,
@@ -266,9 +266,10 @@ async def generate_blueprint(
         )
         db.add(db_slot)
 
-    await db.commit()
+    # NOTE: We do not commit here — the caller controls the transaction, so quota
+    # and blueprint creation succeed or fail together.
 
-    # Reload blueprint with slots relationship
+    # Reload blueprint with slots relationship within the same transaction
     result = await db.execute(
         select(ProfileBlueprintDB)
         .where(ProfileBlueprintDB.id == db_blueprint.id)

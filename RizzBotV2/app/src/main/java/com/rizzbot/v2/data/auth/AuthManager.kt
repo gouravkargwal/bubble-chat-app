@@ -50,10 +50,16 @@ class AuthManager @Inject constructor(
 
     fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
 
-    suspend fun authenticateFirebase(firebaseIdToken: String): AuthResult {
+    suspend fun authenticateFirebase(
+        firebaseIdToken: String,
+        googleProviderId: String?
+    ): AuthResult {
         return try {
             val response = hostedApi.get().authenticateFirebase(
-                FirebaseAuthRequest(firebaseIdToken)
+                FirebaseAuthRequest(
+                    firebaseToken = firebaseIdToken,
+                    googleProviderId = googleProviderId
+                )
             )
             saveAuth(response.token, response.userId, response.expiresAt)
             

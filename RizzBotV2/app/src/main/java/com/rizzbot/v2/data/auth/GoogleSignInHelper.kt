@@ -98,14 +98,22 @@ class GoogleSignInHelper @Inject constructor(
             // Sign in to Firebase with the Google credential
             val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
-            val firebaseIdToken = authResult.user?.getIdToken(false)?.await()?.token
+            val firebaseUser = authResult.user
+            val firebaseIdToken = firebaseUser?.getIdToken(false)?.await()?.token
                 ?: return GoogleSignInResult.Error("Something went wrong. Please try again.")
             
-            val firebaseUserId = authResult.user?.uid
+            val firebaseUserId = firebaseUser?.uid
             Log.d("GoogleSignIn", "Firebase sign-in successful, user ID: $firebaseUserId")
 
-            // Send Firebase token to our backend to upgrade the account
-            when (val backendAuthResult = authManager.authenticateFirebase(firebaseIdToken)) {
+            // Extract stable Google provider ID from providerData (NOT the Firebase UID).
+            val googleProviderId = firebaseUser
+                ?.providerData
+                ?.firstOrNull { it.providerId == "google.com" }
+                ?.uid
+            Log.d("GoogleSignIn", "Google provider ID (stable): $googleProviderId")
+
+            // Send Firebase token (and stable Google provider ID) to our backend to upgrade the account
+            when (val backendAuthResult = authManager.authenticateFirebase(firebaseIdToken, googleProviderId)) {
                 is AuthManager.AuthResult.Success -> {
                     // Get the backend user ID (preferred) or fall back to Firebase UID
                     val userId = authManager.getUserId() ?: firebaseUserId ?: ""

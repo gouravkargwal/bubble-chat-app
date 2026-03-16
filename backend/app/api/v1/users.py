@@ -28,13 +28,13 @@ async def delete_all_user_data(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Nuclear option: Delete all user data including interactions, photos, blueprints, and reset Voice DNA.
-    
+
     This is an all-or-nothing operation wrapped in a transaction.
     """
     try:
         # Start transaction
         user_id = user.id
-        
+
         # 1. Delete all Interactions (Chat history)
         interactions_result = await db.execute(
             select(Interaction).where(Interaction.user_id == user_id)
@@ -42,9 +42,22 @@ async def delete_all_user_data(
         interactions = interactions_result.scalars().all()
         for interaction in interactions:
             await db.delete(interaction)
-        logger.info("user_data_purge_interactions", count=len(interactions), user_id=user_id)
+        logger.info(
+            "user_data_purge_interactions", count=len(interactions), user_id=user_id
+        )
 
-        # 2. Delete all AuditedPhotos and their files
+        # 2. Delete all ProfileBlueprints first (cascade will handle BlueprintSlots)
+        blueprints_result = await db.execute(
+            select(ProfileBlueprint).where(ProfileBlueprint.user_id == user_id)
+        )
+        blueprints = blueprints_result.scalars().all()
+        for blueprint in blueprints:
+            await db.delete(blueprint)
+        logger.info(
+            "user_data_purge_blueprints", count=len(blueprints), user_id=user_id
+        )
+
+        # 3. Delete all AuditedPhotos and their files
         photos_result = await db.execute(
             select(AuditedPhoto).where(AuditedPhoto.user_id == user_id)
         )
@@ -64,15 +77,6 @@ async def delete_all_user_data(
             await db.delete(photo)
         logger.info("user_data_purge_photos", count=len(photos), user_id=user_id)
 
-        # 3. Delete all ProfileBlueprints (cascade will handle BlueprintSlots)
-        blueprints_result = await db.execute(
-            select(ProfileBlueprint).where(ProfileBlueprint.user_id == user_id)
-        )
-        blueprints = blueprints_result.scalars().all()
-        for blueprint in blueprints:
-            await db.delete(blueprint)
-        logger.info("user_data_purge_blueprints", count=len(blueprints), user_id=user_id)
-
         # 4. Delete all Conversations
         conversations_result = await db.execute(
             select(Conversation).where(Conversation.user_id == user_id)
@@ -80,7 +84,9 @@ async def delete_all_user_data(
         conversations = conversations_result.scalars().all()
         for conversation in conversations:
             await db.delete(conversation)
-        logger.info("user_data_purge_conversations", count=len(conversations), user_id=user_id)
+        logger.info(
+            "user_data_purge_conversations", count=len(conversations), user_id=user_id
+        )
 
         # 5. Reset UserVoiceDNA to blank state (don't delete, just reset)
         voice_dna_result = await db.execute(
@@ -103,6 +109,10 @@ async def delete_all_user_data(
             voice_dna.recent_organic_messages = "[]"
             voice_dna.semantic_profile = None
             logger.info("user_data_purge_voice_dna_reset", user_id=user_id)
+
+        # 6. Null out directly identifying fields on the User record
+        user.email = None
+        user.display_name = None
 
         # Commit transaction
         await db.commit()
@@ -129,7 +139,7 @@ async def delete_all_user_data(
     except Exception as e:
         # Rollback on error
         await db.rollback()
-        logger.error("user_data_purge_failed", error=str(e), user_id=user.id)
+        logger.error("user_data_purge_failed", error=str(e), user_id=user_id)
         raise HTTPException(
             status_code=500, detail="Failed to delete user data. Please try again."
         ) from e

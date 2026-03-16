@@ -307,7 +307,7 @@ async def analyze_profile_photos(
         photos=all_photos,
     )
 
-    # Persist audit results and images for history viewing
+    # Persist audit results and images for history viewing (within caller's transaction)
     STATIC_ROOT.mkdir(parents=True, exist_ok=True)
     audits_root = STATIC_ROOT / "audits" / user.id
     audits_root.mkdir(parents=True, exist_ok=True)
@@ -356,8 +356,6 @@ async def analyze_profile_photos(
         except (IndexError, ValueError) as e:
             logger.warning("profile_audit_save_skip", error=str(e), idx=idx)
             continue
-
-    await db.commit()
 
     score_summary = [
         {"id": p.photo_id, "score": p.score, "tier": p.tier}

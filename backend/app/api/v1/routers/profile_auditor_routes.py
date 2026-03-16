@@ -17,6 +17,7 @@ from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import AuditedPhoto, BlueprintSlot, User
 from app.models.profile_auditor import AuditResponse
 from app.services.profile_auditor_service import analyze_profile_photos
+from app.services.quota_manager import QuotaExceededException, QuotaManager
 
 
 logger = structlog.get_logger()
@@ -43,45 +44,49 @@ async def profile_audit(
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
     audits_per_week = tier_config["limits"]["profile_audits_per_week"]
 
-    now = datetime.now(timezone.utc)
-    monday_midnight = (now - timedelta(days=now.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0, tzinfo=None
-    )
-    plan_start = user.plan_period_start
-    if plan_start is not None:
-        plan_start_naive = plan_start.replace(tzinfo=None) if plan_start.tzinfo else plan_start
-        week_start = max(monday_midnight, plan_start_naive)
-    else:
-        week_start = monday_midnight
+    # 1. Enforce weekly audit limit via QuotaManager when we have a stable Google ID.
+    if audits_per_week > 0 and user.google_provider_id:
+        qm = QuotaManager(db)
+        try:
+            await qm.check_and_increment_audits(
+                user.google_provider_id,
+                weekly_limit=audits_per_week,
+            )
+        except QuotaExceededException:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Weekly profile audit limit reached ({audits_per_week}/week). Resets on Monday.",
+            )
 
-    weekly_audits_result = await db.execute(
-        select(func.count(func.distinct(cast(AuditedPhoto.created_at, Date)))).where(
-            AuditedPhoto.user_id == user.id,
-            AuditedPhoto.created_at >= week_start,
-        )
-    )
-    weekly_audits_used = weekly_audits_result.scalar() or 0
-
-    if weekly_audits_used >= audits_per_week:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Weekly profile audit limit reached ({audits_per_week}/week). Resets on Monday.",
-        )
-
+    # 2. Execute heavy AI/Vision call with explicit transaction control.
     try:
-        return await analyze_profile_photos(images=images, user=user, db=db, lang=lang)
+        response = await analyze_profile_photos(
+            images=images, user=user, db=db, lang=lang
+        )
+        # 3. SUCCESS: commit quota increment + new audits, release locks.
+        await db.commit()
+        return response
     except ValueError as e:
+        # Known, user-facing error (bad images, etc.) — rollback to refund quota.
+        await db.rollback()
         logger.error("profile_audit_failed", error=str(e))
         raise HTTPException(
-            status_code=500, detail=str(e) or "Failed to audit profile photos."
+            status_code=400, detail=str(e) or "Failed to audit profile photos."
         ) from e
     except Exception as e:
+        # Unexpected failure — rollback so quota isn't charged on server error.
+        await db.rollback()
         logger.error(
-            "profile_audit_unexpected_error", error=str(e), error_type=type(e).__name__
+            "profile_audit_unexpected_error",
+            error=str(e),
+            error_type=type(e).__name__,
         )
         raise HTTPException(
             status_code=500,
-            detail="An unexpected error occurred while auditing photos.",
+            detail=(
+                "An unexpected error occurred while auditing photos. "
+                "Your quota was not charged."
+            ),
         ) from e
 
 
@@ -166,20 +171,24 @@ async def delete_profile_audit_photo(
             slots_cleared=len(slots),
         )
 
-    # Delete the file from storage
+    storage_path = photo.storage_path  # keep path before deleting DB row
+
+    # 1. Delete the database record FIRST and commit.
+    await db.delete(photo)
+    await db.commit()
+
+    logger.info("profile_audit_delete_db_success", photo_id=photo_id, user_id=user.id)
+
+    # 2. Delete the physical file SECOND.
     try:
-        file_path = Path("static") / photo.storage_path.lstrip("/")
+        file_path = Path("static") / storage_path.lstrip("/")
         if file_path.exists():
             file_path.unlink()
             logger.info("profile_audit_delete_file_removed", path=str(file_path))
     except Exception as e:
+        # Log only — DB is already consistent; orphaned files can be cleaned later.
         logger.warning(
-            "profile_audit_delete_file_failed", error=str(e), path=photo.storage_path
+            "profile_audit_delete_file_failed", error=str(e), path=storage_path
         )
 
-    # Delete the database record
-    await db.delete(photo)
-    await db.commit()
-
-    logger.info("profile_audit_delete_success", photo_id=photo_id, user_id=user.id)
     return {"success": True, "message": "Photo deleted successfully."}
