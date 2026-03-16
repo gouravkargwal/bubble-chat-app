@@ -40,7 +40,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -69,6 +72,9 @@ data class HistoryItem(
     val brutalFeedback: String,
     val improvementTip: String,
     val createdAt: Long,
+    val archetypeTitle: String,
+    val roastSummary: String,
+    val shareCardColor: String,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +86,7 @@ fun ProfileHistoryScreen(
 ) {
     val auditsState = viewModel.audits.collectAsState()
     val isLoadingState = viewModel.isLoadingState.collectAsState()
+    val isSharingState = viewModel.isSharingState.collectAsState()
     val listState = rememberLazyListState()
 
     // Detect scroll near bottom and load more
@@ -164,6 +171,8 @@ fun ProfileHistoryScreen(
                     items(auditsState.value, key = { it.id }) { audit ->
                         AuditHistoryCard(
                             audit = audit,
+                            isSharing = isSharingState.value,
+                            onShare = { viewModel.shareLatestRoast() },
                             onDelete = { viewModel.deletePhoto(audit.id) }
                         )
                     }
@@ -193,6 +202,8 @@ fun ProfileHistoryScreen(
 @Composable
 private fun AuditHistoryCard(
     audit: HistoryItem,
+    isSharing: Boolean,
+    onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -290,20 +301,36 @@ private fun AuditHistoryCard(
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                // Delete Button
-                OutlinedButton(
-                    onClick = onDelete,
+
+                // Action row: Share + Delete with icons, no glow
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFFFF5252)
-                    ),
-                    border = BorderStroke(1.dp, Color(0xFFFF5252))
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = "Delete Roast",
-                        fontSize = 14.sp
-                    )
+                    OutlinedButton(
+                        onClick = onShare,
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSharing
+                    ) {
+                        Text(
+                            text = if (isSharing) "Sharing..." else "Share",
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFFFF5252)
+                        ),
+                        border = BorderStroke(1.dp, Color(0xFFFF5252))
+                    ) {
+                        Text(
+                            text = "Delete",
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }

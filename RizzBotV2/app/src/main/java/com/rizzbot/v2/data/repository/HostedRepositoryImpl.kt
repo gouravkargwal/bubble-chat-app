@@ -385,6 +385,17 @@ class HostedRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun downloadProfileAuditShareCard(): Result<ByteArray> {
+        return try {
+            val userId = authManager.get().getUserId()
+                ?: return Result.failure(IllegalStateException("Missing userId for share card"))
+            val body = hostedApi.getProfileAuditShareCard(userId)
+            Result.success(body.bytes())
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun deleteAllUserData(): Result<Unit> {
         return try {
             hostedApi.deleteAllUserData()

@@ -1,6 +1,9 @@
 package com.rizzbot.v2.ui.profile
 
 import android.content.Context
+import android.content.Intent
+import android.graphics.BitmapFactory
+import androidx.core.content.FileProvider
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -32,7 +35,8 @@ data class ProfileAuditorState(
     val showPaywall: Boolean = false,
     val tier: String = "free",
     val weeklyAuditsUsed: Int = 0,
-    val profileAuditsPerWeek: Int = 1
+    val profileAuditsPerWeek: Int = 1,
+    val isSharing: Boolean = false
 )
 
 @HiltViewModel
@@ -151,6 +155,60 @@ class ProfileAuditorViewModel @Inject constructor(
             }
         }
     }
+
+    fun shareLatestRoast() {
+        val currentResult = _state.value.result ?: return
+        if (_state.value.isSharing) return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isSharing = true, error = null)
+            try {
+                val bytesResult = hostedRepository.downloadProfileAuditShareCard()
+                bytesResult
+                    .onSuccess { bytes ->
+                        // Decode to bitmap and write to cache for sharing
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            ?: throw IllegalStateException("Failed to decode share card image")
+
+                        val cacheDir = context.cacheDir
+                        val file = java.io.File(cacheDir, "profile_roast_share_card.png")
+                        java.io.FileOutputStream(file).use { out ->
+                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                        }
+
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            context.packageName + ".fileprovider",
+                            file
+                        )
+
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/*"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(
+                            Intent.createChooser(
+                                shareIntent,
+                                "Share your roast"
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                    .onFailure { e ->
+                        _state.value = _state.value.copy(
+                            error = e.message ?: "Failed to generate share card."
+                        )
+                    }
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    error = e.message ?: "Failed to generate share card."
+                )
+            } finally {
+                _state.value = _state.value.copy(isSharing = false)
+            }
+        }
+    }
 }
 
 private fun AuditResponse.toUiModel(): AuditResponseUi =
@@ -158,6 +216,14 @@ private fun AuditResponse.toUiModel(): AuditResponseUi =
         totalAnalyzed = totalAnalyzed,
         passedCount = passedCount,
         isHardReset = isHardReset,
+        archetypeTitle = archetypeTitle,
+        roastSummary = roastSummary,
+        shareCardColor = shareCardColor,
+        overallScore = photos.takeIf { it.isNotEmpty() }
+            ?.map { it.score }
+            ?.average()
+            ?.let { (it * 10).toInt().coerceIn(0, 100) }
+            ?: 0,
         photos = photos.map { photo ->
             PhotoFeedbackUi(
                 photoId = photo.photoId,

@@ -4,12 +4,15 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -39,6 +42,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -66,9 +70,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,6 +101,10 @@ data class AuditResponseUi(
     val totalAnalyzed: Int,
     val passedCount: Int,
     val isHardReset: Boolean,
+    val archetypeTitle: String,
+    val roastSummary: String,
+    val shareCardColor: String,
+    val overallScore: Int,
     val photos: List<PhotoFeedbackUi>
 )
 
@@ -152,11 +162,43 @@ fun ProfileAuditorScreen(
                 color = DarkBg,
                 shadowElevation = 12.dp
             ) {
-                Box(
+                Column(
                     modifier = Modifier
                         .navigationBarsPadding()
-                        .padding(16.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (state.result != null) {
+                        Button(
+                            onClick = { viewModel.shareLatestRoast() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF1E1E2F),
+                                contentColor = Color.White
+                            ),
+                            enabled = !state.isSharing
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (state.isSharing) "Preparing share card..." else "Share My Roast",
+                                    fontSize = 15.sp
+                                )
+                            }
+                        }
+                    }
+
                     Button(
                         onClick = {
                             if (!canAudit) {
@@ -522,6 +564,8 @@ private fun ProfileAuditResultContent(
             .padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        ArchetypeHeader(result = result)
+
         if (godTier.isNotEmpty()) {
             Text(
                 text = "🟢 GOD TIER (Use as Main)",
@@ -552,6 +596,141 @@ private fun ProfileAuditResultContent(
             )
             graveyard.forEach { photo ->
                 PhotoResultRow(photo = photo, uri = photoIdToUri[photo.photoId])
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchetypeHeader(result: AuditResponseUi) {
+    // Parse hex color safely
+    val baseColor = remember(result.shareCardColor) {
+        try {
+            Color(android.graphics.Color.parseColor(result.shareCardColor))
+        } catch (_: IllegalArgumentException) {
+            Color(0xFFFFD700)
+        }
+    }
+
+    val gradientBrush = Brush.verticalGradient(
+        colors = listOf(
+            baseColor.copy(alpha = 0.45f),
+            baseColor.copy(alpha = 0.12f),
+            DarkBg
+        )
+    )
+
+    // Sparkle effect for gold
+    val isGold = result.shareCardColor.equals("#FFD700", ignoreCase = true)
+    val shimmerAlpha by rememberInfiniteTransition(label = "header_shimmer")
+        .animateFloat(
+            initialValue = if (isGold) 0.15f else 0f,
+            targetValue = if (isGold) 0.4f else 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1400, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "header_shimmer_alpha"
+        )
+
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(450)) + expandVertically(animationSpec = tween(450))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(gradientBrush, RoundedCornerShape(24.dp))
+                .then(
+                    if (isGold) {
+                        Modifier.drawBehind {
+                            val strokeWidth = 3.dp.toPx()
+                            val inset = strokeWidth / 2
+                            drawRoundRect(
+                                color = Color.White.copy(alpha = shimmerAlpha),
+                                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                                size = size.copy(
+                                    width = size.width - strokeWidth,
+                                    height = size.height - strokeWidth
+                                ),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx()),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                    width = strokeWidth,
+                                    cap = StrokeCap.Round
+                                )
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(18.dp)
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = "Dating Archetype",
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontSize = 12.sp
+                )
+
+                Text(
+                    text = result.archetypeTitle.ifBlank { "The Main Character" },
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    // Use a bold, display-style font weight; custom font family can be wired later
+                    style = MaterialTheme.typography.headlineSmall
+                )
+
+                // Overall score badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = Color.Black.copy(alpha = 0.45f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "${result.overallScore}/100 overall",
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Text(
+                        text = "${result.passedCount} / ${result.totalAnalyzed} photos passed",
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 11.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "“",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 26.sp
+                    )
+                    Text(
+                        text = result.roastSummary.ifBlank {
+                            "You know you look good, and you're making sure nobody forgets it."
+                        },
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
