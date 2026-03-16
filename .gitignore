@@ -54,3 +54,6 @@ pgdata_dev/
 .coverage
 htmlcov/
 .pytest_cache/
+# Keystores and upload certificates
+*.jks
+*upload_certificate.pem
