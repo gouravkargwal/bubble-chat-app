@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import User
+from app.services.billing import apply_plan_upgrade
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -73,105 +74,116 @@ async def revenuecat_webhook(
         logger.warning("revenuecat_webhook_user_not_found", app_user_id=app_user_id)
         return {"status": "ignored", "reason": "User not found"}
 
-    # ---- Tier mapping logic ----
+    # ---- Tier mapping + billing period logic ----
     # Webhooks send an array of entitlement_ids (e.g. ["pro"], ["premium"])
     affected_entitlements = event_data.get("entitlement_ids") or []
     if not isinstance(affected_entitlements, list):
         affected_entitlements = []
 
-    # Start from current values
-    new_tier: str = user.tier
-    new_source: str | None = user.tier_source
-    new_plan_period_start: datetime | None = user.plan_period_start
-
     # Helper: does this event affect a given entitlement id?
     def affects(entitlement_id: str) -> bool:
         return entitlement_id in affected_entitlements
 
-    # purchased_at_ms is the start of the new billing period (from RevenueCat)
-    purchased_at_ms = event_data.get("purchased_at_ms")
+    # Determine new tier from entitlements (priority: premium > pro)
+    new_tier: str | None = None
+    if affects("premium"):
+        new_tier = "premium"
+    elif affects("pro"):
+        new_tier = "pro"
 
-    # 1) Upgrades / renewals / restores / product changes
-    if event_type in (
-        "INITIAL_PURCHASE",
-        "RENEWAL",
-        "RESTORE",
-        "UNCANCELLATION",
-        "PRODUCT_CHANGE",
+    # Derive billing_period from product_id string
+    product_id: str | None = event_data.get("product_id")
+    billing_period = "weekly"  # sensible default
+    if product_id:
+        pid = product_id.lower()
+        if "monthly" in pid:
+            billing_period = "monthly"
+        elif "yearly" in pid or "annual" in pid:
+            billing_period = "yearly"
+        elif "weekly" in pid:
+            billing_period = "weekly"
+
+    # 1) INITIAL_PURCHASE / RENEWAL / PRODUCT_CHANGE → Clean Slate upgrade path
+    # FIXED: Added PRODUCT_CHANGE so users who upgrade tiers actually get their new limits.
+    if (
+        event_type in ("INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE")
+        and new_tier is not None
     ):
-        # Priority: premium > pro
-        if affects("premium"):
-            new_tier = "premium"
-            new_source = "purchase"
-        elif affects("pro"):
-            new_tier = "pro"
-            new_source = "purchase"
 
-        # Reset usage window to the start of this new billing period
-        if purchased_at_ms:
-            new_plan_period_start = datetime.fromtimestamp(
-                purchased_at_ms / 1000, tz=timezone.utc
-            )
-        else:
-            new_plan_period_start = datetime.now(timezone.utc)
+        # Capture pre-commit tier so we don't touch expired objects after apply_plan_upgrade.
+        old_tier_snapshot = user.tier
 
-    # 2) Expiration: only downgrade if the expiring entitlement matches current tier
-    elif event_type == "EXPIRATION":
-        if user.tier == "premium" and affects("premium"):
-            new_tier = "free"
-            new_source = None
-            new_plan_period_start = None
-        elif user.tier == "pro" and affects("pro"):
-            new_tier = "free"
-            new_source = None
-            new_plan_period_start = None
+        await apply_plan_upgrade(
+            db=db,
+            user_id=user.id,
+            new_tier=new_tier,
+            billing_period=billing_period,
+        )
 
-    # 3) CANCELLATION: ignore for tier changes; access remains until EXPIRATION
-
-    # Optimization: if nothing changed, return early
-    if new_tier == user.tier and new_source == user.tier_source and new_plan_period_start == user.plan_period_start:
         logger.info(
-            "revenuecat_webhook_tier_unchanged",
+            "revenuecat_webhook_tier_updated",
             app_user_id=app_user_id,
-            tier=new_tier,
+            old_tier=old_tier_snapshot,
+            new_tier=new_tier,
+            event_type=event_type,
+            billing_period=billing_period,
+        )
+        return {
+            "status": "success",
+            "user_id": app_user_id,
+            "new_tier": new_tier,
+            "billing_period": billing_period,
+            "message": "Plan upgraded with clean-slate quotas",
+        }
+
+    # 2) EXPIRATION: only downgrade if the expiring entitlement matches current tier
+    if event_type == "EXPIRATION":
+        new_tier_exp: str | None = None
+        if user.tier == "premium" and affects("premium"):
+            new_tier_exp = "free"
+        elif user.tier == "pro" and affects("pro"):
+            new_tier_exp = "free"
+
+        if new_tier_exp is None:
+            return {
+                "status": "ignored",
+                "reason": "Expiration does not affect current tier",
+            }
+
+        old_tier_snapshot = user.tier
+        user.tier = new_tier_exp
+        user.tier_source = "free"
+        user.tier_expires_at = None
+        user.plan_period_start = None
+
+        await db.commit()
+        # await db.refresh(user) isn't strictly necessary anymore if we just return,
+        # but it's safe if you need to use the `user` object later.
+
+        logger.info(
+            "revenuecat_webhook_tier_updated",
+            app_user_id=app_user_id,
+            old_tier=old_tier_snapshot,
+            new_tier=new_tier_exp,
             event_type=event_type,
         )
         return {
             "status": "success",
             "user_id": app_user_id,
-            "old_tier": user.tier,
-            "new_tier": new_tier,
-            "message": "Tier unchanged",
+            "old_tier": old_tier_snapshot,
+            "new_tier": new_tier_exp,
+            "message": "Subscription expired, tier downgraded",
         }
 
-    # Persist changes
-    old_tier = user.tier
-    old_source = user.tier_source
-
-    user.tier = new_tier
-    # DB column is NOT NULL, so fall back to a sentinel when clearing source
-    user.tier_source = new_source or "free"
-    # RevenueCat manages expiration; we do not track an explicit expiry timestamp
-    user.tier_expires_at = None
-    user.plan_period_start = new_plan_period_start
-
-    await db.commit()
-    await db.refresh(user)
-
+    # 3) Other event types (RESTORE / UNCANCELLATION / CANCELLATION)
+    # Note: CANCELLATION just means auto-renew is off. They keep their tier until EXPIRATION.
     logger.info(
-        "revenuecat_webhook_tier_updated",
+        "revenuecat_webhook_event_ignored",
         app_user_id=app_user_id,
-        old_tier=old_tier,
-        new_tier=new_tier,
-        old_source=old_source,
-        new_source=new_source,
         event_type=event_type,
     )
-
     return {
-        "status": "success",
+        "status": "ignored",
         "user_id": app_user_id,
-        "old_tier": old_tier,
-        "new_tier": new_tier,
-        "tier_source": new_source,
+        "event_type": event_type,
     }

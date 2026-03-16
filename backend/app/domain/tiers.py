@@ -1,6 +1,7 @@
 """Tier configuration — single source of truth for feature gating."""
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,7 @@ def get_tier_config(tier: str) -> TierConfig:
     return TIERS.get(tier, TIERS["free"])
 
 
-def _utc_now_naive() -> "datetime":
+def _utc_now_naive() -> datetime:
     """Return current UTC time as a naive datetime (consistent with DB storage)."""
     from datetime import datetime, timezone
 
@@ -84,8 +85,8 @@ def get_effective_tier(user) -> str:
     from datetime import datetime, timezone
 
     # Check God Mode first (24-hour referral reward) - uses timezone-aware UTC
-    now = datetime.now(timezone.utc)
-    if user.god_mode_expires_at and user.god_mode_expires_at > now:
+    now_aware = datetime.now(timezone.utc)
+    if user.god_mode_expires_at and user.god_mode_expires_at > now_aware:
         return "premium"
 
     # Otherwise, check underlying tier
@@ -93,11 +94,14 @@ def get_effective_tier(user) -> str:
     if tier == "free":
         return tier
 
-    now_naive = _utc_now_naive()
-
     # Check tier expiry (subscription)
-    if user.tier_expires_at and user.tier_expires_at < now_naive:
-        return "free"
+    if user.tier_expires_at:
+        expires_at = user.tier_expires_at
+        # Normalize any legacy naive timestamps to UTC-aware to avoid comparison errors.
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now_aware:
+            return "free"
 
     return tier
 
