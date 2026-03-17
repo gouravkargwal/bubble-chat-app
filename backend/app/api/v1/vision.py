@@ -371,6 +371,8 @@ async def generate_replies(
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
 
     # 2. Check daily/weekly rate limits via QuotaManager (0 = unlimited).
+    # IMPORTANT: quota increments must be persisted immediately so they are not rolled back
+    # with the long-running LLM transaction. We commit right after incrementing.
     daily_limit = tier_config["limits"]["chat_generations_per_day"]
     effective_limit = daily_limit + user.bonus_replies
 
@@ -383,7 +385,11 @@ async def generate_replies(
                 daily_limit=effective_limit,
                 weekly_limit=None,
             )
+            # Persist quota usage in its own short transaction so later failures
+            # (LLM errors, DB rollbacks for interactions, etc.) do NOT refund usage.
+            await db.commit()
         except QuotaExceededException:
+            # No commit on failure; nothing was incremented.
             raise HTTPException(
                 status_code=429,
                 detail="Daily limit reached. Upgrade to Premium for more replies.",
