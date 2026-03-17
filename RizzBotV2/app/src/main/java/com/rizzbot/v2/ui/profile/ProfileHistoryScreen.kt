@@ -302,22 +302,11 @@ private fun AuditHistoryCard(
                 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Action row: Share + Delete with icons, no glow
+                // Action row: Delete only (share temporarily disabled)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onShare,
-                        modifier = Modifier.weight(1f),
-                        enabled = !isSharing
-                    ) {
-                        Text(
-                            text = if (isSharing) "Sharing..." else "Share",
-                            fontSize = 14.sp
-                        )
-                    }
-
                     OutlinedButton(
                         onClick = onDelete,
                         modifier = Modifier.weight(1f),

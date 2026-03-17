@@ -121,11 +121,13 @@ fun ProfileAuditorScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val maxPhotos = state.maxPhotosPerAudit
-    
+
     // Calculate if user can audit
     val isGodMode = state.tier == "premium" || state.tier == "god_mode"
     val hasAuditsLeft = state.weeklyAuditsUsed < state.profileAuditsPerWeek
     val canAudit = isGodMode || hasAuditsLeft
+
+    val isShareEnabled = false
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxPhotos)
@@ -168,7 +170,7 @@ fun ProfileAuditorScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (state.result != null) {
+                    if (isShareEnabled && state.result != null) {
                         Button(
                             onClick = { viewModel.shareLatestRoast() },
                             modifier = Modifier
