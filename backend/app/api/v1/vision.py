@@ -1,6 +1,8 @@
 """Main reply generation endpoint — the core product."""
 
+import asyncio
 import copy
+import dataclasses
 import json
 import time
 
@@ -21,6 +23,15 @@ from app.config import settings
 from app.domain.conversation import (
     build_conversation_context,
     find_or_create_conversation,
+)
+from app.domain.models import (
+    AnalysisResult,
+    ConversationContext,
+    ParsedLlmResponse,
+    ReplyOption as DomainReplyOption,
+    StrategyResult,
+    VisualTranscriptItem,
+    VoiceDNA,
 )
 from app.core.tier_config import TIER_CONFIG
 from app.domain.tiers import get_effective_tier
@@ -44,6 +55,110 @@ logger = structlog.get_logger()
 
 # Lazy-initialized client
 _client: GeminiClient | None = None
+
+
+# ---------- LangGraph agent wiring ----------
+
+def _build_agent_initial_state(
+    image_base64: str,
+    direction: str,
+    custom_hint: str,
+    voice_dna: VoiceDNA | None,
+    conversation_context: ConversationContext | None,
+) -> dict:
+    """Build initial AgentState for the LangGraph agent."""
+    voice_dict = dataclasses.asdict(voice_dna) if voice_dna else {}
+    context_dict = dataclasses.asdict(conversation_context) if conversation_context else {}
+    return {
+        "image_bytes": image_base64,
+        "direction": direction,
+        "custom_hint": custom_hint,
+        "voice_dna_dict": voice_dict,
+        "conversation_context_dict": context_dict,
+        "is_valid_chat": True,
+        "bouncer_reason": "",
+        "analysis": None,
+        "strategy": None,
+        "drafts": None,
+        "is_cringe": False,
+        "auditor_feedback": "",
+        "revision_count": 0,
+    }
+
+
+def _run_agent_sync(initial_state: dict) -> dict:
+    """Run the compiled LangGraph agent (sync, for use in thread)."""
+    from agent.graph import rizz_agent
+    return rizz_agent.invoke(initial_state)
+
+
+async def _run_agent(initial_state: dict) -> dict:
+    """Run the agent without blocking the event loop."""
+    return await asyncio.to_thread(_run_agent_sync, initial_state)
+
+
+def _parsed_from_agent_state(final_state: dict) -> ParsedLlmResponse:
+    """Map final agent state to ParsedLlmResponse for persistence and response."""
+    analysis_out = final_state["analysis"]
+    strategy_out = final_state["strategy"]
+    drafts = final_state["drafts"]
+
+    visual_transcript = []
+    for bubble in analysis_out.visual_transcript:
+        visual_transcript.append(
+            VisualTranscriptItem(
+                side="right" if bubble.sender == "user" else "left",
+                sender=bubble.sender,
+                quoted_context=bubble.quoted_context,
+                actual_new_message=bubble.actual_new_message,
+                is_reply_to_user=False,
+            )
+        )
+
+    analysis = AnalysisResult(
+        their_last_message=getattr(analysis_out, "their_last_message", "") or "",
+        who_texted_last="unclear",
+        their_tone=analysis_out.their_tone,
+        their_effort=analysis_out.their_effort,
+        conversation_temperature=analysis_out.conversation_temperature,
+        stage=getattr(analysis_out, "stage", "early_talking") or "early_talking",
+        person_name=getattr(analysis_out, "person_name", "unknown") or "unknown",
+        key_detail=analysis_out.key_detail,
+        what_they_want="",
+        detected_dialect=analysis_out.detected_dialect,
+        their_actual_new_message=(
+            next(
+                (b.actual_new_message for b in reversed(analysis_out.visual_transcript) if b.sender == "them"),
+                "",
+            )
+            if analysis_out.visual_transcript else ""
+        ),
+        detected_archetype=analysis_out.detected_archetype,
+        archetype_reasoning=analysis_out.archetype_reasoning,
+    )
+
+    strategy = StrategyResult(
+        wrong_moves=strategy_out.wrong_moves,
+        right_energy=strategy_out.right_energy,
+        hook_point=strategy_out.hook_point,
+    )
+
+    replies = [
+        DomainReplyOption(
+            text=r.text,
+            strategy_label=r.strategy_label,
+            is_recommended=r.is_recommended,
+            coach_reasoning=r.coach_reasoning,
+        )
+        for r in drafts.replies[:4]
+    ]
+
+    return ParsedLlmResponse(
+        visual_transcript=visual_transcript,
+        analysis=analysis,
+        strategy=strategy,
+        replies=replies,
+    )
 
 
 GEMINI_RESPONSE_SCHEMA: dict = {
@@ -444,6 +559,7 @@ async def generate_replies(
 
     # 8. Load conversation context only if tier supports memory and a conversation_id is provided
     conversation_context = None
+    convo = None
     if (
         tier_config["features"]["chemistry_tracking_enabled"]
         and request.conversation_id
@@ -458,300 +574,344 @@ async def generate_replies(
         if convo and convo.is_active:
             conversation_context = await build_conversation_context(convo, db)
 
-    # 9. Build prompt using tier's variant
-    # Use default variant for now (can be extended in tier config if needed)
-    payload = prompt_engine.build(
-        direction=request.direction.value,
-        custom_hint=custom_hint,
-        voice_dna=voice_dna,
-        conversation_context=conversation_context,
-        variant_id="default",
-    )
-
-    # 9a. Context Threading: inject RECENT HISTORY from the last N interactions
-    # for this specific person into the system prompt so the model can maintain
-    # dialect and vibe continuity.
-    if conversation_context and conversation_context.person_name != "unknown":
-        recent_history_block = ""
-        try:
-            max_context_messages = tier_config["limits"]["max_context_messages"]
-            history_result = await db.execute(
-                select(Interaction)
-                .where(
-                    Interaction.user_id == user.id,
-                    Interaction.person_name == conversation_context.person_name,
-                )
-                .order_by(Interaction.created_at.desc())
-                .limit(max_context_messages)
-            )
-            history_items = history_result.scalars().all()
-
-            # Build a compact text block focusing on how the user actually types.
-            lines: list[str] = []
-            for interaction in reversed(history_items):
-                if interaction.user_organic_text:
-                    lines.append(interaction.user_organic_text)
-
-            if lines:
-                recent_history_block = (
-                    "\n\n══════════════════════════════════════\n"
-                    "RECENT HISTORY (user's texting style — maintain this dialect)\n"
-                    "══════════════════════════════════════\n"
-                )
-                for idx, msg in enumerate(lines, start=1):
-                    truncated = msg if len(msg) <= 160 else msg[:157] + "..."
-                    recent_history_block += f"{idx}. {truncated}\n"
-        except Exception as e:  # pragma: no cover - defensive logging only
-            logger.warning(
-                "recent_history_injection_failed",
-                error=str(e),
-                user_id=user.id,
-            )
-            recent_history_block = ""
-
-        if recent_history_block:
-            payload.system_prompt = f"{payload.system_prompt}{recent_history_block}"
-
-    # 10. Dynamic temperature routing + call Gemini with retry on JSON truncation
-    client = _get_client()
-    start = time.monotonic()
-    t1 = t2 = t3 = start
-
-    # Dynamic Temperature Routing:
-    # Different directions and custom hints need different creativity levels.
-    direction_key = (request.direction.value or "").lower()
-    if custom_hint:
-        # User provided a specific angle → medium-high creativity.
-        llm_temperature = 0.78
-    elif direction_key == "opener":
-        # Cold read → max creativity for playful hooks.
-        llm_temperature = 0.8
-    elif direction_key in ("change_topic", "tease"):
-        # Needs high creativity to pivot/joke.
-        llm_temperature = 0.78
-    elif direction_key == "revive_chat":
-        # Needs a fresh, interesting angle without feeling random.
-        llm_temperature = 0.75
-    elif direction_key in ("get_number", "ask_out"):
-        # Goal-oriented → still creative, but slightly more controlled.
-        llm_temperature = 0.65
-    else:
-        # quick_reply and anything else → creative but anchored to context.
-        llm_temperature = 0.72
-
-    # Dynamic token routing: Give a massive ceiling for the model's 'thought' process
-    max_tokens = 8000 + (1000 * len(images))
-
-    # Dynamically modify schema based on tier config
-    response_schema = copy.deepcopy(GEMINI_RESPONSE_SCHEMA)
-    include_coach_reasoning = tier_config["features"]["include_coach_reasoning"]
-
-    if not include_coach_reasoning:
-        # Remove coach_reasoning from schema properties
-        reply_properties = response_schema["properties"]["replies"]["items"][
-            "properties"
-        ]
-        if "coach_reasoning" in reply_properties:
-            del reply_properties["coach_reasoning"]
-
-        # Remove coach_reasoning from required list
-        reply_required = response_schema["properties"]["replies"]["items"]["required"]
-        if "coach_reasoning" in reply_required:
-            reply_required.remove("coach_reasoning")
-
-        # Update schema description to remove coach_reasoning mention
-        replies_description = response_schema["properties"]["replies"]["description"]
-        response_schema["properties"]["replies"]["description"] = (
-            replies_description.replace(
-                "an is_recommended flag, and a one-sentence coach_reasoning.",
-                "an is_recommended flag.",
-            )
-        )
-
-        # Update system prompt to explicitly tell it not to provide coach_reasoning
-        payload.system_prompt = f"{payload.system_prompt}\n\nCRITICAL: DO NOT provide coach_reasoning in your response."
-
-    raw = ""
+    # 9. Run LangGraph agent (bouncer -> analyst -> strategist -> writer -> auditor) or legacy Gemini path
     parsed = None
+    user_organic_text = None
+    # Default temperature used for persistence when the agent path is taken.
+    llm_temperature = 0.7
+    start = time.monotonic()
+    use_agent = True
 
-    # Phase 1: setup completed (everything before the first LLM call)
-    t1 = time.monotonic()
-    logger.info(
-        "vision_timing_phase_1_setup",
-        timing_phase_1_setup_ms=int((t1 - start) * 1000),
-    )
-
-    for attempt in range(1, 3):
+    if use_agent:
+        initial_state = _build_agent_initial_state(
+            images[0],
+            request.direction.value,
+            custom_hint or "",
+            voice_dna,
+            conversation_context,
+        )
         try:
-            raw = await client.vision_generate(
-                system_prompt=payload.system_prompt,
-                user_prompt=payload.user_prompt,
-                base64_images=images,
-                temperature=llm_temperature,
-                model=settings.gemini_model,
-                max_output_tokens=int(max_tokens),
-                response_schema=response_schema,
-            )
-
-            # Phase 2: LLM call latency
-            t2 = time.monotonic()
-            logger.info(
-                "vision_timing_phase_2_llm",
-                timing_phase_2_llm_ms=int((t2 - t1) * 1000),
-            )
-
-            parsed = parse_llm_response(raw)
-
-            # ---------------------------------------------------------
-            # VOICE DNA: THE ECHO FILTER & EXTRACTION
-            # ---------------------------------------------------------
-            user_organic_text = None
-
-            # 1. Extract the last thing the user actually sent (the right-side bubble)
-            if parsed and parsed.visual_transcript:
-                for msg in reversed(parsed.visual_transcript):
-                    if msg.side.lower() == "right" or msg.sender.lower() == "user":
-                        # Use ONLY the actual new message text, ignoring any quoted context.
-                        user_organic_text = msg.actual_new_message
-                        break
-
-            # 2. The Echo Filter: Check if they copied an AI suggestion
-            if user_organic_text and len(user_organic_text) > 3:
-                clean_text = user_organic_text.lower().strip()
-
-                # Pull the last 10 interactions to cross-reference
-                recent_interactions_query = await db.execute(
-                    select(Interaction)
-                    .where(Interaction.user_id == user.id)
-                    .order_by(Interaction.created_at.desc())
-                    .limit(10)
-                )
-                recent_interactions = recent_interactions_query.scalars().all()
-
-                is_echo = False
-                for past_int in recent_interactions:
-                    past_replies = [
-                        (past_int.reply_0 or "").lower().strip(),
-                        (past_int.reply_1 or "").lower().strip(),
-                        (past_int.reply_2 or "").lower().strip(),
-                        (past_int.reply_3 or "").lower().strip(),
-                    ]
-
-                    # If the text is a 90% match to an AI suggestion, it's an Echo.
-                    if any(
-                        pr in clean_text or clean_text in pr
-                        for pr in past_replies
-                        if len(pr) > 5
-                    ):
-                        is_echo = True
-                        logger.info(
-                            "voice_dna_echo_detected", user_id=user.id, text=clean_text
-                        )
-                        user_organic_text = None  # Discard it
-                        break
-
-                if not is_echo:
-                    # The user typed this themselves! It is organic data.
-                    logger.info(
-                        "voice_dna_organic_text_found",
-                        user_id=user.id,
-                        text=clean_text,
-                    )
-
-                    # Update Voice DNA stats and recent organic messages
-                    voice_result = await db.execute(
-                        select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
-                    )
-                    voice_db = voice_result.scalar_one_or_none()
-                    if voice_db is None:
-                        voice_db = UserVoiceDNA(user_id=user.id)
-                        db.add(voice_db)
-
-                    updated_dna = update_voice_dna_stats(voice_db, clean_text)
-                    await db.commit()
-
-                    # Trigger Semantic Profiling for Premium users if they have enough data
-                    try:
-                        messages_list = (
-                            json.loads(updated_dna.recent_organic_messages)
-                            if getattr(updated_dna, "recent_organic_messages", None)
-                            else []
-                        )
-                    except (json.JSONDecodeError, TypeError):
-                        messages_list = []
-
-                    if (
-                        effective_tier in ["premium", "pro"]
-                        and len(messages_list) >= 5
-                        and not getattr(updated_dna, "semantic_profile", None)
-                    ):
-                        background_tasks.add_task(
-                            generate_semantic_profile_background,
-                            user_id=user.id,
-                            db=db,
-                            messages=messages_list,
-                        )
-
-            # Phase 3: parsing latency
-            t3 = time.monotonic()
-            logger.info(
-                "vision_timing_phase_3_parse",
-                timing_phase_3_parse_ms=int((t3 - t2) * 1000),
-            )
-            logger.info(
-                "replies_generated",
-                attempt=attempt,
-                replies_count=len(parsed.replies),
-                reply_lengths=[len(r.text) for r in parsed.replies],
-                reply_previews=[r.text[:50] for r in parsed.replies],
-            )
-            break
-        except json.JSONDecodeError as e:
-            # Handle Gemini sometimes truncating JSON strings.
-            if attempt == 1 and "Unterminated string" in str(e):
-                logger.warning(
-                    "llm_json_unterminated_retry",
-                    attempt=attempt,
-                    error=str(e),
-                    old_max_tokens=max_tokens,
-                )
-                max_tokens *= 1.5
-                continue
-            logger.error(
-                "llm_json_decode_error",
-                attempt=attempt,
-                error=str(e),
-                raw_preview=raw[:200],
-            )
-            raise HTTPException(
-                status_code=502, detail="Failed to parse AI JSON response. Try again."
-            )
-        except ValueError as e:
-            # parse_llm_response or client-level validation error
-            logger.error(
-                "llm_value_error",
-                attempt=attempt,
-                error=str(e),
-                raw_preview=raw[:200],
-            )
-            raise HTTPException(
-                status_code=502, detail="Failed to generate replies. Try again."
-            )
+            final_state = await _run_agent(initial_state)
         except Exception as e:
-            logger.error(
-                "llm_call_failed",
-                attempt=attempt,
-                error=str(e),
-            )
+            logger.error("agent_run_failed", error=str(e), user_id=user.id)
             raise HTTPException(
-                status_code=502, detail="Failed to generate replies. Try again."
+                status_code=502,
+                detail="Failed to generate replies. Try again.",
+            ) from e
+        if not final_state.get("is_valid_chat", True):
+            raise HTTPException(
+                status_code=400,
+                detail=final_state.get(
+                    "bouncer_reason",
+                    "Image is not a valid chat or dating app screenshot.",
+                ),
             )
+        parsed = _parsed_from_agent_state(final_state)
+        # Extract user's last message from transcript for persistence (legacy path does this in its try block)
+        if parsed and parsed.visual_transcript:
+            for msg in reversed(parsed.visual_transcript):
+                if getattr(msg, "side", "").lower() == "right" or getattr(msg, "sender", "").lower() == "user":
+                    user_organic_text = msg.actual_new_message
+                    break
+        logger.info(
+            "vision_timing_agent",
+            timing_agent_ms=int((time.monotonic() - start) * 1000),
+        )
 
     if parsed is None:
-        logger.error("llm_no_successful_attempts")
-        raise HTTPException(
-            status_code=502, detail="Failed to generate replies. Try again."
+        # Legacy path: build prompt and call Gemini directly
+        payload = prompt_engine.build(
+            direction=request.direction.value,
+            custom_hint=custom_hint,
+            voice_dna=voice_dna,
+            conversation_context=conversation_context,
+            variant_id="default",
         )
+
+        # 9a. Context Threading: inject RECENT HISTORY from the last N interactions
+        # for this specific person into the system prompt so the model can maintain
+        # dialect and vibe continuity.
+        if conversation_context and conversation_context.person_name != "unknown":
+            recent_history_block = ""
+            try:
+                max_context_messages = tier_config["limits"]["max_context_messages"]
+                history_result = await db.execute(
+                    select(Interaction)
+                    .where(
+                        Interaction.user_id == user.id,
+                        Interaction.person_name == conversation_context.person_name,
+                    )
+                    .order_by(Interaction.created_at.desc())
+                    .limit(max_context_messages)
+                )
+                history_items = history_result.scalars().all()
+
+                # Build a compact text block focusing on how the user actually types.
+                lines: list[str] = []
+                for interaction in reversed(history_items):
+                    if interaction.user_organic_text:
+                        lines.append(interaction.user_organic_text)
+
+                if lines:
+                    recent_history_block = (
+                        "\n\n══════════════════════════════════════\n"
+                        "RECENT HISTORY (user's texting style — maintain this dialect)\n"
+                        "══════════════════════════════════════\n"
+                    )
+                    for idx, msg in enumerate(lines, start=1):
+                        truncated = msg if len(msg) <= 160 else msg[:157] + "..."
+                        recent_history_block += f"{idx}. {truncated}\n"
+            except Exception as e:  # pragma: no cover - defensive logging only
+                logger.warning(
+                    "recent_history_injection_failed",
+                    error=str(e),
+                    user_id=user.id,
+                )
+                recent_history_block = ""
+
+            if recent_history_block:
+                payload.system_prompt = f"{payload.system_prompt}{recent_history_block}"
+
+        # 10. Dynamic temperature routing + call Gemini with retry on JSON truncation
+        client = _get_client()
+        start = time.monotonic()
+        t1 = t2 = t3 = start
+
+        # Dynamic Temperature Routing:
+        # Different directions and custom hints need different creativity levels.
+        direction_key = (request.direction.value or "").lower()
+        if custom_hint:
+            # User provided a specific angle → medium-high creativity.
+            llm_temperature = 0.78
+        elif direction_key == "opener":
+            # Cold read → max creativity for playful hooks.
+            llm_temperature = 0.8
+        elif direction_key in ("change_topic", "tease"):
+            # Needs high creativity to pivot/joke.
+            llm_temperature = 0.78
+        elif direction_key == "revive_chat":
+            # Needs a fresh, interesting angle without feeling random.
+            llm_temperature = 0.75
+        elif direction_key in ("get_number", "ask_out"):
+            # Goal-oriented → still creative, but slightly more controlled.
+            llm_temperature = 0.65
+        else:
+            # quick_reply and anything else → creative but anchored to context.
+            llm_temperature = 0.72
+
+        # Dynamic token routing: Give a massive ceiling for the model's 'thought' process
+        max_tokens = 8000 + (1000 * len(images))
+
+        # Dynamically modify schema based on tier config
+        response_schema = copy.deepcopy(GEMINI_RESPONSE_SCHEMA)
+        include_coach_reasoning = tier_config["features"]["include_coach_reasoning"]
+
+        if not include_coach_reasoning:
+            # Remove coach_reasoning from schema properties
+            reply_properties = response_schema["properties"]["replies"]["items"][
+                "properties"
+            ]
+            if "coach_reasoning" in reply_properties:
+                del reply_properties["coach_reasoning"]
+
+            # Remove coach_reasoning from required list
+            reply_required = response_schema["properties"]["replies"]["items"]["required"]
+            if "coach_reasoning" in reply_required:
+                reply_required.remove("coach_reasoning")
+
+            # Update schema description to remove coach_reasoning mention
+            replies_description = response_schema["properties"]["replies"]["description"]
+            response_schema["properties"]["replies"]["description"] = (
+                replies_description.replace(
+                    "an is_recommended flag, and a one-sentence coach_reasoning.",
+                    "an is_recommended flag.",
+                )
+            )
+
+            # Update system prompt to explicitly tell it not to provide coach_reasoning
+            payload.system_prompt = f"{payload.system_prompt}\n\nCRITICAL: DO NOT provide coach_reasoning in your response."
+
+        raw = ""
+        parsed = None
+
+        # Phase 1: setup completed (everything before the first LLM call)
+        t1 = time.monotonic()
+        logger.info(
+            "vision_timing_phase_1_setup",
+            timing_phase_1_setup_ms=int((t1 - start) * 1000),
+        )
+
+        for attempt in range(1, 3):
+            try:
+                raw = await client.vision_generate(
+                    system_prompt=payload.system_prompt,
+                    user_prompt=payload.user_prompt,
+                    base64_images=images,
+                    temperature=llm_temperature,
+                    model=settings.gemini_model,
+                    max_output_tokens=int(max_tokens),
+                    response_schema=response_schema,
+                )
+
+                # Phase 2: LLM call latency
+                t2 = time.monotonic()
+                logger.info(
+                    "vision_timing_phase_2_llm",
+                    timing_phase_2_llm_ms=int((t2 - t1) * 1000),
+                )
+
+                parsed = parse_llm_response(raw)
+
+                # ---------------------------------------------------------
+                # VOICE DNA: THE ECHO FILTER & EXTRACTION
+                # ---------------------------------------------------------
+                user_organic_text = None
+
+                # 1. Extract the last thing the user actually sent (the right-side bubble)
+                if parsed and parsed.visual_transcript:
+                    for msg in reversed(parsed.visual_transcript):
+                        if msg.side.lower() == "right" or msg.sender.lower() == "user":
+                            # Use ONLY the actual new message text, ignoring any quoted context.
+                            user_organic_text = msg.actual_new_message
+                            break
+
+                # 2. The Echo Filter: Check if they copied an AI suggestion
+                if user_organic_text and len(user_organic_text) > 3:
+                    clean_text = user_organic_text.lower().strip()
+
+                    # Pull the last 10 interactions to cross-reference
+                    recent_interactions_query = await db.execute(
+                        select(Interaction)
+                        .where(Interaction.user_id == user.id)
+                        .order_by(Interaction.created_at.desc())
+                        .limit(10)
+                    )
+                    recent_interactions = recent_interactions_query.scalars().all()
+
+                    is_echo = False
+                    for past_int in recent_interactions:
+                        past_replies = [
+                            (past_int.reply_0 or "").lower().strip(),
+                            (past_int.reply_1 or "").lower().strip(),
+                            (past_int.reply_2 or "").lower().strip(),
+                            (past_int.reply_3 or "").lower().strip(),
+                        ]
+
+                        # If the text is a 90% match to an AI suggestion, it's an Echo.
+                        if any(
+                            pr in clean_text or clean_text in pr
+                            for pr in past_replies
+                            if len(pr) > 5
+                        ):
+                            is_echo = True
+                            logger.info(
+                                "voice_dna_echo_detected", user_id=user.id, text=clean_text
+                            )
+                            user_organic_text = None  # Discard it
+                            break
+
+                    if not is_echo:
+                        # The user typed this themselves! It is organic data.
+                        logger.info(
+                            "voice_dna_organic_text_found",
+                            user_id=user.id,
+                            text=clean_text,
+                        )
+
+                        # Update Voice DNA stats and recent organic messages
+                        voice_result = await db.execute(
+                            select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
+                        )
+                        voice_db = voice_result.scalar_one_or_none()
+                        if voice_db is None:
+                            voice_db = UserVoiceDNA(user_id=user.id)
+                            db.add(voice_db)
+
+                        updated_dna = update_voice_dna_stats(voice_db, clean_text)
+                        await db.commit()
+
+                        # Trigger Semantic Profiling for Premium users if they have enough data
+                        try:
+                            messages_list = (
+                                json.loads(updated_dna.recent_organic_messages)
+                                if getattr(updated_dna, "recent_organic_messages", None)
+                                else []
+                            )
+                        except (json.JSONDecodeError, TypeError):
+                            messages_list = []
+
+                        if (
+                            effective_tier in ["premium", "pro"]
+                            and len(messages_list) >= 5
+                            and not getattr(updated_dna, "semantic_profile", None)
+                        ):
+                            background_tasks.add_task(
+                                generate_semantic_profile_background,
+                                user_id=user.id,
+                                db=db,
+                                messages=messages_list,
+                            )
+
+                # Phase 3: parsing latency
+                t3 = time.monotonic()
+                logger.info(
+                    "vision_timing_phase_3_parse",
+                    timing_phase_3_parse_ms=int((t3 - t2) * 1000),
+                )
+                logger.info(
+                    "replies_generated",
+                    attempt=attempt,
+                    replies_count=len(parsed.replies),
+                    reply_lengths=[len(r.text) for r in parsed.replies],
+                    reply_previews=[r.text[:50] for r in parsed.replies],
+                )
+                break
+            except json.JSONDecodeError as e:
+                # Handle Gemini sometimes truncating JSON strings.
+                if attempt == 1 and "Unterminated string" in str(e):
+                    logger.warning(
+                        "llm_json_unterminated_retry",
+                        attempt=attempt,
+                        error=str(e),
+                        old_max_tokens=max_tokens,
+                    )
+                    max_tokens *= 1.5
+                    continue
+                logger.error(
+                    "llm_json_decode_error",
+                    attempt=attempt,
+                    error=str(e),
+                    raw_preview=raw[:200],
+                )
+                raise HTTPException(
+                    status_code=502, detail="Failed to parse AI JSON response. Try again."
+                )
+            except ValueError as e:
+                # parse_llm_response or client-level validation error
+                logger.error(
+                    "llm_value_error",
+                    attempt=attempt,
+                    error=str(e),
+                    raw_preview=raw[:200],
+                )
+                raise HTTPException(
+                    status_code=502, detail="Failed to generate replies. Try again."
+                )
+            except Exception as e:
+                logger.error(
+                    "llm_call_failed",
+                    attempt=attempt,
+                    error=str(e),
+                )
+                raise HTTPException(
+                    status_code=502, detail="Failed to generate replies. Try again."
+                )
+
+        if parsed is None:
+            logger.error("llm_no_successful_attempts")
+            raise HTTPException(
+                status_code=502, detail="Failed to generate replies. Try again."
+            )
 
     latency_ms = int((time.monotonic() - start) * 1000)
 
@@ -889,7 +1049,8 @@ async def generate_replies(
     t4 = time.monotonic()
     logger.info(
         "vision_timing_phase_4_db_writes",
-        timing_phase_4_db_writes_ms=int((t4 - t3) * 1000),
+        # For the agent path, we didn't set t3; measure from overall start instead.
+        timing_phase_4_db_writes_ms=int((t4 - start) * 1000),
     )
 
     reply_payloads: list[ReplyOptionPayload] = []

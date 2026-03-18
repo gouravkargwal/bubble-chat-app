@@ -11,6 +11,7 @@ from app.domain.conversation import update_conversation_from_analysis
 from app.domain.models import AnalysisResult
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Conversation, Interaction, User
+from app.core.embeddings import embed_text
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -38,8 +39,25 @@ async def track_copy(
     if not interaction:
         raise HTTPException(status_code=404, detail="Interaction not found")
 
-    # Update copied index
+    # Update copied index and store embedding of the copied reply
     interaction.copied_index = request.reply_index
+
+    # Determine which reply text was copied
+    reply_attr = f"reply_{request.reply_index}"
+    reply_text = getattr(interaction, reply_attr, None)
+
+    if reply_text:
+        # Try to generate an embedding for semantic memory, but never block the user on failures.
+        try:
+            interaction.embedding = await embed_text(reply_text)
+        except Exception as e:  # pragma: no cover - defensive logging
+            logger.error(
+                "semantic_memory_failed",
+                error=str(e),
+                reply_preview=reply_text[:120] if reply_text else "",
+            )
+            interaction.embedding = None
+
     await db.commit()
 
     # Update conversation context (mark topic as "worked")

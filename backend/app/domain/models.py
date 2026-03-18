@@ -113,6 +113,12 @@ class ConversationContext:
     interaction_count: int = 0
     recent_summaries: list[str] = field(default_factory=list)
     recent_user_replies: list[str] = field(default_factory=list)
+    # Long-term memory anchors from the very first interaction in this conversation.
+    first_key_detail: str | None = None
+    first_their_last_message: str | None = None
+    # Topic exhaustion guardrail inputs (most recent first).
+    last_user_organic_texts: list[str] = field(default_factory=list)
+    last_ai_replies_shown: list[str] = field(default_factory=list)
 
 
 @dataclass

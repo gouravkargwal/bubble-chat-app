@@ -1,0 +1,12 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "python_version": "3.11",
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "rizz_agent": "./agent/graph.py:rizz_agent"
+  },
+  "env": ".env.dev",
+  "dockerfile_lines": []
+}

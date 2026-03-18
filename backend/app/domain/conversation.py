@@ -115,18 +115,38 @@ async def build_conversation_context(
     topics_worked = json.loads(conversation.topics_worked or "[]")
     topics_failed = json.loads(conversation.topics_failed or "[]")
 
-    # Get last 3 interaction summaries
+    # Long-term memory: anchor to the very first interaction of this conversation.
+    first_key_detail: str | None = None
+    first_their_last_message: str | None = None
+
+    first_result = await db.execute(
+        select(Interaction)
+        .where(Interaction.conversation_id == conversation.id)
+        .order_by(Interaction.created_at.asc())
+        .limit(1)
+    )
+    first_interaction = first_result.scalar_one_or_none()
+    if first_interaction:
+        first_key_detail = first_interaction.key_detail or None
+        first_their_last_message = first_interaction.their_last_message or None
+
+    # Recent flow: fetch the LAST 5 interactions for this conversation.
+    # These power both the compact conversation history block and the
+    # TOPIC EXHAUSTION MAP so the model sees what was just discussed.
     result = await db.execute(
         select(Interaction)
         .where(Interaction.conversation_id == conversation.id)
         .order_by(Interaction.created_at.desc())
-        .limit(3)
+        .limit(5)
     )
     recent_interactions = result.scalars().all()
 
     summaries: list[str] = []
     recent_user_replies: list[str] = []
+    last_user_organic_texts: list[str] = []
+    last_ai_replies_shown: list[str] = []
 
+    # Build summaries from oldest → newest so the history reads chronologically.
     for interaction in reversed(recent_interactions):
         summary = f"[{interaction.direction}] "
         if interaction.copied_index is not None:
@@ -147,6 +167,34 @@ async def build_conversation_context(
             summary += "Didn't use any suggestion"
         summaries.append(summary)
 
+    # Topic exhaustion inputs: last 3 organic texts and last 3 reply options shown.
+    # We walk the most recent interactions (limited to 5) from newest to oldest.
+    for interaction in recent_interactions:
+        if interaction.user_organic_text:
+            last_user_organic_texts.append(interaction.user_organic_text)
+        if len(last_user_organic_texts) >= 3:
+            break
+
+    # Flatten reply_0..reply_3 for each interaction until we collect 3 reply texts.
+    for interaction in recent_interactions:
+        for idx in range(4):
+            raw_reply = getattr(interaction, f"reply_{idx}", "") or ""
+            if not raw_reply:
+                continue
+            reply_text = raw_reply
+            try:
+                loaded = json.loads(raw_reply)
+                if isinstance(loaded, dict) and "text" in loaded:
+                    reply_text = str(loaded["text"])
+            except json.JSONDecodeError:
+                # If it's not JSON, treat the raw string as the text.
+                pass
+            last_ai_replies_shown.append(reply_text)
+            if len(last_ai_replies_shown) >= 3:
+                break
+        if len(last_ai_replies_shown) >= 3:
+            break
+
     return ConversationContext(
         person_name=conversation.person_name,
         stage=conversation.stage,
@@ -156,4 +204,8 @@ async def build_conversation_context(
         interaction_count=conversation.interaction_count,
         recent_summaries=summaries,
         recent_user_replies=recent_user_replies[-3:],
+        first_key_detail=first_key_detail,
+        first_their_last_message=first_their_last_message,
+        last_user_organic_texts=last_user_organic_texts[:3],
+        last_ai_replies_shown=last_ai_replies_shown[:3],
     )

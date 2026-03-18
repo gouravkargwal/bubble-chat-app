@@ -70,6 +70,29 @@ CRITICAL RULE FOR OPENERS: Since this is an opener, you MUST provide 4 completel
 Ensure high topic diversity and do not mix observations within a single reply."""
             )
 
+        # Anti-cliché guardrail specifically for CHANGE_TOPIC requests.
+        if direction.lower() == "change_topic":
+            parts.append(
+                """
+CRITICAL: When changing the topic, you MUST ground the new topic in the [LONG TERM MEMORY & PROFILE CONTEXT]. DO NOT use generic, overused dating app cliches. STRICTLY BANNED TOPICS: Pineapple on pizza, zombie apocalypse, teleportation, winning the lottery, or generic travel questions. Generate highly specific, observational, and slightly edgy topics based ONLY on the user's actual profile data or earlier conversation themes."""
+            )
+
+        # Terminal direction guardrails for GET_NUMBER.
+        if direction.lower() == "get_number":
+            parts.append(
+                """
+TERMINAL DIRECTION: GET NUMBER / MOVE OFF APP (CRITICAL)
+- The response MUST include a clear transition to moving off the app.
+- Use casual Hinglish/Indian texting style for the close, with phrasing like:
+  - "whatsapp pe switch karein"
+  - "drop your number"
+  - "number de de fir waha stalk karunga"
+- This is not optional: at least one reply MUST explicitly ask to move to WhatsApp/number/IG in natural, low-pressure language.
+- If CONVERSATION_TEMPERATURE is "hot", your closes should be more direct and confident (e.g., clearly asking for number / WhatsApp in one line).
+- If CONVERSATION_TEMPERATURE is "warm", make the close a softer suggestion (e.g., "chalo ye chat wa pe continue karein" or "lets move this to wa"), framed as a natural next step rather than a demand.
+- Teasing is allowed ONLY if it still leads to an explicit "move off app" line in that reply. Do NOT generate pure banter that ignores the close."""
+            )
+
         # 6. Situational playbook (auto-selected based on conversation state)
         if variant.use_playbooks and conversation_context:
             playbook = select_playbook(
@@ -92,6 +115,22 @@ Ensure high topic diversity and do not mix observations within a single reply.""
             and conversation_context.interaction_count > 0
         ):
             parts.append(self._build_conversation_history_block(conversation_context))
+
+        # 8b. Long-term memory + profile context section to keep the model anchored
+        # to the original profile scan and topics that have historically worked.
+        if conversation_context:
+            parts.append(
+                self._build_long_term_memory_block(conversation_context)
+            )
+
+        # 8c. Topic exhaustion prevention: show the model exactly what has already
+        # been discussed so it can avoid repeating the same themes.
+        if conversation_context:
+            topic_exhaustion_block = self._build_topic_exhaustion_block(
+                conversation_context
+            )
+            if topic_exhaustion_block:
+                parts.append(topic_exhaustion_block)
 
         # 9. Self-critique checklist
         if variant.use_self_critique:
@@ -233,6 +272,77 @@ Their voice > your defaults."""
 
         return "\n".join(parts)
 
+    def _build_long_term_memory_block(self, ctx: ConversationContext) -> str:
+        lines: list[str] = [
+            "",
+            "══════════════════════════════════════",
+            "[LONG TERM MEMORY & PROFILE CONTEXT]",
+            "══════════════════════════════════════",
+        ]
+
+        if ctx.first_key_detail:
+            lines.append(f"Original key detail from first interaction: {ctx.first_key_detail}")
+        if ctx.first_their_last_message:
+            lines.append(
+                f"Their very first meaningful message (paraphrased): {ctx.first_their_last_message}"
+            )
+
+        if ctx.topics_worked:
+            lines.append(
+                "Topics that historically got good responses (do NOT forget these): "
+                + ", ".join(ctx.topics_worked)
+            )
+        if ctx.topics_failed:
+            lines.append(
+                "Topics that historically fell flat (avoid repeating these): "
+                + ", ".join(ctx.topics_failed)
+            )
+
+        if len(lines) == 4:
+            # No additional context beyond the header; still return the header so
+            # the anti-cliché guardrail can reference it safely.
+            lines.append("No long-term memory available yet for this conversation.")
+
+        lines.append(
+            "Treat this section as ground truth about the user's actual profile and prior chemistry. Do NOT hallucinate new traits."
+        )
+        return "\n".join(lines)
+
+    def _build_topic_exhaustion_block(
+        self, ctx: ConversationContext
+    ) -> str:
+        recent_org = ctx.last_user_organic_texts or []
+        recent_replies = ctx.last_ai_replies_shown or []
+
+        if not recent_org and not recent_replies:
+            return ""
+
+        lines: list[str] = [
+            "",
+            "══════════════════════════════════════",
+            "TOPIC EXHAUSTION MAP (most recent first)",
+            "══════════════════════════════════════",
+        ]
+
+        if recent_org:
+            lines.append("Recent organic messages the user actually typed:")
+            for i, msg in enumerate(recent_org[:3], 1):
+                preview = msg if len(msg) <= 100 else msg[:97] + "..."
+                lines.append(f"{i}. {preview}")
+
+        if recent_replies:
+            lines.append("")
+            lines.append("Recent AI reply options already shown to the user:")
+            for i, msg in enumerate(recent_replies[:3], 1):
+                preview = msg if len(msg) <= 100 else msg[:97] + "..."
+                lines.append(f"{i}. {preview}")
+
+        lines.append(
+            "CRITICAL: Do NOT repeat the same themes, hooks, or stories from this list. You must introduce genuinely new angles."
+        )
+
+        return "\n".join(lines)
+
     def _build_user_prompt(
         self,
         direction: str,
@@ -252,11 +362,23 @@ Their voice > your defaults."""
         # Direction-specific final instructions to leverage recency bias
         if direction == "change_topic":
             parts.append(
-                "\n⚠️ IMPORTANT: The user wants to CHANGE THE TOPIC. Do not mention the old subject. Pivot to something completely new."
+                "\n⚠️ IMPORTANT: The user wants to CHANGE THE TOPIC.\n"
+                "- Use the [LONG TERM MEMORY & PROFILE CONTEXT] section as your ONLY source for new topics.\n"
+                "- Strictly avoid overused dating app cliches or hypotheticals.\n"
+                "- STRICTLY BANNED: pineapple on pizza, zombie apocalypse, teleportation, winning the lottery, generic travel questions.\n"
+                "- Study the TOPIC EXHAUSTION MAP and do NOT repeat any themes, hooks, or stories listed there.\n"
+                "Pivot to a genuinely fresh, specific, slightly edgy angle that still feels naturally grounded in their actual profile or earlier chemistry."
             )
         elif direction == "ask_out":
             parts.append(
                 "\n⚠️ IMPORTANT: The goal is to ASK THEM OUT. Be specific and bold with a concrete plan (place and time)."
+            )
+        elif direction == "get_number":
+            parts.append(
+                "\n⚠️ IMPORTANT: The goal is to MOVE OFF THE APP.\n"
+                "- Every reply must naturally steer the conversation toward exchanging WhatsApp / number / IG.\n"
+                "- Use casual Hinglish phrasing like 'whatsapp pe switch karein?' or 'drop your number', not stiff English.\n"
+                "- If the conversation feels hot, be direct and confident. If it feels just warm, make it a soft suggestion instead of a command."
             )
         elif direction == "revive_chat":
             parts.append(

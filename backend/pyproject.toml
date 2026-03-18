@@ -20,6 +20,9 @@ dependencies = [
     "google-auth>=2.0",
     "pyinstrument>=4.6",
     "Pillow>=10.0.0",
+    "langgraph>=0.2",
+    "langchain-google-genai>=2.0",
+    "pgvector>=0.2",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +30,14 @@ dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.8", "mypy>=1.13"]
 [build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "alembic*", "firebase*"]
+exclude = ["static*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

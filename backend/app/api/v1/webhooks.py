@@ -136,7 +136,9 @@ async def revenuecat_webhook(
             "message": "Plan upgraded with clean-slate quotas",
         }
 
-    # 2) EXPIRATION: only downgrade if the expiring entitlement matches current tier
+    # 2) EXPIRATION: only downgrade if the expiring entitlement matches current tier.
+    # We also apply a soft quota reset behavior here so users are never "debt-locked"
+    # the moment their paid plan ends.
     if event_type == "EXPIRATION":
         new_tier_exp: str | None = None
         if user.tier == "premium" and affects("premium"):
@@ -151,14 +153,52 @@ async def revenuecat_webhook(
             }
 
         old_tier_snapshot = user.tier
+
+        # Downgrade user to free and clear subscription metadata.
         user.tier = new_tier_exp
         user.tier_source = "free"
         user.tier_expires_at = None
         user.plan_period_start = None
 
+        # Apply a grace reset on daily usage if they were above the free limit.
+        # This mirrors the downgrade behavior inside apply_plan_upgrade but is
+        # triggered by an EXPIRATION event instead of a PRODUCT_CHANGE.
+        if user.google_provider_id:
+            from datetime import timedelta, timezone
+
+            from app.infrastructure.database.models import UserQuota
+            from app.core.tier_config import TIER_CONFIG
+
+            now = datetime.now(timezone.utc)
+
+            quota_result = await db.execute(
+                select(UserQuota)
+                .where(UserQuota.google_provider_id == user.google_provider_id)
+                .with_for_update()
+            )
+            quota = quota_result.scalar_one_or_none()
+
+            if quota is not None:
+                free_cfg = TIER_CONFIG.get("free", TIER_CONFIG["free"])
+                free_daily_limit = int(
+                    free_cfg["limits"].get("chat_generations_per_day", 0)
+                )
+
+                # Always realign reset windows from expiration time so the new
+                # free period starts cleanly.
+                quota.daily_reset_at = now + timedelta(days=1)
+                quota.weekly_reset_at = now + timedelta(weeks=1)
+
+                if free_daily_limit > 0 and quota.daily_usage_count > free_daily_limit:
+                    logger.info(
+                        "revenuecat_expiration_grace_reset",
+                        app_user_id=app_user_id,
+                        previous_daily_usage=quota.daily_usage_count,
+                        free_daily_limit=free_daily_limit,
+                    )
+                    quota.daily_usage_count = 0
+
         await db.commit()
-        # await db.refresh(user) isn't strictly necessary anymore if we just return,
-        # but it's safe if you need to use the `user` object later.
 
         logger.info(
             "revenuecat_webhook_tier_updated",

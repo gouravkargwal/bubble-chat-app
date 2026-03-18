@@ -14,6 +14,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 
 class Base(DeclarativeBase):
@@ -183,6 +184,8 @@ class Interaction(Base):
     copied_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rating_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rating_positive: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Vector embedding of the copied reply for similarity search
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     # Metadata
     llm_model: Mapped[str] = mapped_column(String(100))
     prompt_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
