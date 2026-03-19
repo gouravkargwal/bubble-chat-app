@@ -32,8 +32,8 @@ android {
         applicationId = "com.cookd.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "2.0.0"
+        versionCode = 12
+        versionName = "2.0.1"
 
         // Set via gradle.properties or Firebase Console → Authentication → Google
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: ""}\"")

@@ -2,7 +2,10 @@ package com.rizzbot.v2.data.auth
 
 import android.accounts.AccountManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
+import java.security.MessageDigest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -155,6 +158,7 @@ class GoogleSignInHelper @Inject constructor(
             .addCredentialOption(googleIdOption)
             .build()
 
+        logAppSigningSha1(activityContext)
         Log.d("GoogleSignIn", "Requesting credential from CredentialManager...")
         val result = credentialManager.getCredential(activityContext, request)
         val credential = result.credential
@@ -169,6 +173,23 @@ class GoogleSignInHelper @Inject constructor(
         
         Log.w("GoogleSignIn", "Credential is not a Google ID token credential. Type: ${credential::class.simpleName}")
         return null
+    }
+
+    private fun logAppSigningSha1(ctx: Context) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+            val pkgInfo = ctx.packageManager.getPackageInfo(ctx.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            val signingInfo = pkgInfo.signingInfo ?: return
+            val signers = signingInfo.apkContentsSigners
+            val sha1s = signers.map { cert ->
+                val md = MessageDigest.getInstance("SHA1")
+                val digest = md.digest(cert.toByteArray())
+                digest.joinToString(":") { b -> "%02x".format(b) }
+            }
+            Log.d("GoogleSignIn", "App signing SHA-1(s): ${sha1s.joinToString()}")
+        } catch (t: Throwable) {
+            Log.e("GoogleSignIn", "Failed to log app signing SHA-1", t)
+        }
     }
 
     fun isSignedIn(): Boolean {
