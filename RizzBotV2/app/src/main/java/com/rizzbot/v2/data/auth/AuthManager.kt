@@ -1,17 +1,22 @@
 package com.rizzbot.v2.data.auth
 
 import android.content.Context
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.FirebaseAuthRequest
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.rizzbot.v2.data.subscription.SubscriptionManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.Lazy
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 @Singleton
 class AuthManager @Inject constructor(
@@ -44,7 +49,9 @@ class AuthManager @Inject constructor(
     fun isAuthenticated(): Boolean {
         val token = getToken() ?: return false
         val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L)
-        return token.isNotEmpty() && System.currentTimeMillis() / 1000 < expiresAt
+        // Backend provides expiry in seconds; compare using seconds (and add a small buffer).
+        val nowSeconds = System.currentTimeMillis() / 1000
+        return token.isNotEmpty() && nowSeconds < (expiresAt - 60)
     }
 
     fun getValidToken(): String? {
@@ -86,7 +93,8 @@ class AuthManager @Inject constructor(
             .remove(KEY_TOKEN)
             .remove(KEY_USER_ID)
             .remove(KEY_EXPIRES_AT)
-            .apply()
+            .commit()
+        Log.w("AuthDebug", "clearAuth() called; removed local jwt_token + expires_at")
     }
 
     private fun saveAuth(token: String, userId: String, expiresAt: Long) {
@@ -94,7 +102,30 @@ class AuthManager @Inject constructor(
             .putString(KEY_TOKEN, token)
             .putString(KEY_USER_ID, userId)
             .putLong(KEY_EXPIRES_AT, expiresAt)
-            .apply()
+            .commit()
+        Log.d("AuthDebug", "saveAuth() wrote jwt_token + expires_at=$expiresAt (userId=$userId)")
+    }
+
+    private suspend fun awaitFirebaseUser(timeoutMs: Long): FirebaseUser? {
+        firebaseAuth.currentUser?.let { return it }
+
+        return withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine { cont ->
+                lateinit var listener: FirebaseAuth.AuthStateListener
+                listener = FirebaseAuth.AuthStateListener { auth ->
+                    val user = auth.currentUser
+                    if (user != null && cont.isActive) {
+                        firebaseAuth.removeAuthStateListener(listener)
+                        cont.resume(user)
+                    }
+                }
+
+                firebaseAuth.addAuthStateListener(listener)
+                cont.invokeOnCancellation {
+                    firebaseAuth.removeAuthStateListener(listener)
+                }
+            }
+        }
     }
 
     /**
@@ -104,9 +135,17 @@ class AuthManager @Inject constructor(
      * restart, but Firebase still has a valid refresh session.
      */
     suspend fun refreshBackendTokenIfFirebaseSignedIn(): Boolean {
-        val firebaseUser = firebaseAuth.currentUser ?: return false
+        // On cold start, Firebase may take a moment to restore `currentUser`.
+        // Wait briefly so routing/auth decision doesn't incorrectly fall back to onboarding/login.
+        val firebaseUser = awaitFirebaseUser(timeoutMs = 5000L)
+        if (firebaseUser == null) {
+            Log.w("AuthDebug", "Firebase user not ready within timeout; cannot refresh backend JWT")
+            return false
+        }
+        Log.d("AuthDebug", "Firebase user ready for backend refresh (uid=${firebaseUser.uid})")
 
-        val firebaseIdToken = firebaseUser.getIdToken(false).await().token ?: return false
+        // Force-mint a fresh Firebase ID token for the backend JWT refresh flow.
+        val firebaseIdToken = firebaseUser.getIdToken(true).await().token ?: return false
 
         // Stable provider identifier for cross-device lookup.
         val googleProviderId = firebaseUser.providerData

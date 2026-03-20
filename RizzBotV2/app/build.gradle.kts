@@ -32,7 +32,7 @@ android {
         applicationId = "com.cookd.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
+        versionCode = 21
         versionName = "2.0.1"
 
         // Set via gradle.properties or Firebase Console → Authentication → Google
@@ -48,7 +48,7 @@ android {
             resValue("string", "app_name", "Cookd (Staging)")
             buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"226210127602-dc2jh362c0a2bcc2trdbd1da6qqnogvc.apps.googleusercontent.com\"")
-            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_mvwllCzumJLbCSLXWVnFtqKIZqd\"")
+            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_qbaXLjSzKcIbBbYlEjNfLQzSoWn\"")
         }
 
         create("production") {

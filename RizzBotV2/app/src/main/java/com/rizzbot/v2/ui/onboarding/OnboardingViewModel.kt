@@ -120,6 +120,13 @@ class OnboardingViewModel @Inject constructor(
             val hasPermission = permissionHelper.canDrawOverlays()
             if (hasPermission) {
                 // Already has permissions: go straight to Home
+                // Persist onboarding completion so MainActivity can skip onboarding on next app start.
+                settingsRepository.setOnboardingCompleted(true)
+                android.util.Log.d(
+                    "AuthDebug",
+                    "Persisted onboardingCompleted=true (returning user + overlay permission)"
+                )
+                analyticsHelper.onboardingCompleted()
                 _state.update { it.copy(onboardingDone = true) }
             } else {
                 // Needs to re-grant permissions: go to TrustAndTechStep (Step 3)

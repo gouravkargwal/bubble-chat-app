@@ -26,10 +26,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-private data class BootState(
-    val onboardingCompleted: Boolean,
-    val isAuthenticated: Boolean,
-)
+private sealed class BootState {
+    data object Refreshing : BootState()
+    data class Ready(
+        val onboardingCompleted: Boolean,
+        val isAuthenticated: Boolean,
+    ) : BootState()
+}
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -74,35 +77,56 @@ class MainActivity : ComponentActivity() {
 
             // Resolve onboarding/auth state before selecting a start destination.
             // This avoids rendering the onboarding screen on the first frame when DataStore emits `false` initially.
-            val bootState = remember { mutableStateOf<BootState?>(null) }
+            val bootState = remember { mutableStateOf<BootState>(BootState.Refreshing) }
 
             LaunchedEffect(Unit) {
                 val onboardingCompleted = settingsDataStore.onboardingCompleted.first()
+                android.util.Log.d("AuthDebug", "Boot onboardingCompleted=$onboardingCompleted")
 
                 var isAuthenticated = authManager.isAuthenticated()
+                android.util.Log.d(
+                    "AuthDebug",
+                    "Boot auth check: initial isAuthenticated=$isAuthenticated"
+                )
                 if (!isAuthenticated) {
                     // If Firebase still has a valid session, re-issue backend JWT before deciding route.
-                    val refreshed = authManager.refreshBackendTokenIfFirebaseSignedIn()
+                    val refreshed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        authManager.refreshBackendTokenIfFirebaseSignedIn()
+                    }
                     isAuthenticated = refreshed && authManager.isAuthenticated()
+                    android.util.Log.d(
+                        "AuthDebug",
+                        "Boot auth check: refreshAttempted=true refreshed=$refreshed postIsAuthenticated=$isAuthenticated"
+                    )
                 }
 
-                bootState.value = BootState(
+                bootState.value = BootState.Ready(
                     onboardingCompleted = onboardingCompleted,
                     isAuthenticated = isAuthenticated
                 )
+                android.util.Log.d(
+                    "AuthDebug",
+                    "Boot resolved: onboardingCompleted=$onboardingCompleted isAuthenticated=$isAuthenticated"
+                )
             }
 
-            val resolvedOnboardingCompleted = bootState.value?.onboardingCompleted ?: false
-            val canSkipOnboarding = bootState.value?.onboardingCompleted == true && bootState.value?.isAuthenticated == true
+            val resolvedOnboardingCompleted =
+                (bootState.value as? BootState.Ready)?.onboardingCompleted ?: false
+            val canSkipOnboarding =
+                (bootState.value as? BootState.Ready)?.onboardingCompleted == true &&
+                    (bootState.value as? BootState.Ready)?.isAuthenticated == true
 
             RizzBotV2Theme {
-                if (bootState.value == null) {
-                    // Keep SplashScreen up while we decide route.
-                } else {
+                when (val state = bootState.value) {
+                    BootState.Refreshing -> {
+                        // Keep SplashScreen up while we decide route.
+                    }
+                    is BootState.Ready -> {
                     NavGraph(
                         navController = navController,
                         startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route
                     )
+                    }
                 }
             }
 

@@ -551,11 +551,6 @@ private fun ProfileAuditResultContent(
     result: AuditResponseUi,
     photoIdToUri: Map<String, Uri>
 ) {
-    if (result.isHardReset) {
-        HardResetResultView()
-        return
-    }
-
     val godTier = result.photos.filter { it.tier == PhotoTier.GOD_TIER }
     val filler = result.photos.filter { it.tier == PhotoTier.FILLER }
     val graveyard = result.photos.filter { it.tier == PhotoTier.GRAVEYARD }
