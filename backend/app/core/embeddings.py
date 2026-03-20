@@ -11,6 +11,11 @@ logger = structlog.get_logger()
 # The actual active 2026 model
 EMBEDDING_MODEL_NAME = "models/gemini-embedding-001"
 # We must strictly enforce this to match the Postgres pgvector schema
+# Default embedding dimensionality.
+#
+# NOTE: pgvector's expected dimensionality comes from the `Interaction.embedding`
+# column type at runtime. We still keep a default here, but callers should pass
+# the expected dimension when they can.
 EMBEDDING_DIMENSIONS = 768
 
 
@@ -20,8 +25,11 @@ def _get_embeddings_model() -> GoogleGenerativeAIEmbeddings:
     return GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL_NAME)
 
 
-async def embed_text(text: str) -> Optional[List[float]]:
-    """Generate a 768-dim embedding vector for the given text using Gemini's MRL truncation.
+async def embed_text(text: str, dimensions: int | None = None) -> Optional[List[float]]:
+    """Generate an embedding vector for the given text.
+
+    If `dimensions` is provided, we force Gemini to return exactly that output dimensionality.
+    Otherwise we fall back to `EMBEDDING_DIMENSIONS`.
 
     This uses LangChain's GoogleGenerativeAIEmbeddings wrapper under the hood.
     """
@@ -30,16 +38,26 @@ async def embed_text(text: str) -> Optional[List[float]]:
 
     model = _get_embeddings_model()
     try:
-        # CRITICAL: output_dimensionality must be passed here, NOT in the constructor
-        embedding = await asyncio.to_thread(
-            model.embed_query, text, output_dimensionality=EMBEDDING_DIMENSIONS
+        dimensions_to_use = dimensions or EMBEDDING_DIMENSIONS
+        # Useful for debugging pgvector dimension mismatch issues.
+        logger.debug(
+            "embed_text_dimensions",
+            requested_dim=dimensions,
+            used_dim=dimensions_to_use,
+            embedding_model=EMBEDDING_MODEL_NAME,
+            text_preview=text[:60] if text else "",
         )
 
-        if not embedding or len(embedding) != EMBEDDING_DIMENSIONS:
+        # CRITICAL: output_dimensionality must be passed here, NOT in the constructor
+        embedding = await asyncio.to_thread(
+            model.embed_query, text, output_dimensionality=dimensions_to_use
+        )
+
+        if not embedding or len(embedding) != dimensions_to_use:
             logger.error(
                 "embedding_dimension_mismatch",
                 embedding_model=EMBEDDING_MODEL_NAME,
-                expected_dim=EMBEDDING_DIMENSIONS,
+                expected_dim=dimensions_to_use,
                 actual_dim=len(embedding) if embedding else 0,
                 text_preview=text[:120] if text else "",
             )

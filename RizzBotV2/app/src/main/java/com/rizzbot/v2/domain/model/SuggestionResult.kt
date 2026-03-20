@@ -17,6 +17,10 @@ sealed class SuggestionResult {
         val errorType: ErrorType
     ) : SuggestionResult()
 
+    data class RequiresUserConfirmation(
+        val suggestedMatch: SuggestedMatch
+    ) : SuggestionResult()
+
     data object Loading : SuggestionResult()
 
     enum class ErrorType {

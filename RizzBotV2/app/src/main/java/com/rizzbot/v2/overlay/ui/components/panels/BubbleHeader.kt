@@ -59,6 +59,11 @@ fun BubbleHeader(
             "Step 3 of 3",
             "Something went wrong"
         )
+        is BubbleState.RequiresUserConfirmation -> Triple(
+            3,
+            "Step 3 of 3",
+            "New chat detected"
+        )
         else -> Triple(0, "", "")
     }
 

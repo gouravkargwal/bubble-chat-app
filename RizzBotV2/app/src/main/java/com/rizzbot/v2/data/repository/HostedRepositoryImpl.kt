@@ -14,11 +14,15 @@ import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto
 import com.rizzbot.v2.data.remote.dto.TrackCopyRequest
 import com.rizzbot.v2.data.remote.dto.TrackRatingRequest
+import com.rizzbot.v2.data.remote.dto.ResolveConversationRequest
+import com.rizzbot.v2.data.remote.dto.RequiresUserConfirmationResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
 import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.ReferralInfo
+import com.rizzbot.v2.domain.model.SuggestedMatch
+import com.rizzbot.v2.domain.model.SuggestedMatchContextPreview
 import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
@@ -29,6 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -87,6 +92,35 @@ class HostedRepositoryImpl @Inject constructor(
             }
             
             when (e.code()) {
+                409 -> {
+                    val rawBody = e.response()?.errorBody()?.string()
+                    val parsed = rawBody?.let { body ->
+                        runCatching {
+                            Json { ignoreUnknownKeys = true }
+                                .decodeFromString(RequiresUserConfirmationResponse.serializer(), body)
+                        }.getOrNull()
+                    }
+
+                    if (parsed?.status == "REQUIRES_USER_CONFIRMATION") {
+                        val ctx = parsed.suggestedMatch.contextPreview
+                        val suggestedMatch = SuggestedMatch(
+                            personName = parsed.suggestedMatch.personName,
+                            conversationId = parsed.suggestedMatch.conversationId,
+                            lastActive = parsed.suggestedMatch.lastActive,
+                            contextPreview = SuggestedMatchContextPreview(
+                                herLastMessage = ctx.herLastMessage,
+                                yourLastReply = ctx.yourLastReply,
+                                aiMemoryNote = ctx.aiMemoryNote
+                            )
+                        )
+                        SuggestionResult.RequiresUserConfirmation(suggestedMatch)
+                    } else {
+                        SuggestionResult.Error(
+                            message = "New chat detected. Please confirm.",
+                            errorType = SuggestionResult.ErrorType.UNKNOWN
+                        )
+                    }
+                }
                 // 403 = Forbidden (tier/permission issue)
                 403 -> SuggestionResult.Error(
                     "Access denied. Your tier may have changed. Please refresh.",
@@ -117,6 +151,78 @@ class HostedRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e("RizzBotAPI", "Serialization failed", e)
             SuggestionResult.Error("Error: ${e.message ?: "Unknown error"}", SuggestionResult.ErrorType.UNKNOWN)
+        }
+    }
+
+    override suspend fun resolveConversationMerge(
+        suggestedConversationId: String,
+        isMatch: Boolean,
+        newOcrText: String
+    ): SuggestionResult {
+        val userId = authManager.get().getUserId()
+        if (userId.isNullOrEmpty()) {
+            return SuggestionResult.Error(
+                message = "Session expired. Please restart the app.",
+                errorType = SuggestionResult.ErrorType.INVALID_API_KEY
+            )
+        }
+
+        return try {
+            val response = hostedApi.resolveConversation(
+                ResolveConversationRequest(
+                    userId = userId,
+                    suggestedConversationId = suggestedConversationId,
+                    isMatch = isMatch,
+                    newOcrText = newOcrText
+                )
+            )
+
+            _usageState.value = _usageState.value.copy(
+                dailyUsed = _usageState.value.dailyLimit - response.usageRemaining
+            )
+
+            SuggestionResult.Success(
+                replies = response.replies,
+                summary = response.personName ?: "",
+                personName = response.personName,
+                interactionId = response.interactionId,
+                stage = response.stage,
+                usageRemaining = response.usageRemaining
+            )
+        } catch (e: HttpException) {
+            when (e.code()) {
+                403 -> SuggestionResult.Error(
+                    "Access denied. Your tier may have changed. Please refresh.",
+                    SuggestionResult.ErrorType.QUOTA_EXCEEDED
+                )
+                429 -> SuggestionResult.Error(
+                    "Daily limit reached. Upgrade to Premium for unlimited replies.",
+                    SuggestionResult.ErrorType.QUOTA_EXCEEDED
+                )
+                401 -> SuggestionResult.Error(
+                    "Session expired. Please restart the app.",
+                    SuggestionResult.ErrorType.INVALID_API_KEY
+                )
+                502 -> SuggestionResult.Error(
+                    "AI is temporarily unavailable. Try again.",
+                    SuggestionResult.ErrorType.UNKNOWN
+                )
+                else -> SuggestionResult.Error(
+                    "Server error: ${e.code()}",
+                    SuggestionResult.ErrorType.UNKNOWN
+                )
+            }
+        } catch (e: SocketTimeoutException) {
+            SuggestionResult.Error(
+                "Request timed out. Try again.",
+                SuggestionResult.ErrorType.TIMEOUT
+            )
+        } catch (e: Exception) {
+            Log.e("RizzBotAPI", "Serialization failed", e)
+            SuggestionResult.Error(
+                "Error: ${e.message ?: "Unknown error"}",
+                SuggestionResult.ErrorType.UNKNOWN
+            )
         }
     }
 

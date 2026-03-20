@@ -15,6 +15,7 @@ sealed class OverlayEvent {
     data class AddMoreScreenshots(val direction: DirectionWithHint) : OverlayEvent()
     data class RetakeLastScreenshot(val direction: DirectionWithHint) : OverlayEvent()
     data class RemoveScreenshot(val index: Int, val direction: DirectionWithHint) : OverlayEvent()
+    data class ConfirmMerge(val isMatch: Boolean) : OverlayEvent()
     data object ClearAndStartOver : OverlayEvent()
     data object UpgradeTapped : OverlayEvent()
     data object Back : OverlayEvent()

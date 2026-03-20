@@ -118,16 +118,18 @@ class PaywallViewModel @Inject constructor(
 
                     // Use the correct accessors for Pro packages
                     // RevenueCat Offering has weekly and monthly properties for standard packages
+                    // 1. Get standard Pro packages (These are null-safe by default)
                     val weeklyPackage = defaultOffering.weekly
                     val monthlyPackage = defaultOffering.monthly
-                    
-                    // Use getPackage for Premium packages (custom package identifiers)
-                    val premiumWeeklyPackage = defaultOffering.getPackage("premium_weekly")
-                    val premiumMonthlyPackage = defaultOffering.getPackage("premium_monthly")
+
+                    // 2. Safely find Premium packages using .find {} instead of .getPackage()
+                    // .find returns null if not found, instead of crashing the app.
+                    val premiumWeeklyPackage = defaultOffering.availablePackages.find { it.identifier == "premium_weekly" }
+                    val premiumMonthlyPackage = defaultOffering.availablePackages.find { it.identifier == "premium_monthly" }
 
                     val proPackages = listOfNotNull(weeklyPackage, monthlyPackage)
                     val premiumPackages = listOfNotNull(premiumWeeklyPackage, premiumMonthlyPackage)
-
+                    
                     // Default to Premium Monthly
                     val defaultSelected = premiumMonthlyPackage ?: premiumPackages.firstOrNull()
 

@@ -14,6 +14,11 @@ interface HostedRepository {
     val usageState: StateFlow<UsageState>
 
     suspend fun generateReply(base64Images: List<String>, direction: DirectionWithHint): SuggestionResult
+    suspend fun resolveConversationMerge(
+        suggestedConversationId: String,
+        isMatch: Boolean,
+        newOcrText: String
+    ): SuggestionResult
     suspend fun trackCopy(interactionId: String, replyIndex: Int)
     suspend fun trackRating(interactionId: String, replyIndex: Int, isPositive: Boolean)
     suspend fun refreshUsage(force: Boolean = false)

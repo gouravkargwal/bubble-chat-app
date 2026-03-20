@@ -1,4 +1,5 @@
-from typing import cast, Any
+from typing import cast, Any, Literal
+import asyncio
 import base64
 import json
 import time
@@ -16,6 +17,9 @@ from agent.state import (
     AuditorOutput,
     BouncerOutput,
 )
+from app.services.memory_service import get_match_context
+from app.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 
 logger = structlog.get_logger(__name__)
@@ -53,99 +57,140 @@ def has_forbidden_punctuation(text: str) -> bool:
     return any(ch in text for ch in forbidden)
 
 
+from pydantic import BaseModel, Field
+
+class RawOcrTextItem(BaseModel):
+    sender: Literal["user", "them"] = Field(
+        description="Bubble anchor sender derived from horizontal alignment: left='them', right='user'."
+    )
+    actual_new_message: str = Field(
+        description="Bold/solid fresh text below any quoted (faded) block."
+    )
+    quoted_context: str | None = Field(
+        description="Top nested/faded quoted block text (or null if none)."
+    )
+    is_reply: bool = Field(
+        description="true iff quoted_context is present for this bubble."
+    )
+
+class OcrExtractorOutput(BaseModel):
+    # Strict schema used by downstream analyst_node.
+    raw_ocr_text: list[RawOcrTextItem] = Field(
+        description=(
+            "List of extracted bubble objects. sender is absolute from bubble alignment. "
+            "quoted_context is only the faded quoted block at the top of the bubble."
+        )
+    )
+
+
+def _normalize_raw_ocr_text(raw_ocr_text: Any) -> list[dict[str, Any]]:
+    """
+    Convert `raw_ocr_text` into plain JSON-serializable dicts.
+
+    The LLM structured output uses Pydantic models; the rest of the pipeline
+    expects simple lists/dicts (for json.dumps and embeddings).
+    """
+    if raw_ocr_text is None:
+        return []
+    if isinstance(raw_ocr_text, str):
+        # If a caller somehow passes a string, keep it as a single blob.
+        return [{"sender": "them", "actual_new_message": raw_ocr_text, "quoted_context": None, "is_reply": False}]
+    if isinstance(raw_ocr_text, list):
+        normalized: list[dict[str, Any]] = []
+        for item in raw_ocr_text:
+            if hasattr(item, "model_dump"):
+                normalized.append(cast(dict[str, Any], item.model_dump()))
+            elif isinstance(item, dict):
+                normalized.append(item)
+        return normalized
+    return []
+
+OCR_EXTRACTOR_SYSTEM_PROMPT = """
+You are a precise OCR extractor. Your ONLY job is to extract the text verbatim from the chat screenshot.
+
+CRITICAL: Bubble ownership and quoted-reply splitting
+Read the image from top to bottom. For each message bubble:
+
+1) Identify the Anchor (sender) using ONLY horizontal alignment:
+- LEFT-aligned bubble => sender = "them"
+- RIGHT-aligned bubble => sender = "user"
+
+This sender is the ABSOLUTE source of truth for that bubble.
+Do NOT change sender because the quoted/faded text inside the bubble seems to belong to someone else.
+
+2) Detect Quoted Layers (quoted_context):
+- If there is a nested/grey/indented faded quoted block at the TOP of the bubble, extract that quoted block text.
+- If there are multiple faded nested quote blocks at the top, extract all of them and join them with newline characters.
+- If there is no quoted/faded block at the top, set quoted_context = null.
+
+3) Actual Message (actual_new_message):
+- Extract the bold/solid actual fresh message BELOW the quoted_context (the bottom-most solid text in the bubble).
+- actual_new_message MUST NOT include any faded/quoted text.
+
+4) is_reply:
+- true iff quoted_context is not null and not empty.
+
+Return ONLY data that matches this schema:
+raw_ocr_text is a list of objects with keys: sender, actual_new_message, quoted_context, is_reply.
+
+Do not translate or summarize. Extract the exact text, emojis, and punctuation as they appear on screen.
+"""
+
 ANALYST_SYSTEM_PROMPT = """
-You are a visual chat analyst. Follow these rules strictly.
+You are an expert social profiler. Use the Core Lore and Past Memories to interpret the Raw OCR Text. Do not just look at the words; look at the established relationship dynamic to determine the vibe (e.g., if the lore says they tease each other, label aggressive-sounding text as "playful/high-interest").
 
-══════════════════════════════════════
-PHASE 0: VISUAL AUDIT
-══════════════════════════════════════
-Before reading a single word of text, scan the photos. What is she doing? Where is she? What is she wearing?
-Extract and save 3-4 specific physical or environmental details into `visual_hooks`.
-Examples: "Wearing a high-end watch", "In a library", "Holding a specific breed of dog", "At a high-end sushi spot",
-"Wearing a specific sneaker brand (Jordans)", "Minimalist clean-girl aesthetic in her 3rd photo".
-BE SPECIFIC. Do not say "She is pretty." Say what is on-screen.
+You are also provided the screenshot image. Use it strictly to extract `visual_hooks` (3-4 specific physical or environmental details from the photos). DO NOT read the text from the image for conversation analysis, use the provided Raw OCR Text instead.
 
-══════════════════════════════════════
-LANGUAGE SPOKEN AUDIT (CRITICAL)
-══════════════════════════════════════
-Explicitly hunt for the 'Languages Spoken' UI tag. If "Hindi" is listed ANYWHERE in the UI — even if her prompts are in English —
-you MUST set `detected_dialect` to "HINGLISH".
+From the image:
+- Extract 3-4 visual_hooks (e.g. "Wearing a high-end watch", "In a library", "Holding a specific breed of dog").
 
-TRANSCRIPT IS TRUTH (CRITICAL):
-If the visual_transcript shows her speaking in Hindi or Hinglish, you MUST set detected_dialect to HINGLISH,
-even if her profile says "English only." Real-world behavior overrides profile settings.
-
-══════════════════════════════════════
-CRITICAL: VISUAL TRANSCRIPT & SPATIAL RULES
-══════════════════════════════════════
-Before ANY analysis, you MUST read the image from top to bottom and generate a `visual_transcript` of the last 3-4 chat bubbles. 
-To determine WHO sent a message, you MUST look at the horizontal pixel alignment:
-- RIGHT-ALIGNED bubbles (often colored): ALWAYS the USER (the person asking for help).
-- LEFT-ALIGNED bubbles (often gray/white): ALWAYS the MATCH (the other person).
-
-If a text bubble is on the RIGHT, its sender is "user". If it is on the LEFT, its sender is "them". NEVER mix these up.
-
-NESTED / QUOTED REPLIES (CRITICAL FOR EACH BUBBLE):
-- Many apps show a small grey/indented box at the TOP of a bubble containing a PAST message being quoted.
-- That grey/indented box is a quoted reply from the past. Map this EXACTLY into `quoted_context` (old text). It is NOT the new message.
-- The ACTUAL NEW MESSAGE is the text immediately BELOW that nested box, at the bottom of the bubble.
-- For every bubble, you MUST:
-  - Put ONLY the grey/indented quoted box text into `quoted_context` (or "" if none). Treat this as `quoted_replies` / past context.
-  - Put ONLY the bottom-most fresh text that was just typed into `actual_new_message`. This is the ONLY thing considered the new message.
-
-When you decide their current tone, effort, temperature, and `analysis.their_last_message`, you MUST treat the ACTUAL NEW MESSAGE (the bottom-most text in the latest left-side bubble) as the thing they just said, and treat anything in `quoted_context` purely as past context.
-
-SPEAKER ATTRIBUTION RULE (CRITICAL):
-Pay strict attention to the `sender` and `quoted_context` fields.
-- If `sender` is "them" and there is a `quoted_context`, it means THEY are reacting to YOUR life/message.
-- DO NOT attribute the events in the `quoted_context` to the match. You must explicitly distinguish between what the user is doing and how the match is reacting to it in your `key_detail` output.
-
-══════════════════════════════════════
-PHASE 1: ANALYZE
-══════════════════════════════════════
-
-CRITICAL: TEXT EXTRACTION MUST BE VERBATIM (NO TRANSLATION):
-- When reading any message text (in `visual_transcript`, `quoted_context`, or `actual_new_message`), you MUST extract the text VERBATIM, exactly as it appears on the screen.
-- If the text is in Hindi, Devanagari script, or Romanized Hinglish (e.g., "kya kar rahe ho"), DO NOT translate it into English. Do not paraphrase or "clean up" spelling. Copy the exact letters that are on the screen.
-- This rule applies to both the quoted replies and the actual new message. Your job is to read, not to translate.
-
-Read the screenshot carefully and figure out:
-
-- DETECTED_DIALECT: Based on how the user and match actually type, classify the dominant chat style as exactly one of: ENGLISH, HINDI, or HINGLISH. Use the raw, non-translated text and scripts you see on screen to decide this.
-- THEIR_TONE: excited / playful / flirty / neutral / dry / upset / testing / vulnerable / sarcastic
-- THEIR_EFFORT: high (long thoughtful messages) / medium / low (one word, "lol", "k", late replies)
-- CONVERSATION_TEMPERATURE: hot (heavy flirting) / warm (good vibes) / lukewarm (polite but flat) / cold (dying)
-- KEY_DETAIL: One specific thing from the screenshot to hook into — a hobby, opinion, joke, reference.
-- PERSON_NAME: First name if visible, else "unknown".
+From the Raw OCR Text:
+- The Raw OCR Text is a JSON list of objects under `raw_ocr_text`.
+- Build `visual_transcript` by mapping each object 1:1 into a `ChatBubble`:
+  - `sender` = item.sender (absolute bubble alignment; do NOT infer from text)
+  - `quoted_context` = item.quoted_context or "" if null
+  - `actual_new_message` = item.actual_new_message
+- Ownership rule for analysis:
+  - `actual_new_message` always belongs to the bubble's `sender`.
+  - `quoted_context` is past context and MUST NOT be used as the "latest actual message" for her last message.
+- THEIR_LAST_MESSAGE: Use ONLY the most recent bubble in `visual_transcript` where `sender == "them"`, and paraphrase ONLY that bubble's `actual_new_message` (ignore quoted_context).
+- DETECTED_DIALECT: ENGLISH, HINDI, or HINGLISH based on her most recent bubble's `actual_new_message` (ignore `quoted_context`).
+- THEIR_TONE: excited / playful / flirty / neutral / dry / upset / testing / vulnerable / sarcastic (based on her most recent `actual_new_message`).
+- THEIR_EFFORT: high / medium / low (based on her most recent `actual_new_message`).
+- CONVERSATION_TEMPERATURE: hot / warm / lukewarm / cold (based on her most recent `actual_new_message`).
+- KEY_DETAIL: One specific thing from her most recent `actual_new_message` to hook into.
+- PERSON_NAME: First name if discernible, else "unknown" (from her most recent `actual_new_message`).
 - STAGE: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument.
-- THEIR_LAST_MESSAGE: Short paraphrase of the other person's most recent message (max 8 words).
+- THEIR_LAST_MESSAGE: Short paraphrase of the other person's most recent message (use only the most recent sender=="them" bubble's `actual_new_message`, ignore `quoted_context`).
 
-THE INTENTIONS OVERRIDE (DETECTION):
-- Explicitly scan the transcript for any talk about dating goals, "casual vs serious", "no casual", "what are you looking for", "marriage", or long-term intent questions.
-- If such intent/boundary language appears, you MUST flag this internally when you reason about tone/effort/stage so the Strategist can switch to High-Status Sincerity instead of default cocky/push-pull banter.
+DETECTED_ARCHETYPE (CHOOSE EXACTLY ONE BASED ON HER BEHAVIOR):
+- "THE BANTER GIRL": Uses sarcasm, witty comebacks, and tests you playfully.
+- "THE INTELLECTUAL": Sends longer texts, jumps into deeper topics.
+- "THE SOFT/TRADITIONAL": Polite, literal, often uses soft emojis like ✨.
+- "THE LOW-INVESTMENT": Short, dry replies like "haha", "yeah", "Nahi".
 
-DETECTED_ARCHETYPE (CHOOSE EXACTLY ONE, BASED ON HER BEHAVIOR):
-- "THE BANTER GIRL": Uses sarcasm, witty comebacks, and tests you playfully. She must actually be contributing to the joke.
-- "THE INTELLECTUAL": Sends longer texts, jumps into deeper topics, references books/culture/news, and cares about ideas more than surface banter.
-- "THE SOFT/TRADITIONAL": Polite, literal, often uses soft emojis like ✨, 🥺, 🤍, and tends to take jokes at face value. She may seem confused or slightly hurt by dry sarcasm instead of volleying back.
-- "THE LOW-INVESTMENT": Short, dry replies like "haha", "yeah", "Nahi", or just emojis. Slow or minimal responses. She is NOT bantering; she is barely replying.
-
-ARCHETYPE_REASONING: One short sentence explaining WHY you chose that archetype, grounded in HER actual new message and recent behavior (not the user's).
-
-ARCHETYPE CHAIN-OF-THOUGHT (CRITICAL):
-You MUST fill out `archetype_reasoning` first (2 sentences). Analyze her effort.
-- If she has 0 prompts and just selfies, she is "THE LOW-INVESTMENT".
-- If she has complex photos and long text, she is "THE INTELLECTUAL".
-Then, based strictly on that reasoning, pick `detected_archetype`.
-
-CRITICAL RULE: You must write your `archetype_reasoning` BEFORE you select the `detected_archetype`. If her text is just 1 or 2 words (like "Gurgaon 😴" or "Nahi"), you MUST classify her as THE LOW-INVESTMENT, not THE BANTER GIRL.
+ARCHETYPE_REASONING: One short sentence explaining WHY you chose that archetype, grounded in HER actual new message and recent behavior.
 
 You must return a JSON object that matches the `AnalystOutput` schema exactly.
 """
 
 
 STRATEGIST_SYSTEM_PROMPT = """
-You are a Dating Strategist. Your ONLY job is to decide the psychological strategy, not to write any replies.
+You are the Chef. Your ONLY job is to decide the psychological strategy, not to write any replies.
+
+Match Identity: Respond to [person_name].
+
+The Lore: Use the [core_lore] to maintain the established relationship dynamic
+(for example: if she is bossy, be a playful brat).
+
+The Memories: Use [past_memories] to reference inside jokes ONLY if they fit the
+current topic naturally.
+
+The Transcript: Base the immediate reply on the current screenshot text
+(the latest transcript_text).
+
+Tone: Ensure the final generated reply is in high-status 'Hinglish' and matches the
+energy level found in the Lore.
 
 You will be given:
 - A structured analysis of the screenshot (`analysis`) including:
@@ -156,8 +201,13 @@ You will be given:
   - detected_archetype
   - archetype_reasoning
   - key_detail
-- The user's requested direction (e.g. "get_number", "ask_out", "revive_chat", "change_topic").
+- A Librarian context dictionary (`librarian`) including:
+  - person_name
+  - core_lore
+  - past_memories
+- The user's requested direction (e.g. "get_number", "ask_out", "revive_chat", "change_topic")
 - A conversation context dictionary with any extra metadata about stage, history, and prior tactics.
+- The latest transcript_text (current screenshot text)
 
 Use ONLY this information to decide:
 - WRONG_MOVES: 2-3 things that would be bad to say right now.
@@ -453,6 +503,33 @@ def _encode_image_from_state(state: AgentState) -> str:
     raise ValueError("Invalid image format provided.")
 
 
+def ocr_extractor_node(state: AgentState) -> AgentState:
+    """
+    Extracts the verbatim text and participants out of the vision state.
+    """
+    t0 = time.monotonic()
+    logger.info("agent_ocr_start", **_state_meta(state))
+    image_url = _encode_image_from_state(state)
+
+    llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0).with_structured_output(OcrExtractorOutput)
+
+    content = [
+        {"type": "text", "text": "Extract the raw text and identify participants from this image."},
+        {"type": "image_url", "image_url": {"url": image_url}},
+    ]
+
+    t_call = time.monotonic()
+    result = llm.invoke([
+        SystemMessage(content=OCR_EXTRACTOR_SYSTEM_PROMPT),
+        HumanMessage(content=content)
+    ])
+    out = cast(OcrExtractorOutput, result)
+
+    logger.info("agent_ocr_done", llm_ms=int((time.monotonic() - t_call) * 1000))
+    # Store plain dicts so downstream json.dumps + logging never fails.
+    return {**state, "raw_ocr_text": _normalize_raw_ocr_text(out.raw_ocr_text)}
+
+
 def analyst_node(state: AgentState) -> AgentState:
     """
     LangGraph node that runs the visual analysis on the screenshot and
@@ -461,6 +538,12 @@ def analyst_node(state: AgentState) -> AgentState:
     t0 = time.monotonic()
     logger.info("agent_analyst_start", **_state_meta(state))
     image_url = _encode_image_from_state(state)
+    raw_ocr_text = state.get("raw_ocr_text", [])
+    raw_ocr_text_str = json.dumps(
+        _normalize_raw_ocr_text(raw_ocr_text), ensure_ascii=False
+    )
+    core_lore = state.get("core_lore", "")
+    past_memories = state.get("past_memories", "")
 
     llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0).with_structured_output(
         AnalystOutput
@@ -469,7 +552,13 @@ def analyst_node(state: AgentState) -> AgentState:
     content = [
         {
             "type": "text",
-            "text": "Analyze this dating app screenshot according to the system instructions.",
+                "text": (
+                    "Raw OCR Text (JSON list of bubbles):\n"
+                    f"{raw_ocr_text_str}\n\n"
+                    f"Core Lore:\n{core_lore}\n\n"
+                    f"Past Memories:\n{past_memories}\n\n"
+                    "Analyze the conversation vibe based on this context and extract visual_hooks from the image."
+                ),
         },
         {
             "type": "image_url",
@@ -580,6 +669,59 @@ def bouncer_node(state: AgentState) -> AgentState:
     }
 
 
+def librarian_node(state: AgentState) -> AgentState:
+    """
+    Librarian node: fetch core lore + semantic memories for the match.
+    Runs after `ocr_extractor_node` to use `raw_ocr_text` for indexing.
+    """
+    core_lore = state.get("core_lore", "") or ""
+    past_memories = state.get("past_memories", "") or ""
+    raw_ocr_text = state.get("raw_ocr_text", [])
+    current_text = json.dumps(_normalize_raw_ocr_text(raw_ocr_text), ensure_ascii=False)
+
+    conversation_id = state.get("conversation_id")
+    user_id = state.get("user_id")
+    if not (conversation_id and user_id and raw_ocr_text):
+        return {**state, "core_lore": core_lore, "past_memories": past_memories}
+
+    try:
+        async def _fetch() -> dict[str, str]:
+            # IMPORTANT:
+            # `librarian_node` runs inside a background thread (via `asyncio.to_thread`)
+            # and uses `asyncio.run()` internally (a separate event loop).
+            #
+            # To avoid SQLAlchemy async connection pool reuse across event loops
+            # (which causes: "Future attached to a different loop"), we create a
+            # short-lived engine/session here and dispose it immediately.
+            engine = create_async_engine(
+                settings.database_url,
+                echo=False,
+            )
+            SessionMaker = async_sessionmaker(
+                engine, class_=AsyncSession, expire_on_commit=False
+            )
+            try:
+                async with SessionMaker() as local_db:
+                    return await get_match_context(
+                        local_db,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        current_text=current_text,
+                    )
+            finally:
+                await engine.dispose()
+
+        librarian = asyncio.run(_fetch())
+        core_lore = librarian.get("core_lore") or ""
+        past_memories = librarian.get("past_memories") or ""
+    except Exception:
+        # Retrieval must never break generation.
+        core_lore = ""
+        past_memories = ""
+
+    return {**state, "core_lore": core_lore, "past_memories": past_memories}
+
+
 def strategist_node(state: AgentState) -> AgentState:
     """
     LangGraph node that takes the prior analysis + direction + conversation context
@@ -593,6 +735,38 @@ def strategist_node(state: AgentState) -> AgentState:
 
     direction = state.get("direction", "")
     context = state.get("conversation_context_dict", {})
+
+    core_lore = state.get("core_lore", "") or ""
+    past_memories = state.get("past_memories", "") or ""
+
+    person_name = getattr(analysis, "person_name", None) or "unknown"
+    convo_ctx_person = (state.get("conversation_context_dict", {}) or {}).get(
+        "person_name", None
+    )
+    if convo_ctx_person and str(convo_ctx_person).lower() != "unknown":
+        person_name = str(convo_ctx_person)
+
+    transcript_text = ""
+    for bubble in reversed(getattr(analysis, "visual_transcript", []) or []):
+        if getattr(bubble, "sender", "") == "them":
+            actual = getattr(bubble, "actual_new_message", "") or ""
+            # Strategy decisions should be anchored to her latest ACTUAL new message only.
+            # Quoted_context (faded reply blocks) is past context and can belong to the opposite person.
+            transcript_text = actual
+            break
+    if not transcript_text:
+        # Fallback: use the latest bubble content we can find.
+        for bubble in reversed(getattr(analysis, "visual_transcript", []) or []):
+            actual = getattr(bubble, "actual_new_message", "") or ""
+            if actual:
+                transcript_text = actual
+                break
+
+    librarian_context = {
+        "person_name": person_name,
+        "core_lore": core_lore,
+        "past_memories": past_memories,
+    }
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-3.1-flash-lite-preview", temperature=0.4
@@ -608,6 +782,8 @@ def strategist_node(state: AgentState) -> AgentState:
                         "analysis": analysis.model_dump(),
                         "direction": direction,
                         "conversation_context": context,
+                        "librarian": librarian_context,
+                        "transcript_text": transcript_text,
                     }
                 )
             ),

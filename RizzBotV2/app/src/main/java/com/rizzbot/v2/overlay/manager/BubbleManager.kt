@@ -336,6 +336,7 @@ class BubbleManager @Inject constructor(
                                         val result = orchestrator.result.value
                                         _state.value = when (result) {
                                             is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                                            is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                                             else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
                                         }
                                     }
@@ -346,6 +347,7 @@ class BubbleManager @Inject constructor(
                                 val previews = orchestrator.getPreviewBitmaps()
                                 _state.value = when {
                                     result is SuggestionResult.Success -> BubbleState.Expanded(result)
+                                    result is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                                     previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
                                         previews,
                                         currentDirection ?: DirectionWithHint()
@@ -521,6 +523,7 @@ class BubbleManager @Inject constructor(
             _state.value = when (result) {
                 is SuggestionResult.Success -> BubbleState.Expanded(result)
                 is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, direction)
+                is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                 is SuggestionResult.Loading -> BubbleState.Loading()
             }
         }
@@ -590,6 +593,7 @@ class BubbleManager @Inject constructor(
                             val result = orchestrator.result.value
                             _state.value = when (result) {
                                 is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                                is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                                 else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
                             }
                         }
@@ -600,6 +604,7 @@ class BubbleManager @Inject constructor(
                     val previews = orchestrator.getPreviewBitmaps()
                     _state.value = when {
                         result is SuggestionResult.Success -> BubbleState.Expanded(result)
+                        result is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                         previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
                             previews,
                             currentDirection ?: DirectionWithHint()
@@ -668,6 +673,7 @@ class BubbleManager @Inject constructor(
                         _state.value = when (result) {
                             is SuggestionResult.Success -> BubbleState.Expanded(result)
                             is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
+                            is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                             is SuggestionResult.Loading -> BubbleState.Loading()
                         }
                     }
@@ -702,6 +708,7 @@ class BubbleManager @Inject constructor(
                         val result = orchestrator.result.value
                         _state.value = when (result) {
                             is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                            is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                             else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
                         }
                     }
@@ -715,6 +722,37 @@ class BubbleManager @Inject constructor(
                         _state.value = BubbleState.ScreenshotPreview(previewBitmaps, event.direction)
                     } else {
                         _state.value = BubbleState.DirectionPicker
+                    }
+                }
+            }
+            is OverlayEvent.ConfirmMerge -> {
+                val payload = (_state.value as? BubbleState.RequiresUserConfirmation)?.payload
+                if (payload == null) {
+                    Log.w(TAG, "ConfirmMerge ignored: no pending confirmation state")
+                    return
+                }
+
+                activeScope.launch {
+                    val direction = currentDirection ?: DirectionWithHint()
+                    _state.value = BubbleState.Loading(isProcessing = true)
+
+                    val result = hostedRepository.resolveConversationMerge(
+                        suggestedConversationId = payload.conversationId,
+                        isMatch = event.isMatch,
+                        newOcrText = payload.personName
+                    )
+
+                    _state.value = when (result) {
+                        is SuggestionResult.Success -> BubbleState.Expanded(result)
+                        is SuggestionResult.Error -> BubbleState.Error(
+                            message = result.message,
+                            errorType = result.errorType,
+                            direction = direction
+                        )
+                        is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(
+                            payload = result.suggestedMatch
+                        )
+                        is SuggestionResult.Loading -> BubbleState.Loading(isProcessing = true)
                     }
                 }
             }
@@ -796,6 +834,7 @@ class BubbleManager @Inject constructor(
                         _state.value = when (result) {
                             is SuggestionResult.Success -> BubbleState.Expanded(result)
                             is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
+                            is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                             is SuggestionResult.Loading -> BubbleState.Loading()
                         }
                     }
@@ -836,6 +875,7 @@ class BubbleManager @Inject constructor(
                     }
                     is BubbleState.Loading,
                     is BubbleState.Expanded,
+                    is BubbleState.RequiresUserConfirmation,
                     is BubbleState.Error -> {
                         // From replies/error/loading, prefer going back to capture if possible.
                         if (previews.isNotEmpty()) {

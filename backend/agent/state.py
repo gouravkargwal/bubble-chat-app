@@ -28,8 +28,9 @@ class ChatBubble(BaseModel):
 
 
 class AnalystOutput(BaseModel):
-    visual_transcript: List[ChatBubble]
+    visual_transcript: List[ChatBubble] = Field(default_factory=list)
     visual_hooks: List[str] = Field(
+        default_factory=list,
         description="List 3-4 specific physical or environmental details from the photos."
     )
     detected_dialect: Literal["ENGLISH", "HINDI", "HINGLISH"]
@@ -90,6 +91,8 @@ class AgentState(TypedDict):
     image_bytes: str
     direction: str
     custom_hint: str
+    user_id: str
+    conversation_id: str | None
     voice_dna_dict: Dict[str, Any]
     conversation_context_dict: Dict[str, Any]
 
@@ -101,9 +104,31 @@ class AgentState(TypedDict):
     analysis: Optional[AnalystOutput]
     strategy: Optional[StrategyOutput]
     drafts: Optional[WriterOutput]
+    core_lore: str
+    past_memories: str
+    # OCR output is now structured so ownership can be handled deterministically.
+    raw_ocr_text: List["RawOcrTextItem"]
 
     # Auditor state
     is_cringe: bool
     auditor_feedback: str
     revision_count: int
+
+
+class RawOcrTextItem(TypedDict):
+    """
+    Strict OCR item schema for one bubble.
+
+    `sender` is ALWAYS the bubble anchor based on horizontal alignment:
+    - left-aligned bubble => "them"
+    - right-aligned bubble => "user"
+
+    `actual_new_message` is the bold/solid fresh text below any quoted (faded) block.
+    `quoted_context` is the quoted (faded) top block text (or null if none).
+    """
+
+    sender: Literal["user", "them"]
+    actual_new_message: str
+    quoted_context: str | None
+    is_reply: bool
 

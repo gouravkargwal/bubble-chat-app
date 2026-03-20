@@ -4,7 +4,9 @@ import structlog
 from agent.state import AgentState
 from agent.nodes import (
     bouncer_node,
+    ocr_extractor_node,
     analyst_node,
+    librarian_node,
     strategist_node,
     writer_node,
     auditor_node,
@@ -58,7 +60,7 @@ def check_bouncer(state: AgentState) -> str:
     """
     Route based on whether the image is a valid chat screenshot.
     """
-    decision = "analyst" if state.get("is_valid_chat", False) else "end"
+    decision = "ocr_extractor" if state.get("is_valid_chat", False) else "end"
     logger.info(
         "agent_route_bouncer",
         decision=decision,
@@ -69,7 +71,9 @@ def check_bouncer(state: AgentState) -> str:
 
 # --- 2. Add the Nodes ("The Factory Stations") ---
 workflow.add_node("bouncer", bouncer_node)
+workflow.add_node("ocr_extractor", ocr_extractor_node)
 workflow.add_node("analyst", analyst_node)
+workflow.add_node("librarian", librarian_node)
 workflow.add_node("strategist", strategist_node)
 workflow.add_node("writer", writer_node)
 workflow.add_node("auditor", auditor_node)
@@ -80,10 +84,12 @@ workflow.add_conditional_edges(
     "bouncer",
     check_bouncer,
     {
-        "analyst": "analyst",
+        "ocr_extractor": "ocr_extractor",
         "end": END,
     },
 )
+workflow.add_edge("ocr_extractor", "librarian")
+workflow.add_edge("librarian", "analyst")
 workflow.add_edge("analyst", "strategist")
 workflow.add_edge("strategist", "writer")
 workflow.add_edge("writer", "auditor")

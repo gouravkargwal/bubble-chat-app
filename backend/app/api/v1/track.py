@@ -49,7 +49,17 @@ async def track_copy(
     if reply_text:
         # Try to generate an embedding for semantic memory, but never block the user on failures.
         try:
-            interaction.embedding = await embed_text(reply_text)
+            expected_dim_raw = getattr(Interaction.embedding.type, "dim", None)
+            expected_dim: int | None = None
+            if expected_dim_raw is not None:
+                try:
+                    expected_dim = int(expected_dim_raw)
+                except (TypeError, ValueError):
+                    expected_dim = None
+            interaction.embedding = await embed_text(
+                reply_text,
+                dimensions=expected_dim if expected_dim and expected_dim > 0 else None,
+            )
         except Exception as e:  # pragma: no cover - defensive logging
             logger.error(
                 "semantic_memory_failed",

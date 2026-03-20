@@ -1,5 +1,7 @@
 """API request/response schemas."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.models.enums import ConversationDirection
@@ -61,6 +63,25 @@ class VisionResponse(BaseModel):
     conversation_id: str
 
 
+# Hybrid stitch confirmation (cross-platform chat resolution)
+class SuggestedMatchContextPreview(BaseModel):
+    her_last_message: str
+    your_last_reply: str
+    ai_memory_note: str
+
+
+class SuggestedMatch(BaseModel):
+    person_name: str
+    conversation_id: str
+    last_active: str
+    context_preview: SuggestedMatchContextPreview
+
+
+class RequiresUserConfirmation(BaseModel):
+    status: Literal["REQUIRES_USER_CONFIRMATION"]
+    suggested_match: SuggestedMatch
+
+
 class CalibrationRequest(BaseModel):
     images: list[str] = Field(..., description="Base64 screenshots for calibration")
 
@@ -68,6 +89,13 @@ class CalibrationRequest(BaseModel):
 class CalibrationResponse(BaseModel):
     messages_extracted: int
     success: bool
+
+
+class ResolveConversationRequest(BaseModel):
+    user_id: str
+    suggested_conversation_id: str
+    is_match: bool
+    new_ocr_text: str
 
 
 # Tracking

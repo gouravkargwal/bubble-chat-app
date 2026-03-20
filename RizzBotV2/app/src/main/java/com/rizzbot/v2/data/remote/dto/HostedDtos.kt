@@ -43,6 +43,36 @@ data class VisionGenerateResponse(
     @SerialName("usage_remaining") val usageRemaining: Int
 )
 
+// Hybrid Stitch (cross-platform chat resolution)
+@Serializable
+data class ResolveConversationRequest(
+    @SerialName("user_id") val userId: String,
+    @SerialName("suggested_conversation_id") val suggestedConversationId: String,
+    @SerialName("is_match") val isMatch: Boolean,
+    @SerialName("new_ocr_text") val newOcrText: String
+)
+
+@Serializable
+data class RequiresUserConfirmationResponse(
+    val status: String,
+    @SerialName("suggested_match") val suggestedMatch: SuggestedMatchDto
+)
+
+@Serializable
+data class SuggestedMatchDto(
+    @SerialName("person_name") val personName: String,
+    @SerialName("conversation_id") val conversationId: String,
+    @SerialName("last_active") val lastActive: String,
+    @SerialName("context_preview") val contextPreview: SuggestedMatchContextPreviewDto
+)
+
+@Serializable
+data class SuggestedMatchContextPreviewDto(
+    @SerialName("her_last_message") val herLastMessage: String,
+    @SerialName("your_last_reply") val yourLastReply: String,
+    @SerialName("ai_memory_note") val aiMemoryNote: String
+)
+
 // ── Vision / Calibration (Voice DNA) ──
 
 @Serializable

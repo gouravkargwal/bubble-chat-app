@@ -20,6 +20,7 @@ import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
 import com.rizzbot.v2.data.remote.dto.VerifyPurchaseResponse
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateResponse
+import com.rizzbot.v2.data.remote.dto.ResolveConversationRequest
 import com.rizzbot.v2.data.remote.dto.ProfileBlueprintDto
 import com.rizzbot.v2.data.remote.dto.ProfileBlueprintListResponse
 import okhttp3.MultipartBody
@@ -67,6 +68,9 @@ interface HostedApi {
 
     @DELETE("api/v1/conversations/{id}")
     suspend fun deleteConversation(@Path("id") id: String)
+
+    @POST("api/v1/conversations/resolve")
+    suspend fun resolveConversation(@Body request: ResolveConversationRequest): VisionGenerateResponse
 
     // Referral
     @GET("api/v1/referral/me")

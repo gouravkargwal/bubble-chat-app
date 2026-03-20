@@ -40,6 +40,7 @@ import com.rizzbot.v2.overlay.ui.components.panels.BubbleHeader
 import com.rizzbot.v2.overlay.ui.components.panels.DirectionPicker
 import com.rizzbot.v2.overlay.ui.components.panels.ErrorPanel
 import com.rizzbot.v2.overlay.ui.components.panels.LoadingOverlay
+import com.rizzbot.v2.overlay.ui.components.panels.MergeConfirmationPanel
 import com.rizzbot.v2.overlay.ui.components.panels.ProcessingOverlay
 import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
 import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
@@ -75,6 +76,7 @@ fun BubbleOverlay(
     val isFullScreen = currentState is BubbleState.DirectionPicker ||
         currentState is BubbleState.ScreenshotPreview ||
         currentState is BubbleState.Expanded ||
+        currentState is BubbleState.RequiresUserConfirmation ||
         currentState is BubbleState.Error
 
     OverlayTheme {
@@ -291,6 +293,11 @@ private fun FullScreenCard(
                         onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
                         onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
                         onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                    )
+                    is BubbleState.RequiresUserConfirmation -> MergeConfirmationPanel(
+                        payload = s.payload,
+                        onYes = { onEvent(OverlayEvent.ConfirmMerge(isMatch = true)) },
+                        onNo = { onEvent(OverlayEvent.ConfirmMerge(isMatch = false)) }
                     )
                     is BubbleState.Error -> ErrorPanel(
                         message = s.message,

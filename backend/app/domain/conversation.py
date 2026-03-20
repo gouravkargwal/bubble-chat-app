@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import AnalysisResult, ConversationContext
@@ -16,8 +16,22 @@ async def find_or_create_conversation(
     db: AsyncSession,
 ) -> Conversation:
     """Find an existing conversation by person name or create a new one."""
+    # Singleton active conversation per user:
+    # Whenever we activate (or create) a conversation, deactivate all other active
+    # conversations for this user first.
+    async def _deactivate_other_conversations() -> None:
+        await db.execute(
+            text(
+                "UPDATE conversations "
+                "SET is_active = false "
+                "WHERE user_id = :user_id AND is_active = true"
+            ),
+            {"user_id": user_id},
+        )
+
     if not person_name or person_name == "unknown":
         # Create a transient conversation
+        await _deactivate_other_conversations()
         convo = Conversation(user_id=user_id, person_name="unknown")
         db.add(convo)
         await db.commit()
@@ -36,9 +50,13 @@ async def find_or_create_conversation(
     existing = result.scalar_one_or_none()
 
     if existing:
+        await _deactivate_other_conversations()
+        existing.is_active = True  # ensure it is the singleton active one
+        await db.commit()
         return existing
 
     # Create new conversation
+    await _deactivate_other_conversations()
     convo = Conversation(user_id=user_id, person_name=person_name)
     db.add(convo)
     await db.commit()
