@@ -140,7 +140,7 @@ fun ProfileAuditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Brutal Profile Auditor",
+                        text = "Photo Audit",
                         fontSize = 18.sp
                     )
                 },

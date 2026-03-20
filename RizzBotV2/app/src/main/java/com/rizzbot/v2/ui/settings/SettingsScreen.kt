@@ -534,7 +534,7 @@ private fun UsageLimitsDisplay(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Weekly Profile Audits",
+                "Weekly Photo Audits",
                 color = Color.White,
                 fontSize = 14.sp
             )

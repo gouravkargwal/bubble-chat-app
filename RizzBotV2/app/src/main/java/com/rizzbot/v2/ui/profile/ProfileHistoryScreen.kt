@@ -117,7 +117,7 @@ fun ProfileHistoryScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Profile Audit History",
+                        text = "Photo Audit History",
                         fontSize = 18.sp,
                         color = Color.White,
                     )
@@ -156,7 +156,7 @@ fun ProfileHistoryScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No audits yet. Run a Brutal Profile Audit to see history here.",
+                        text = "No audits yet. Run a Photo Audit to see history here.",
                         color = Color(0xFF8080A0),
                         fontSize = 14.sp,
                     )

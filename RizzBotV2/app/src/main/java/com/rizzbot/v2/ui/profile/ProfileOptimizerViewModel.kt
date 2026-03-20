@@ -78,7 +78,7 @@ class ProfileOptimizerViewModel @Inject constructor(
                 } else {
                     val code = response.code()
                     val message = when (code) {
-                        400 -> "We need at least one good audit first. Run a Brutal Profile Audit, then try again."
+                        400 -> "We need at least one good audit first. Run a Photo Audit, then try again."
                         401 -> "Session expired. Please log in again."
                         403 -> "Profile blueprints aren't available on your current plan. Upgrade to unlock this feature."
                         429 -> "You've used your weekly blueprint limit. It resets every Monday — come back then!"

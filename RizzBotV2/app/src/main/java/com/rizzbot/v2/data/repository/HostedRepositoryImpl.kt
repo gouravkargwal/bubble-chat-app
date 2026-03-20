@@ -537,8 +537,8 @@ class HostedRepositoryImpl @Inject constructor(
                 }
             } else {
                 val message = when (response.code()) {
-                    429 -> "You've used your weekly profile audit limit. It resets every Monday — come back then!"
-                    403 -> "Profile audits aren't available on your current plan. Please upgrade."
+                    429 -> "You've used your weekly photo audit limit. It resets every Monday — come back then!"
+                    403 -> "Photo audits aren't available on your current plan. Please upgrade."
                     else -> "Server error: ${response.code()}"
                 }
                 Result.failure(Exception(message))

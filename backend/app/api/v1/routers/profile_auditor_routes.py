@@ -661,7 +661,7 @@ async def profile_audit(
         except QuotaExceededException:
             raise HTTPException(
                 status_code=429,
-                detail=f"Weekly profile audit limit reached ({audits_per_week}/week). Resets on Monday.",
+                detail=f"Weekly photo audit limit reached ({audits_per_week}/week). Resets on Monday.",
             )
 
     # 2. Execute heavy AI/Vision call with explicit transaction control.
@@ -827,7 +827,7 @@ async def get_share_card(
 
     if not photos:
         raise HTTPException(
-            status_code=404, detail="No profile audits found for this user."
+            status_code=404, detail="No photo audits found for this user."
         )
 
     latest_created_at = max(p.created_at for p in photos)
