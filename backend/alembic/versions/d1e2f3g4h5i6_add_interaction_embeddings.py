@@ -23,10 +23,10 @@ def upgrade() -> None:
     # Ensure the pgvector extension is available
     op.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-    # Add embedding column to interactions (OpenAI/Gemini 1536-dim)
+    # Add embedding column to interactions (768-dim, gemini-embedding-001)
     op.add_column(
         "interactions",
-        sa.Column("embedding", Vector(1536), nullable=True),
+        sa.Column("embedding", Vector(768), nullable=True),
     )
 
     # HNSW index for fast vector similarity search using cosine distance

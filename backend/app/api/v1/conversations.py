@@ -136,14 +136,14 @@ async def resolve_conversation(
         effective_conversation_id = convo.id
     else:
         # Create a fresh conversation for the newly-detected person/platform.
-        # Singleton active conversation per user:
-        # Deactivate any previously-active conversation before starting the new one.
+        # Only deactivate the suggested conversation that the user rejected, not all
+        # active conversations — the user may have other ongoing chats with different people.
         await db.execute(
             text(
                 "UPDATE conversations SET is_active = false "
-                "WHERE user_id = :user_id AND is_active = true"
+                "WHERE id = :conv_id AND user_id = :user_id"
             ),
-            {"user_id": user.id},
+            {"conv_id": request.suggested_conversation_id, "user_id": user.id},
         )
         convo = Conversation(
             user_id=user.id,

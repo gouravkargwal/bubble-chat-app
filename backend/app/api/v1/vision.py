@@ -823,7 +823,7 @@ async def generate_replies(
     # This MUST happen before any LangGraph agent nodes run.
     if not effective_conversation_id:
         ocr_person_name, extracted_texts = await _extract_hybrid_stitch_ocr_signals(
-            image_base64=images[0]
+            image_base64=images[-1]
         )
 
         outcome, matched_conversation_id, payload = (
@@ -902,13 +902,12 @@ async def generate_replies(
                             except Exception:
                                 stored_texts.append(reply_val)
 
-                stored_norm = {
-                    _normalize_text_for_overlap(t): t for t in stored_texts if t
-                }
                 for ext in extracted_texts:
-                    ext_norm = _normalize_text_for_overlap(ext)
-                    if ext_norm and ext_norm in stored_norm:
-                        duplicate_snippet = ext[:80]
+                    for stored in stored_texts:
+                        if _text_overlap(ext, stored):
+                            duplicate_snippet = ext[:80]
+                            break
+                    if duplicate_snippet:
                         break
 
             if duplicate_snippet:

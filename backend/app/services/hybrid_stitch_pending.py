@@ -70,6 +70,7 @@ def peek_pending_hybrid_resolution(
     if not pending:
         return None
     if time.monotonic() - pending.created_at_monotonic > _TTL_SECONDS:
+        _PENDING.pop(key, None)  # evict expired entry to prevent unbounded growth
         return None
     return pending
 
