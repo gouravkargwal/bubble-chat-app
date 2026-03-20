@@ -14,12 +14,13 @@ services:
   api:
     build: .
     command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --workers 4 --timeout-keep-alive 30
-    ports:
-      - "18000:8000"
     env_file: .env.prod
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default # Needed to talk to Postgres
+      - milk_bridge # Needed to talk to the existing milk network
     healthcheck:
       test:
         [
@@ -33,23 +34,10 @@ services:
       retries: 3
     restart: unless-stopped
 
-  nginx-proxy-manager:
-    image: jc21/nginx-proxy-manager:latest
-    restart: unless-stopped
-    ports:
-      - "18080:80"
-      - "18081:81"
-      - "18443:443"
-    environment:
-      DB_SQLITE_FILE: "/data/database.sqlite"
-    volumes:
-      - npm_data:/data
-      - npm_letsencrypt:/etc/letsencrypt
-    depends_on:
-      api:
-        condition: service_started
-
 volumes:
   pgdata_prod:
-  npm_data:
-  npm_letsencrypt:
+
+networks:
+  milk_bridge:
+    external: true
+    name: milk-management-system_milk_network
