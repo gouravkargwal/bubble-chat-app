@@ -91,6 +91,19 @@ async def revenuecat_webhook(
     elif affects("pro"):
         new_tier = "pro"
 
+    # RevenueCat sometimes sends `entitlement_ids: null` for certain payloads/environments.
+    # In that case, we can still infer the tier from the `product_id`.
+    def infer_tier_from_product_id(pid: str | None) -> str | None:
+        if not pid:
+            return None
+        val = pid.lower()
+        # Priority: premium should win over pro if both substrings ever appear.
+        if "premium" in val:
+            return "premium"
+        if "pro" in val:
+            return "pro"
+        return None
+
     # Derive billing_period from product_id string
     product_id: str | None = event_data.get("product_id")
     billing_period = "weekly"  # sensible default
@@ -102,6 +115,10 @@ async def revenuecat_webhook(
             billing_period = "yearly"
         elif "weekly" in pid:
             billing_period = "weekly"
+
+    # If entitlements were missing/empty, fall back to product_id inference.
+    if new_tier is None:
+        new_tier = infer_tier_from_product_id(product_id)
 
     # 1) INITIAL_PURCHASE / RENEWAL / PRODUCT_CHANGE → Clean Slate upgrade path
     # FIXED: Added PRODUCT_CHANGE so users who upgrade tiers actually get their new limits.
@@ -141,9 +158,10 @@ async def revenuecat_webhook(
     # the moment their paid plan ends.
     if event_type == "EXPIRATION":
         new_tier_exp: str | None = None
-        if user.tier == "premium" and affects("premium"):
+        expiring_tier = infer_tier_from_product_id(product_id)
+        if user.tier == "premium" and (affects("premium") or expiring_tier == "premium"):
             new_tier_exp = "free"
-        elif user.tier == "pro" and affects("pro"):
+        elif user.tier == "pro" and (affects("pro") or expiring_tier == "pro"):
             new_tier_exp = "free"
 
         if new_tier_exp is None:

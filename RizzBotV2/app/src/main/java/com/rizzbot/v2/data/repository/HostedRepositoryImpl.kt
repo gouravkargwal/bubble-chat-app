@@ -210,13 +210,88 @@ class HostedRepositoryImpl @Inject constructor(
             lastUsageFetchTime = System.currentTimeMillis()
         } catch (e: HttpException) {
             if (e.code() == 401) {
-                // Backend no longer recognizes this user/token → treat as hard logout.
+                // Backend rejected our JWT. If Firebase still has a valid signed-in session,
+                // attempt to silently re-issue a backend JWT and retry once.
+                val refreshed = authManager.get().refreshBackendTokenIfFirebaseSignedIn()
+                if (refreshed) {
+                    try {
+                        val usage = hostedApi.getUsage()
+
+                        // Extract max_photos_per_audit from limits map
+                        val maxPhotosPerAudit = usage.limits["max_photos_per_audit"]
+                            ?.let { 
+                                if (it is JsonPrimitive) {
+                                    it.content.toIntOrNull() ?: 3
+                                } else {
+                                    3
+                                }
+                            } ?: 3
+
+                        // Extract profile_audits_per_week from limits map
+                        val profileAuditsPerWeek = usage.limits["profile_audits_per_week"]
+                            ?.let {
+                                if (it is JsonPrimitive) {
+                                    it.content.toIntOrNull() ?: 1
+                                } else {
+                                    1
+                                }
+                            } ?: 1
+
+                        // Extract profile_blueprints_per_week from limits map
+                        val profileBlueprintsPerWeek = usage.limits["profile_blueprints_per_week"]
+                            ?.let {
+                                if (it is JsonPrimitive) {
+                                    it.content.toIntOrNull() ?: 0
+                                } else {
+                                    0
+                                }
+                            } ?: 0
+
+                        _usageState.value = UsageState(
+                            dailyLimit = usage.dailyLimit,
+                            dailyUsed = usage.dailyUsed,
+                            weeklyUsed = usage.weeklyUsed,
+                            monthlyUsed = usage.monthlyUsed,
+                            profileAuditsPerWeek = profileAuditsPerWeek,
+                            weeklyAuditsUsed = usage.weeklyAuditsUsed,
+                            isPremium = usage.isPremium,
+                            tier = usage.tier,
+                            bonusReplies = usage.bonusReplies,
+                            allowedDirections = usage.allowedDirections,
+                            customHintsEnabled = usage.customHints,
+                            maxScreenshots = usage.maxScreenshots,
+                            premiumExpiresAt = usage.tierExpiresAt,
+                            godModeExpiresAt = usage.godModeExpiresAt?.let { 
+                                try {
+                                    java.time.Instant.ofEpochSecond(it)
+                                } catch (e: Exception) {
+                                    android.util.Log.w("HostedRepo", "Failed to parse godModeExpiresAt: ${e.message}")
+                                    null
+                                }
+                            },
+                            totalRepliesGenerated = usage.totalRepliesGenerated,
+                            totalRepliesCopied = usage.totalRepliesCopied,
+                            maxPhotosPerAudit = maxPhotosPerAudit,
+                            profileBlueprintsPerWeek = profileBlueprintsPerWeek,
+                            weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
+                            billingPeriod = usage.billingPeriod
+                        )
+
+                        // Update cache timestamp on successful retry fetch
+                        lastUsageFetchTime = System.currentTimeMillis()
+                        return
+                    } catch (_: Exception) {
+                        // If retry still fails, fall through to hard logout below.
+                    }
+                }
+
+                // Hard logout: backend no longer recognizes this user/token.
                 authManager.get().clearAuth()
                 // Stop overlay service so "Cookd is active" indicator goes off
                 context.stopService(Intent(context, OverlayService::class.java))
                 // Reset to initial usage state; UI should now behave as fully signed-out.
                 _usageState.value = UsageState()
-                
+
                 // Restart app to trigger MainActivity's auth check → sends user to onboarding
                 val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
                 intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)

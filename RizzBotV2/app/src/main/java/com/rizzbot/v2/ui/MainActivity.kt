@@ -5,10 +5,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.revenuecat.purchases.Purchases
@@ -23,7 +23,13 @@ import com.rizzbot.v2.ui.theme.RizzBotV2Theme
 import com.rizzbot.v2.util.InAppUpdateHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
+
+private data class BootState(
+    val onboardingCompleted: Boolean,
+    val isAuthenticated: Boolean,
+)
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -62,32 +68,54 @@ class MainActivity : ComponentActivity() {
         InAppUpdateHelper.checkForUpdate(this)
 
         setContent {
-            val onboardingCompleted by settingsDataStore.onboardingCompleted.collectAsState(initial = false)
             val navController = rememberNavController()
             val navigateTo = pendingNavigation.value
             val shouldShowPaywall = showPaywallFromIntent.value
 
-            // Both onboarding AND valid auth required to skip to Home
-            // Auto Backup can restore DataStore (onboarding=true) but not EncryptedSharedPrefs
-            val canSkipOnboarding = onboardingCompleted && authManager.isAuthenticated()
+            // Resolve onboarding/auth state before selecting a start destination.
+            // This avoids rendering the onboarding screen on the first frame when DataStore emits `false` initially.
+            val bootState = remember { mutableStateOf<BootState?>(null) }
 
-            RizzBotV2Theme {
-                NavGraph(
-                    navController = navController,
-                    startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route
+            LaunchedEffect(Unit) {
+                val onboardingCompleted = settingsDataStore.onboardingCompleted.first()
+
+                var isAuthenticated = authManager.isAuthenticated()
+                if (!isAuthenticated) {
+                    // If Firebase still has a valid session, re-issue backend JWT before deciding route.
+                    val refreshed = authManager.refreshBackendTokenIfFirebaseSignedIn()
+                    isAuthenticated = refreshed && authManager.isAuthenticated()
+                }
+
+                bootState.value = BootState(
+                    onboardingCompleted = onboardingCompleted,
+                    isAuthenticated = isAuthenticated
                 )
             }
 
-            androidx.compose.runtime.LaunchedEffect(navigateTo) {
-                if (navigateTo == "premium" && onboardingCompleted) {
+            val resolvedOnboardingCompleted = bootState.value?.onboardingCompleted ?: false
+            val canSkipOnboarding = bootState.value?.onboardingCompleted == true && bootState.value?.isAuthenticated == true
+
+            RizzBotV2Theme {
+                if (bootState.value == null) {
+                    // Keep SplashScreen up while we decide route.
+                } else {
+                    NavGraph(
+                        navController = navController,
+                        startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route
+                    )
+                }
+            }
+
+            LaunchedEffect(navigateTo, bootState.value) {
+                if (navigateTo == "premium" && resolvedOnboardingCompleted) {
                     navController.navigate(Screen.Premium.route)
                     pendingNavigation.value = null
                 }
             }
             
             // Handle paywall intent - watch both the flag and onboarding state
-            androidx.compose.runtime.LaunchedEffect(shouldShowPaywall, onboardingCompleted) {
-                if (shouldShowPaywall && onboardingCompleted) {
+            LaunchedEffect(shouldShowPaywall, resolvedOnboardingCompleted, bootState.value) {
+                if (shouldShowPaywall && resolvedOnboardingCompleted) {
                     // Small delay to ensure navigation graph is ready
                     kotlinx.coroutines.delay(150)
                     try {

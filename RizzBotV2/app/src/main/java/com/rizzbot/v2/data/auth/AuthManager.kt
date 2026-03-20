@@ -5,11 +5,13 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.FirebaseAuthRequest
+import com.google.firebase.auth.FirebaseAuth
 import com.rizzbot.v2.data.subscription.SubscriptionManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.Lazy
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.tasks.await
 
 @Singleton
 class AuthManager @Inject constructor(
@@ -34,6 +36,8 @@ class AuthManager @Inject constructor(
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     }
+
+    private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
 
     fun getToken(): String? = prefs.getString(KEY_TOKEN, null)
 
@@ -91,5 +95,39 @@ class AuthManager @Inject constructor(
             .putString(KEY_USER_ID, userId)
             .putLong(KEY_EXPIRES_AT, expiresAt)
             .apply()
+    }
+
+    /**
+     * Attempts to silently re-issue our backend JWT using the currently signed-in Firebase user.
+     *
+     * This is used to avoid "logged out" loops when our backend JWT is rejected (401) after an app
+     * restart, but Firebase still has a valid refresh session.
+     */
+    suspend fun refreshBackendTokenIfFirebaseSignedIn(): Boolean {
+        val firebaseUser = firebaseAuth.currentUser ?: return false
+
+        val firebaseIdToken = firebaseUser.getIdToken(false).await().token ?: return false
+
+        // Stable provider identifier for cross-device lookup.
+        val googleProviderId = firebaseUser.providerData
+            .firstOrNull { it.providerId == "google.com" }
+            ?.uid
+
+        return try {
+            val response = hostedApi.get().authenticateFirebase(
+                FirebaseAuthRequest(
+                    firebaseToken = firebaseIdToken,
+                    googleProviderId = googleProviderId
+                )
+            )
+
+            saveAuth(response.token, response.userId, response.expiresAt)
+
+            // Keep RevenueCat identity aligned with the backend user.
+            subscriptionManager.get().setUserId(response.userId)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 }
