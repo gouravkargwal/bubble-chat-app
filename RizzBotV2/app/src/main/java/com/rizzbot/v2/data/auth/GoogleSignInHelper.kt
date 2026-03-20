@@ -1,6 +1,7 @@
 package com.rizzbot.v2.data.auth
 
-import android.accounts.AccountManager
+import android.app.Activity
+import android.content.Intent
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -22,6 +23,11 @@ import com.revenuecat.purchases.interfaces.LogInCallback
 import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.rizzbot.v2.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +40,8 @@ sealed class GoogleSignInResult {
     data class Error(val message: String) : GoogleSignInResult()
 }
 
+class GoogleSignInFallbackRequired(val signInIntent: Intent) : Exception("Google sign-in fallback required.")
+
 @Singleton
 class GoogleSignInHelper @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -42,13 +50,12 @@ class GoogleSignInHelper @Inject constructor(
     private val credentialManager = CredentialManager.create(context)
     private val firebaseAuth = FirebaseAuth.getInstance()
 
-    suspend fun signIn(activityContext: Context): GoogleSignInResult {
+    suspend fun signIn(activity: Activity): GoogleSignInResult {
         val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
-        val packageName = context.packageName
         
         // Log configuration details for debugging
         Log.d("GoogleSignIn", "=== Google Sign-In Configuration ===")
-        Log.d("GoogleSignIn", "Package Name: $packageName")
+        Log.d("GoogleSignIn", "Package Name: ${context.packageName}")
         Log.d("GoogleSignIn", "Web Client ID: $webClientId")
         Log.d("GoogleSignIn", "BuildConfig.BACKEND_URL: ${BuildConfig.BACKEND_URL}")
         Log.d("GoogleSignIn", "=====================================")
@@ -62,34 +69,12 @@ class GoogleSignInHelper @Inject constructor(
             // First try authorized accounts for faster sign-in
             Log.d("GoogleSignIn", "Attempting sign-in with authorized accounts first...")
             val idToken = try {
-                getGoogleIdToken(activityContext, webClientId, filterByAuthorized = true)
+                getGoogleIdToken(activity, webClientId, filterByAuthorized = true)
             } catch (e: NoCredentialException) {
-                // No previously authorized account — show full account picker
-                Log.d("GoogleSignIn", "No authorized account found, trying full account picker...")
-                try {
-                    getGoogleIdToken(activityContext, webClientId, filterByAuthorized = false)
-                } catch (e2: NoCredentialException) {
-                    // This means no accounts are available or OAuth client is misconfigured
-                    Log.e("GoogleSignIn", "NoCredentialException: ${e2.message}", e2)
-                    // Check if device has Google accounts
-                    val hasAccounts = AccountManager.get(context)
-                        .getAccountsByType("com.google")
-                        .isNotEmpty()
-                    
-                    Log.d("GoogleSignIn", "Device has Google accounts: $hasAccounts")
-                    
-                    if (!hasAccounts) {
-                        return GoogleSignInResult.Error("No Google account found on this device. Please add one in Settings.")
-                    } else {
-                        // Device has accounts but Credential Manager can't access them
-                        // This usually means OAuth client is not properly configured for this package
-                        Log.e("GoogleSignIn", "Device has Google accounts but sign-in failed. Package: $packageName, WebClientId: $webClientId")
-                        return GoogleSignInResult.Error(
-                            "Google Sign-In is not properly configured for this app. " +
-                            "Please ensure the Android OAuth client is set up in Firebase Console for package: $packageName"
-                        )
-                    }
-                }
+                // If CredentialManager has no authorized credential, fall back immediately.
+                Log.d("GoogleSignIn", "NoCredentialException: falling back to GoogleSignInClient.signInIntent...")
+                val signInIntent = createGoogleSignInIntent(activity, webClientId)
+                throw GoogleSignInFallbackRequired(signInIntent)
             }
 
             if (idToken == null) {
@@ -136,6 +121,9 @@ class GoogleSignInHelper @Inject constructor(
             }
         } catch (e: GetCredentialCancellationException) {
             GoogleSignInResult.Error("Sign-in was cancelled.")
+        } catch (e: GoogleSignInFallbackRequired) {
+            // Caller/UI must launch the intent.
+            throw e
         } catch (e: Exception) {
             Log.e("GoogleSignIn", "Sign-in failed", e)
             GoogleSignInResult.Error("Something went wrong. Please try again.")
@@ -152,6 +140,7 @@ class GoogleSignInHelper @Inject constructor(
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(filterByAuthorized)
             .setServerClientId(webClientId)
+            .setAutoSelectEnabled(true)
             .build()
 
         val request = GetCredentialRequest.Builder()
@@ -173,6 +162,83 @@ class GoogleSignInHelper @Inject constructor(
         
         Log.w("GoogleSignIn", "Credential is not a Google ID token credential. Type: ${credential::class.simpleName}")
         return null
+    }
+
+    private fun createGoogleSignInIntent(activity: Activity, webClientId: String): Intent {
+        // Interactive fallback that covers cases where CredentialManager has no retrievable credentials.
+        val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(webClientId)
+            .requestEmail()
+            .build()
+
+        val googleSignInClient = GoogleSignIn.getClient(activity, options)
+        return googleSignInClient.signInIntent
+    }
+
+    suspend fun finishSignInWithGoogleIntentResult(signInResultData: Intent?): GoogleSignInResult {
+        if (signInResultData == null) {
+            return GoogleSignInResult.Error("Sign-in returned no data. Please try again.")
+        }
+
+        return try {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(signInResultData)
+            val account = try {
+                task.await()
+            } catch (e: ApiException) {
+                Log.e("GoogleSignIn", "Google Sign-In failed with status: ${e.statusCode}", e)
+                val message = when (e.statusCode) {
+                    GoogleSignInStatusCodes.SIGN_IN_CANCELLED -> "Sign-in was cancelled."
+                    GoogleSignInStatusCodes.SIGN_IN_FAILED ->
+                        "Google sign-in failed due to app configuration. Check SHA keys, package name, and OAuth client IDs."
+                    GoogleSignInStatusCodes.SIGN_IN_CURRENTLY_IN_PROGRESS ->
+                        "Sign-in is already in progress. Please try again."
+                    CommonStatusCodes.NETWORK_ERROR -> "Network error during sign-in. Please try again."
+                    CommonStatusCodes.DEVELOPER_ERROR ->
+                        "Google Sign-In configuration error (developer error). Check OAuth client setup."
+                    else -> "Google sign-in failed. Please try again."
+                }
+                return GoogleSignInResult.Error(message)
+            }
+            val idToken = account?.idToken
+
+            if (idToken.isNullOrBlank()) {
+                GoogleSignInResult.Error("Could not retrieve your Google account. Please try again.")
+            } else {
+                Log.d("GoogleSignIn", "Successfully retrieved Google ID token (fallback), signing in to Firebase...")
+
+                val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+                val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
+                val firebaseUser = authResult.user
+                val firebaseIdToken = firebaseUser?.getIdToken(false)?.await()?.token
+                    ?: return GoogleSignInResult.Error("Something went wrong. Please try again.")
+
+                val firebaseUserId = firebaseUser?.uid
+                Log.d("GoogleSignIn", "Firebase sign-in successful (fallback), user ID: $firebaseUserId")
+
+                val googleProviderId = firebaseUser
+                    ?.providerData
+                    ?.firstOrNull { it.providerId == "google.com" }
+                    ?.uid
+                Log.d("GoogleSignIn", "Google provider ID (stable): $googleProviderId")
+
+                when (val backendAuthResult = authManager.authenticateFirebase(firebaseIdToken, googleProviderId)) {
+                    is AuthManager.AuthResult.Success -> {
+                        val userId = authManager.getUserId() ?: firebaseUserId ?: ""
+                        if (userId.isNotEmpty()) {
+                            syncRevenueCatUser(userId)
+                        } else {
+                            Log.w("GoogleSignIn", "No user ID available for RevenueCat sync (fallback)")
+                        }
+
+                        GoogleSignInResult.Success(firebaseIdToken, backendAuthResult.isNewUser)
+                    }
+                    is AuthManager.AuthResult.Error -> GoogleSignInResult.Error(backendAuthResult.message)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("GoogleSignIn", "GoogleSignIn intent fallback failed", e)
+            GoogleSignInResult.Error("Google sign-in failed. Please try again.")
+        }
     }
 
     private fun logAppSigningSha1(ctx: Context) {

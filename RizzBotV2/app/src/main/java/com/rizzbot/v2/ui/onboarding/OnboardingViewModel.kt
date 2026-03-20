@@ -1,9 +1,12 @@
 package com.rizzbot.v2.ui.onboarding
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.auth.GoogleSignInHelper
+import com.rizzbot.v2.data.auth.GoogleSignInFallbackRequired
 import com.rizzbot.v2.data.auth.GoogleSignInResult
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
@@ -11,7 +14,10 @@ import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -45,6 +51,8 @@ class OnboardingViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(OnboardingState())
     val state: StateFlow<OnboardingState> = _state.asStateFlow()
+    private val _googleSignInEvents = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
+    val googleSignInEvents: SharedFlow<Intent> = _googleSignInEvents.asSharedFlow()
 
     init {
         analyticsHelper.onboardingStarted()
@@ -61,43 +69,79 @@ class OnboardingViewModel @Inject constructor(
         analyticsHelper.onboardingStepCompleted(next)
     }
 
-    fun signInWithGoogle(activityContext: Context) {
+    fun signInWithGoogle(activity: Activity) {
         viewModelScope.launch {
             _state.update { it.copy(isAuthenticating = true, authError = null) }
-            when (val result = googleSignInHelper.signIn(activityContext)) {
-                is GoogleSignInResult.Success -> {
-                    analyticsHelper.authCompleted()
-                    // Refresh usage so the app knows the user's actual tier (force after auth)
-                    hostedRepository.refreshUsage(force = true)
-                    _state.update {
-                        it.copy(
-                            isAuthenticating = false,
-                            userName = googleSignInHelper.getCurrentUserName()
-                        )
-                    }
-                    
-                    // Smart routing based on isNewUser
-                    if (result.isNewUser) {
-                        // New user: proceed to Vibe Check (Step 1)
-                        _state.update { it.copy(isNewUser = true) }
-                        nextStep()
-                    } else {
-                        // Returning user: skip Vibe Check and Demo
-                        refreshPermissions()
-                        val hasPermission = permissionHelper.canDrawOverlays()
-                        if (hasPermission) {
-                            // Already has permissions: go straight to Home
-                            _state.update { it.copy(onboardingDone = true) }
-                        } else {
-                            // Needs to re-grant permissions: go to TrustAndTechStep (Step 3)
-                            _state.update { it.copy(currentStep = 3, isNewUser = false) }
-                        }
+
+            try {
+                when (val result = googleSignInHelper.signIn(activity)) {
+                    is GoogleSignInResult.Success -> handleSuccessfulSignIn(result)
+                    is GoogleSignInResult.Error -> {
+                        _state.update { it.copy(isAuthenticating = false, authError = result.message) }
                     }
                 }
-                is GoogleSignInResult.Error -> {
-                    _state.update {
-                        it.copy(isAuthenticating = false, authError = result.message)
-                    }
+            } catch (e: GoogleSignInFallbackRequired) {
+                // One-shot UI event to launch Google sign-in intent.
+                _googleSignInEvents.emit(e.signInIntent)
+            }
+        }
+    }
+
+    fun onActivityRequiredForGoogleSignIn() {
+        _state.update {
+            it.copy(
+                isAuthenticating = false,
+                authError = "Sign-in requires an Activity context."
+            )
+        }
+    }
+
+    private suspend fun handleSuccessfulSignIn(result: GoogleSignInResult.Success) {
+        analyticsHelper.authCompleted()
+        // Refresh usage so the app knows the user's actual tier (force after auth)
+        hostedRepository.refreshUsage(force = true)
+
+        _state.update {
+            it.copy(
+                isAuthenticating = false,
+                authError = null,
+                userName = googleSignInHelper.getCurrentUserName()
+            )
+        }
+
+        // Smart routing based on isNewUser
+        if (result.isNewUser) {
+            // New user: proceed to Vibe Check (Step 1)
+            _state.update { it.copy(isNewUser = true) }
+            nextStep()
+        } else {
+            // Returning user: skip Vibe Check and Demo
+            refreshPermissions()
+            val hasPermission = permissionHelper.canDrawOverlays()
+            if (hasPermission) {
+                // Already has permissions: go straight to Home
+                _state.update { it.copy(onboardingDone = true) }
+            } else {
+                // Needs to re-grant permissions: go to TrustAndTechStep (Step 3)
+                _state.update { it.copy(currentStep = 3, isNewUser = false) }
+            }
+        }
+    }
+
+    fun onGoogleSignInActivityResult(resultCode: Int, data: Intent?) {
+        viewModelScope.launch {
+            if (data == null && resultCode == Activity.RESULT_CANCELED) {
+                _state.update { it.copy(isAuthenticating = false, authError = "Sign-in was cancelled.") }
+                return@launch
+            }
+
+            when (val result = googleSignInHelper.finishSignInWithGoogleIntentResult(data)) {
+                is GoogleSignInResult.Success -> handleSuccessfulSignIn(result)
+                is GoogleSignInResult.Error -> _state.update {
+                    it.copy(
+                        isAuthenticating = false,
+                        authError = result.message
+                    )
                 }
             }
         }

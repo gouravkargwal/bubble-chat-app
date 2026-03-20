@@ -1,5 +1,6 @@
 package com.rizzbot.v2.ui.onboarding
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -47,6 +48,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
 
 private val Pink = Color(0xFFE91E63)
@@ -67,6 +71,18 @@ fun OnboardingScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        viewModel.onGoogleSignInActivityResult(result.resultCode, result.data)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.googleSignInEvents.collectLatest { intent ->
+            googleSignInLauncher.launch(intent)
+        }
+    }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshPermissions()
@@ -124,7 +140,14 @@ fun OnboardingScreen(
                     0 -> HookAndLoginStep(
                         isAuthenticating = state.isAuthenticating,
                         authError = state.authError,
-                        onSignIn = { viewModel.signInWithGoogle(context) }
+                        onSignIn = {
+                            val activity = context as? Activity
+                            if (activity != null) {
+                                viewModel.signInWithGoogle(activity)
+                            } else {
+                                viewModel.onActivityRequiredForGoogleSignIn()
+                            }
+                        }
                     )
                     1 -> VibeCheckStep(
                         onNext = { viewModel.nextStep() }

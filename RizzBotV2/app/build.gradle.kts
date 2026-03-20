@@ -32,7 +32,7 @@ android {
         applicationId = "com.cookd.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
+        versionCode = 18
         versionName = "2.0.1"
 
         // Set via gradle.properties or Firebase Console → Authentication → Google
@@ -47,16 +47,17 @@ android {
             applicationIdSuffix = ".stg"
             resValue("string", "app_name", "Cookd (Staging)")
             buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
-            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"226210127602-opgeg6boua6o6jvrksbjq1hpf898gcf9.apps.googleusercontent.com\"")
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"226210127602-dc2jh362c0a2bcc2trdbd1da6qqnogvc.apps.googleusercontent.com\"")
             buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_mvwllCzumJLbCSLXWVnFtqKIZqd\"")
         }
 
         create("production") {
             dimension = "environment"
             // Production uses default app_name from strings.xml: "Cookd"
-            buildConfigField("String", "BACKEND_URL", "\"https://api.cookd.app/\"")
-            // TODO: Replace with your production RevenueCat API key (starts with "goog_" for Google Play)
-            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"REPLACE_WITH_PRODUCTION_KEY\"")
+            buildConfigField("String", "BACKEND_URL", "\"https://cookd.digidairy.site/\"")
+            // Set in local.properties: GOOGLE_WEB_CLIENT_ID_PROD, REVENUE_CAT_PUBLIC_KEY_PROD (from production Firebase + RevenueCat)
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID_PROD") ?: ""}\"")
+            buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"${localProperties.getProperty("REVENUE_CAT_PUBLIC_KEY_PROD") ?: "REPLACE_WITH_PRODUCTION_KEY"}\"")
         }
     }
 
@@ -171,6 +172,7 @@ dependencies {
     implementation(libs.credentials)
     implementation(libs.credentials.play.services)
     implementation(libs.googleid)
+    implementation("com.google.android.gms:play-services-auth:21.1.1")
 
     // RevenueCat
     // NOTE: Keep these versions in sync with a version that exists on Maven Central
