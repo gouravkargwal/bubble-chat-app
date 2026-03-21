@@ -11,6 +11,7 @@ StrategyLabel = Literal[
     "SOFT CLOSE",
     "VALUE ANCHOR",
     "PATTERN INTERRUPT",
+    "HONEST FRAME",
 ]
 
 
@@ -39,14 +40,16 @@ class AnalystOutput(BaseModel):
     conversation_temperature: str
     archetype_reasoning: str = Field(
         description=(
-            "First, analyze her exact behavior. Is she using sarcasm? Is she giving one-word dry answers? "
-            "Is she being deep? Write 2 sentences analyzing her specific effort and tone before picking an archetype."
+            "FIRST count her words, check her message structure (question? statement? emoji-only?), "
+            "and note her effort level. THEN reason about which archetype fits based on the "
+            "MESSAGE STRUCTURE RULES, not tone labels."
         )
     )
     detected_archetype: str = Field(
         description=(
             "Based strictly on the reasoning above, select EXACTLY ONE: "
-            "'THE BANTER GIRL', 'THE INTELLECTUAL', 'THE SOFT/TRADITIONAL', or 'THE LOW-INVESTMENT'."
+            "'THE BANTER GIRL', 'THE INTELLECTUAL', 'THE WARM/STEADY', "
+            "'THE GUARDED/TESTER', 'THE EAGER/DIRECT', or 'THE LOW-INVESTMENT'."
         )
     )
     key_detail: str
@@ -95,6 +98,7 @@ class AgentState(TypedDict):
     conversation_id: str | None
     voice_dna_dict: Dict[str, Any]
     conversation_context_dict: Dict[str, Any]
+    ocr_hint_text: str  # last OCR text from hybrid stitch, used for semantic memory search
 
     # Bouncer state
     is_valid_chat: bool
@@ -131,4 +135,3 @@ class RawOcrTextItem(TypedDict):
     actual_new_message: str
     quoted_context: str | None
     is_reply: bool
-

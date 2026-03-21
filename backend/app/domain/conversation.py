@@ -1,9 +1,9 @@
 """Conversation memory manager — auto-detects and tracks per-person conversations."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import AnalysisResult, ConversationContext
@@ -15,49 +15,37 @@ async def find_or_create_conversation(
     person_name: str,
     db: AsyncSession,
 ) -> Conversation:
-    """Find an existing conversation by person name or create a new one."""
-    # Singleton active conversation per user:
-    # Whenever we activate (or create) a conversation, deactivate all other active
-    # conversations for this user first.
-    async def _deactivate_other_conversations() -> None:
-        await db.execute(
-            text(
-                "UPDATE conversations "
-                "SET is_active = false "
-                "WHERE user_id = :user_id AND is_active = true"
-            ),
-            {"user_id": user_id},
-        )
+    """Find an existing conversation by person name or create a new one.
 
+    Multiple active conversations are supported (one per person).
+    If a conversation for this person already exists (active or inactive),
+    reactivate it. Otherwise create a new one.
+    """
     if not person_name or person_name == "unknown":
-        # Create a transient conversation
-        await _deactivate_other_conversations()
-        convo = Conversation(user_id=user_id, person_name="unknown")
+        convo = Conversation(user_id=user_id, person_name="unknown", is_active=True)
         db.add(convo)
         await db.commit()
         await db.refresh(convo)
         return convo
 
-    # Fuzzy match: case-insensitive search for active conversations
+    # Search all conversations for this person (active or inactive), most recent first
     name_lower = person_name.lower().strip()
     result = await db.execute(
         select(Conversation).where(
             Conversation.user_id == user_id,
-            Conversation.is_active == True,  # noqa: E712
             func.lower(Conversation.person_name) == name_lower,
-        )
+        ).order_by(Conversation.last_interaction_at.desc().nullslast())
     )
-    existing = result.scalar_one_or_none()
+    existing = result.scalars().first()
 
     if existing:
-        await _deactivate_other_conversations()
-        existing.is_active = True  # ensure it is the singleton active one
-        await db.commit()
+        if not existing.is_active:
+            existing.is_active = True
+            await db.commit()
         return existing
 
-    # Create new conversation
-    await _deactivate_other_conversations()
-    convo = Conversation(user_id=user_id, person_name=person_name)
+    # No existing conversation for this person — create one
+    convo = Conversation(user_id=user_id, person_name=person_name, is_active=True)
     db.add(convo)
     await db.commit()
     await db.refresh(convo)
@@ -81,8 +69,7 @@ async def update_conversation_from_analysis(
 
     # Increment count
     conversation.interaction_count += 1
-    # Store naive UTC timestamp to match TIMESTAMP WITHOUT TIME ZONE column
-    conversation.last_interaction_at = datetime.utcnow()
+    conversation.last_interaction_at = datetime.now(timezone.utc)
 
     # Track topics
     if analysis.key_detail:

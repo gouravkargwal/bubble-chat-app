@@ -39,6 +39,11 @@ enum class ConversationDirection(
         displayName = "Revive dead chat",
         emoji = "👻",
         promptInstruction = "Send a low-pressure, playful text to restart a dead conversation without sounding needy."
+    ),
+    DE_ESCALATE(
+        displayName = "Cool things down",
+        emoji = "🕊️",
+        promptInstruction = "She seems upset or things got tense. Respond with calm, grounded emotional maturity."
     );
 }
 

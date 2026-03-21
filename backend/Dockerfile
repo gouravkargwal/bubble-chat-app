@@ -1,9 +1,16 @@
 FROM python:3.12-slim AS builder
 
+# Slow/flaky PyPI: longer timeouts; avoid PEP517 isolated subprocess re-downloading setuptools
+ENV PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir "setuptools>=75" wheel && \
+    pip install --no-cache-dir -e . --no-build-isolation
 
 FROM python:3.12-slim
 

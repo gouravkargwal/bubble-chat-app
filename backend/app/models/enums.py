@@ -13,3 +13,4 @@ class ConversationDirection(str, Enum):
     REVIVE_CHAT = "revive_chat"
     GET_NUMBER = "get_number"
     ASK_OUT = "ask_out"
+    DE_ESCALATE = "de_escalate"

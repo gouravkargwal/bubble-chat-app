@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
+    # OpenRouter — used by v2 agent generator_node
+    openrouter_api_key: str = ""
+    openrouter_model: str = "qwen/qwen3.5-9b"
+
     # Google Play Billing
     google_play_service_account: str = ""
     google_play_package_name: str = "com.cookd.app"

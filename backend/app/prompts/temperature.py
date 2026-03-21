@@ -8,6 +8,10 @@ _TEMP_MATRIX: dict[str, dict[str, float]] = {
     "keep_playful": {"cold": 0.75, "lukewarm": 0.80, "warm": 0.85, "hot": 0.85},
     "go_deeper": {"cold": 0.60, "lukewarm": 0.65, "warm": 0.70, "hot": 0.70},
     "change_topic": {"cold": 0.70, "lukewarm": 0.75, "warm": 0.80, "hot": 0.80},
+    "tease": {"cold": 0.75, "lukewarm": 0.80, "warm": 0.85, "hot": 0.85},
+    "revive_chat": {"cold": 0.75, "lukewarm": 0.80, "warm": 0.80, "hot": 0.80},
+    "opener": {"cold": 0.75, "lukewarm": 0.80, "warm": 0.80, "hot": 0.80},
+    "de_escalate": {"cold": 0.55, "lukewarm": 0.60, "warm": 0.60, "hot": 0.65},
 }
 
 

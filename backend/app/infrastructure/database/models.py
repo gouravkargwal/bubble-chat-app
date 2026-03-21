@@ -232,6 +232,72 @@ class UserVoiceDNA(Base):
     user: Mapped[User] = relationship(back_populates="voice_dna")
 
 
+class PendingResolution(Base):
+    """DB-backed pending resolution store for Hybrid Stitch confirmation flow.
+
+    Replaces the in-memory dict so it works across multiple workers.
+    Rows auto-expire via TTL check; a periodic cleanup job can purge old rows.
+    """
+
+    __tablename__ = "pending_resolutions"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    suggested_conversation_id: Mapped[str] = mapped_column(String(36), index=True)
+    images: Mapped[str] = mapped_column(Text)  # JSON array of base64 strings
+    direction: Mapped[str] = mapped_column(String(30))
+    custom_hint: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    extracted_person_name: Mapped[str] = mapped_column(String(100))
+    conflict_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    conflict_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    outcome: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )  # "confirmed_match" | "rejected_new" | "expired"
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_pending_res_user_conv", "user_id", "suggested_conversation_id"),
+    )
+
+
+class PersonAlias(Base):
+    """Identity resolution table — maps OCR-extracted name variants to canonical conversations.
+
+    When a user confirms a stitch (or auto-stitch succeeds), we persist the alias
+    so future OCR extractions of the same name variant resolve instantly without
+    fuzzy matching.
+    """
+
+    __tablename__ = "person_aliases"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    alias_name: Mapped[str] = mapped_column(String(100))  # normalized lowercase name
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversations.id"), index=True
+    )
+    source: Mapped[str] = mapped_column(
+        String(30), default="auto_stitch"
+    )  # auto_stitch | user_confirmed | manual
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "alias_name", name="uq_person_alias_user_name"),
+        Index("ix_person_alias_user_alias", "user_id", "alias_name"),
+    )
+
+
 class Referral(Base):
     __tablename__ = "referrals"
 

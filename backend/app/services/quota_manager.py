@@ -160,6 +160,46 @@ class QuotaManager:
         # Caller is responsible for committing.
         return quota.daily_usage_count, quota.weekly_usage_count
 
+    async def check_only(
+        self,
+        google_provider_id: str,
+        *,
+        daily_limit: int,
+        weekly_limit: int | None = None,
+    ) -> None:
+        """Check limits and raise if exceeded, but do NOT increment.
+
+        Use this before running the agent. Call increment() after success.
+        """
+        now = datetime.now(timezone.utc)
+        quota = await self._get_or_create_quota(google_provider_id, lock=False)
+        self._maybe_reset_chat_windows(quota, now)
+
+        effective_daily_limit = max(daily_limit, 0)
+        if effective_daily_limit > 0 and quota.daily_usage_count >= effective_daily_limit:
+            raise QuotaExceededException(
+                f"Daily quota exceeded for {google_provider_id}"
+            )
+
+        if weekly_limit is not None and weekly_limit > 0:
+            if quota.weekly_usage_count >= weekly_limit:
+                raise QuotaExceededException(
+                    f"Weekly quota exceeded for {google_provider_id}"
+                )
+
+    async def increment(self, google_provider_id: str) -> Tuple[int, int]:
+        """Increment usage counters after a successful generation.
+
+        Returns (new_daily_usage, new_weekly_usage) AFTER increment.
+        Caller is responsible for committing.
+        """
+        now = datetime.now(timezone.utc)
+        quota = await self._get_or_create_quota(google_provider_id, lock=True)
+        self._maybe_reset_chat_windows(quota, now)
+        quota.daily_usage_count += 1
+        quota.weekly_usage_count += 1
+        return quota.daily_usage_count, quota.weekly_usage_count
+
     async def check_and_increment_audits(
         self,
         google_provider_id: str,

@@ -42,7 +42,7 @@ interface HostedApi {
     suspend fun authenticateFirebase(@Body request: FirebaseAuthRequest): AuthResponse
 
     // Vision
-    @POST("api/v1/vision/generate")
+    @POST("api/v1/vision/generate_v2")
     suspend fun generateReply(@Body request: VisionGenerateRequest): VisionGenerateResponse
 
     @POST("api/v1/vision/calibrate")

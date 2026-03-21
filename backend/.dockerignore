@@ -1,0 +1,30 @@
+# Virtual envs (often hundreds of MB — never send to the daemon)
+.venv/
+venv/
+env/
+
+# Python / tooling caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Git & local IDE
+.git/
+.gitignore
+.cursor/
+
+# Local dev / secrets (compose injects env at runtime)
+.env
+.env.*
+!.env.example
+
+# Large or irrelevant for the image
+.langgraph_api/
+profile_results.html
+rizzbot_backend.egg-info/

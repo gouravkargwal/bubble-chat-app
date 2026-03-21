@@ -1,5 +1,6 @@
 """Voice DNA — learns user's texting style from copied replies."""
 
+import difflib
 import json
 import re
 
@@ -38,7 +39,54 @@ _SLANG_WORDS = {
     "yoo",
     "yooo",
     "bet",
+    # Hindi/Hinglish slang
+    "yaar",
+    "bhai",
+    "bro",
+    "arre",
+    "matlab",
+    "toh",
+    "kya",
+    "acha",
+    "haan",
+    "nahi",
+    "bilkul",
+    "ekdum",
+    "bas",
+    "abhi",
+    "thoda",
+    "bahut",
+    "chal",
+    "kar",
+    "tha",
+    "hai",
+    "hun",
+    "karo",
+    "mera",
+    "tera",
+    "apna",
+    "kyun",
+    "phir",
+    "waise",
+    "vaise",
+    "scene",
+    "sorted",
+    "sahi",
 }
+
+
+def is_echo_text(candidate: str, past_replies: list[str]) -> bool:
+    """Return True if candidate closely matches any of the past_replies (echo detection)."""
+    candidate_norm = candidate.lower().strip()
+    for past_reply in past_replies:
+        reply_norm = past_reply.lower().strip()
+        if len(reply_norm) < 6:
+            continue
+        if candidate_norm == reply_norm:
+            return True
+        if difflib.SequenceMatcher(None, candidate_norm, reply_norm).ratio() >= 0.85:
+            return True
+    return False
 
 
 def update_voice_dna_stats(current: UserVoiceDNA, organic_text: str) -> UserVoiceDNA:
@@ -66,9 +114,11 @@ def update_voice_dna_stats(current: UserVoiceDNA, organic_text: str) -> UserVoic
     current.lowercase_count = (current.lowercase_count or 0) + (
         1 if is_lowercase else 0
     )
-    current.capitalization = (
-        "lowercase" if current.lowercase_count / new_n > 0.7 else "normal"
-    )
+    lowercase_ratio = current.lowercase_count / new_n
+    if lowercase_ratio > 0.7:
+        current.capitalization = "lowercase"
+    else:
+        current.capitalization = "normal"
 
     # Punctuation
     has_ellipsis = "..." in organic_text
@@ -93,8 +143,11 @@ def update_voice_dna_stats(current: UserVoiceDNA, organic_text: str) -> UserVoic
             if isinstance(parsed, dict):
                 word_freq = parsed
         except (json.JSONDecodeError, TypeError):
-            # Fallback to empty dict if corrupted
-            pass
+            import structlog as _structlog
+            _structlog.get_logger().warning(
+                "voice_dna_word_frequency_corrupted",
+                user_id=getattr(current, "user_id", "unknown"),
+            )
     words = organic_text.lower().split()
     for word in words:
         clean = word.strip(".,!?\"'()[]")
@@ -126,6 +179,11 @@ def update_voice_dna_stats(current: UserVoiceDNA, organic_text: str) -> UserVoic
             else []
         )
     except (json.JSONDecodeError, TypeError):
+        import structlog as _structlog
+        _structlog.get_logger().warning(
+            "voice_dna_recent_messages_corrupted",
+            user_id=getattr(current, "user_id", "unknown"),
+        )
         recent_msgs = []
 
     recent_msgs.append(organic_text)

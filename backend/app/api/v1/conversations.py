@@ -2,7 +2,7 @@
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user
@@ -12,10 +12,14 @@ from app.api.v1.schemas.schemas import (
     ResolveConversationRequest,
     VisionRequest,
 )
+from app.api.v1.vision_shared import save_alias
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Conversation, User
 from app.models.enums import ConversationDirection
-from app.services.hybrid_stitch_pending import pop_pending_hybrid_resolution
+from app.services.hybrid_stitch_pending import (
+    pop_pending_hybrid_resolution,
+    parse_pending_images,
+)
 
 from app.api.v1.vision import generate_replies as vision_generate_replies
 
@@ -104,13 +108,15 @@ async def resolve_conversation(
     The initial ambiguity detection occurs in `POST /api/v1/vision/generate`.
     Here we:
     - pick the conversation_id (existing vs newly created),
+    - persist the alias for future instant lookups (feedback loop),
     - re-run the generation pipeline using the cached screenshots/context.
     """
 
     if request.user_id != user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    pending = pop_pending_hybrid_resolution(
+    pending = await pop_pending_hybrid_resolution(
+        db=db,
         user_id=user.id,
         suggested_conversation_id=request.suggested_conversation_id,
     )
@@ -122,29 +128,46 @@ async def resolve_conversation(
 
     effective_conversation_id: str
     if request.is_match:
-        # Link to the suggested existing conversation.
+        # User confirmed: link to the suggested existing conversation.
+        # Don't gate on is_active — the stitch engine may have matched an inactive convo.
         convo_result = await db.execute(
             select(Conversation).where(
                 Conversation.id == request.suggested_conversation_id,
                 Conversation.user_id == user.id,
-                Conversation.is_active == True,  # noqa: E712
             )
         )
         convo = convo_result.scalar_one_or_none()
         if convo is None:
             raise HTTPException(status_code=404, detail="Conversation not found.")
+        # Reactivate if it was soft-deleted
+        if not convo.is_active:
+            convo.is_active = True
+            await db.commit()
         effective_conversation_id = convo.id
-    else:
-        # Create a fresh conversation for the newly-detected person/platform.
-        # Only deactivate the suggested conversation that the user rejected, not all
-        # active conversations — the user may have other ongoing chats with different people.
-        await db.execute(
-            text(
-                "UPDATE conversations SET is_active = false "
-                "WHERE id = :conv_id AND user_id = :user_id"
-            ),
-            {"conv_id": request.suggested_conversation_id, "user_id": user.id},
+
+        # Feedback loop: save the OCR name as an alias for this conversation
+        await save_alias(
+            db=db,
+            user_id=user.id,
+            alias_name=pending.extracted_person_name,
+            conversation_id=convo.id,
+            source="user_confirmed",
         )
+    else:
+        # User rejected: create a fresh conversation for the newly-detected person.
+        # Only deactivate the suggested conversation that the user rejected, not all
+        # active conversations — the user may have other ongoing chats.
+        convo_result = await db.execute(
+            select(Conversation).where(
+                Conversation.id == request.suggested_conversation_id,
+                Conversation.user_id == user.id,
+            )
+        )
+        suggested_convo = convo_result.scalar_one_or_none()
+        if suggested_convo:
+            suggested_convo.is_active = False
+            await db.commit()
+
         convo = Conversation(
             user_id=user.id,
             person_name=pending.extracted_person_name,
@@ -155,8 +178,19 @@ async def resolve_conversation(
         await db.refresh(convo)
         effective_conversation_id = convo.id
 
+        # Save alias for the NEW conversation so future OCR of this name resolves correctly
+        await save_alias(
+            db=db,
+            user_id=user.id,
+            alias_name=pending.extracted_person_name,
+            conversation_id=convo.id,
+            source="user_confirmed",
+        )
+
+    images = parse_pending_images(pending)
+
     vision_request = VisionRequest(
-        images=pending.images,
+        images=images,
         direction=ConversationDirection(pending.direction),
         custom_hint=pending.custom_hint,
         conversation_id=effective_conversation_id,
@@ -167,8 +201,9 @@ async def resolve_conversation(
         "[CONFLICT] Resolving hybrid stitch pending resolution",
         user_id=user.id,
         suggested_conversation_id=request.suggested_conversation_id,
-        conflict_reason=getattr(pending, "conflict_reason", None),
-        conflict_detail=getattr(pending, "conflict_detail", None),
+        conflict_reason=pending.conflict_reason,
+        conflict_detail=pending.conflict_detail,
+        is_match=request.is_match,
     )
 
     vision_response = await vision_generate_replies(

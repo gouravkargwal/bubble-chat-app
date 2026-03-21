@@ -862,22 +862,27 @@ def writer_node(state: AgentState) -> AgentState:
         model="gemini-3.1-flash-lite-preview", temperature=temperature
     ).with_structured_output(WriterOutput)
 
+    # Explicitly surface semantic_profile at the top level so it gets full LLM attention
+    semantic_profile = voice_dna.get("semantic_profile") if isinstance(voice_dna, dict) else None
+
+    payload: dict = {
+        "analysis": analysis.model_dump(),
+        "strategy": strategy.model_dump(),
+        "direction": direction,
+        "voice_dna_dict": voice_dna,
+        "conversation_context_dict": conversation_context,
+        "auditor_feedback": auditor_feedback,
+    }
+    if semantic_profile:
+        payload["USER_PSYCHOLOGICAL_STYLE_GUIDE"] = (
+            f"CRITICAL — match this style in every reply: {semantic_profile}"
+        )
+
     t_call = time.monotonic()
     result = writer_llm.invoke(
         [
             SystemMessage(content=WRITER_SYSTEM_PROMPT),
-            HumanMessage(
-                content=json.dumps(
-                    {
-                        "analysis": analysis.model_dump(),
-                        "strategy": strategy.model_dump(),
-                        "direction": direction,
-                        "voice_dna_dict": voice_dna,
-                        "conversation_context_dict": conversation_context,
-                        "auditor_feedback": auditor_feedback,
-                    }
-                )
-            ),
+            HumanMessage(content=json.dumps(payload)),
         ]
     )
 

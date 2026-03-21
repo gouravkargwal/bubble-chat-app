@@ -17,11 +17,13 @@ from app.api.v1.track import router as track_router
 from app.api.v1.usage import router as usage_router
 from app.api.v1.users import router as users_router
 from app.api.v1.vision import router as vision_router
+from app.api.v1.vision_v2 import router as vision_v2_router
 from app.api.v1.webhooks import router as webhooks_router
 
 v1_router = APIRouter()
 v1_router.include_router(auth_router, tags=["auth"])
 v1_router.include_router(vision_router, tags=["vision"])
+v1_router.include_router(vision_v2_router, tags=["vision-v2"])
 v1_router.include_router(profile_auditor_router)
 v1_router.include_router(profile_optimizer_router)
 v1_router.include_router(track_router, tags=["track"])

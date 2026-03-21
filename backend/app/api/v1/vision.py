@@ -3,9 +3,7 @@
 import asyncio
 import copy
 import dataclasses
-import difflib
 import json
-import re
 from datetime import datetime, timezone
 import time
 
@@ -23,6 +21,10 @@ from app.api.v1.schemas.schemas import (
     VisionRequest,
     VisionResponse,
     RequiresUserConfirmation,
+)
+from app.api.v1.vision_shared import (
+    resolve_hybrid_stitch_conversation_id,
+    save_alias,
 )
 from app.config import settings
 from app.domain.conversation import (
@@ -49,7 +51,7 @@ from app.infrastructure.database.models import (
     UserVoiceDNA,
 )
 from app.services.quota_manager import QuotaExceededException, QuotaManager
-from app.domain.voice_dna import update_voice_dna_stats
+from app.domain.voice_dna import update_voice_dna_stats, is_echo_text
 from app.services.voice_dna import generate_semantic_profile_background
 from app.llm.gemini_client import GeminiClient
 from app.llm.response_parser import parse_llm_response
@@ -99,6 +101,7 @@ def _build_agent_initial_state(
         "core_lore": "",
         "past_memories": "",
         "raw_ocr_text": [],
+        "ocr_hint_text": "",
     }
 
 
@@ -415,89 +418,7 @@ def _get_client() -> GeminiClient:
     return _client
 
 
-# ---------- Hybrid Stitch (human-in-the-loop) helpers ----------
-
-_HYBRID_FUZZY_NAME_THRESHOLD = 0.6
-_HYBRID_OVERLAP_THRESHOLD = 0.86
-
-# Keep overlap extraction simple: compare verbatim-ish OCR text to what we stored.
-_NON_WORD_RE = re.compile(r"[^\w\s]+", flags=re.UNICODE)
-_WS_RE = re.compile(r"\s+")
-
-
-def _normalize_name(name: str) -> str:
-    name = name or ""
-    name = name.strip().lower()
-    name = _NON_WORD_RE.sub("", name)
-    name = _WS_RE.sub(" ", name).strip()
-    return name
-
-
-def _name_similarity(a: str, b: str) -> float:
-    """Soft fuzzy name similarity tuned for short names (e.g., Nikita vs Niki)."""
-    a_n = _normalize_name(a)
-    b_n = _normalize_name(b)
-    if not a_n or not b_n:
-        return 0.0
-    if a_n == b_n:
-        return 1.0
-
-    # 1) SequenceMatcher ratio (works decently for prefix matches).
-    seq_ratio = difflib.SequenceMatcher(None, a_n, b_n).ratio()
-
-    # 2) Trigram Jaccard to boost "shared letters" similarity.
-    def trigrams(s: str) -> set[str]:
-        if len(s) < 3:
-            return {s} if s else set()
-        return {s[i : i + 3] for i in range(len(s) - 2)}
-
-    ta = trigrams(a_n)
-    tb = trigrams(b_n)
-    jacc = (len(ta & tb) / len(ta | tb)) if ta and tb else 0.0
-    return max(seq_ratio, jacc)
-
-
-def _normalize_text_for_overlap(text: str) -> str:
-    text = text or ""
-    text = text.strip().lower()
-    text = _NON_WORD_RE.sub("", text)
-    text = _WS_RE.sub(" ", text).strip()
-    return text
-
-
-def _text_overlap(a: str, b: str) -> bool:
-    """Return True if two OCR/text strings appear to overlap strongly."""
-    a_n = _normalize_text_for_overlap(a)
-    b_n = _normalize_text_for_overlap(b)
-    if not a_n or not b_n:
-        return False
-    if a_n == b_n:
-        return True
-    # Handle substring matches (common for short OCR reads).
-    if len(a_n) >= 6 and (a_n in b_n or b_n in a_n):
-        return True
-    ratio = difflib.SequenceMatcher(None, a_n, b_n).ratio()
-    return ratio >= _HYBRID_OVERLAP_THRESHOLD
-
-
-def _format_relative_time(dt: datetime | None) -> str:
-    if not dt:
-        return "unknown"
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    now = datetime.now(timezone.utc)
-    delta = now - dt
-    seconds = max(0, int(delta.total_seconds()))
-    if seconds < 60:
-        return "just now"
-    minutes = seconds // 60
-    if minutes < 60:
-        return f"{minutes} minutes ago"
-    hours = minutes // 60
-    if hours < 48:
-        return f"{hours} hours ago"
-    days = hours // 24
-    return f"{days} days ago"
+# ---------- Hybrid Stitch OCR extraction (v1-specific Gemini call) ----------
 
 
 async def _extract_hybrid_stitch_ocr_signals(*, image_base64: str) -> tuple[str, list[str]]:
@@ -573,127 +494,7 @@ async def _extract_hybrid_stitch_ocr_signals(*, image_base64: str) -> tuple[str,
         return person_name, extracted_texts
     except Exception as e:  # pragma: no cover - defensive
         logger.error("hybrid_stitch_ocr_extraction_failed", error=str(e))
-        # Fall back to "unknown" which will usually lead to scenario3/new conversation.
         return "unknown", []
-
-
-async def _resolve_hybrid_stitch_conversation_id(
-    *,
-    user_id: str,
-    ocr_person_name: str,
-    extracted_texts: list[str],
-    db: AsyncSession,
-) -> tuple[str, str | None, dict | None]:
-    """
-    Returns (outcome, conversation_id, payload)
-    outcome:
-      - "new_match": conversation_id=None, payload=None
-      - "auto_stitch": conversation_id=<existing>, payload=None
-      - "requires_user_confirmation": conversation_id=<existing>, payload=<exact JSON schema dict>
-    """
-
-    # Fetch active conversations for fuzzy name matching.
-    result = await db.execute(
-        select(Conversation).where(
-            Conversation.user_id == user_id,
-            Conversation.is_active == True,  # noqa: E712
-        )
-    )
-    convos = result.scalars().all()
-    if not convos:
-        return "new_match", None, None
-
-    best_convo = None
-    best_score = 0.0
-    for convo in convos:
-        score = _name_similarity(ocr_person_name, convo.person_name)
-        if score > best_score:
-            best_score = score
-            best_convo = convo
-
-    if not best_convo or best_score < _HYBRID_FUZZY_NAME_THRESHOLD:
-        return "new_match", None, None
-
-    # Name looks like an existing conversation — check whether OCR text overlaps recent stored messages.
-    recent_result = await db.execute(
-        select(Interaction)
-        .where(
-            Interaction.user_id == user_id,
-            Interaction.conversation_id == best_convo.id,
-        )
-        .order_by(Interaction.created_at.desc())
-        .limit(8)
-    )
-    recent_interactions = recent_result.scalars().all()
-
-    stored_texts: list[str] = []
-    for it in recent_interactions:
-        if it.their_last_message:
-            stored_texts.append(it.their_last_message)
-        if it.user_organic_text:
-            stored_texts.append(it.user_organic_text)
-        if it.copied_index is not None:
-            reply_attr = f"reply_{it.copied_index}"
-            reply_val = getattr(it, reply_attr, None)
-            if isinstance(reply_val, str) and reply_val.strip():
-                stored_texts.append(reply_val)
-
-    overlap = False
-    for extracted in extracted_texts:
-        for stored in stored_texts:
-            if _text_overlap(extracted, stored):
-                overlap = True
-                break
-        if overlap:
-            break
-
-    if overlap:
-        return "auto_stitch", best_convo.id, None
-
-    # Scenario 3: ambiguity / platform jump. Build the exact payload for the frontend.
-    her_last_message = ""
-    your_last_reply = ""
-    ai_memory_note = ""
-
-    # Most recent interaction is first due to desc ordering.
-    for it in recent_interactions:
-        if not her_last_message and it.their_last_message:
-            her_last_message = it.their_last_message or ""
-        if not your_last_reply and it.copied_index is not None:
-            reply_attr = f"reply_{it.copied_index}"
-            reply_val = getattr(it, reply_attr, None)
-            if isinstance(reply_val, str) and reply_val.strip():
-                your_last_reply = reply_val
-        if not ai_memory_note and it.key_detail:
-            ai_memory_note = it.key_detail or ""
-        if her_last_message and your_last_reply and ai_memory_note:
-            break
-
-    # Fallback: if we didn't find a key_detail, use conversation person's name as a placeholder note.
-    if not ai_memory_note:
-        ai_memory_note = ""
-
-    last_active_dt: datetime | None = None
-    if recent_interactions:
-        last_active_dt = recent_interactions[0].created_at
-    else:
-        last_active_dt = best_convo.created_at
-
-    payload = {
-        "status": "REQUIRES_USER_CONFIRMATION",
-        "suggested_match": {
-            "person_name": best_convo.person_name,
-            "conversation_id": best_convo.id,
-            "last_active": _format_relative_time(last_active_dt),
-            "context_preview": {
-                "her_last_message": her_last_message,
-                "your_last_reply": your_last_reply,
-                "ai_memory_note": ai_memory_note,
-            },
-        },
-    }
-
-    return "requires_user_confirmation", best_convo.id, payload
 
 
 @router.post("/vision/calibrate", response_model=CalibrationResponse)
@@ -826,8 +627,9 @@ async def generate_replies(
             image_base64=images[-1]
         )
 
+        # Use the shared composite-scoring stitch resolver
         outcome, matched_conversation_id, payload = (
-            await _resolve_hybrid_stitch_conversation_id(
+            await resolve_hybrid_stitch_conversation_id(
                 user_id=user.id,
                 ocr_person_name=ocr_person_name,
                 extracted_texts=extracted_texts,
@@ -836,104 +638,30 @@ async def generate_replies(
         )
 
         if outcome == "requires_user_confirmation" and payload:
-            # Cache enough context so `/api/v1/conversations/resolve` can re-run generation.
             matched_id = matched_conversation_id or ""
 
-            # Collect conflict reasons for detailed logging.
-            conflict_reasons: list[str] = []
-            conflict_details: list[str] = []
-
-            # Active State: multiple active conversations per user (singleton violation).
-            active_ids_result = await db.execute(
-                select(Conversation.id).where(
-                    Conversation.user_id == user.id,
-                    Conversation.is_active == True,  # noqa: E712
-                )
-            )
-            active_ids = list(active_ids_result.scalars().all())
-            if len(active_ids) > 1:
-                logger.warning(
-                    f"[CONFLICT] Multiple active conversations found for user {user.id}. "
-                    f"Active IDs: {active_ids}"
-                )
-                conflict_reasons.append("singleton_violation")
-                conflict_details.append(f"active_ids={active_ids}")
-
             # Concurrency Lock: another request already created a pending resolution.
-            if matched_id and has_pending_hybrid_resolution(
-                user_id=user.id, suggested_conversation_id=matched_id
+            if matched_id and await has_pending_hybrid_resolution(
+                db=db, user_id=user.id, suggested_conversation_id=matched_id
             ):
                 logger.warning(
-                    f"[CONFLICT] Conversation {matched_id} is already locked/processing."
+                    "hybrid_stitch_processing_lock",
+                    user_id=user.id,
+                    locked_conversation_id=matched_id,
                 )
-                conflict_reasons.append("processing_lock")
-                conflict_details.append(f"pending_conv_id={matched_id}")
 
-            # Duplicate Check: exact/normalized match vs recent stored texts.
-            duplicate_snippet: str | None = None
-            if matched_id and extracted_texts:
-                recent_result = await db.execute(
-                    select(Interaction)
-                    .where(
-                        Interaction.user_id == user.id,
-                        Interaction.conversation_id == matched_id,
-                    )
-                    .order_by(Interaction.created_at.desc())
-                    .limit(8)
-                )
-                recent_interactions = recent_result.scalars().all()
+            conflict_reason = "hybrid_stitch_ambiguity"
+            payload["detail"] = f"409 requires user confirmation. reason={conflict_reason}"
 
-                stored_texts: list[str] = []
-                for it in recent_interactions:
-                    if it.their_last_message:
-                        stored_texts.append(str(it.their_last_message))
-                    if it.user_organic_text:
-                        stored_texts.append(str(it.user_organic_text))
-                    if it.copied_index is not None:
-                        reply_attr = f"reply_{it.copied_index}"
-                        reply_val = getattr(it, reply_attr, None)
-                        if isinstance(reply_val, str) and reply_val.strip():
-                            try:
-                                loaded = json.loads(reply_val)
-                                if isinstance(loaded, dict) and "text" in loaded:
-                                    stored_texts.append(str(loaded["text"]))
-                                else:
-                                    stored_texts.append(reply_val)
-                            except Exception:
-                                stored_texts.append(reply_val)
-
-                for ext in extracted_texts:
-                    for stored in stored_texts:
-                        if _text_overlap(ext, stored):
-                            duplicate_snippet = ext[:80]
-                            break
-                    if duplicate_snippet:
-                        break
-
-            if duplicate_snippet:
-                logger.warning(
-                    f"[CONFLICT] Duplicate transcript detected for user {user.id}. "
-                    f"Text: {duplicate_snippet}"
-                )
-                conflict_reasons.append("duplicate_ocr")
-                conflict_details.append(f"duplicate_text={duplicate_snippet}")
-
-            if not conflict_reasons:
-                conflict_reasons.append("hybrid_stitch_ambiguity")
-
-            detail = "; ".join(conflict_details) if conflict_details else ""
-            payload["detail"] = (
-                f"409 requires user confirmation. reason={','.join(conflict_reasons)}"
-                + (f"; {detail}" if detail else "")
-            )
-            store_pending_hybrid_resolution(
+            await store_pending_hybrid_resolution(
+                db=db,
                 user_id=user.id,
-                suggested_conversation_id=matched_conversation_id or "",
+                suggested_conversation_id=matched_id,
                 images=images,
                 direction=request.direction.value,
                 custom_hint=custom_hint,
                 extracted_person_name=ocr_person_name,
-                conflict_reason=",".join(conflict_reasons) if conflict_reasons else None,
+                conflict_reason=conflict_reason,
                 conflict_detail=payload.get("detail"),
             )
             return JSONResponse(status_code=409, content=payload)
@@ -944,29 +672,25 @@ async def generate_replies(
             new_conversation_person_name = ocr_person_name
 
     # 8. Check daily/weekly rate limits via QuotaManager (0 = unlimited).
-    # IMPORTANT: quota increments must be persisted immediately so they are not rolled back
-    # with the long-running LLM transaction. We commit right after incrementing.
+    # Check-only here — we increment after the agent succeeds so errors don't cost the user.
     daily_limit = tier_config["limits"]["chat_generations_per_day"]
     effective_limit = daily_limit + user.bonus_replies
 
     daily_used = 0
+    quota_manager: QuotaManager | None = None
     if user.google_provider_id:
         quota_manager = QuotaManager(db)
         try:
-            daily_used, _ = await quota_manager.check_and_increment(
+            await quota_manager.check_only(
                 user.google_provider_id,
                 daily_limit=effective_limit,
                 weekly_limit=None,
             )
-            await db.commit()
         except QuotaExceededException:
             raise HTTPException(
                 status_code=429,
                 detail="Daily limit reached. Upgrade to Premium for more replies.",
             )
-    else:
-        # If we don't have a stable Google ID (anonymous/legacy), fall back to no quota.
-        daily_used = 0
 
     # 9. Load Voice DNA only if tier supports it
     voice_dna = None
@@ -975,7 +699,7 @@ async def generate_replies(
             select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
         )
         voice_db = result.scalar_one_or_none()
-        if voice_db and voice_db.sample_count >= 3:
+        if voice_db and voice_db.sample_count >= 8:
             voice_dna = await voice_to_domain(voice_db, db)
 
     # 10. Load conversation context only if tier supports memory.
@@ -1238,18 +962,12 @@ async def generate_replies(
                             (past_int.reply_2 or "").lower().strip(),
                             (past_int.reply_3 or "").lower().strip(),
                         ]
-
-                        # If the text is a 90% match to an AI suggestion, it's an Echo.
-                        if any(
-                            pr in clean_text or clean_text in pr
-                            for pr in past_replies
-                            if len(pr) > 5
-                        ):
+                        if is_echo_text(clean_text, past_replies):
                             is_echo = True
                             logger.info(
                                 "voice_dna_echo_detected", user_id=user.id, text=clean_text
                             )
-                            user_organic_text = None  # Discard it
+                            user_organic_text = None
                             break
 
                     if not is_echo:
@@ -1262,7 +980,7 @@ async def generate_replies(
 
                         # Update Voice DNA stats and recent organic messages
                         voice_result = await db.execute(
-                            select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
+                            select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id).with_for_update()
                         )
                         voice_db = voice_result.scalar_one_or_none()
                         if voice_db is None:
@@ -1282,10 +1000,14 @@ async def generate_replies(
                         except (json.JSONDecodeError, TypeError):
                             messages_list = []
 
+                        should_refresh_semantic = (
+                            not getattr(updated_dna, "semantic_profile", None)
+                            or (updated_dna.sample_count % 25 == 0 and updated_dna.sample_count > 0)
+                        )
                         if (
                             effective_tier in ["premium", "pro"]
                             and len(messages_list) >= 5
-                            and not getattr(updated_dna, "semantic_profile", None)
+                            and should_refresh_semantic
                         ):
                             background_tasks.add_task(
                                 generate_semantic_profile_background,
@@ -1468,6 +1190,10 @@ async def generate_replies(
         screenshot_count=len(images),
         latency_ms=latency_ms,
     )
+    # Increment quota now that we have a successful reply to return.
+    if quota_manager and user.google_provider_id:
+        daily_used, _ = await quota_manager.increment(user.google_provider_id)
+
     db.add(interaction)
     await db.commit()
     await db.refresh(interaction)
