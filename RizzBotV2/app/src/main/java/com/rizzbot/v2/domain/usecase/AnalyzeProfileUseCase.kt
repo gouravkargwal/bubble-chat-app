@@ -6,6 +6,8 @@ import com.rizzbot.v2.domain.model.DatingApp
 import com.rizzbot.v2.domain.model.ProfileAnalysisResult
 import com.rizzbot.v2.domain.repository.HostedRepository
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class AnalyzeProfileUseCase @Inject constructor(
     private val repository: HostedRepository,
@@ -18,7 +20,9 @@ class AnalyzeProfileUseCase @Inject constructor(
         android.util.Log.d("AnalyzeProfileUC", "invoke called with ${bitmaps.size} bitmaps for ${datingApp.name}")
         
         return try {
-            val byteArrays = bitmaps.map { imageCompressor.bitmapToJpegByteArray(it) }
+            val byteArrays = withContext(Dispatchers.IO) {
+                bitmaps.map { imageCompressor.bitmapToJpegByteArray(it) }
+            }
 
             // Step 1: Submit the audit job (returns job_id immediately)
             val submitResult = repository.submitAuditJob(byteArrays)

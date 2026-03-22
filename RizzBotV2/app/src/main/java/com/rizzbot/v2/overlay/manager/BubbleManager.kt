@@ -23,6 +23,7 @@ import com.rizzbot.v2.overlay.OverlayLifecycleOwner
 import com.rizzbot.v2.overlay.ui.BubbleOverlay
 import com.rizzbot.v2.util.ClipboardHelper
 import com.rizzbot.v2.util.HapticHelper
+import com.rizzbot.v2.BuildConfig
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -73,6 +74,9 @@ class BubbleManager @Inject constructor(
      * waiting for the TransparentGalleryActivity result.
      */
     private var pendingGalleryDirection: DirectionWithHint? = null
+
+    /** Avoid redundant [WindowManager.updateViewLayout] when only in-overlay content changes. */
+    private var lastAppliedExpandedLayout: Boolean? = null
 
     init {
         // Default position: right edge, vertically centered
@@ -143,7 +147,10 @@ class BubbleManager @Inject constructor(
 
     private fun updateWindowForState(state: BubbleState) {
         val view = composeView ?: return
-        val params = createParams(isFullScreenState(state))
+        val expanded = isFullScreenState(state)
+        if (lastAppliedExpandedLayout == expanded) return
+        lastAppliedExpandedLayout = expanded
+        val params = createParams(expanded)
         try {
             windowManager.updateViewLayout(view, params)
         } catch (e: IllegalArgumentException) {
@@ -203,7 +210,9 @@ class BubbleManager @Inject constructor(
         var dragParams: WindowManager.LayoutParams? = null
 
         view.setOnTouchListener { _, event ->
-            Log.d(TAG, "Touch event: action=${event.action} state=${_state.value}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Touch event: action=${event.action} state=${_state.value}")
+            }
 
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
@@ -258,7 +267,6 @@ class BubbleManager @Inject constructor(
 
                         try {
                             windowManager.updateViewLayout(view, lp)
-                            Log.d(TAG, "Dragging bubble to x=${lp.x}, y=${lp.y}")
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to update layout during drag", e)
                         }
@@ -300,7 +308,6 @@ class BubbleManager @Inject constructor(
                                     bubbleX = newX
                                     try {
                                         windowManager.updateViewLayout(view, lp)
-                                        Log.d(TAG, "Snapping bubble to x=$newX, y=${lp.y}")
                                     } catch (e: Exception) {
                                         Log.w(TAG, "Failed to update layout during snap", e)
                                     }
@@ -419,6 +426,7 @@ class BubbleManager @Inject constructor(
             }
         }
         composeView = null
+        lastAppliedExpandedLayout = null
         _state.value = BubbleState.Hidden
         orchestrator.clearAllState() // Clear all state when service is hidden
         currentDirection = null
@@ -442,6 +450,7 @@ class BubbleManager @Inject constructor(
             }
         }
         composeView = null
+        lastAppliedExpandedLayout = null
         _state.value = BubbleState.Capturing
     }
 
