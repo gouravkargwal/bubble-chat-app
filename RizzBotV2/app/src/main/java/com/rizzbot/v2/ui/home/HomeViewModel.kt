@@ -8,7 +8,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.capture.ImageCompressor
 import com.rizzbot.v2.data.remote.api.HostedApi
-import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.domain.model.UserPreferences
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
@@ -34,12 +33,10 @@ data class HomeState(
     val totalRepliesGenerated: Int = 0,
     val totalRepliesCopied: Int = 0,
     val showHowItWorks: Boolean = true,
-    val recentReplies: List<HistoryItemResponse> = emptyList(),
     val rizzProfile: UserPreferences? = null,
     val usage: UsageState = UsageState(),
     val showCalibrationModal: Boolean = false,
     val isLoadingUsage: Boolean = true,
-    val isLoadingHistory: Boolean = true,
     val roastLanguage: String = "English",
     val latestBlueprintTheme: String? = null,
     val latestBlueprintSlotCount: Int = 0,
@@ -113,16 +110,6 @@ class HomeViewModel @Inject constructor(
             hostedRepository.refreshUsage(force = false)
         }
 
-        // Fetch recent history from backend
-        viewModelScope.launch {
-            val history = hostedRepository.getHistory(limit = 3, offset = 0)
-            // Filter out items with no valid replies
-            val validHistory = history.filter { item ->
-                item.replies.any { reply -> reply.text.isNotBlank() }
-            }
-            _state.update { it.copy(recentReplies = validHistory, isLoadingHistory = false) }
-        }
-
         // Fetch user preferences from backend
         viewModelScope.launch {
             try {
@@ -178,7 +165,7 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * User pull-to-refresh: permissions, usage, recent history strip, voice profile, latest blueprint.
+     * User pull-to-refresh: permissions, usage, voice profile, latest blueprint.
      */
     fun refresh() {
         viewModelScope.launch {
@@ -186,12 +173,6 @@ class HomeViewModel @Inject constructor(
             try {
                 refreshPermissionStatus()
                 hostedRepository.refreshUsage(force = true)
-
-                val history = hostedRepository.getHistory(limit = 3, offset = 0)
-                val validHistory = history.filter { item ->
-                    item.replies.any { reply -> reply.text.isNotBlank() }
-                }
-                _state.update { it.copy(recentReplies = validHistory, isLoadingHistory = false) }
 
                 try {
                     val prefs = hostedRepository.getUserPreferences()

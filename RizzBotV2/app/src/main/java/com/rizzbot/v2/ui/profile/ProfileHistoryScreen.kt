@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -125,7 +126,7 @@ fun ProfileHistoryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingDeleteId = null }) {
-                    Text("Cancel", color = Color(0xFFE91E63))
+                    Text("Cancel", color = MaterialTheme.colorScheme.primary)
                 }
             },
             containerColor = Color(0xFF1A1A2E),
@@ -192,7 +193,7 @@ fun ProfileHistoryScreen(
                     isRefreshing = isLoadingState.value && auditsState.value.isNotEmpty(),
                     state = pullRefreshState,
                     containerColor = cardBg,
-                    color = Color(0xFFE91E63),
+                    color = MaterialTheme.colorScheme.primary,
                 )
             },
             modifier = Modifier
@@ -288,7 +289,7 @@ private fun AuditHistoryCard(
             
             // Premium accent divider
             HorizontalDivider(
-                color = Color(0xFFE91E63),
+                color = MaterialTheme.colorScheme.primary,
                 thickness = 2.dp
             )
             

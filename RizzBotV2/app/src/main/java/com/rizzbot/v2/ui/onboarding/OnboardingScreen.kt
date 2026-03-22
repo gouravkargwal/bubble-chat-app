@@ -60,8 +60,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
 
-private val Pink = Color(0xFFE91E63)
-private val PinkDark = Color(0xFFC2185B)
 private val DarkBg = Color(0xFF0A0A14)
 private val CardBg = Color(0xFF14142B)
 private val CardBorder = Color(0xFF1E1E3F)
@@ -136,7 +134,7 @@ fun OnboardingScreen(
                     repeat(4) { step ->
                         val filled = step <= state.currentStep
                         val trackColor by animateColorAsState(
-                            targetValue = if (filled) Pink else CardBorder,
+                            targetValue = if (filled) MaterialTheme.colorScheme.primary else CardBorder,
                             animationSpec = tween(280, easing = FastOutSlowInEasing),
                             label = "onboardingStepColor",
                         )
@@ -153,7 +151,7 @@ fun OnboardingScreen(
                                 .then(
                                     if (filled) {
                                         Modifier.background(
-                                            Brush.horizontalGradient(listOf(Pink, PinkDark)),
+                                            Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)),
                                         )
                                     } else {
                                         Modifier.background(trackColor)
@@ -255,7 +253,7 @@ private fun HookAndLoginStep(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Pink.copy(alpha = 0.3f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                             Color.Transparent
                         )
                     )
@@ -348,14 +346,14 @@ private fun HookAndLoginStep(
                     onClick = onOpenTerms,
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                 ) {
-                    Text("Terms", color = Pink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Terms", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Text("·", color = SubtleText.copy(alpha = 0.4f), fontSize = 11.sp)
                 TextButton(
                     onClick = onOpenPrivacy,
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                 ) {
-                    Text("Privacy", color = Pink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Privacy", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -417,7 +415,7 @@ private fun VibeCheckStep(
         Button(
             onClick = onNext,
             enabled = selectedVibe != null,
-            colors = ButtonDefaults.buttonColors(containerColor = Pink),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
@@ -443,7 +441,7 @@ private fun VibeCard(
             .clickable(onClick = onClick)
             .then(
                 if (isSelected) {
-                    Modifier.border(2.dp, Pink, RoundedCornerShape(16.dp))
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
                 } else {
                     Modifier
                 }
@@ -471,7 +469,7 @@ private fun VibeCard(
                 Icon(
                     Icons.Default.Check,
                     contentDescription = null,
-                    tint = Pink,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -570,7 +568,7 @@ private fun InteractiveDemoStep(
                     
                     Button(
                         onClick = { chatState = 1 },
-                        colors = ButtonDefaults.buttonColors(containerColor = Pink),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp)
@@ -619,7 +617,7 @@ private fun InteractiveDemoStep(
                         Box(
                             modifier = Modifier
                                 .background(
-                                    color = Pink,
+                                    color = MaterialTheme.colorScheme.primary,
                                     shape = RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
                                 )
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -639,7 +637,7 @@ private fun InteractiveDemoStep(
         if (chatState == 2) {
             Button(
                 onClick = onNext,
-                colors = ButtonDefaults.buttonColors(containerColor = Pink),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -670,7 +668,7 @@ private fun TrustAndTechStep(
         Icon(
             Icons.Default.Shield,
             contentDescription = null,
-            tint = Pink,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(64.dp)
         )
         
@@ -712,7 +710,7 @@ private fun TrustAndTechStep(
         if (!hasPermission) {
             Button(
                 onClick = onRequestPermission,
-                colors = ButtonDefaults.buttonColors(containerColor = Pink),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -723,7 +721,7 @@ private fun TrustAndTechStep(
         } else {
             Button(
                 onClick = onComplete,
-                colors = ButtonDefaults.buttonColors(containerColor = Pink),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),

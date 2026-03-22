@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.remote.dto.AuditResponse
+import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.compressImage
@@ -114,10 +115,20 @@ class ProfileAuditorViewModel @Inject constructor(
         val s = _state.value
         val isGod = s.tier == "premium" || s.tier == "god_mode"
         val limit = s.profileAuditsPerWeek
-        val hasLeft = limit <= 0 || s.weeklyAuditsUsed < limit
-        if (!isGod && !hasLeft) {
-            onBlocked()
+        if (isGod) {
+            _state.update { it.copy(auditSessionStarted = true, error = null) }
             return
+        }
+        when {
+            TierQuota.isNotOnPlan(limit) -> {
+                onBlocked()
+                return
+            }
+            TierQuota.isUnlimited(limit) -> { /* ok */ }
+            s.weeklyAuditsUsed >= limit -> {
+                onBlocked()
+                return
+            }
         }
         _state.update { it.copy(auditSessionStarted = true, error = null) }
     }

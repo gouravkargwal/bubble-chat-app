@@ -2,6 +2,11 @@
 
 from app.models.enums import ConversationDirection
 
+# Limits semantics (usage + enforcement):
+# - profile_blueprints_per_week: 0 = feature not on this tier (optimize endpoint returns 403);
+#   >0 = weekly cap. (Unlike chat_generations where 0 can mean unlimited in some paths, here 0 is locked.)
+# - Other numeric limits: see each endpoint / QuotaManager.
+
 TIER_CONFIG = {
     "free": {
         "limits": {

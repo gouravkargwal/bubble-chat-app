@@ -28,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,11 +54,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.rizzbot.v2.ui.theme.Pink
-
 private val BgColor = Color(0xFF050510)
 private val CardColor = Color(0xFF0D0D22)
-private val Accent = Pink
 private val TextPrimary = Color.White
 private val TextSecondary = Color(0xFFB0B0D0)
 private val TextMuted = Color(0xFF606080)
@@ -212,7 +210,7 @@ private fun BlueprintHistoryListView(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.Black)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
                 ) {
                     Text("Try again", fontWeight = FontWeight.SemiBold)
                 }
@@ -237,7 +235,7 @@ private fun BlueprintListCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = label,
-                color = Accent,
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -274,7 +272,7 @@ private fun BlueprintDetailView(
         item {
             Text(
                 text = blueprint.overallTheme,
-                color = Accent,
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 lineHeight = 20.sp
@@ -315,7 +313,7 @@ private fun SlotDetailCard(slot: OptimizedSlot, onCopy: (String) -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "Slot ${slot.slotNumber}",
-                    color = Accent,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -460,7 +458,7 @@ private fun BioCard(bio: String, onCopy: () -> Unit) {
                 ) {
                     Text(
                         text = "Copy",
-                        color = Accent,
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )

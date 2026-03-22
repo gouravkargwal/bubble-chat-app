@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.auth.GoogleSignInHelper
 import com.rizzbot.v2.domain.model.ReferralInfo
+import com.rizzbot.v2.domain.model.TierQuota
+import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 data class SettingsState(
@@ -24,7 +28,7 @@ data class SettingsState(
     val billingPeriod: String = "daily",
     val profileAuditsPerWeek: Int = 1,
     val weeklyAuditsUsed: Int = 0,
-    val profileBlueprintsPerWeek: Int = 0,
+    val profileBlueprintsPerWeek: Int = TierQuota.NOT_ON_PLAN,
     val weeklyBlueprintsUsed: Int = 0,
     val godModeExpiresAt: java.time.Instant? = null,
     val userName: String? = null,
@@ -47,6 +51,25 @@ class SettingsViewModel @Inject constructor(
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+    private fun applyUsageSnapshot(usage: UsageState) {
+        _state.update {
+            it.copy(
+                isPremium = usage.isPremium,
+                tier = usage.tier,
+                dailyLimit = usage.dailyLimit,
+                dailyUsed = usage.dailyUsed,
+                weeklyUsed = usage.weeklyUsed,
+                monthlyUsed = usage.monthlyUsed,
+                billingPeriod = usage.billingPeriod,
+                profileAuditsPerWeek = usage.profileAuditsPerWeek,
+                weeklyAuditsUsed = usage.weeklyAuditsUsed,
+                profileBlueprintsPerWeek = usage.profileBlueprintsPerWeek,
+                weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
+                godModeExpiresAt = usage.godModeExpiresAt
+            )
+        }
+    }
+
     init {
         _state.update {
             it.copy(
@@ -57,24 +80,7 @@ class SettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             hostedRepository.refreshUsage(force = true) // Always fetch fresh data when opening settings
-            hostedRepository.usageState.collect { usage ->
-                _state.update {
-                    it.copy(
-                        isPremium = usage.isPremium,
-                        tier = usage.tier,
-                        dailyLimit = usage.dailyLimit,
-                        dailyUsed = usage.dailyUsed,
-                        weeklyUsed = usage.weeklyUsed,
-                        monthlyUsed = usage.monthlyUsed,
-                        billingPeriod = usage.billingPeriod,
-                        profileAuditsPerWeek = usage.profileAuditsPerWeek,
-                        weeklyAuditsUsed = usage.weeklyAuditsUsed,
-                        profileBlueprintsPerWeek = usage.profileBlueprintsPerWeek,
-                        weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
-                        godModeExpiresAt = usage.godModeExpiresAt
-                    )
-                }
-            }
+            hostedRepository.usageState.collect { usage -> applyUsageSnapshot(usage) }
         }
 
         viewModelScope.launch {
@@ -89,12 +95,22 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun refresh() {
-        viewModelScope.launch {
+    /**
+     * Awaitable refresh: after [HostedRepository.refreshUsage] returns, copies [HostedRepository.usageState]
+     * into settings state immediately so tier/limits are not briefly wrong if [referral] is updated before
+     * the [hostedRepository.usageState] collector runs.
+     */
+    suspend fun refreshComplete() {
+        withContext(Dispatchers.IO) {
             hostedRepository.refreshUsage(force = true)
-            val info = hostedRepository.getReferralInfo()
-            _state.update { it.copy(referral = info) }
         }
+        applyUsageSnapshot(hostedRepository.usageState.value)
+        val info = withContext(Dispatchers.IO) { hostedRepository.getReferralInfo() }
+        _state.update { it.copy(referral = info) }
+    }
+
+    fun refresh() {
+        viewModelScope.launch { refreshComplete() }
     }
 
     fun onReferralCodeChanged(code: String) {

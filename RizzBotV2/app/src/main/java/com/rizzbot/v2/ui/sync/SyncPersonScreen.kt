@@ -32,7 +32,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val Pink = Color(0xFFE91E63)
 private val DarkBg = Color(0xFF0F0F1A)
 private val CardBg = Color(0xFF1A1A2E)
 
@@ -83,7 +82,7 @@ fun SyncPersonScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Pink)
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.height(16.dp))
                             Text("Extracting profile info...", color = Color.White)
                             Text("This may take a few seconds", color = Color.Gray, fontSize = 12.sp)
@@ -105,7 +104,7 @@ fun SyncPersonScreen(
                             Spacer(modifier = Modifier.height(12.dp))
                             Button(
                                 onClick = { viewModel.clearResult() },
-                                colors = ButtonDefaults.buttonColors(containerColor = Pink)
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) { Text("Try Again") }
                         }
                     }
@@ -138,7 +137,7 @@ fun SyncPersonScreen(
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.AddPhotoAlternate, null, tint = Pink, modifier = Modifier.size(40.dp))
+                                    Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text("Tap to add screenshots", color = Color.Gray)
                                 }
@@ -178,7 +177,7 @@ fun SyncPersonScreen(
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
                                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.Add, null, tint = Pink)
+                                            Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
                                         }
                                     }
                                 }
@@ -196,7 +195,7 @@ fun SyncPersonScreen(
                                 }
                                 viewModel.syncProfile(bitmaps)
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Pink),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -218,10 +217,10 @@ private fun StepRow(number: String, text: String) {
             modifier = Modifier
                 .size(24.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Pink.copy(alpha = 0.2f)),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(number, color = Pink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(number, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(text, color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
@@ -234,7 +233,7 @@ private fun ProfileResultCard(result: PersonProfileResult.Success, onDone: () ->
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(Pink),
+                    modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(result.name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -250,40 +249,40 @@ private fun ProfileResultCard(result: PersonProfileResult.Success, onDone: () ->
 
             if (result.bio != null) {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Bio", color = Pink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Bio", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(result.bio, color = Color.White, fontSize = 13.sp)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Interests", color = Pink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("Interests", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Spacer(modifier = Modifier.height(4.dp))
             result.interests.forEach { interest ->
                 Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                    Text("  \u2022  ", color = Pink, fontSize = 13.sp)
+                    Text("  \u2022  ", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                     Text(interest, color = Color.White, fontSize = 13.sp)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Personality Traits", color = Pink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("Personality Traits", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Spacer(modifier = Modifier.height(4.dp))
             result.personalityTraits.forEach { trait ->
                 Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                    Text("  \u2022  ", color = Pink, fontSize = 13.sp)
+                    Text("  \u2022  ", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                     Text(trait, color = Color.White, fontSize = 13.sp)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Conversation Angles", color = Pink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("Conversation Angles", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Spacer(modifier = Modifier.height(4.dp))
             Text(result.fullExtraction, color = Color.White, fontSize = 13.sp)
 
             Spacer(modifier = Modifier.height(20.dp))
             Button(
                 onClick = onDone,
-                colors = ButtonDefaults.buttonColors(containerColor = Pink),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {

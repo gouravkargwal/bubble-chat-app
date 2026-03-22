@@ -110,7 +110,7 @@ fun HistoryScreen(
                     isRefreshing = isPullRefreshing,
                     state = pullRefreshState,
                     containerColor = Color(0xFF1A1A2E),
-                    color = Color(0xFFE91E63),
+                    color = MaterialTheme.colorScheme.primary,
                 )
             },
             modifier = Modifier
@@ -132,7 +132,7 @@ fun HistoryScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                     Button(
                         onClick = onBack,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Back to home", color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -242,7 +242,7 @@ private fun HistoryCard(
                     }
                     Text(
                         "${entry.direction}${entry.customHint?.let { " \u2022 $it" } ?: ""}",
-                        color = Color(0xFFE91E63), fontSize = 12.sp
+                        color = MaterialTheme.colorScheme.primary, fontSize = 12.sp
                     )
                 }
                 Text(dateFormat.format(Date(entry.createdAt * 1000)), color = Color.Gray, fontSize = 11.sp)

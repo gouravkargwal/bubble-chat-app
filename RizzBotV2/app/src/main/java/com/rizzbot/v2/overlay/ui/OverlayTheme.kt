@@ -4,11 +4,32 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.rizzbot.v2.ui.theme.GodModePrimary
+import com.rizzbot.v2.ui.theme.GodModePrimaryDark
+import com.rizzbot.v2.ui.theme.GodModeSecondary
+import com.rizzbot.v2.ui.theme.Pink
+import com.rizzbot.v2.ui.theme.PinkDark
+import com.rizzbot.v2.ui.theme.Purple
 
-private val OverlayColorScheme = darkColorScheme(
-    primary = Color(0xFFE91E63),
+private val DarkOnGoldPrimary = Color(0xFF1C1508)
+
+private val OverlayPinkScheme = darkColorScheme(
+    primary = Pink,
     onPrimary = Color.White,
-    secondary = Color(0xFF9C27B0),
+    secondary = Purple,
+    tertiary = PinkDark,
+    surface = Color.Transparent,
+    onSurface = Color.White,
+    background = Color.Transparent,
+    onBackground = Color.White,
+    error = Color(0xFFEF5350)
+)
+
+private val OverlayGodModeScheme = darkColorScheme(
+    primary = GodModePrimary,
+    onPrimary = DarkOnGoldPrimary,
+    secondary = GodModeSecondary,
+    tertiary = GodModePrimaryDark,
     surface = Color.Transparent,
     onSurface = Color.White,
     background = Color.Transparent,
@@ -17,9 +38,12 @@ private val OverlayColorScheme = darkColorScheme(
 )
 
 @Composable
-fun OverlayTheme(content: @Composable () -> Unit) {
+fun OverlayTheme(
+    isGodMode: Boolean = false,
+    content: @Composable () -> Unit
+) {
     MaterialTheme(
-        colorScheme = OverlayColorScheme,
+        colorScheme = if (isGodMode) OverlayGodModeScheme else OverlayPinkScheme,
         content = content
     )
 }

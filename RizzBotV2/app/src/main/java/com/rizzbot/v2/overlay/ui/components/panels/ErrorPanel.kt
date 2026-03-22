@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.domain.model.SuggestionResult
-import com.rizzbot.v2.overlay.ui.theme.OverlayColors
+import androidx.compose.material3.MaterialTheme
 
 /**
  * Panel showing error messages with retry/upgrade options
@@ -63,7 +63,7 @@ fun ErrorPanel(
         if (isQuotaExceeded) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Upgrade to Premium for unlimited replies",
+                "Upgrade for a higher daily reply allowance",
                 color = Color.Gray,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
@@ -72,7 +72,7 @@ fun ErrorPanel(
             Button(
                 onClick = onUpgrade,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = OverlayColors.AccentPink),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Upgrade Now")
@@ -93,7 +93,7 @@ fun ErrorPanel(
                 }
                 Button(
                     onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = OverlayColors.AccentPink)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Retry")
                 }

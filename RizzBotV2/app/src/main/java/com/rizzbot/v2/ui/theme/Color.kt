@@ -14,8 +14,12 @@ val TextWhite = Color(0xFFFFFFFF)
 val TextGray = Color(0xFFB0B0B0)
 
 /**
- * Gold is reserved for **locked / paywalled** affordances (lock icons, upgrade CTAs).
- * Primary interactive accents (including for premium & referral god-mode users) use [Pink].
+ * Gold for **locked / paywalled** affordances and the **God Mode** app theme primary accent.
  */
 val LockedFeatureGold = Color(0xFFFFD700)
 val LockedFeatureGoldMuted = LockedFeatureGold.copy(alpha = 0.15f)
+
+val GodModePrimary = LockedFeatureGold
+val GodModePrimaryLight = Color(0xFFFFEC73)
+val GodModePrimaryDark = Color(0xFFB8860B)
+val GodModeSecondary = Color(0xFFFFAB00)

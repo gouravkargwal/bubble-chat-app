@@ -22,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.rizzbot.v2.domain.model.DirectionWithHint
+import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.overlay.OverlayEvent
 import com.rizzbot.v2.overlay.manager.BubbleState
@@ -45,6 +47,7 @@ import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
 import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
 import com.rizzbot.v2.overlay.ui.theme.OverlayShapes
+import com.rizzbot.v2.ui.theme.LocalAppGodMode
 import com.rizzbot.v2.ui.paywall.PaywallDialog
 import kotlinx.coroutines.flow.StateFlow
 
@@ -78,11 +81,13 @@ fun BubbleOverlay(
         currentState is BubbleState.RequiresUserConfirmation ||
         currentState is BubbleState.Error
 
-    OverlayTheme {
-        Box(
-            modifier = if (isFullScreen) Modifier.fillMaxSize() 
-            else Modifier.background(Color.Transparent)
-        ) {
+    val isGodMode = usage.isGodModeActive
+    CompositionLocalProvider(LocalAppGodMode provides isGodMode) {
+        OverlayTheme(isGodMode = isGodMode) {
+            Box(
+                modifier = if (isFullScreen) Modifier.fillMaxSize()
+                else Modifier.background(Color.Transparent)
+            ) {
             // Background scrim with blur effect
             BackgroundScrim(
                 visible = isFullScreen,
@@ -123,10 +128,13 @@ fun BubbleOverlay(
                     currentState = currentState,
                     usage = usage,
                     isGalleryMode = galleryMode,
-                    onEvent = onEvent,
-                    showPaywall = showPaywall,
-                    onDismissPaywall = onDismissPaywall
+                    onEvent = onEvent
                 )
+            }
+            }
+
+            if (showPaywall) {
+                PaywallDialog(onDismiss = onDismissPaywall)
             }
         }
     }
@@ -172,9 +180,7 @@ private fun FullScreenCard(
     currentState: BubbleState,
     usage: UsageState,
     isGalleryMode: Boolean,
-    onEvent: (OverlayEvent) -> Unit,
-    showPaywall: Boolean = false,
-    onDismissPaywall: () -> Unit = {}
+    onEvent: (OverlayEvent) -> Unit
 ) {
     val isLoading = currentState is BubbleState.Loading
     
@@ -224,9 +230,10 @@ private fun FullScreenCard(
                             modifier = Modifier.fillMaxSize()
                         )
                         is BubbleState.ScreenshotPreview -> {
-                            val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
-                            val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
-                            val canGenerate = isGodMode || hasRepliesLeft
+                            val hasRepliesLeft =
+                                TierQuota.isUnlimited(usage.dailyLimit) ||
+                                    usage.dailyUsed < usage.dailyLimit
+                            val canGenerate = usage.isGodModeActive || hasRepliesLeft
 
                             ScreenshotPreviewPanel(
                                 bitmaps = s.bitmaps,
@@ -303,13 +310,6 @@ private fun FullScreenCard(
                     }
                 }
             }
-        }
-
-        // Paywall Dialog
-        if (showPaywall) {
-            PaywallDialog(
-                onDismiss = onDismissPaywall
-            )
         }
     }
 }

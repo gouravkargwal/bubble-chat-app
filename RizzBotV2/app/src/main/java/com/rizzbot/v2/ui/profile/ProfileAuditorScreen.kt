@@ -78,8 +78,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.ui.paywall.PaywallDialog
-import com.rizzbot.v2.ui.theme.Pink
 import kotlinx.coroutines.delay
 
 enum class PhotoTier {
@@ -160,7 +160,7 @@ fun ProfileAuditorScreen(
                     TextButton(onClick = onOpenPastPhotoAudits) {
                         Text(
                             text = "Past audits",
-                            color = Pink,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 14.sp,
                             maxLines = 1,
                         )
@@ -198,15 +198,15 @@ fun ProfileAuditorScreen(
                                     .fillMaxWidth()
                                     .height(52.dp),
                                 shape = RoundedCornerShape(14.dp),
-                                border = BorderStroke(1.dp, Pink),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Pink)
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text(text = "Start a new audit", fontSize = 15.sp)
                             }
                         }
                         showIntro -> {
                             if (!isGodMode &&
-                                weeklyAuditLimit > 0 &&
+                                TierQuota.isFinite(weeklyAuditLimit) &&
                                 state.weeklyAuditsUsed >= weeklyAuditLimit
                             ) {
                                 Text(
@@ -224,7 +224,7 @@ fun ProfileAuditorScreen(
                                     .height(52.dp),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Pink
+                                    containerColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
                                 Text(
@@ -243,7 +243,7 @@ fun ProfileAuditorScreen(
                                     .height(52.dp),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Pink
+                                    containerColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
                                 Row(
@@ -316,8 +316,10 @@ fun ProfileAuditorScreen(
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
                             text = when {
-                                isGodMode || weeklyAuditLimit <= 0 ->
+                                isGodMode || TierQuota.isUnlimited(weeklyAuditLimit) ->
                                     "Unlimited photo audits on your plan."
+                                TierQuota.isNotOnPlan(weeklyAuditLimit) ->
+                                    "Photo audits aren't included on your current plan."
                                 else -> {
                                     val limit = weeklyAuditLimit
                                     val used = weeklyAuditsUsed.coerceAtMost(limit)
@@ -370,7 +372,7 @@ fun ProfileAuditorScreen(
                             }
                             Text(
                                 text = "Dismiss",
-                                color = Pink,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontSize = 13.sp,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
@@ -464,7 +466,7 @@ fun ProfileAuditorScreen(
                                             )
                                         },
                                         colors = AssistChipDefaults.assistChipColors(
-                                            containerColor = if (isSelected) Pink else CardBg
+                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else CardBg
                                         )
                                     )
                                 }
@@ -615,8 +617,8 @@ private fun AuditIntroStepRow(
             modifier = Modifier
                 .size(32.dp)
                 .clip(CircleShape)
-                .background(Pink.copy(alpha = 0.22f))
-                .border(1.5.dp, Pink, CircleShape),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
+                .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -686,12 +688,12 @@ private fun AuditStepPill(
     val current = index == currentStep
     val bg = when {
         done -> Color(0xFF1B5E20).copy(alpha = 0.45f)
-        current -> Pink.copy(alpha = 0.22f)
+        current -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
         else -> CardBg
     }
     val ring = when {
         done -> Color(0xFF81C784)
-        current -> Pink
+        current -> MaterialTheme.colorScheme.primary
         else -> Color(0xFF252542)
     }
     Column(
@@ -786,7 +788,7 @@ private fun AuditProgressView(progress: AuditProgress) {
             CircularProgressIndicator(
                 progress = { if (progress.progress > 0f) progress.progress else 0f },
                 modifier = Modifier.size(100.dp),
-                color = Pink,
+                color = MaterialTheme.colorScheme.primary,
                 trackColor = Color(0xFF252542),
                 strokeWidth = 6.dp,
             )
@@ -794,7 +796,7 @@ private fun AuditProgressView(progress: AuditProgress) {
             if (progress.progress <= 0f) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(100.dp),
-                    color = Pink.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                     strokeWidth = 4.dp,
                 )
             }
@@ -994,8 +996,8 @@ private fun ProfileAuditResultContent(
 private fun RoastSummaryBanner(result: AuditResponseUi) {
     val gradientBrush = Brush.verticalGradient(
         colors = listOf(
-            Pink.copy(alpha = 0.45f),
-            Pink.copy(alpha = 0.12f),
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
             DarkBg
         )
     )
@@ -1114,7 +1116,7 @@ private fun PhotoResultRow(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Tip: ${photo.improvementTip}",
-                    color = Pink.copy(alpha = 0.92f),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
                     fontSize = 12.sp,
                 )
             }

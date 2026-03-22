@@ -22,6 +22,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,8 +42,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 private val DarkBg = Color(0xFF0F0F1A)
 private val CardBg = Color(0xFF1A1A2E)
-private val Pink = Color(0xFFE91E63)
-
 @Composable
 fun PaywallScreen(
     onDismiss: () -> Unit,
@@ -128,7 +127,7 @@ fun PaywallScreen(
                                 exit = fadeOut(animationSpec = tween(200))
                             ) {
                                 Surface(
-                                    color = Pink.copy(alpha = 0.15f),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                     shape = RoundedCornerShape(999.dp),
                                     modifier = Modifier
                                         .size(88.dp)
@@ -140,7 +139,7 @@ fun PaywallScreen(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = "Premium unlocked",
-                                            tint = Pink,
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(40.dp)
                                         )
                                     }
@@ -191,7 +190,7 @@ fun PaywallScreen(
 
                     // Subheadline
                     Text(
-                        "Get unlimited AI-powered replies, profile optimization, and more",
+                        "Higher reply allowances, profile tools, and advanced AI — see Settings for live quotas.",
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 16.sp,
                         textAlign = TextAlign.Center,
@@ -227,8 +226,8 @@ fun PaywallScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        FeatureRow("Unlimited Chat")
-                                        FeatureRow("Advanced Replies")
+                                        FeatureRow("Higher daily reply caps")
+                                        FeatureRow("Advanced reply styles")
                                     }
                                 }
                                 PaywallTier.Premium -> {
@@ -296,7 +295,7 @@ fun PaywallScreen(
                                 .height(200.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = Pink)
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     is PaywallUiState.Error -> {
@@ -353,11 +352,11 @@ fun PaywallScreen(
                     .padding(top = 16.dp, bottom = 12.dp)
             ) {
                 if (state.purchaseSuccess) {
-                    // Success primary CTA — refreshes backend data before navigating
+                    // Success CTA — refreshes backend data before navigating
                     Button(
                         onClick = { viewModel.refreshUserTierFromBackend() },
                         enabled = !state.isRefreshingAfterPurchase,
-                        colors = ButtonDefaults.buttonColors(containerColor = Pink),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
@@ -396,7 +395,7 @@ fun PaywallScreen(
                                 viewModel.purchasePackage(activity, selectedPackage, onPurchaseSuccess)
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Pink,
+                                containerColor = MaterialTheme.colorScheme.primary,
                                 disabledContainerColor = CardBg.copy(alpha = 0.5f)
                             ),
                             modifier = Modifier
@@ -510,7 +509,7 @@ private fun FeatureRow(text: String) {
         Icon(
             Icons.Default.Check,
             contentDescription = "Included",
-            tint = Pink,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -568,7 +567,7 @@ private fun TabButton(
     modifier: Modifier = Modifier
 ) {
     val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) Pink else Color.Transparent,
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
         animationSpec = tween(300),
         label = "tabBackground"
     )
@@ -649,7 +648,7 @@ private fun PackageCard(
             )
             .then(
                 if (isSelected) {
-                    Modifier.border(2.dp, Pink, RoundedCornerShape(16.dp))
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
                 } else {
                     Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
                 }
@@ -671,8 +670,8 @@ private fun PackageCard(
                         Modifier.background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    Pink.copy(alpha = 0.15f),
-                                    Pink.copy(alpha = 0.05f)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
                                 )
                             )
                         )
@@ -722,7 +721,7 @@ private fun PackageCard(
                     // Savings Badge for Monthly packages
                     if (savingsPercentage != null) {
                         Surface(
-                            color = Pink,
+                            color = MaterialTheme.colorScheme.primary,
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.padding(start = 8.dp)
                         ) {
@@ -752,7 +751,7 @@ private fun PackageCard(
                 
                 Text(
                     priceText,
-                    color = Pink,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )

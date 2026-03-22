@@ -35,8 +35,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.ui.theme.LockedFeatureGold
-import com.rizzbot.v2.ui.theme.Pink
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +79,7 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSignOutDialog = false }) {
-                    Text("Cancel", color = Color(0xFFE91E63))
+                    Text("Cancel", color = MaterialTheme.colorScheme.primary)
                 }
             },
             containerColor = Color(0xFF1A1A2E)
@@ -132,7 +132,7 @@ fun SettingsScreen(
                     onClick = { showDeleteAllDataDialog = false },
                     enabled = !isDeletingData
                 ) {
-                    Text("Cancel", color = Color(0xFFE91E63))
+                    Text("Cancel", color = MaterialTheme.colorScheme.primary)
                 }
             },
             containerColor = Color(0xFF1A1A2E)
@@ -162,9 +162,11 @@ fun SettingsScreen(
             onRefresh = {
                 coroutineScope.launch {
                     isRefreshing = true
-                    viewModel.refresh()
-                    delay(350L)
-                    isRefreshing = false
+                    try {
+                        viewModel.refreshComplete()
+                    } finally {
+                        isRefreshing = false
+                    }
                 }
             },
             state = pullRefreshState,
@@ -174,7 +176,7 @@ fun SettingsScreen(
                     isRefreshing = isRefreshing,
                     state = pullRefreshState,
                     containerColor = Color(0xFF1A1A2E),
-                    color = Color(0xFFE91E63),
+                    color = MaterialTheme.colorScheme.primary,
                 )
             },
             modifier = Modifier.padding(padding)
@@ -196,7 +198,7 @@ fun SettingsScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     // User info
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Color(0xFFE91E63), modifier = Modifier.size(32.dp))
+                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -223,6 +225,7 @@ fun SettingsScreen(
                         isGodMode = isGodMode || state.tier == "premium",
                         godModeExpiresAt = godModeExpiresAt,
                         dailyLimit = state.dailyLimit,
+                        billingPeriod = state.billingPeriod,
                         onUpgradeClick = onPremium,
                         onInviteClick = {
                             coroutineScope.launch {
@@ -251,9 +254,29 @@ fun SettingsScreen(
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 13.sp
                                 )
-                                Text("• Unlimited Replies", color = Color.Gray, fontSize = 12.sp)
+                                Text(
+                                    text = when {
+                                        TierQuota.isUnlimited(state.dailyLimit) ->
+                                            "• Unlimited daily AI replies"
+                                        else ->
+                                            "• Up to ${state.dailyLimit} AI replies per ${TierQuota.billingPeriodNoun(state.billingPeriod)}"
+                                    },
+                                    color = Color.Gray,
+                                    fontSize = 12.sp
+                                )
                                 Text("• AI Voice Cloning", color = Color.Gray, fontSize = 12.sp)
-                                Text("• Profile photo audit", color = Color.Gray, fontSize = 12.sp)
+                                Text(
+                                    text = when {
+                                        TierQuota.isUnlimited(state.profileAuditsPerWeek) ->
+                                            "• Unlimited profile photo audits"
+                                        TierQuota.isNotOnPlan(state.profileAuditsPerWeek) ->
+                                            "• Profile photo audits not on this plan"
+                                        else ->
+                                            "• Up to ${state.profileAuditsPerWeek} profile photo audit(s) per week"
+                                    },
+                                    color = Color.Gray,
+                                    fontSize = 12.sp
+                                )
                             }
                         }
                     }
@@ -272,10 +295,7 @@ fun SettingsScreen(
                     UsageLimitsDisplay(
                         dailyLimit = state.dailyLimit,
                         dailyUsed = state.dailyUsed,
-                        weeklyUsed = state.weeklyUsed,
-                        monthlyUsed = state.monthlyUsed,
                         billingPeriod = state.billingPeriod,
-                        isPremium = state.isPremium,
                         weeklyAuditsLimit = state.profileAuditsPerWeek,
                         weeklyAuditsUsed = state.weeklyAuditsUsed,
                         weeklyBlueprintsLimit = state.profileBlueprintsPerWeek,
@@ -319,7 +339,7 @@ fun SettingsScreen(
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("Referral Code", referral.referralCode))
                             }) {
-                                Icon(Icons.Default.ContentCopy, "Copy", tint = Color(0xFFE91E63))
+                                Icon(Icons.Default.ContentCopy, "Copy", tint = MaterialTheme.colorScheme.primary)
                             }
                             IconButton(
                                 onClick = {
@@ -333,7 +353,7 @@ fun SettingsScreen(
                                     context.startActivity(Intent.createChooser(intent, "Share Code"))
                                 }
                             ) {
-                                Icon(Icons.Default.Share, "Share", tint = Color(0xFFE91E63))
+                                Icon(Icons.Default.Share, "Share", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
 
@@ -360,11 +380,11 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFFE91E63),
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
                                 unfocusedBorderColor = Color(0xFF252542),
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                cursorColor = Color(0xFFE91E63),
+                                cursorColor = MaterialTheme.colorScheme.primary,
                                 focusedPlaceholderColor = Color.Gray,
                                 unfocusedPlaceholderColor = Color.Gray
                             ),
@@ -374,7 +394,7 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.applyReferralCode() },
                             enabled = state.referralCodeInput.isNotBlank() && !state.isApplyingReferral,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             if (state.isApplyingReferral) {
@@ -505,17 +525,13 @@ fun SettingsScreen(
 private fun UsageLimitsDisplay(
     dailyLimit: Int,
     dailyUsed: Int,
-    weeklyUsed: Int,
-    monthlyUsed: Int,
     billingPeriod: String,
-    isPremium: Boolean,
     weeklyAuditsLimit: Int,
     weeklyAuditsUsed: Int,
     weeklyBlueprintsLimit: Int,
     weeklyBlueprintsUsed: Int = 0
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Label and usage count row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -526,48 +542,52 @@ private fun UsageLimitsDisplay(
                 color = Color.White,
                 fontSize = 14.sp
             )
-            if (isPremium && dailyLimit == 0) {
-                Text(
-                    "UNLIMITED",
+            when {
+                TierQuota.isUnlimited(dailyLimit) -> Text(
+                    "Unlimited",
                     color = Color(0xFF4CAF50),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-            } else {
-                Text(
+                TierQuota.isNotOnPlan(dailyLimit) -> Text(
+                    "Not on your plan",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+                else -> Text(
                     "$dailyUsed of $dailyLimit used",
                     color = Color.Gray,
                     fontSize = 12.sp
                 )
             }
         }
-        
-        // Progress bar (only show if not unlimited)
-        if (!(isPremium && dailyLimit == 0)) {
-            val progress = if (dailyLimit > 0) (dailyUsed.toFloat() / dailyLimit).coerceIn(0f, 1f) else 0f
+
+        if (TierQuota.isFinite(dailyLimit)) {
+            val progress = (dailyUsed.toFloat() / dailyLimit).coerceIn(0f, 1f)
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
-                color = if (progress >= 1f) Color(0xFFEF5350) else Color(0xFFE91E63),
+                color = if (progress >= 1f) Color(0xFFEF5350) else MaterialTheme.colorScheme.primary,
                 trackColor = Color(0xFF252542)
             )
-            
-            // Reset text
             Text(
-                "Resets every 24 hours.",
+                when (billingPeriod.lowercase()) {
+                    "weekly" -> "Resets each billing week."
+                    "monthly" -> "Resets each billing month."
+                    else -> "Resets every 24 hours."
+                },
                 color = Color.Gray,
                 fontSize = 11.sp
             )
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider(color = Color(0xFF252542))
         Spacer(modifier = Modifier.height(8.dp))
-        
-        // Weekly Profile Audits
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -578,36 +598,38 @@ private fun UsageLimitsDisplay(
                 color = Color.White,
                 fontSize = 14.sp
             )
-            if (isPremium && weeklyAuditsLimit == 0) {
-                Text(
-                    "UNLIMITED",
+            when {
+                TierQuota.isUnlimited(weeklyAuditsLimit) -> Text(
+                    "Unlimited",
                     color = Color(0xFF4CAF50),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-            } else {
-                Text(
+                TierQuota.isNotOnPlan(weeklyAuditsLimit) -> Text(
+                    "Not on your plan",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+                else -> Text(
                     "$weeklyAuditsUsed of $weeklyAuditsLimit used",
                     color = Color.Gray,
                     fontSize = 12.sp
                 )
             }
         }
-        
-        // Progress bar (only show if not unlimited)
-        if (!(isPremium && weeklyAuditsLimit == 0)) {
-            val progress = if (weeklyAuditsLimit > 0) (weeklyAuditsUsed.toFloat() / weeklyAuditsLimit).coerceIn(0f, 1f) else 0f
+
+        if (TierQuota.isFinite(weeklyAuditsLimit)) {
+            val progress =
+                (weeklyAuditsUsed.toFloat() / weeklyAuditsLimit).coerceIn(0f, 1f)
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
-                color = if (progress >= 1f) Color(0xFFEF5350) else Color(0xFFE91E63),
+                color = if (progress >= 1f) Color(0xFFEF5350) else MaterialTheme.colorScheme.primary,
                 trackColor = Color(0xFF252542)
             )
-            
-            // Reset text
             Text(
                 "Resets every Monday.",
                 color = Color.Gray,
@@ -615,55 +637,57 @@ private fun UsageLimitsDisplay(
             )
         }
 
-        if (weeklyBlueprintsLimit > 0) {
-            Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFF252542))
-            Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider(color = Color(0xFF252542))
+        Spacer(modifier = Modifier.height(8.dp))
 
-            // Weekly Profile Blueprints (Auto Profile Builder)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Weekly Profile Blueprints",
-                    color = Color.White,
-                    fontSize = 14.sp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Weekly Profile Blueprints",
+                color = Color.White,
+                fontSize = 14.sp
+            )
+            when {
+                TierQuota.isUnlimited(weeklyBlueprintsLimit) -> Text(
+                    "Unlimited",
+                    color = Color(0xFF4CAF50),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-                if (isPremium && weeklyBlueprintsLimit == 0) {
-                    Text(
-                        "UNLIMITED",
-                        color = Color(0xFF4CAF50),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                } else {
-                    Text(
-                        "$weeklyBlueprintsUsed of $weeklyBlueprintsLimit used",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            if (!(isPremium && weeklyBlueprintsLimit == 0)) {
-                val progress = if (weeklyBlueprintsLimit > 0) (weeklyBlueprintsUsed.toFloat() / weeklyBlueprintsLimit).coerceIn(0f, 1f) else 0f
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = if (progress >= 1f) Color(0xFFEF5350) else Color(0xFFE91E63),
-                    trackColor = Color(0xFF252542)
-                )
-                Text(
-                    "Resets every Monday.",
+                TierQuota.isNotOnPlan(weeklyBlueprintsLimit) -> Text(
+                    "Not on your plan",
                     color = Color.Gray,
-                    fontSize = 11.sp
+                    fontSize = 12.sp
+                )
+                else -> Text(
+                    "$weeklyBlueprintsUsed of $weeklyBlueprintsLimit used",
+                    color = Color.Gray,
+                    fontSize = 12.sp
                 )
             }
+        }
+
+        if (TierQuota.isFinite(weeklyBlueprintsLimit)) {
+            val progress =
+                (weeklyBlueprintsUsed.toFloat() / weeklyBlueprintsLimit).coerceIn(0f, 1f)
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = if (progress >= 1f) Color(0xFFEF5350) else MaterialTheme.colorScheme.primary,
+                trackColor = Color(0xFF252542)
+            )
+            Text(
+                "Resets every Monday.",
+                color = Color.Gray,
+                fontSize = 11.sp
+            )
         }
     }
 }
@@ -674,6 +698,7 @@ private fun PlanStatusCard(
     isGodMode: Boolean,
     godModeExpiresAt: java.time.Instant?,
     dailyLimit: Int,
+    billingPeriod: String,
     onUpgradeClick: () -> Unit,
     onInviteClick: () -> Unit
 ) {
@@ -698,7 +723,7 @@ private fun PlanStatusCard(
     }
 
     val cardBorder = if (isGodMode || tier == "premium") {
-        BorderStroke(1.dp, Pink.copy(alpha = 0.45f))
+        BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))
     } else {
         null
     }
@@ -718,7 +743,7 @@ private fun PlanStatusCard(
                 Icon(
                     Icons.Default.WorkspacePremium,
                     contentDescription = null,
-                    tint = Pink,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -729,7 +754,7 @@ private fun PlanStatusCard(
                         isGodMode || tier == "premium" -> {
                             Text(
                                 "GOD MODE ACTIVE",
-                                color = Pink,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
                             )
                             godModeExpiresAt?.let { expiresAt ->
@@ -752,7 +777,7 @@ private fun PlanStatusCard(
                                 }
                             } ?: run {
                                 Text(
-                                    "Deep Persona Sync & Semantic Profiling enabled.",
+                                    "Full tier perks — see Usage Limits below for your live quotas.",
                                     color = Color.Gray,
                                     fontSize = 12.sp
                                 )
@@ -765,7 +790,14 @@ private fun PlanStatusCard(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Unlimited AI Replies & Basic Voice DNA.",
+                                when {
+                                    TierQuota.isUnlimited(dailyLimit) ->
+                                        "Voice DNA and expanded vibes. Unlimited replies on your plan."
+                                    TierQuota.isFinite(dailyLimit) ->
+                                        "Higher reply caps than Free — up to $dailyLimit AI replies per ${TierQuota.billingPeriodNoun(billingPeriod)} • Voice DNA."
+                                    else ->
+                                        "Expanded tools and Voice DNA — quotas in Usage Limits below."
+                                },
                                 color = Color.Gray,
                                 fontSize = 12.sp
                             )
@@ -777,7 +809,14 @@ private fun PlanStatusCard(
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                "Standard access with daily limits.",
+                                when {
+                                    TierQuota.isFinite(dailyLimit) ->
+                                        "Up to $dailyLimit AI replies per ${TierQuota.billingPeriodNoun(billingPeriod)}."
+                                    TierQuota.isUnlimited(dailyLimit) ->
+                                        "Plan includes unlimited daily replies."
+                                    else ->
+                                        "Standard access — see Usage Limits for quotas."
+                                },
                                 color = Color.Gray,
                                 fontSize = 12.sp
                             )
@@ -847,7 +886,7 @@ private fun SettingsRow(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = Color(0xFFE91E63), modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Text(label, color = textColor, modifier = Modifier.weight(1f))
         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))

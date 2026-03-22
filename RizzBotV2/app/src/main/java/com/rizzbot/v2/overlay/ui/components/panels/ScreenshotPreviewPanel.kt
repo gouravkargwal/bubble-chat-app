@@ -48,7 +48,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rizzbot.v2.overlay.ui.theme.OverlayColors
+import androidx.compose.material3.MaterialTheme
 
 /**
  * Panel for previewing captured screenshots before generating replies
@@ -194,7 +194,7 @@ fun ScreenshotPreviewPanel(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("+ Add more", color = OverlayColors.AccentPink)
+                    Text("+ Add more", color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -205,7 +205,7 @@ fun ScreenshotPreviewPanel(
             onClick = onConfirm,
             enabled = canGenerate && !isLoading,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = OverlayColors.AccentPink),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(

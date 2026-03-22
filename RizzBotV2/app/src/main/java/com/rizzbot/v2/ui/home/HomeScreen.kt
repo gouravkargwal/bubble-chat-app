@@ -39,16 +39,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.model.UserPreferences
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import com.rizzbot.v2.ui.premium.VoiceDNACalibrationModal
 import com.rizzbot.v2.ui.theme.CardBg
 import com.rizzbot.v2.ui.theme.CardBgLight
 import com.rizzbot.v2.ui.theme.CookdDimens
 import com.rizzbot.v2.ui.theme.DarkBg
 import com.rizzbot.v2.ui.theme.LockedFeatureGold
-import com.rizzbot.v2.ui.theme.Pink
 
 private val DividerColor = CardBgLight
 
@@ -69,10 +65,10 @@ fun HomeScreen(
     val pullRefreshState = rememberPullToRefreshState()
     val context = LocalContext.current
 
-    val isGodMode = state.usage.tier == "premium" || state.usage.tier == "god_mode"
+    val isGodMode = state.usage.isGodModeActive
     val isProOrAbove = state.usage.tier == "pro" || isGodMode
-    val primaryAccent = Pink
-    val heroGlow = Pink.copy(alpha = 0.05f)
+    val primaryAccent = MaterialTheme.colorScheme.primary
+    val heroGlow = primaryAccent.copy(alpha = 0.05f)
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshPermissionStatus()
@@ -117,7 +113,7 @@ fun HomeScreen(
                         isRefreshing = isPullRefreshing,
                         state = pullRefreshState,
                         containerColor = CardBg,
-                        color = Pink,
+                        color = primaryAccent,
                     )
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -175,9 +171,9 @@ fun HomeScreen(
                 }
             )
 
-            // Core data-driven content: skeleton while usage/history still loading
+            // Core data-driven content: skeleton while usage still loading
             AnimatedContent(
-                targetState = !(state.isLoadingUsage || state.isLoadingHistory),
+                targetState = !state.isLoadingUsage,
                 label = "homeContent"
             ) { isLoaded ->
                 if (!isLoaded) {
@@ -206,17 +202,6 @@ fun HomeScreen(
                         if (state.showHowItWorks) {
                             HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
                         }
-
-                        // ── RECENT ACTIVITY ──
-                        if (state.recentReplies.isNotEmpty()) {
-                            SectionDivider()
-                            SectionHeader(title = "Recent Activity", icon = "📝")
-                        }
-                        RecentRepliesSection(
-                            replies = state.recentReplies,
-                            onSeeAll = onNavigateToHistory,
-                            primaryAccent = primaryAccent
-                        )
                     }
                 }
             }
@@ -338,7 +323,7 @@ private fun HeroCard(
             if (!hasPermission) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Pink.copy(alpha = 0.15f)),
+                    colors = CardDefaults.cardColors(containerColor = primaryAccent.copy(alpha = 0.15f)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.clickable { onGrantPermission() }
                 ) {
@@ -349,7 +334,7 @@ private fun HeroCard(
                         Icon(
                             Icons.Default.Warning,
                             contentDescription = "Overlay permission required",
-                            tint = Pink,
+                            tint = primaryAccent,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -706,6 +691,7 @@ private fun HowItWorksCard(onDismiss: () -> Unit) {
 
 @Composable
 private fun StepItem(number: String, text: String) {
+    val accent = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier.padding(vertical = 4.dp),
         verticalAlignment = Alignment.Top
@@ -714,86 +700,13 @@ private fun StepItem(number: String, text: String) {
             modifier = Modifier
                 .size(24.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Pink.copy(alpha = 0.2f)),
+                .background(accent.copy(alpha = 0.2f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(number, color = Pink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(number, color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(text, color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
-    }
-}
-
-@Composable
-private fun RecentRepliesSection(
-    replies: List<com.rizzbot.v2.data.remote.dto.HistoryItemResponse>,
-    onSeeAll: () -> Unit,
-    primaryAccent: Color
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Recent Replies", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                TextButton(onClick = onSeeAll) {
-                    Text("See all", color = primaryAccent, fontSize = 13.sp)
-                }
-            }
-
-            if (replies.isEmpty()) {
-                Text(
-                    "No replies yet. Open a dating app and tap the bubble!",
-                    color = Color.Gray,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
-            } else {
-                replies.forEachIndexed { index, entry ->
-                    if (index > 0) HorizontalDivider(color = DividerColor, modifier = Modifier.padding(vertical = 8.dp))
-                    ReplyItem(entry)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReplyItem(entry: com.rizzbot.v2.data.remote.dto.HistoryItemResponse) {
-    val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                entry.personName?.take(30) ?: "Unknown",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                dateFormat.format(Date(entry.createdAt * 1000)),
-                color = Color.Gray,
-                fontSize = 11.sp
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            entry.replies.firstOrNull()?.text ?: "",
-            color = Color.Gray,
-            fontSize = 13.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
@@ -824,7 +737,7 @@ private fun RizzProfileCard(
                 )
                 if (preferences?.hasEnoughData == true) {
                     TextButton(onClick = onSeeFullStats) {
-                        Text("Full stats", color = Pink, fontSize = 13.sp)
+                        Text("Full stats", color = primaryAccent, fontSize = 13.sp)
                     }
                 }
             }

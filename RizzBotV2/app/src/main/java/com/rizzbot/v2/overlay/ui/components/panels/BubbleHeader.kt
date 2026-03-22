@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.overlay.manager.BubbleState
-import com.rizzbot.v2.overlay.ui.theme.OverlayColors
+import androidx.compose.material3.MaterialTheme
 
 /**
  * Header component for all full-screen panels showing step progress and navigation
@@ -111,7 +111,7 @@ fun BubbleHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (step > 1) {
                 TextButton(onClick = onStartOver) {
-                    Text("Start over", color = OverlayColors.AccentPink, fontSize = 11.sp)
+                    Text("Start over", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                 }
             }
             IconButton(onClick = onClose) {

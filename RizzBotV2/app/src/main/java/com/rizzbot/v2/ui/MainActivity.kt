@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -22,9 +24,9 @@ import com.rizzbot.v2.BuildConfig as AppBuildConfig
 import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.local.datastore.SettingsDataStore
 import com.rizzbot.v2.data.subscription.SubscriptionManager
+import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.ui.navigation.NavGraph
 import com.rizzbot.v2.ui.navigation.Screen
-import com.rizzbot.v2.ui.theme.Pink
 import com.rizzbot.v2.ui.theme.RizzBotV2Theme
 import com.rizzbot.v2.util.InAppUpdateHelper
 import dagger.hilt.android.AndroidEntryPoint
@@ -46,6 +48,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsDataStore: SettingsDataStore
     @Inject lateinit var authManager: AuthManager
     @Inject lateinit var subscriptionManager: SubscriptionManager
+    @Inject lateinit var hostedRepository: HostedRepository
 
     private val pendingNavigation = mutableStateOf<String?>(null)
     private val showPaywallFromIntent = mutableStateOf(false)
@@ -80,6 +83,8 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
             val navigateTo = pendingNavigation.value
             val shouldShowPaywall = showPaywallFromIntent.value
+            val usage by hostedRepository.usageState.collectAsState()
+            val isGodMode = usage.isGodModeActive
 
             // Resolve onboarding/auth state before selecting a start destination.
             // This avoids rendering the onboarding screen on the first frame when DataStore emits `false` initially.
@@ -134,14 +139,20 @@ class MainActivity : ComponentActivity() {
                     ready.onboardingCompleted && !ready.isAuthenticated
                 } == true
 
-            RizzBotV2Theme {
+            LaunchedEffect((bootState.value as? BootState.Ready)?.isAuthenticated) {
+                if ((bootState.value as? BootState.Ready)?.isAuthenticated == true) {
+                    hostedRepository.refreshUsage(force = false)
+                }
+            }
+
+            RizzBotV2Theme(isGodMode = isGodMode) {
                 when (val state = bootState.value) {
                     BootState.Refreshing -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = Pink)
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     is BootState.Ready -> {

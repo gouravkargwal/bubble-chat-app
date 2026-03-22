@@ -77,8 +77,7 @@ fun StatsScreen(
 
     val DarkBg = Color(0xFF0F0F1A)
     val CardBg = Color(0xFF1A1A2E)
-    val BrandPink = Color(0xFFE91E63)
-    val brandAccent = BrandPink
+    val brandAccent = MaterialTheme.colorScheme.primary
     val isPremiumTier = state.tier == "premium" || state.tier == "god_mode"
     
     // Auto-refresh when screen becomes visible
@@ -93,7 +92,7 @@ fun StatsScreen(
                     Text(
                         text = if (isPremiumTier) "Voice DNA Dashboard ✦" else "Voice DNA Dashboard",
                         fontWeight = FontWeight.Bold,
-                        color = BrandPink
+                        color = brandAccent
                     )
                 },
                 navigationIcon = {
@@ -119,7 +118,7 @@ fun StatsScreen(
                     isRefreshing = isRefreshing,
                     state = pullRefreshState,
                     containerColor = CardBg,
-                    color = BrandPink,
+                    color = brandAccent,
                 )
             },
             modifier = Modifier

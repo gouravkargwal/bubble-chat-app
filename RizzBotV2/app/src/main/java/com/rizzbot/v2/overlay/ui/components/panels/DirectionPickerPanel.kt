@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -36,8 +37,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.rizzbot.v2.domain.model.ConversationDirection
 import com.rizzbot.v2.domain.model.DirectionWithHint
-import com.rizzbot.v2.overlay.ui.theme.OverlayColors
-
 /**
  * Panel for selecting conversation direction and vibe
  */
@@ -59,6 +58,7 @@ fun DirectionPicker(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
+    val accent = MaterialTheme.colorScheme.primary
 
     Column(
         modifier = modifier
@@ -85,7 +85,7 @@ fun DirectionPicker(
                     .padding(vertical = 2.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (isLocked) Color(0xFFE91E63).copy(alpha = 0.05f)
+                        if (isLocked) accent.copy(alpha = 0.05f)
                         else Color.White.copy(alpha = 0.05f)
                     )
                     .clickable(enabled = !isLoading) {
@@ -95,7 +95,7 @@ fun DirectionPicker(
                         if (isLocked) Modifier
                             .border(
                                 width = 1.dp,
-                                color = OverlayColors.AccentPink.copy(alpha = 0.9f),
+                                color = accent.copy(alpha = 0.9f),
                                 shape = RoundedCornerShape(12.dp)
                             )
                         else Modifier
@@ -116,7 +116,7 @@ fun DirectionPicker(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         "UNLOCK",
-                        color = OverlayColors.AccentPink,
+                        color = accent,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -144,7 +144,7 @@ fun DirectionPicker(
                         if (!customHintsEnabled) Modifier
                             .border(
                                 width = 1.dp,
-                                color = OverlayColors.AccentPink.copy(alpha = 0.9f),
+                                color = accent.copy(alpha = 0.9f),
                                 shape = RoundedCornerShape(12.dp)
                             )
                         else Modifier
@@ -165,7 +165,7 @@ fun DirectionPicker(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         "UNLOCK",
-                        color = OverlayColors.AccentPink,
+                        color = accent,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -186,7 +186,7 @@ fun DirectionPicker(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedBorderColor = OverlayColors.AccentPink,
+                    focusedBorderColor = accent,
                     unfocusedBorderColor = Color.Gray
                 ),
                 singleLine = true
@@ -199,7 +199,7 @@ fun DirectionPicker(
                     onDirectionSelected(DirectionWithHint(customHint = customHint))
                 },
                 enabled = !isLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = OverlayColors.AccentPink),
+                colors = ButtonDefaults.buttonColors(containerColor = accent),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (isLoading) "Cooking..." else "Generate")
@@ -251,8 +251,9 @@ private fun ModeChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val accent = MaterialTheme.colorScheme.primary
     val background =
-        if (selected) OverlayColors.AccentPink.copy(alpha = 0.95f)
+        if (selected) accent.copy(alpha = 0.95f)
         else Color.Transparent
     val contentColor =
         if (selected) Color.Black

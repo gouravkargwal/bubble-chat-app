@@ -121,7 +121,7 @@ fun DemoScreen(
             // CTA
             Button(
                 onClick = onContinue,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -135,7 +135,7 @@ fun DemoScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("View Premium Plans", color = Color(0xFFE91E63), fontWeight = FontWeight.Bold)
+                Text("View Premium Plans", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -153,7 +153,7 @@ private fun DemoCard(scenario: DemoScenario, number: Int) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE91E63)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
@@ -188,7 +188,7 @@ private fun DemoCard(scenario: DemoScenario, number: Int) {
             // Direction used
             Text(
                 "Direction: ${scenario.direction}",
-                color = Color(0xFFE91E63),
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -205,7 +205,7 @@ private fun DemoCard(scenario: DemoScenario, number: Int) {
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Text(label, color = Color(0xFFE91E63), fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        Text(label, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(reply, color = Color.White, fontSize = 13.sp)
                     }

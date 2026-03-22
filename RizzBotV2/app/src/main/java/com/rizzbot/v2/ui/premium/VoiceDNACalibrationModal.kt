@@ -41,13 +41,12 @@ import androidx.compose.ui.unit.sp
 
 private val ModalDarkBg = Color(0xFF0F0F1A)
 private val ModalCardBg = Color(0xFF1A1A2E)
-private val AccentPink = Color(0xFFE91E63)
-
 @Composable
 fun VoiceDNACalibrationModal(
     onDismiss: () -> Unit,
     onImagesSelected: (List<Uri>) -> Unit
 ) {
+    val accent = MaterialTheme.colorScheme.primary
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
@@ -85,13 +84,13 @@ fun VoiceDNACalibrationModal(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(AccentPink.copy(alpha = 0.15f)),
+                            .background(accent.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.RecordVoiceOver,
                             contentDescription = "Voice DNA",
-                            tint = AccentPink,
+                            tint = accent,
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -115,7 +114,7 @@ fun VoiceDNACalibrationModal(
                     Button(
                         onClick = { imagePickerLauncher.launch("image/*") },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentPink),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
                         shape = MaterialTheme.shapes.medium
                     ) {
                         Icon(

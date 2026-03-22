@@ -71,14 +71,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.rizzbot.v2.ui.theme.DarkBg
-import com.rizzbot.v2.ui.theme.Pink
 import com.rizzbot.v2.util.HapticHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val CardBg = Color(0xFF111122)
-private val Accent = Pink
-private val AccentSoft = Accent.copy(alpha = 0.16f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,7 +134,7 @@ fun ProfileOptimizerScreen(
             if (state is OptimizerState.Success) {
                 FloatingActionButton(
                     onClick = { viewModel.generateBlueprint() },
-                    containerColor = Accent,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.navigationBarsPadding()
                 ) {
                     Row(
@@ -239,13 +236,13 @@ private fun IdleOptimizerCard(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(AccentSoft),
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = Accent,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -302,7 +299,7 @@ private fun IdleOptimizerCard(
                 Button(
                     onClick = onGenerate,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     contentPadding = PaddingValues(vertical = 16.dp)
                 ) {
                     Row(
@@ -369,11 +366,11 @@ private fun LoadingState() {
                 modifier = Modifier
                     .height(80.dp)
                     .clip(CircleShape)
-                    .background(AccentSoft),
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
-                    color = Accent,
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 3.dp
                 )
             }
@@ -429,7 +426,7 @@ private fun SuccessState(
             ) {
                 Text(
                     text = "View Blueprints & History",
-                    color = Accent,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -452,12 +449,12 @@ private fun SuccessState(
                 Icon(
                     imageVector = Icons.Default.Cached,
                     contentDescription = null,
-                    tint = Accent
+                    tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Recalibrate with a new blueprint",
-                    color = Accent,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 13.sp
                 )
             }
@@ -496,7 +493,7 @@ private fun SlotCard(
                     badge = {
                         Badge(
                             containerColor = Color.Black.copy(alpha = 0.85f),
-                            contentColor = Accent
+                            contentColor = MaterialTheme.colorScheme.primary
                         ) {
                             Text(
                                 text = "Slot ${slot.slotNumber}: ${slot.role}",
@@ -599,7 +596,7 @@ private fun FeatureBullet(text: String) {
             modifier = Modifier
                 .size(6.dp)
                 .clip(CircleShape)
-                .background(Accent)
+                .background(MaterialTheme.colorScheme.primary)
                 .padding(top = 6.dp)
         )
         Text(
@@ -651,7 +648,7 @@ private fun ErrorState(
                     Button(
                         onClick = onRetry,
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Accent)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text(
                             text = "Try Again",

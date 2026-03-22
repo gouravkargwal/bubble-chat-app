@@ -15,6 +15,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.rizzbot.v2.capture.ScreenCaptureOrchestrator
 import com.rizzbot.v2.domain.model.DirectionWithHint
+import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.overlay.OverlayEvent
 import com.rizzbot.v2.overlay.OverlayEventBus
@@ -668,7 +669,9 @@ class BubbleManager @Inject constructor(
             is OverlayEvent.ConfirmScreenshot -> {
                 val usage = hostedRepository.usageState.value
                 val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
-                val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
+                val hasRepliesLeft =
+                    TierQuota.isUnlimited(usage.dailyLimit) ||
+                        usage.dailyUsed < usage.dailyLimit
                 
                 if (!isGodMode && !hasRepliesLeft) {
                     // User hit their daily limit - redirect to paywall
@@ -823,7 +826,9 @@ class BubbleManager @Inject constructor(
             is OverlayEvent.Regenerate -> {
                 val usage = hostedRepository.usageState.value
                 val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
-                val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
+                val hasRepliesLeft =
+                    TierQuota.isUnlimited(usage.dailyLimit) ||
+                        usage.dailyUsed < usage.dailyLimit
                 
                 if (!isGodMode && !hasRepliesLeft) {
                     // User hit their daily limit - collapse FIRST, then redirect to paywall

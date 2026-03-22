@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,8 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val AccentPink = Color(0xFFE91E63)
-private val RecommendedGlow = AccentPink.copy(alpha = 0.22f)
 private val CardShape = RoundedCornerShape(16.dp)
 
 @Composable
@@ -58,7 +57,9 @@ fun SuggestionCard(
     var copied by remember { mutableStateOf(false) }
     var rated by remember { mutableStateOf<Boolean?>(null) }
 
-    val borderColor = if (isRecommended) AccentPink.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.08f)
+    val accent = MaterialTheme.colorScheme.primary
+    val recommendedGlow = accent.copy(alpha = 0.22f)
+    val borderColor = if (isRecommended) accent.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.08f)
 
     Card(
         modifier = modifier
@@ -82,7 +83,7 @@ fun SuggestionCard(
             modifier = Modifier
                 .drawBehind {
                     drawLine(
-                        color = AccentPink,
+                        color = accent,
                         start = Offset(0f, 0f),
                         end = Offset(0f, size.height),
                         strokeWidth = 3.dp.toPx()
@@ -90,7 +91,7 @@ fun SuggestionCard(
 
                     if (isRecommended) {
                         drawCircle(
-                            color = RecommendedGlow,
+                            color = recommendedGlow,
                             radius = size.height * 0.9f,
                             center = Offset(size.width * 0.1f, size.height / 2f)
                         )
@@ -101,7 +102,7 @@ fun SuggestionCard(
             // Header: Wingman's Choice badge or original vibe label
             Text(
                 text = if (isRecommended) "✨ WINGMAN'S CHOICE" else label,
-                color = AccentPink,
+                color = accent,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
             )

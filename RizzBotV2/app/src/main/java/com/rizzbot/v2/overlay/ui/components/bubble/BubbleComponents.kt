@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
@@ -51,7 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.overlay.manager.BubbleState
-import com.rizzbot.v2.overlay.ui.theme.OverlayColors
+import com.rizzbot.v2.overlay.ui.theme.overlayBubbleGradient
 import kotlinx.coroutines.delay
 
 /**
@@ -64,6 +65,8 @@ fun RizzButton(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val accent = MaterialTheme.colorScheme.primary
+    val bubbleGradient = overlayBubbleGradient()
     val pulse = rememberInfiniteTransition(label = "rizz_pulse")
     
     // Normal gentle pulse
@@ -94,7 +97,7 @@ fun RizzButton(
             .shadow(
                 elevation = 8.dp,
                 shape = CircleShape,
-                spotColor = OverlayColors.AccentPink
+                spotColor = accent
             )
             .scale(scale),
         contentAlignment = Alignment.Center
@@ -115,7 +118,7 @@ fun RizzButton(
                         )
                     } else {
                         // Normal pink gradient when not loading
-                        Brush.radialGradient(colors = OverlayColors.BubbleGradientColors)
+                        Brush.radialGradient(colors = bubbleGradient)
                     }
                 )
                 .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)

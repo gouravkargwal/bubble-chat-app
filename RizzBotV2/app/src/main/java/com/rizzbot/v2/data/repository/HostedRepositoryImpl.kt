@@ -17,6 +17,7 @@ import com.rizzbot.v2.data.remote.dto.TrackRatingRequest
 import com.rizzbot.v2.data.remote.dto.ResolveConversationRequest
 import com.rizzbot.v2.data.remote.dto.RequiresUserConfirmationResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
+import com.rizzbot.v2.data.remote.dto.UsageResponse
 import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.domain.model.DirectionWithHint
@@ -24,6 +25,7 @@ import com.rizzbot.v2.domain.model.ReferralInfo
 import com.rizzbot.v2.domain.model.SuggestedMatch
 import com.rizzbot.v2.domain.model.SuggestedMatchContextPreview
 import com.rizzbot.v2.domain.model.SuggestionResult
+import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.overlay.OverlayService
@@ -31,6 +33,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.Json
@@ -55,6 +59,69 @@ class HostedRepositoryImpl @Inject constructor(
     // TTL cache for usage data to prevent over-fetching
     private var lastUsageFetchTime: Long = 0
     private val USAGE_CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+
+    /**
+     * Concurrent [refreshUsage] calls (Settings pull-to-refresh, Home, Paywall, etc.) could finish
+     * out of order; a slower stale response would overwrite a newer one. Serialize refreshes.
+     */
+    private val refreshUsageLock = Mutex()
+
+    private fun limitIntFromMap(
+        limits: Map<String, JsonElement>,
+        key: String,
+        ifMissing: Int
+    ): Int = limits[key]?.let { el ->
+        if (el is JsonPrimitive) el.content.toIntOrNull() ?: ifMissing else ifMissing
+    } ?: ifMissing
+
+    /**
+     * Backend ([tier_config.profile_blueprints_per_week]): `0` = feature not on tier (403 on generate);
+     * positive = weekly cap. This differs from quotas where `0` may mean unlimited — normalize here.
+     */
+    private fun profileBlueprintsPerWeekFromMap(limits: Map<String, JsonElement>): Int {
+        val raw = limits["profile_blueprints_per_week"]
+            ?.let { el -> if (el is JsonPrimitive) el.content.toIntOrNull() else null }
+            ?: return TierQuota.NOT_ON_PLAN
+        return when {
+            raw <= 0 -> TierQuota.NOT_ON_PLAN
+            else -> raw
+        }
+    }
+
+    private fun usageStateFromResponse(usage: UsageResponse): UsageState {
+        val maxPhotosPerAudit = limitIntFromMap(usage.limits, "max_photos_per_audit", 3)
+        val profileAuditsPerWeek = limitIntFromMap(usage.limits, "profile_audits_per_week", 1)
+        val profileBlueprintsPerWeek = profileBlueprintsPerWeekFromMap(usage.limits)
+        return UsageState(
+            dailyLimit = usage.dailyLimit,
+            dailyUsed = usage.dailyUsed,
+            weeklyUsed = usage.weeklyUsed,
+            monthlyUsed = usage.monthlyUsed,
+            profileAuditsPerWeek = profileAuditsPerWeek,
+            weeklyAuditsUsed = usage.weeklyAuditsUsed,
+            isPremium = usage.isPremium,
+            tier = usage.tier,
+            bonusReplies = usage.bonusReplies,
+            allowedDirections = usage.allowedDirections,
+            customHintsEnabled = usage.customHints,
+            maxScreenshots = usage.maxScreenshots,
+            premiumExpiresAt = usage.tierExpiresAt,
+            godModeExpiresAt = usage.godModeExpiresAt?.let { sec ->
+                try {
+                    java.time.Instant.ofEpochSecond(sec)
+                } catch (e: Exception) {
+                    android.util.Log.w("HostedRepo", "Failed to parse godModeExpiresAt: ${e.message}")
+                    null
+                }
+            },
+            totalRepliesGenerated = usage.totalRepliesGenerated,
+            totalRepliesCopied = usage.totalRepliesCopied,
+            maxPhotosPerAudit = maxPhotosPerAudit,
+            profileBlueprintsPerWeek = profileBlueprintsPerWeek,
+            weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
+            billingPeriod = usage.billingPeriod
+        )
+    }
 
     override suspend fun generateReply(
         base64Images: List<String>,
@@ -129,7 +196,7 @@ class HostedRepositoryImpl @Inject constructor(
                 // 429 is *only* used by the backend for app-level daily quota
                 // (DB-based check before calling Gemini).
                 429 -> SuggestionResult.Error(
-                    "Daily limit reached. Upgrade to Premium for unlimited replies.",
+                    "Daily limit reached. Upgrade for a higher reply allowance.",
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
                 401 -> SuggestionResult.Error(
@@ -196,7 +263,7 @@ class HostedRepositoryImpl @Inject constructor(
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
                 429 -> SuggestionResult.Error(
-                    "Daily limit reached. Upgrade to Premium for unlimited replies.",
+                    "Daily limit reached. Upgrade for a higher reply allowance.",
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
                 401 -> SuggestionResult.Error(
@@ -243,75 +310,18 @@ class HostedRepositoryImpl @Inject constructor(
     }
 
     override suspend fun refreshUsage(force: Boolean) {
+        refreshUsageLock.withLock {
         // Check cache TTL - skip network call if cache is fresh and not forcing
         val currentTime = System.currentTimeMillis()
         if (!force && lastUsageFetchTime > 0 && (currentTime - lastUsageFetchTime < USAGE_CACHE_TTL_MS)) {
             // Cache is fresh, skip API call
-            return
+            return@withLock
         }
-        
+
         try {
             val usage = hostedApi.getUsage()
-            // Extract max_photos_per_audit from limits map
-            val maxPhotosPerAudit = usage.limits["max_photos_per_audit"]
-                ?.let { 
-                    if (it is JsonPrimitive) {
-                        it.content.toIntOrNull() ?: 3
-                    } else {
-                        3
-                    }
-                } ?: 3
-            
-            // Extract profile_audits_per_week from limits map
-            val profileAuditsPerWeek = usage.limits["profile_audits_per_week"]
-                ?.let {
-                    if (it is JsonPrimitive) {
-                        it.content.toIntOrNull() ?: 1
-                    } else {
-                        1
-                    }
-                } ?: 1
+            _usageState.value = usageStateFromResponse(usage)
 
-            // Extract profile_blueprints_per_week from limits map
-            val profileBlueprintsPerWeek = usage.limits["profile_blueprints_per_week"]
-                ?.let {
-                    if (it is JsonPrimitive) {
-                        it.content.toIntOrNull() ?: 0
-                    } else {
-                        0
-                    }
-                } ?: 0
-
-            _usageState.value = UsageState(
-                dailyLimit = usage.dailyLimit,
-                dailyUsed = usage.dailyUsed,
-                weeklyUsed = usage.weeklyUsed,
-                monthlyUsed = usage.monthlyUsed,
-                profileAuditsPerWeek = profileAuditsPerWeek,
-                weeklyAuditsUsed = usage.weeklyAuditsUsed,
-                isPremium = usage.isPremium,
-                tier = usage.tier,
-                bonusReplies = usage.bonusReplies,
-                allowedDirections = usage.allowedDirections,
-                customHintsEnabled = usage.customHints,
-                maxScreenshots = usage.maxScreenshots,
-                premiumExpiresAt = usage.tierExpiresAt,
-                godModeExpiresAt = usage.godModeExpiresAt?.let { 
-                    try {
-                        java.time.Instant.ofEpochSecond(it)
-                    } catch (e: Exception) {
-                        android.util.Log.w("HostedRepo", "Failed to parse godModeExpiresAt: ${e.message}")
-                        null
-                    }
-                },
-                totalRepliesGenerated = usage.totalRepliesGenerated,
-                totalRepliesCopied = usage.totalRepliesCopied,
-                maxPhotosPerAudit = maxPhotosPerAudit,
-                profileBlueprintsPerWeek = profileBlueprintsPerWeek,
-                weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
-                billingPeriod = usage.billingPeriod
-            )
-            
             // Update cache timestamp on successful fetch
             lastUsageFetchTime = System.currentTimeMillis()
         } catch (e: HttpException) {
@@ -322,66 +332,7 @@ class HostedRepositoryImpl @Inject constructor(
                 if (refreshed) {
                     try {
                         val usage = hostedApi.getUsage()
-
-                        // Extract max_photos_per_audit from limits map
-                        val maxPhotosPerAudit = usage.limits["max_photos_per_audit"]
-                            ?.let { 
-                                if (it is JsonPrimitive) {
-                                    it.content.toIntOrNull() ?: 3
-                                } else {
-                                    3
-                                }
-                            } ?: 3
-
-                        // Extract profile_audits_per_week from limits map
-                        val profileAuditsPerWeek = usage.limits["profile_audits_per_week"]
-                            ?.let {
-                                if (it is JsonPrimitive) {
-                                    it.content.toIntOrNull() ?: 1
-                                } else {
-                                    1
-                                }
-                            } ?: 1
-
-                        // Extract profile_blueprints_per_week from limits map
-                        val profileBlueprintsPerWeek = usage.limits["profile_blueprints_per_week"]
-                            ?.let {
-                                if (it is JsonPrimitive) {
-                                    it.content.toIntOrNull() ?: 0
-                                } else {
-                                    0
-                                }
-                            } ?: 0
-
-                        _usageState.value = UsageState(
-                            dailyLimit = usage.dailyLimit,
-                            dailyUsed = usage.dailyUsed,
-                            weeklyUsed = usage.weeklyUsed,
-                            monthlyUsed = usage.monthlyUsed,
-                            profileAuditsPerWeek = profileAuditsPerWeek,
-                            weeklyAuditsUsed = usage.weeklyAuditsUsed,
-                            isPremium = usage.isPremium,
-                            tier = usage.tier,
-                            bonusReplies = usage.bonusReplies,
-                            allowedDirections = usage.allowedDirections,
-                            customHintsEnabled = usage.customHints,
-                            maxScreenshots = usage.maxScreenshots,
-                            premiumExpiresAt = usage.tierExpiresAt,
-                            godModeExpiresAt = usage.godModeExpiresAt?.let { 
-                                try {
-                                    java.time.Instant.ofEpochSecond(it)
-                                } catch (e: Exception) {
-                                    android.util.Log.w("HostedRepo", "Failed to parse godModeExpiresAt: ${e.message}")
-                                    null
-                                }
-                            },
-                            totalRepliesGenerated = usage.totalRepliesGenerated,
-                            totalRepliesCopied = usage.totalRepliesCopied,
-                            maxPhotosPerAudit = maxPhotosPerAudit,
-                            profileBlueprintsPerWeek = profileBlueprintsPerWeek,
-                            weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
-                            billingPeriod = usage.billingPeriod
-                        )
+                        _usageState.value = usageStateFromResponse(usage)
 
                         // Update cache timestamp on successful retry fetch
                         lastUsageFetchTime = System.currentTimeMillis()
@@ -407,6 +358,7 @@ class HostedRepositoryImpl @Inject constructor(
             android.util.Log.w("HostedRepo", "refreshUsage http failed: ${e.message()}")
         } catch (e: Exception) {
             android.util.Log.w("HostedRepo", "refreshUsage failed: ${e.message}")
+        }
         }
     }
 

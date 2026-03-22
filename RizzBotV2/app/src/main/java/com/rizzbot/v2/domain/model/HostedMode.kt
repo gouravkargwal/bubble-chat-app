@@ -20,15 +20,22 @@ data class UsageState(
     val totalRepliesGenerated: Int = 0,  // Total from backend
     val totalRepliesCopied: Int = 0,  // Total from backend
     val maxPhotosPerAudit: Int = 3,  // Default to free tier limit
-    val profileBlueprintsPerWeek: Int = 0,  // From limits map; 0 = no access
+    /** See [TierQuota]; default before first fetch = not on plan. */
+    val profileBlueprintsPerWeek: Int = TierQuota.NOT_ON_PLAN,
     val weeklyBlueprintsUsed: Int = 0,  // From backend
     val billingPeriod: String = "daily"  // "daily", "weekly", or "monthly"
 ) {
+    /** Paid entitlement or referral God Mode window (matches tier checks across the app). */
+    val isGodModeActive: Boolean
+        get() = tier == "premium" || tier == "god_mode"
+
     val dailyRemaining: Int
-        get() = if (dailyLimit == 0) Int.MAX_VALUE else (dailyLimit - dailyUsed).coerceAtLeast(0)
+        get() =
+            if (TierQuota.isUnlimited(dailyLimit)) Int.MAX_VALUE
+            else (dailyLimit - dailyUsed).coerceAtLeast(0)
 
     val canGenerate: Boolean
-        get() = dailyLimit == 0 || dailyRemaining > 0
+        get() = TierQuota.isUnlimited(dailyLimit) || dailyRemaining > 0
 
     val trialDaysRemaining: Int
         get() {

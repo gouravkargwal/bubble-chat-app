@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,8 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.domain.model.SuggestedMatch
-import com.rizzbot.v2.overlay.ui.theme.OverlayColors
-
 @Composable
 fun MergeConfirmationPanel(
     payload: SuggestedMatch,
@@ -30,7 +29,7 @@ fun MergeConfirmationPanel(
     onNo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val accent = OverlayColors.AccentPink
+    val accent = MaterialTheme.colorScheme.primary
     val contextBg = Color(0xFF252542)
 
     Column(
