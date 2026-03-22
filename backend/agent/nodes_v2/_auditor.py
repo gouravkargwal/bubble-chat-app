@@ -9,22 +9,22 @@ If any reply fails → routes back to generator with feedback (max 1 rewrite).
 Model: gemini-3.1-flash-lite-preview at temperature 0 (deterministic judgment)
 """
 
-from typing import cast
 import json
 import time
+from typing import cast
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from agent.state import AgentState, AnalystOutput, WriterOutput
+from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
     AUDITOR_MODEL,
     MAX_REWRITES,
-    build_llm,
     transcript_text_from_analysis,
     truncate,
 )
+from agent.state import AgentState, AnalystOutput, WriterOutput
 
 logger = structlog.get_logger(__name__)
 
@@ -137,7 +137,6 @@ def auditor_node(state: AgentState) -> dict:
       - is_cringe: True if replies need a rewrite
       - auditor_feedback: Specific instructions for the generator on what to fix
     """
-    t0 = time.monotonic()
     user_id = state.get("user_id", "")
     revision_count = state.get("revision_count", 0)
 
@@ -195,19 +194,17 @@ def auditor_node(state: AgentState) -> dict:
         ],
     }
 
-    llm = build_llm(
-        model=AUDITOR_MODEL,
-        temperature=0,  # Deterministic judgment
-        structured_output=AuditorNodeOutput,
-    )
-
     t_call = time.monotonic()
     try:
-        result = llm.invoke(
-            [
+        result, usage_row = invoke_structured_gemini(
+            model=AUDITOR_MODEL,
+            temperature=0,
+            schema=AuditorNodeOutput,
+            messages=[
                 SystemMessage(content=_AUDITOR_SYSTEM_PROMPT),
                 HumanMessage(content=json.dumps(eval_payload)),
-            ]
+            ],
+            phase="v2_auditor",
         )
         audit = cast(AuditorNodeOutput, result)
     except Exception as e:
@@ -237,7 +234,11 @@ def auditor_node(state: AgentState) -> dict:
     )
 
     if audit.overall_passes:
-        return {"is_cringe": False, "auditor_feedback": ""}
+        return {
+            "is_cringe": False,
+            "auditor_feedback": "",
+            "gemini_usage_log": [usage_row],
+        }
 
     # Build structured feedback for the generator
     feedback_lines = [audit.summary, ""]
@@ -247,4 +248,5 @@ def auditor_node(state: AgentState) -> dict:
     return {
         "is_cringe": True,
         "auditor_feedback": "\n".join(feedback_lines),
+        "gemini_usage_log": [usage_row],
     }

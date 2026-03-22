@@ -102,6 +102,7 @@ def _build_agent_initial_state(
         "past_memories": "",
         "raw_ocr_text": [],
         "ocr_hint_text": "",
+        "gemini_usage_log": [],
     }
 
 

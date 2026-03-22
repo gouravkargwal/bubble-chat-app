@@ -1,4 +1,5 @@
-from typing import TypedDict, List, Dict, Any, Optional, Literal
+import operator
+from typing import Annotated, TypedDict, List, Dict, Any, Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -117,6 +118,9 @@ class AgentState(TypedDict):
     is_cringe: bool
     auditor_feedback: str
     revision_count: int
+
+    # Token usage + exact gemini_pricing cost per LangChain call (concatenated by LangGraph)
+    gemini_usage_log: Annotated[list[dict[str, Any]], operator.add]
 
 
 class RawOcrTextItem(TypedDict):

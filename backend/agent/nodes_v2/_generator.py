@@ -9,29 +9,29 @@ Single Gemini call with structured output that performs:
 Model: gemini-3.1-flash-lite-preview with dynamic temperature
 """
 
-from typing import cast, Any
 import json
 import time
+from typing import Any, cast
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from agent.state import (
-    AgentState,
-    AnalystOutput,
-    WriterOutput,
-    StrategyOutput,
-    StrategyLabel,
-    ReplyOption,
-)
+from agent.nodes_v2._lc_usage import invoke_structured_gemini
+from agent.nodes_v2._post_processor import validate_and_fix_replies
 from agent.nodes_v2._shared import (
     GENERATOR_MODEL,
-    build_llm,
     transcript_text_from_analysis,
     truncate,
 )
-from agent.nodes_v2._post_processor import validate_and_fix_replies
+from agent.state import (
+    AgentState,
+    AnalystOutput,
+    ReplyOption,
+    StrategyLabel,
+    StrategyOutput,
+    WriterOutput,
+)
 from app.prompts.temperature import calculate_temperature
 
 logger = structlog.get_logger(__name__)
@@ -419,20 +419,18 @@ def generator_node(state: AgentState) -> dict:
     # --- Build conditional prompt (only relevant archetype + direction injected) ---
     system_prompt = _build_generator_prompt(detected_archetype, direction)
 
-    # --- Structured output LLM call with dynamic temperature + timeout + retry ---
-    llm = build_llm(
-        model=GENERATOR_MODEL,
-        temperature=llm_temperature,
-        structured_output=GeneratorOutput,
-    )
-
     t_call = time.monotonic()
+    phase = "v2_generator_rewrite" if is_rewrite else "v2_generator"
     try:
-        result = llm.invoke(
-            [
+        result, usage_row = invoke_structured_gemini(
+            model=GENERATOR_MODEL,
+            temperature=llm_temperature,
+            schema=GeneratorOutput,
+            messages=[
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=json.dumps(payload)),
-            ]
+            ],
+            phase=phase,
         )
         gen_out = cast(GeneratorOutput, result)
     except Exception as e:
@@ -481,4 +479,5 @@ def generator_node(state: AgentState) -> dict:
         # Clear auditor feedback after consuming it
         "auditor_feedback": "",
         "is_cringe": False,
+        "gemini_usage_log": [usage_row],
     }

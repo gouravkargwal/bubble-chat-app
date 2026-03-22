@@ -4,6 +4,7 @@ import httpx
 import structlog
 
 from app.llm.base import LlmClient
+from app.llm.gemini_pricing import usage_record
 
 logger = structlog.get_logger()
 
@@ -26,6 +27,8 @@ class GeminiClient(LlmClient):
         model: str | None = None,
         max_output_tokens: int = 2000,
         response_schema: dict | None = None,
+        usage_sink: list[dict] | None = None,
+        usage_phase: str = "gemini_vision_generate",
     ) -> str:
         model = model or self.default_model
         url = (
@@ -83,6 +86,28 @@ class GeminiClient(LlmClient):
                 response = await self._client.post(url, json=payload)
                 response.raise_for_status()
                 data = response.json()
+
+                usage = data.get("usageMetadata") or {}
+                if usage:
+                    row = usage_record(
+                        phase=usage_phase,
+                        model=model,
+                        prompt_tokens=usage.get("promptTokenCount"),
+                        candidates_tokens=usage.get("candidatesTokenCount"),
+                        total_tokens=usage.get("totalTokenCount"),
+                    )
+                    logger.info(
+                        "gemini_usage",
+                        model=model,
+                        prompt_token_count=row["prompt_tokens"],
+                        candidates_token_count=row["candidates_tokens"],
+                        total_token_count=usage.get("totalTokenCount"),
+                        thoughts_token_count=usage.get("thoughtsTokenCount"),
+                        cost_usd=row["cost_usd"],
+                        cost_inr=row["cost_inr"],
+                    )
+                    if usage_sink is not None:
+                        usage_sink.append(row)
 
                 # Log the raw Gemini response (truncated) for debugging
                 try:
@@ -185,6 +210,8 @@ class GeminiClient(LlmClient):
         model: str = "gemini-2.5-flash",
         temperature: float = 0.3,
         max_output_tokens: int = 1024,
+        usage_sink: list[dict] | None = None,
+        usage_phase: str = "gemini_generate_content",
     ) -> str:
         """Generic text-only content generation helper."""
         url = (
@@ -207,6 +234,28 @@ class GeminiClient(LlmClient):
         response = await self._client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()
+
+        usage = data.get("usageMetadata") or {}
+        if usage:
+            row = usage_record(
+                phase=usage_phase,
+                model=model,
+                prompt_tokens=usage.get("promptTokenCount"),
+                candidates_tokens=usage.get("candidatesTokenCount"),
+                total_tokens=usage.get("totalTokenCount"),
+            )
+            logger.info(
+                "gemini_usage",
+                model=model,
+                prompt_token_count=row["prompt_tokens"],
+                candidates_token_count=row["candidates_tokens"],
+                total_token_count=usage.get("totalTokenCount"),
+                thoughts_token_count=usage.get("thoughtsTokenCount"),
+                cost_usd=row["cost_usd"],
+                cost_inr=row["cost_inr"],
+            )
+            if usage_sink is not None:
+                usage_sink.append(row)
 
         candidates = data.get("candidates", [])
         if not candidates:

@@ -46,7 +46,7 @@ from agent.state import (
 from app.prompts.temperature import calculate_temperature
 from app.services.memory_service import get_match_context
 from app.config import settings
-from app.infrastructure.database.engine import async_session
+from app.infrastructure.database.engine import librarian_async_session
 
 logger = structlog.get_logger(__name__)
 
@@ -186,7 +186,7 @@ def _fetch_librarian_context(
     """Runs the async DB fetch using the shared engine (no new pool per call)."""
 
     async def _fetch() -> dict[str, str]:
-        async with async_session() as local_db:
+        async with librarian_async_session() as local_db:
             return await get_match_context(
                 local_db,
                 user_id=user_id,

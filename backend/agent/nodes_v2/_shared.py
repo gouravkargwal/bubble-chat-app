@@ -10,9 +10,9 @@ import structlog
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
-from app.services.memory_service import get_match_context
 from app.config import settings
-from app.infrastructure.database.engine import async_session
+from app.services.memory_service import get_match_context
+from app.infrastructure.database.engine import librarian_async_session
 from agent.state import AgentState
 
 logger = structlog.get_logger(__name__)
@@ -25,9 +25,14 @@ LLM_TIMEOUT_SECONDS = 30
 LLM_MAX_RETRIES = 2
 REQUIRED_REPLY_COUNT = 4
 MAX_REWRITES = 1  # Max rewrite attempts before shipping as-is
-VISION_MODEL = "gemini-3.1-flash-lite-preview"
-GENERATOR_MODEL = "gemini-3.1-flash-lite-preview"
-AUDITOR_MODEL = "gemini-3.1-flash-lite-preview"
+
+# Same model id as `settings.gemini_model` / `GEMINI_MODEL` in `.env` — one knob for
+# vision + generator + auditor (LangChain). Hybrid OCR and GeminiClient paths also use
+# settings.gemini_model via callers.
+_AGENT_MODEL = settings.gemini_model
+VISION_MODEL = _AGENT_MODEL
+GENERATOR_MODEL = _AGENT_MODEL
+AUDITOR_MODEL = _AGENT_MODEL
 
 # MIME magic bytes for common image formats
 _MIME_SIGNATURES: list[tuple[bytes, str]] = [
@@ -192,7 +197,7 @@ def fetch_librarian_context(
     """Runs the async DB fetch using the shared engine (no new pool per call)."""
 
     async def _fetch() -> dict[str, str]:
-        async with async_session() as local_db:
+        async with librarian_async_session() as local_db:
             return await get_match_context(
                 local_db,
                 user_id=user_id,

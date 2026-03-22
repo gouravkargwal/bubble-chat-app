@@ -10,22 +10,22 @@ Also fetches librarian context (core_lore + past_memories) from the DB inline.
 Model: gemini-3.1-flash-lite-preview at temperature 0 (deterministic)
 """
 
-from typing import cast, Any
 import time
+from typing import Any, cast
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from agent.state import AgentState, AnalystOutput, ChatBubble
+from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
     VISION_MODEL,
-    build_llm,
     encode_image_from_state,
     fetch_librarian_context,
     normalize_raw_ocr_text,
     truncate,
 )
+from agent.state import AgentState, AnalystOutput, ChatBubble
 
 logger = structlog.get_logger(__name__)
 
@@ -232,13 +232,6 @@ def vision_node(state: AgentState) -> dict:
         except Exception as e:
             logger.warning("agent_v2_librarian_failed", error=str(e), user_id=user_id)
 
-    # --- Single LLM call with structured output + timeout + retry ---
-    llm = build_llm(
-        model=VISION_MODEL,
-        temperature=0,
-        structured_output=VisionNodeOutput,
-    )
-
     content = [
         {
             "type": "text",
@@ -252,11 +245,15 @@ def vision_node(state: AgentState) -> dict:
     ]
 
     t_call = time.monotonic()
-    result = llm.invoke(
-        [
+    result, usage_row = invoke_structured_gemini(
+        model=VISION_MODEL,
+        temperature=0,
+        schema=VisionNodeOutput,
+        messages=[
             SystemMessage(content=VISION_NODE_SYSTEM_PROMPT),
             HumanMessage(content=content),
-        ]
+        ],
+        phase="v2_vision",
     )
     out = cast(VisionNodeOutput, result)
     llm_ms = int((time.monotonic() - t_call) * 1000)
@@ -280,6 +277,7 @@ def vision_node(state: AgentState) -> dict:
             "bouncer_reason": out.bouncer_reason,
             "core_lore": core_lore,
             "past_memories": past_memories,
+            "gemini_usage_log": [usage_row],
         }
 
     # Build AnalystOutput from VisionNodeOutput fields
@@ -320,4 +318,5 @@ def vision_node(state: AgentState) -> dict:
         "analysis": analysis,
         "core_lore": core_lore,
         "past_memories": past_memories,
+        "gemini_usage_log": [usage_row],
     }

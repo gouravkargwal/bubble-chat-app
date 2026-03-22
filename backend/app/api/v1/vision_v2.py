@@ -51,6 +51,7 @@ from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Conversation, User, UserVoiceDNA
 from app.llm.gemini_client import GeminiClient
+from app.llm.gemini_pricing import sum_usage_records
 from app.services.hybrid_stitch_pending import (
     has_pending_hybrid_resolution,
     store_pending_hybrid_resolution,
@@ -76,7 +77,10 @@ def _get_gemini_client() -> GeminiClient:
 # Hybrid Stitch OCR signals (lightweight pre-agent Gemini call)
 # ---------------------------------------------------------------------------
 
-async def _extract_ocr_signals(image_base64: str) -> tuple[str, list[str]]:
+async def _extract_ocr_signals(
+    image_base64: str,
+    usage_sink: list[dict] | None = None,
+) -> tuple[str, list[str]]:
     """Quick Gemini call to extract person_name + last bubble texts for conversation stitching."""
     OCR_SIGNALS_SCHEMA: dict = {
         "type": "OBJECT",
@@ -114,6 +118,8 @@ async def _extract_ocr_signals(image_base64: str) -> tuple[str, list[str]]:
             model=settings.gemini_model,
             max_output_tokens=800,
             response_schema=OCR_SIGNALS_SCHEMA,
+            usage_sink=usage_sink,
+            usage_phase="v2_hybrid_stitch_ocr",
         )
         data = __import__("json").loads(raw)
         person_name = str(data.get("person_name") or "unknown")
@@ -200,9 +206,12 @@ async def generate_replies_v2(
     effective_conversation_id = request.conversation_id
     new_conversation_person_name: str | None = None
     extracted_texts: list[str] = []
+    pre_agent_usage: list[dict] = []
 
     if not effective_conversation_id:
-        ocr_person_name, extracted_texts = await _extract_ocr_signals(images[-1])
+        ocr_person_name, extracted_texts = await _extract_ocr_signals(
+            images[-1], usage_sink=pre_agent_usage
+        )
 
         logger.info(
             "v2_hybrid_stitch_ocr_signals",
@@ -381,10 +390,17 @@ async def generate_replies_v2(
     from dataclasses import replace as _replace
     parsed.replies = [_replace(r, text=c.text) for r, c in zip(parsed.replies, _cleaned.replies)]
 
+    graph_usage = final_state.get("gemini_usage_log") or []
+    cost_tot = sum_usage_records(pre_agent_usage + graph_usage)
     logger.info(
         "vision_v2_timing",
         timing_ms=latency_ms,
         user_id=user.id,
+        gemini_cost_usd=cost_tot["cost_usd"],
+        gemini_cost_inr=cost_tot["cost_inr"],
+        gemini_prompt_tokens=cost_tot["prompt_tokens"],
+        gemini_candidates_tokens=cost_tot["candidates_tokens"],
+        gemini_calls=cost_tot["call_count"],
     )
 
     # ------------------------------------------------------------------ #
