@@ -52,6 +52,9 @@ fun SettingsScreen(
 ) {
     val appPublicLink = stringResource(R.string.app_public_link)
     val shareAppText = stringResource(R.string.share_app_body, appPublicLink)
+    val supportEmail = stringResource(R.string.support_email)
+    val supportEmailSubject = stringResource(R.string.support_email_subject)
+    val supportEmailChooserTitle = stringResource(R.string.support_email_chooser_title)
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -474,8 +477,22 @@ fun SettingsScreen(
 
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)), shape = RoundedCornerShape(16.dp)) {
                 Column {
-                    SettingsRow(icon = Icons.Default.SupportAgent, label = "Get Support", onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://tawk.to/chat/cookd")))
+                    SettingsRow(icon = Icons.Default.Email, label = "Email Support", onClick = {
+                        val mailUri = Uri.parse(
+                            "mailto:${Uri.encode(supportEmail)}?subject=${Uri.encode(supportEmailSubject)}"
+                        )
+                        val intent = Intent(Intent.ACTION_SENDTO).apply { data = mailUri }
+                        if (intent.resolveActivity(context.packageManager) != null) {
+                            context.startActivity(
+                                Intent.createChooser(intent, supportEmailChooserTitle)
+                            )
+                        } else {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.support_no_email_app, supportEmail)
+                                )
+                            }
+                        }
                     })
                     HorizontalDivider(color = Color(0xFF252542))
                     SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {
