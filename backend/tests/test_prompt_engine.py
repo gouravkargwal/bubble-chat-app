@@ -56,7 +56,9 @@ def test_voice_dna_injection():
         preferred_length="short",
         sample_count=10,
     )
-    payload = prompt_engine.build(direction="quick_reply", voice_dna=voice)
+    payload = prompt_engine.build(
+        direction="quick_reply", voice_dna=voice, variant_id="voice_dna_on"
+    )
     assert "Voice DNA" in payload.system_prompt
     assert "ngl" in payload.system_prompt
     assert "lowercase" in payload.system_prompt

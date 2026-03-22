@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import com.rizzbot.v2.R
 import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.ui.theme.LockedFeatureGold
 
@@ -48,6 +50,8 @@ fun SettingsScreen(
     onOpenPrivacy: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val appPublicLink = stringResource(R.string.app_public_link)
+    val shareAppText = stringResource(R.string.share_app_body, appPublicLink)
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -343,12 +347,14 @@ fun SettingsScreen(
                             }
                             IconButton(
                                 onClick = {
+                                    val text = context.getString(
+                                        R.string.share_referral_body,
+                                        referral.referralCode,
+                                        appPublicLink
+                                    )
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(
-                                            Intent.EXTRA_TEXT,
-                                            "Use my code ${referral.referralCode} to unlock 24 Hours of God Mode on Cookd! https://cookd.app"
-                                        )
+                                        putExtra(Intent.EXTRA_TEXT, text)
                                     }
                                     context.startActivity(Intent.createChooser(intent, "Share Code"))
                                 }
@@ -475,7 +481,7 @@ fun SettingsScreen(
                     SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, "Check out Cookd - AI dating chat assistant! https://cookd.app")
+                            putExtra(Intent.EXTRA_TEXT, shareAppText)
                         }
                         context.startActivity(Intent.createChooser(intent, "Share Cookd"))
                     })
@@ -792,11 +798,11 @@ private fun PlanStatusCard(
                             Text(
                                 when {
                                     TierQuota.isUnlimited(dailyLimit) ->
-                                        "Voice DNA and expanded vibes. Unlimited replies on your plan."
+                                        "Expanded vibes and tools. Unlimited replies on your plan."
                                     TierQuota.isFinite(dailyLimit) ->
-                                        "Higher reply caps than Free — up to $dailyLimit AI replies per ${TierQuota.billingPeriodNoun(billingPeriod)} • Voice DNA."
+                                        "Higher reply caps than Free — up to $dailyLimit AI replies per ${TierQuota.billingPeriodNoun(billingPeriod)}."
                                     else ->
-                                        "Expanded tools and Voice DNA — quotas in Usage Limits below."
+                                        "Expanded tools — quotas in Usage Limits below."
                                 },
                                 color = Color.Gray,
                                 fontSize = 12.sp

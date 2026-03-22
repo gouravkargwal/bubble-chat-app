@@ -46,6 +46,12 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".stg"
             resValue("string", "app_name", "Cookd (Staging)")
+            // Same as production so shares point at the public listing; change if you publish a separate Play app id for staging.
+            resValue(
+                "string",
+                "app_public_link",
+                "https://play.google.com/store/apps/details?id=com.cookd.mobile"
+            )
             buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"226210127602-dc2jh362c0a2bcc2trdbd1da6qqnogvc.apps.googleusercontent.com\"")
             buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_qbaXLjSzKcIbBbYlEjNfLQzSoWn\"")
@@ -54,6 +60,11 @@ android {
         create("production") {
             dimension = "environment"
             // Production uses default app_name from strings.xml: "Cookd"
+            resValue(
+                "string",
+                "app_public_link",
+                "https://play.google.com/store/apps/details?id=com.cookd.mobile"
+            )
             buildConfigField("String", "BACKEND_URL", "\"https://cookd.digidairy.site/\"")
             // Set in local.properties: GOOGLE_WEB_CLIENT_ID_PROD, REVENUE_CAT_PUBLIC_KEY_PROD (from production Firebase + RevenueCat)
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID_PROD") ?: ""}\"")

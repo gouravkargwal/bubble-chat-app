@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["*"]
     base_url: str = "https://nonconscientious-annette-saddeningly.ngrok-free.dev"
 
+    # Voice DNA (screenshot calibration + style learning). Off until re-enabled in product.
+    voice_dna_enabled: bool = False
+
     def validate_production(self) -> None:
         """Fail fast if critical secrets are not configured in production."""
         if self.environment != "development":

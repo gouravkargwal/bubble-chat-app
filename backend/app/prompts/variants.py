@@ -13,7 +13,7 @@ class PromptVariant:
     use_fork_principle: bool = True
     use_playbooks: bool = True
     use_self_critique: bool = True
-    use_voice_dna: bool = True
+    use_voice_dna: bool = False
     use_conversation_history: bool = True
     # Override specific templates (None = use default)
     custom_few_shots: str | None = None
@@ -29,6 +29,11 @@ class VariantRegistry:
         self.register(PromptVariant(
             id="default",
             description="Full system — all components enabled",
+        ))
+        self.register(PromptVariant(
+            id="voice_dna_on",
+            description="Same as default with Voice DNA block enabled (tests / future use)",
+            use_voice_dna=True,
         ))
         self.register(PromptVariant(
             id="minimal",

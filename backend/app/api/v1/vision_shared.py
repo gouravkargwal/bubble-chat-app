@@ -634,6 +634,8 @@ async def update_voice_dna(
     background_tasks: BackgroundTasks,
 ) -> None:
     """Update Voice DNA stats and optionally trigger semantic profile refresh."""
+    if not settings.voice_dna_enabled:
+        return
     voice_result = await db.execute(
         select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id).with_for_update()
     )

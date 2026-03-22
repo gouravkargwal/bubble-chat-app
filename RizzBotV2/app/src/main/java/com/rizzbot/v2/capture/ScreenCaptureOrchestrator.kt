@@ -26,7 +26,7 @@ class ScreenCaptureOrchestrator @Inject constructor(
     private val hapticHelper: HapticHelper,
     private val analyticsHelper: AnalyticsHelper
 ) {
-    private val _result = MutableStateFlow<SuggestionResult>(SuggestionResult.Loading)
+    private val _result = MutableStateFlow<SuggestionResult>(SuggestionResult.Idle)
     val result: StateFlow<SuggestionResult> = _result.asStateFlow()
 
     private var lastCaptureTime = 0L
@@ -171,7 +171,7 @@ class ScreenCaptureOrchestrator @Inject constructor(
     }
 
     fun resetResult() {
-        _result.value = SuggestionResult.Loading
+        _result.value = SuggestionResult.Idle
     }
 
     /**
@@ -183,7 +183,7 @@ class ScreenCaptureOrchestrator @Inject constructor(
         synchronized(previewBitmaps) {
             previewBitmaps.clear()
         }
-        _result.value = SuggestionResult.Loading
+        _result.value = SuggestionResult.Idle
     }
 
     /**

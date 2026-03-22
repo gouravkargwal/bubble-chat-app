@@ -97,6 +97,8 @@ Focus ONLY on substantive quality:
    - "ask_out" → must include a concrete plan (place/time/activity)
    - "de_escalate" → must NOT be sarcastic, defensive, or dismissive
    - "tease" → must be playful, not mean or generic
+   - If user_custom_hint in the payload is non-empty: EVERY reply must clearly reflect that hint
+     (not a generic reply that could apply without it). Missing the hint = FAIL.
    Direction violated = FAIL.
 
 4. CRINGE / GENERIC: Would a real person actually send this?
@@ -159,6 +161,7 @@ def auditor_node(state: AgentState) -> dict:
         return {"is_cringe": False, "auditor_feedback": ""}
 
     direction = state.get("direction", "quick_reply")
+    custom_hint = (state.get("custom_hint") or "").strip()
 
     verbatim_last_message = transcript_text_from_analysis(analysis)
     their_last_message_paraphrase = getattr(analysis, "their_last_message", "") or ""
@@ -175,6 +178,7 @@ def auditor_node(state: AgentState) -> dict:
         "their_last_message_paraphrase": their_last_message_paraphrase,
         "key_detail": getattr(analysis, "key_detail", ""),
         "direction": direction,
+        "user_custom_hint": custom_hint,
         "replies": [
             {
                 "index": i,

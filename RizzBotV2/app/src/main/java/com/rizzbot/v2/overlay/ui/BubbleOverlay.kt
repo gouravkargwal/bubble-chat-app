@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.rizzbot.v2.domain.model.DirectionWithHint
@@ -47,7 +49,6 @@ import com.rizzbot.v2.overlay.ui.components.panels.DirectionPicker
 import com.rizzbot.v2.overlay.ui.components.panels.ErrorPanel
 import com.rizzbot.v2.overlay.ui.components.panels.LoadingOverlay
 import com.rizzbot.v2.overlay.ui.components.panels.MergeConfirmationPanel
-import com.rizzbot.v2.overlay.ui.components.panels.ProcessingOverlay
 import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
 import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
@@ -70,6 +71,7 @@ fun BubbleOverlay(
     usageState: StateFlow<UsageState>,
     dockOnLeft: StateFlow<Boolean>,
     isGalleryMode: StateFlow<Boolean>,
+    asyncWorkInFlight: StateFlow<Boolean>,
     onEvent: (OverlayEvent) -> Unit,
     onCollapsedOverlayMotionEvent: (MotionEvent) -> Boolean,
 ) {
@@ -77,9 +79,11 @@ fun BubbleOverlay(
     val usage by usageState.collectAsState()
     val dockLeft by dockOnLeft.collectAsState()
     val galleryMode by isGalleryMode.collectAsState()
+    val workInFlight by asyncWorkInFlight.collectAsState()
 
     val isFullScreen = currentState is BubbleState.DirectionPicker ||
         currentState is BubbleState.ScreenshotPreview ||
+        currentState is BubbleState.Loading ||
         currentState is BubbleState.Expanded ||
         currentState is BubbleState.RequiresUserConfirmation ||
         currentState is BubbleState.Error
@@ -137,14 +141,27 @@ fun BubbleOverlay(
                         )
                     }
             }
+            val showFloatingBubble =
+                !isFullScreen || (currentState is BubbleState.Loading && workInFlight)
+            val bubbleModifier = if (isFullScreen) {
+                Modifier
+                    .zIndex(2f)
+                    .align(if (dockLeft) Alignment.TopStart else Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 12.dp)
+            } else {
+                Modifier
+            }
             AnimatedVisibility(
-                visible = !isFullScreen,
+                visible = showFloatingBubble,
+                modifier = bubbleModifier,
                 enter = bubbleEnter,
                 exit = bubbleExit
             ) {
                 BubbleWithHints(
                     state = currentState,
                     dockOnLeft = dockLeft,
+                    asyncWorkInFlight = workInFlight,
                     onCollapsedOverlayMotionEvent = onCollapsedOverlayMotionEvent
                 )
             }
@@ -307,11 +324,7 @@ private fun FullScreenCard(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (s.isProcessing) {
-                                    ProcessingOverlay()
-                                } else {
-                                    LoadingOverlay()
-                                }
+                                LoadingOverlay()
                             }
                         }
                         is BubbleState.Expanded -> SuggestionPanel(

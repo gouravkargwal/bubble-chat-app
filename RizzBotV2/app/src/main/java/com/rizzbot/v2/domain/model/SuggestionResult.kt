@@ -21,6 +21,9 @@ sealed class SuggestionResult {
         val suggestedMatch: SuggestedMatch
     ) : SuggestionResult()
 
+    /** No vision request in flight (distinct from [Loading], which means a request is active). */
+    data object Idle : SuggestionResult()
+
     data object Loading : SuggestionResult()
 
     enum class ErrorType {

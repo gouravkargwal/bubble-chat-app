@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import com.rizzbot.v2.domain.model.UsageState
+import com.rizzbot.v2.FeatureFlags
 import com.rizzbot.v2.domain.model.UserPreferences
 import com.rizzbot.v2.ui.premium.VoiceDNACalibrationModal
 import com.rizzbot.v2.ui.theme.CardBg
@@ -176,32 +176,44 @@ fun HomeScreen(
                 targetState = !state.isLoadingUsage,
                 label = "homeContent"
             ) { isLoaded ->
-                if (!isLoaded) {
-                    HomeSkeleton()
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(CookdDimens.sectionSpacing)) {
-                        // ── YOUR STATS ──
-                        SectionDivider()
-                        SectionHeader(title = "Your Stats", icon = "📊")
-                        RizzProfileCard(
-                            preferences = state.rizzProfile,
-                            onSeeFullStats = onNavigateToStats,
-                            isGodMode = isGodMode,
-                            isProOrAbove = isProOrAbove,
-                            onTrainVoiceDNA = {
-                                if (isProOrAbove) {
-                                    viewModel.showCalibration()
-                                } else {
-                                    onShowPaywall()
-                                }
-                            },
-                            primaryAccent = primaryAccent
-                        )
+                when {
+                    FeatureFlags.HOME_REPLY_STYLE_SECTION_ENABLED -> {
+                        if (!isLoaded) {
+                            HomeSkeleton()
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(CookdDimens.sectionSpacing)) {
+                                // ── YOUR STATS ──
+                                SectionDivider()
+                                SectionHeader(title = "Your Stats", icon = "📊")
+                                RizzProfileCard(
+                                    preferences = state.rizzProfile,
+                                    onSeeFullStats = onNavigateToStats,
+                                    isGodMode = isGodMode,
+                                    isProOrAbove = isProOrAbove,
+                                    voiceDnaEnabled = FeatureFlags.VOICE_DNA_ENABLED,
+                                    onTrainVoiceDNA = {
+                                        if (isProOrAbove) {
+                                            viewModel.showCalibration()
+                                        } else {
+                                            onShowPaywall()
+                                        }
+                                    },
+                                    primaryAccent = primaryAccent
+                                )
 
-                        // How it works (dismissible)
-                        if (state.showHowItWorks) {
+                                if (state.showHowItWorks) {
+                                    HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
+                                }
+                            }
+                        }
+                    }
+                    isLoaded && state.showHowItWorks -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(CookdDimens.sectionSpacing)) {
                             HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
                         }
+                    }
+                    else -> {
+                        Spacer(modifier = Modifier.height(0.dp))
                     }
                 }
             }
@@ -210,7 +222,7 @@ fun HomeScreen(
             }
             }
 
-            if (state.showCalibrationModal) {
+            if (FeatureFlags.VOICE_DNA_ENABLED && state.showCalibrationModal) {
                 VoiceDNACalibrationModal(
                     onDismiss = { viewModel.hideCalibration() },
                     onImagesSelected = { uris ->
@@ -716,6 +728,7 @@ private fun RizzProfileCard(
     onSeeFullStats: () -> Unit,
     isGodMode: Boolean,
     isProOrAbove: Boolean,
+    voiceDnaEnabled: Boolean,
     onTrainVoiceDNA: () -> Unit,
     primaryAccent: Color
 ) {
@@ -730,7 +743,7 @@ private fun RizzProfileCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Your AI Clone Status",
+                    "Your reply style",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
@@ -822,38 +835,40 @@ private fun RizzProfileCard(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Pro / God Mode messaging
-                    if (!isProOrAbove) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    // Pro / God Mode messaging (Voice DNA training)
+                    if (voiceDnaEnabled) {
+                        if (!isProOrAbove) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        "AI Voice Cloning: \uD83D\uDD12",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        "Upgrade to Pro so the AI learns your exact humor, slang, and texting style.",
+                                        color = Color.Gray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        } else {
+                            TextButton(onClick = onTrainVoiceDNA) {
                                 Text(
-                                    "AI Voice Cloning: \uD83D\uDD12",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
-                                )
-                                Text(
-                                    "Upgrade to Pro so the AI learns your exact humor, slang, and texting style.",
-                                    color = Color.Gray,
-                                    fontSize = 12.sp
+                                    text = "\uD83E\uDDEC Add sample chats to sharpen your style",
+                                    color = Color(0xFFA5D6A7),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
-                        }
-                    } else {
-                        TextButton(onClick = onTrainVoiceDNA) {
-                            Text(
-                                text = "\uD83E\uDDEC Add Sample Styles to refine your AI Twin",
-                                color = Color(0xFFA5D6A7),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            )
                         }
                     }
                 }
@@ -870,7 +885,7 @@ private fun RizzProfileCard(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Your AI Twin isn't trained yet",
+                            text = "Your style profile isn’t filled in yet",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
@@ -884,17 +899,19 @@ private fun RizzProfileCard(
                             lineHeight = 18.sp
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = onTrainVoiceDNA,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
-                        ) {
-                            Text(
-                                text = if (isProOrAbove) "Upload Chat Screenshots" else "🔒 Unlock AI Voice DNA",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                        if (voiceDnaEnabled) {
+                            Button(
+                                onClick = onTrainVoiceDNA,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
+                            ) {
+                                Text(
+                                    text = if (isProOrAbove) "Upload Chat Screenshots" else "🔒 Unlock AI Voice DNA",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }
@@ -906,7 +923,7 @@ private fun RizzProfileCard(
                     val progressFraction = (currentRatings / targetRatings.toFloat()).coerceIn(0f, 1f)
 
                     Text(
-                        text = "Calibrating Your AI Twin \uD83E\uDDEC",
+                        text = "Learning your style \uD83E\uDDEC",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
@@ -944,17 +961,19 @@ private fun RizzProfileCard(
                         trackColor = DividerColor
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = onTrainVoiceDNA,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
-                    ) {
-                        Text(
-                            text = if (isProOrAbove) "Upload Screenshots to Speed Up" else "🔒 Unlock AI Voice DNA",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                    if (voiceDnaEnabled) {
+                        Button(
+                            onClick = onTrainVoiceDNA,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
+                        ) {
+                            Text(
+                                text = if (isProOrAbove) "Upload Screenshots to Speed Up" else "🔒 Unlock AI Voice DNA",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }

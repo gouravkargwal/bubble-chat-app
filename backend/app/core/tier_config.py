@@ -1,6 +1,12 @@
 """Master Tier Configuration — single source of truth for all tier limits and features."""
 
+from app.config import settings
 from app.models.enums import ConversationDirection
+
+
+def voice_dna_feature_active(tier_config: dict) -> bool:
+    """True only when the global flag is on and the tier includes Voice DNA."""
+    return settings.voice_dna_enabled and tier_config["features"]["voice_dna_enabled"]
 
 # Limits semantics (usage + enforcement):
 # - profile_blueprints_per_week: 0 = feature not on this tier (optimize endpoint returns 403);
@@ -42,7 +48,7 @@ TIER_CONFIG = {
             "max_custom_hint_chars": 300,
         },
         "features": {
-            "voice_dna_enabled": True,
+            "voice_dna_enabled": False,
             "custom_hints_enabled": True,
             "include_coach_reasoning": True,
             "advanced_languages_enabled": True,
@@ -68,7 +74,7 @@ TIER_CONFIG = {
             "max_custom_hint_chars": 500,
         },
         "features": {
-            "voice_dna_enabled": True,
+            "voice_dna_enabled": False,
             "custom_hints_enabled": True,
             "include_coach_reasoning": True,
             "advanced_languages_enabled": True,

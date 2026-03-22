@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -83,6 +84,23 @@ class BubbleManager @Inject constructor(
      */
     private var pendingGalleryDirection: DirectionWithHint? = null
 
+    /** Never cancelled in [hide]; keeps [isActuallyShown] in sync with [_state]. */
+    private val bubbleFlowScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private val _mergeInFlight = MutableStateFlow(false)
+
+    /**
+     * Vision API in progress ([SuggestionResult.Loading]) or merge resolution in flight.
+     * Used to keep the overlay collapsed with a pulsing bubble during work, and to show
+     * the full loading panel + bubble if the user opens the overlay mid-request.
+     */
+    val overlayAsyncWorkInFlight: StateFlow<Boolean> = combine(
+        orchestrator.result,
+        _mergeInFlight
+    ) { result, merging ->
+        result is SuggestionResult.Loading || merging
+    }.stateIn(bubbleFlowScope, SharingStarted.Eagerly, false)
+
     /** Avoid redundant [WindowManager.updateViewLayout] when only in-overlay content changes. */
     private var lastAppliedExpandedLayout: Boolean? = null
 
@@ -93,9 +111,6 @@ class BubbleManager @Inject constructor(
     private var isDraggingBubble = false
     private var dragLayoutParams: WindowManager.LayoutParams? = null
     private var bubbleSnapAnimator: ValueAnimator? = null
-
-    /** Never cancelled in [hide]; keeps [isActuallyShown] in sync with [_state]. */
-    private val bubbleFlowScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     init {
         applyDefaultBubblePositionTopRight()
@@ -287,8 +302,10 @@ class BubbleManager @Inject constructor(
                             val result = orchestrator.result.value
                             val previews = orchestrator.getPreviewBitmaps()
                             _state.value = when {
+                                _mergeInFlight.value -> BubbleState.Loading()
                                 result is SuggestionResult.Success -> BubbleState.Expanded(result)
                                 result is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
+                                result is SuggestionResult.Loading -> BubbleState.Loading()
                                 previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
                                     previews,
                                     currentDirection ?: DirectionWithHint()
@@ -380,6 +397,7 @@ class BubbleManager @Inject constructor(
                     usageState = hostedRepository.usageState,
                     dockOnLeft = dockOnLeft,
                     isGalleryMode = isGalleryMode,
+                    asyncWorkInFlight = overlayAsyncWorkInFlight,
                     onEvent = { handleEvent(it) },
                     onCollapsedOverlayMotionEvent = { event -> handleCollapsedOverlayMotionEvent(this@apply, event) },
                 )
@@ -442,6 +460,7 @@ class BubbleManager @Inject constructor(
         pendingAppendDirection = null
         pendingGalleryDirection = null
         _isGalleryMode.value = false
+        _mergeInFlight.value = false
         hideCloseTarget()
 
         resetBubblePositionForNextShow()
@@ -590,24 +609,57 @@ class BubbleManager @Inject constructor(
     }
 
     /**
+     * Removes the overlay window so system UI (e.g. photo picker) is not drawn underneath
+     * [TYPE_APPLICATION_OVERLAY]. Restored via [ensureComposeOverlayAttached] from
+     * [handleGalleryResult] or failed launch.
+     */
+    private fun suspendOverlayForGalleryPicker() {
+        hideCloseTarget()
+        composeView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "Overlay already removed for gallery picker", e)
+            }
+        }
+        composeView = null
+        lastAppliedExpandedLayout = null
+    }
+
+    private fun ensureComposeOverlayAttached() {
+        if (composeView == null) {
+            composeView = createAndAttachView()
+        }
+    }
+
+    /**
      * Entry point for the transparent gallery activity to report back a selected image.
      *
      * @param imageBase64 Base64-encoded JPEG of the selected image, or null if the user cancelled.
      */
     fun handleGalleryResult(imageBase64: String?) {
         val direction = pendingGalleryDirection
-        // Always clear pending state first so we don't accidentally reuse it.
         pendingGalleryDirection = null
 
-        if (imageBase64 == null || direction == null) {
-            // User cancelled or we lost the pending direction; nothing to do.
+        if (_state.value is BubbleState.Hidden) {
+            return
+        }
+
+        ensureComposeOverlayAttached()
+
+        if (imageBase64 == null) {
+            if (direction != null) {
+                _state.value = BubbleState.DirectionPicker
+            }
+            return
+        }
+        if (direction == null) {
             return
         }
 
         val activeScope = ensureScope()
         activeScope.launch {
-            // Enter processing state as soon as we have an image + direction
-            _state.value = BubbleState.Loading(isProcessing = true)
+            _state.value = BubbleState.RizzButton
             orchestrator.resetResult()
             orchestrator.clearScreenshot()
 
@@ -618,13 +670,14 @@ class BubbleManager @Inject constructor(
                 is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, direction)
                 is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                 is SuggestionResult.Loading -> BubbleState.Loading()
+                is SuggestionResult.Idle -> BubbleState.DirectionPicker
             }
         }
     }
 
     private fun launchTransparentGalleryActivity() {
-        // Launch a tiny transparent Activity that owns the system photo picker.
         try {
+            suspendOverlayForGalleryPicker()
             val intent = android.content.Intent(
                 context,
                 com.rizzbot.v2.overlay.gallery.TransparentGalleryActivity::class.java
@@ -637,8 +690,8 @@ class BubbleManager @Inject constructor(
             context.startActivity(intent)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to launch TransparentGalleryActivity", e)
-            // Fall back to normal flow by clearing pending state.
             pendingGalleryDirection = null
+            ensureComposeOverlayAttached()
         }
     }
 
@@ -696,8 +749,10 @@ class BubbleManager @Inject constructor(
                     val result = orchestrator.result.value
                     val previews = orchestrator.getPreviewBitmaps()
                     _state.value = when {
+                        _mergeInFlight.value -> BubbleState.Loading()
                         result is SuggestionResult.Success -> BubbleState.Expanded(result)
                         result is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
+                        result is SuggestionResult.Loading -> BubbleState.Loading()
                         previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
                             previews,
                             currentDirection ?: DirectionWithHint()
@@ -762,7 +817,7 @@ class BubbleManager @Inject constructor(
                     _state.value = BubbleState.RizzButton
                 } else {
                     activeScope.launch {
-                        _state.value = BubbleState.Loading()
+                        _state.value = BubbleState.RizzButton
                         orchestrator.generateFromScreenshots(event.direction)
                         val result = orchestrator.result.value
                         _state.value = when (result) {
@@ -770,6 +825,11 @@ class BubbleManager @Inject constructor(
                             is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
                             is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                             is SuggestionResult.Loading -> BubbleState.Loading()
+                            is SuggestionResult.Idle -> BubbleState.Error(
+                                "Something went wrong",
+                                SuggestionResult.ErrorType.UNKNOWN,
+                                event.direction
+                            )
                         }
                     }
                 }
@@ -829,25 +889,34 @@ class BubbleManager @Inject constructor(
 
                 activeScope.launch {
                     val direction = currentDirection ?: DirectionWithHint()
-                    _state.value = BubbleState.Loading(isProcessing = true)
-
-                    val result = hostedRepository.resolveConversationMerge(
-                        suggestedConversationId = payload.conversationId,
-                        isMatch = event.isMatch,
-                        newOcrText = payload.personName
-                    )
-
-                    _state.value = when (result) {
-                        is SuggestionResult.Success -> BubbleState.Expanded(result)
-                        is SuggestionResult.Error -> BubbleState.Error(
-                            message = result.message,
-                            errorType = result.errorType,
-                            direction = direction
+                    _state.value = BubbleState.RizzButton
+                    _mergeInFlight.value = true
+                    try {
+                        val result = hostedRepository.resolveConversationMerge(
+                            suggestedConversationId = payload.conversationId,
+                            isMatch = event.isMatch,
+                            newOcrText = payload.personName
                         )
-                        is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(
-                            payload = result.suggestedMatch
-                        )
-                        is SuggestionResult.Loading -> BubbleState.Loading(isProcessing = true)
+
+                        _state.value = when (result) {
+                            is SuggestionResult.Success -> BubbleState.Expanded(result)
+                            is SuggestionResult.Error -> BubbleState.Error(
+                                message = result.message,
+                                errorType = result.errorType,
+                                direction = direction
+                            )
+                            is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(
+                                payload = result.suggestedMatch
+                            )
+                            is SuggestionResult.Loading -> BubbleState.Loading()
+                            is SuggestionResult.Idle -> BubbleState.Error(
+                                "Something went wrong",
+                                SuggestionResult.ErrorType.UNKNOWN,
+                                direction
+                            )
+                        }
+                    } finally {
+                        _mergeInFlight.value = false
                     }
                 }
             }
@@ -925,7 +994,7 @@ class BubbleManager @Inject constructor(
                     }
                 } else {
                     activeScope.launch {
-                        _state.value = BubbleState.Loading()
+                        _state.value = BubbleState.RizzButton
                         orchestrator.generateFromScreenshots(event.direction)
                         val result = orchestrator.result.value
                         _state.value = when (result) {
@@ -933,6 +1002,11 @@ class BubbleManager @Inject constructor(
                             is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, event.direction)
                             is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
                             is SuggestionResult.Loading -> BubbleState.Loading()
+                            is SuggestionResult.Idle -> BubbleState.Error(
+                                "Something went wrong",
+                                SuggestionResult.ErrorType.UNKNOWN,
+                                event.direction
+                            )
                         }
                     }
                 }

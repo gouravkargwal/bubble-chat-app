@@ -40,7 +40,7 @@ from app.domain.models import (
     VisualTranscriptItem,
     VoiceDNA,
 )
-from app.core.tier_config import TIER_CONFIG
+from app.core.tier_config import TIER_CONFIG, voice_dna_feature_active
 from app.domain.tiers import get_effective_tier
 from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
@@ -505,6 +505,11 @@ async def calibrate_voice_dna(
     db: AsyncSession = Depends(get_db),
 ) -> CalibrationResponse:
     """Extracts organic text from screenshots purely to build Voice DNA. Does not generate replies."""
+    if not settings.voice_dna_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Voice DNA is temporarily unavailable.",
+        )
     if not request.images:
         raise HTTPException(status_code=400, detail="Images required.")
 
@@ -695,7 +700,7 @@ async def generate_replies(
 
     # 9. Load Voice DNA only if tier supports it
     voice_dna = None
-    if tier_config["features"]["voice_dna_enabled"]:
+    if voice_dna_feature_active(tier_config):
         result = await db.execute(
             select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
         )
@@ -911,7 +916,7 @@ async def generate_replies(
                 parsed = parse_llm_response(raw)
 
                 # ---------------------------------------------------------
-                # VOICE DNA: THE ECHO FILTER & EXTRACTION
+                # User organic text + echo filter (persistence). Voice DNA DB updates optional.
                 # ---------------------------------------------------------
                 user_organic_text = None
 
@@ -919,15 +924,13 @@ async def generate_replies(
                 if parsed and parsed.visual_transcript:
                     for msg in reversed(parsed.visual_transcript):
                         if msg.side.lower() == "right" or msg.sender.lower() == "user":
-                            # Use ONLY the actual new message text, ignoring any quoted context.
                             user_organic_text = msg.actual_new_message
                             break
 
-                # 2. The Echo Filter: Check if they copied an AI suggestion
+                # 2. Echo filter: copied AI suggestions are not treated as user's organic text
                 if user_organic_text and len(user_organic_text) > 3:
                     clean_text = user_organic_text.lower().strip()
 
-                    # Pull the last 10 interactions to cross-reference
                     recent_interactions_query = await db.execute(
                         select(Interaction)
                         .where(Interaction.user_id == user.id)
@@ -949,9 +952,7 @@ async def generate_replies(
                             user_organic_text = None
                             break
 
-                    if not is_echo:
-                        # The user typed this themselves! It is organic data.
-                        # Update Voice DNA stats and recent organic messages
+                    if not is_echo and voice_dna_feature_active(tier_config):
                         voice_result = await db.execute(
                             select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id).with_for_update()
                         )
@@ -963,7 +964,6 @@ async def generate_replies(
                         updated_dna = update_voice_dna_stats(voice_db, clean_text)
                         await db.commit()
 
-                        # Trigger Semantic Profiling for Premium users if they have enough data
                         try:
                             messages_list = (
                                 json.loads(updated_dna.recent_organic_messages)

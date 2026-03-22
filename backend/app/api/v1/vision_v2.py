@@ -10,7 +10,7 @@ Full feature parity with /vision/generate:
   - Tier config enforcement (direction guard, screenshot limit, custom hint, coach_reasoning gate)
   - Hybrid Stitch conversation resolution (auto-stitch, 409 requires-confirmation, new match)
   - Quota check-before / increment-after pattern
-  - Voice DNA organic text extraction + echo filter + stats update + semantic profile refresh
+  - Voice DNA (when enabled): organic text extraction + echo filter + stats update + semantic profile refresh
   - Full Interaction persistence (all reply fields, latency, model, temperature)
   - Correct VisionResponse with interaction_id, usage_remaining, conversation_id, person_name, stage
 """
@@ -44,7 +44,7 @@ from app.api.v1.vision_shared import (
     update_voice_dna,
 )
 from app.config import settings
-from app.core.tier_config import TIER_CONFIG
+from app.core.tier_config import TIER_CONFIG, voice_dna_feature_active
 from app.domain.conversation import build_conversation_context
 from app.domain.tiers import get_effective_tier
 from app.domain.voice_dna import to_domain as voice_to_domain
@@ -289,7 +289,7 @@ async def generate_replies_v2(
     # 7. Voice DNA — load if tier supports it
     # ------------------------------------------------------------------ #
     voice_dna = None
-    if tier_config["features"]["voice_dna_enabled"]:
+    if voice_dna_feature_active(tier_config):
         voice_result = await db.execute(
             select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id)
         )
@@ -367,7 +367,7 @@ async def generate_replies_v2(
     # 10. Voice DNA: extract organic text, run echo filter, update stats
     # ------------------------------------------------------------------ #
     organic_text = await extract_organic_text(db=db, user=user, parsed=parsed, conversation_id=effective_conversation_id)
-    if organic_text:
+    if organic_text and voice_dna_feature_active(tier_config):
         await update_voice_dna(
             db=db,
             user=user,

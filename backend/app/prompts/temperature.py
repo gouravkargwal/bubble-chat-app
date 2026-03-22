@@ -20,6 +20,7 @@ def calculate_temperature(
     conversation_temperature: str = "warm",
     stage: str = "early_talking",
     interaction_count: int = 0,
+    custom_hint: str | None = None,
 ) -> float:
     """Calculate the optimal LLM temperature for this specific context."""
     direction_temps = _TEMP_MATRIX.get(direction, _TEMP_MATRIX["quick_reply"])
@@ -34,6 +35,10 @@ def calculate_temperature(
     # First interaction → slightly more creative for openers
     if interaction_count == 0:
         base += 0.05
+
+    # User-typed angle → more creative exploration (v2 custom hint path)
+    if (custom_hint or "").strip():
+        base = max(base, 0.78)
 
     # Clamp to safe range
     return max(0.50, min(base, 0.85))

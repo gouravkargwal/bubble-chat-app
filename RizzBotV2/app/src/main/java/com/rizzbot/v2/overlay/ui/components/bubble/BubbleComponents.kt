@@ -166,11 +166,13 @@ fun RizzButton(
 fun BubbleWithHints(
     state: BubbleState,
     dockOnLeft: Boolean,
+    asyncWorkInFlight: Boolean,
     onCollapsedOverlayMotionEvent: (MotionEvent) -> Boolean,
     modifier: Modifier = Modifier
 ) {
     val showAddMoreHint = state is BubbleState.RizzButtonAddMore
-    val showLoadingHint = state is BubbleState.Loading
+    val showLoadingHint = state is BubbleState.Loading ||
+        ((state is BubbleState.RizzButton || state is BubbleState.RizzButtonAddMore) && asyncWorkInFlight)
     
     // Auto-hide the "add more" hint after 4 seconds
     var showAddMoreHintWithTimeout by remember(showAddMoreHint) { 

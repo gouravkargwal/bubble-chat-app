@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Cookd</string>
+    <string name="boot_tagline">Smart replies for dating chats</string>
     <string name="notification_channel_name">Cookd Service</string>
     <string name="notification_channel_description">Keeps the floating bubble active</string>
     <string name="notification_title">Cookd is active</string>
     <string name="notification_text">Tap the bubble to get reply suggestions</string>
     <string name="capture_channel_name">Screen Capture</string>
     <string name="capture_channel_description">Active during screenshot capture</string>
-    <string name="website_url">https://cookd.app</string>
-    <string name="share_text">Check out Cookd - your AI dating chat assistant! One tap for instant reply suggestions. Download at https://cookd.app</string>
+    <!-- Public link for invites / share sheet (Play Store when you have no marketing site). Override per flavor in app/build.gradle.kts if needed. -->
+    <string name="app_public_link">https://play.google.com/store/apps/details?id=com.cookd.mobile</string>
+    <string name="share_app_body">Check out Cookd — AI dating chat assistant! %1$s</string>
+    <string name="share_referral_body">Use my code %1$s to unlock 24 Hours of God Mode on Cookd! %2$s</string>
 </resources>

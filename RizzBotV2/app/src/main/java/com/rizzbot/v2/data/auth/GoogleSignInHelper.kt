@@ -66,12 +66,11 @@ class GoogleSignInHelper @Inject constructor(
         }
 
         return try {
-            // First try authorized accounts for faster sign-in
-            Log.d("GoogleSignIn", "Attempting sign-in with authorized accounts first...")
+            // Credential Manager: disable auto-select and show all accounts so the user always gets a picker.
+            Log.d("GoogleSignIn", "Requesting Google credential (account picker)...")
             val idToken = try {
-                getGoogleIdToken(activity, webClientId, filterByAuthorized = true)
+                getGoogleIdToken(activity, webClientId, filterByAuthorized = false)
             } catch (e: NoCredentialException) {
-                // If CredentialManager has no authorized credential, fall back immediately.
                 Log.d("GoogleSignIn", "NoCredentialException: falling back to GoogleSignInClient.signInIntent...")
                 val signInIntent = createGoogleSignInIntent(activity, webClientId)
                 throw GoogleSignInFallbackRequired(signInIntent)
@@ -140,7 +139,8 @@ class GoogleSignInHelper @Inject constructor(
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(filterByAuthorized)
             .setServerClientId(webClientId)
-            .setAutoSelectEnabled(true)
+            // Must be false so users see the account picker instead of a silent single-account sign-in.
+            .setAutoSelectEnabled(false)
             .build()
 
         val request = GetCredentialRequest.Builder()
@@ -164,14 +164,16 @@ class GoogleSignInHelper @Inject constructor(
         return null
     }
 
-    private fun createGoogleSignInIntent(activity: Activity, webClientId: String): Intent {
-        // Interactive fallback that covers cases where CredentialManager has no retrievable credentials.
+    private suspend fun createGoogleSignInIntent(activity: Activity, webClientId: String): Intent {
+        // Interactive fallback when Credential Manager has no retrievable credentials.
         val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(webClientId)
             .requestEmail()
             .build()
 
         val googleSignInClient = GoogleSignIn.getClient(activity, options)
+        // Clear any cached account so the legacy flow shows the account chooser instead of reusing the last account.
+        googleSignInClient.signOut().await()
         return googleSignInClient.signInIntent
     }
 

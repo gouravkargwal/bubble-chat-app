@@ -35,6 +35,7 @@ sealed class BubbleState(open val isProcessing: Boolean = false) {
     fun isExpandedState(): Boolean = when (this) {
         is DirectionPicker,
         is ScreenshotPreview,
+        is Loading,
         is Expanded,
         is RequiresUserConfirmation,
         is Error -> true

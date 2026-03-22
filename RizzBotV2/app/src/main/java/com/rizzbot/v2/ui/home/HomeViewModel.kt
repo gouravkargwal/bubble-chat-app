@@ -268,7 +268,7 @@ class HomeViewModel @Inject constructor(
 
                 hostedRepository.calibrateVoiceDNA(base64Images)
 
-                // Refresh user preferences so Digital Twin stats update
+                // Refresh user preferences so home stats update
                 val prefs = hostedRepository.getUserPreferences()
                 if (prefs != null) {
                     val vibeBreakdown = prefs.vibeBreakdown.associate { it.name to it.percentage }

@@ -16,7 +16,7 @@ internal object PaywallTierMarketing {
     fun sublineForAppTier(appTier: String): String =
         when (appTier) {
             "pro" ->
-                "You’re on Pro — Premium unlocks higher caps, AI Twin, and God-Mode Auditor."
+                "You’re on Pro — Premium unlocks higher caps, more profile tools, and God-Mode Auditor."
             "premium", "god_mode" ->
                 "You already have top-tier limits. Renew or switch billing below."
             else ->
@@ -35,7 +35,7 @@ internal object PaywallTierMarketing {
         "Up to 5 screenshots per reply",
         "Up to 3 profile photo audits per week (6 photos each)",
         "Up to 1 profile optimizer blueprint per week",
-        "Voice DNA, custom hints, and expanded reply vibes",
+        "Custom hints and expanded reply vibes",
     )
 
     /** Mirrors TIER_CONFIG["premium"].limits + product extras */
@@ -44,6 +44,6 @@ internal object PaywallTierMarketing {
         "Up to 7 screenshots per reply",
         "Up to 10 profile photo audits per week (10 photos each)",
         "Up to 3 profile optimizer blueprints per week",
-        "Everything in Pro, plus AI Twin Mode & God-Mode Auditor",
+        "Everything in Pro, plus higher caps & God-Mode Auditor",
     )
 }

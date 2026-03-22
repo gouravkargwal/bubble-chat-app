@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.rizzbot.v2.FeatureFlags
 import com.rizzbot.v2.domain.model.UserPreferences
 import kotlin.math.roundToInt
 
@@ -90,7 +91,11 @@ fun StatsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (isPremiumTier) "Voice DNA Dashboard ✦" else "Voice DNA Dashboard",
+                        text = when {
+                            !FeatureFlags.VOICE_DNA_ENABLED -> if (isPremiumTier) "Your Stats ✦" else "Your Stats"
+                            isPremiumTier -> "Voice DNA Dashboard ✦"
+                            else -> "Voice DNA Dashboard"
+                        },
                         fontWeight = FontWeight.Bold,
                         color = brandAccent
                     )
@@ -264,7 +269,11 @@ private fun CalibratingBanner(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Keep chatting and rating replies so your Voice DNA Dashboard can fully unlock.",
+                    text = if (FeatureFlags.VOICE_DNA_ENABLED) {
+                        "Keep chatting and rating replies so your Voice DNA Dashboard can fully unlock."
+                    } else {
+                        "Keep chatting and rating replies to sharpen your reply style insights."
+                    },
                     color = Color.Gray,
                     fontSize = 12.sp
                 )

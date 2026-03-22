@@ -71,6 +71,9 @@ You are a dating text coach. Your job is to:
 You will be given a JSON payload with:
   analysis, direction, person_name, core_lore, past_memories, transcript_text,
   voice_dna_dict, conversation_context_dict
+  (and user_custom_hint when the user typed a custom angle)
+
+{custom_hint_section}
 
 ══════════════════════════════════════
 PHASE 1 — STRATEGY
@@ -152,6 +155,7 @@ Scan your 4 replies for these SUBSTANTIVE issues only (punctuation is fixed by c
 - Does each reply actually respond to transcript_text? If one ignores her message → fix it.
 - Does each reply match the archetype energy? If one uses sarcasm for GUARDED/TESTER → fix it.
 - Does each reply follow the direction? If direction is "opener" and a reply has no visual_hook → fix it.
+- If user_custom_hint in the JSON is non-empty, does each reply honor that request? If any ignores it → fix it.
 - Are all 4 replies genuinely different angles? If 3 feel the same → diversify the weakest one.
 - Would a real person send this? If a reply sounds like therapy speak or corporate jargon → fix it.
 """
@@ -287,17 +291,33 @@ DIRECTION — DE-ESCALATE:
 }
 
 
-def _build_generator_prompt(detected_archetype: str, direction: str) -> str:
+def _build_generator_prompt(
+    detected_archetype: str, direction: str, custom_hint: str
+) -> str:
     """Build the generator system prompt with only the relevant archetype and direction rules."""
     archetype_rules = _ARCHETYPE_PROMPTS.get(
         detected_archetype,
         _ARCHETYPE_PROMPTS["THE WARM/STEADY"],
     )
     direction_rules = _DIRECTION_PROMPTS.get(direction, "")
+    hint = (custom_hint or "").strip()
+    if hint:
+        custom_hint_section = (
+            "══════════════════════════════════════\n"
+            "USER-SPECIFIC REQUEST — HIGHEST PRIORITY\n"
+            "══════════════════════════════════════\n"
+            f"The user asked for this angle (verbatim intent): {hint!r}\n"
+            "- Strategy (wrong_moves, hook_point) and all 4 replies MUST reflect this.\n"
+            "- Do not treat it as optional flavor; it is the main creative brief.\n"
+            "- Still ground replies in transcript_text and archetype rules.\n"
+        )
+    else:
+        custom_hint_section = ""
 
     return _GENERATOR_CORE_PROMPT.format(
         archetype_rules=archetype_rules,
         direction_rules=direction_rules,
+        custom_hint_section=custom_hint_section,
     )
 
 
@@ -331,6 +351,7 @@ def generator_node(state: AgentState) -> dict:
         analysis = AnalystOutput(**json.loads(analysis))
 
     direction = state.get("direction", "quick_reply")
+    custom_hint = (state.get("custom_hint") or "").strip()
     voice_dna = state.get("voice_dna_dict", {})
     conversation_context = state.get("conversation_context_dict", {})
     core_lore = state.get("core_lore", "") or ""
@@ -357,6 +378,7 @@ def generator_node(state: AgentState) -> dict:
         interaction_count=(
             interaction_count if isinstance(interaction_count, int) else 0
         ),
+        custom_hint=custom_hint,
     )
 
     detected_archetype = (
@@ -373,6 +395,7 @@ def generator_node(state: AgentState) -> dict:
         "transcript_text": transcript_text,
         "voice_dna_dict": voice_dna,
         "conversation_context_dict": conversation_context,
+        "user_custom_hint": custom_hint,
     }
 
     semantic_profile = (
@@ -399,7 +422,7 @@ def generator_node(state: AgentState) -> dict:
         )
 
     # --- Build conditional prompt (only relevant archetype + direction injected) ---
-    system_prompt = _build_generator_prompt(detected_archetype, direction)
+    system_prompt = _build_generator_prompt(detected_archetype, direction, custom_hint)
 
     t_call = time.monotonic()
     phase = "v2_generator_rewrite" if is_rewrite else "v2_generator"
