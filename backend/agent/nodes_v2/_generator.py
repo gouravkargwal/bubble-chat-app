@@ -22,7 +22,6 @@ from agent.nodes_v2._post_processor import validate_and_fix_replies
 from agent.nodes_v2._shared import (
     GENERATOR_MODEL,
     transcript_text_from_analysis,
-    truncate,
 )
 from agent.state import (
     AgentState,
@@ -317,7 +316,6 @@ def generator_node(state: AgentState) -> dict:
     Uses dynamic temperature from direction × conversation state.
     Returns partial state update (LangGraph merges into full state).
     """
-    t0 = time.monotonic()
     user_id = state.get("user_id", "")
     revision_count = state.get("revision_count", 0)
     auditor_feedback = state.get("auditor_feedback", "")
@@ -364,22 +362,6 @@ def generator_node(state: AgentState) -> dict:
     detected_archetype = (
         getattr(analysis, "detected_archetype", "THE LOW-INVESTMENT")
         or "THE LOW-INVESTMENT"
-    )
-
-    logger.info(
-        "agent_v2_generator_start",
-        user_id=user_id,
-        direction=direction,
-        is_rewrite=is_rewrite,
-        revision_count=revision_count,
-        person_name=person_name,
-        detected_archetype=detected_archetype,
-        detected_dialect=getattr(analysis, "detected_dialect", None),
-        their_effort=getattr(analysis, "their_effort", None),
-        conversation_temperature=conversation_temperature,
-        stage=stage,
-        llm_temperature=llm_temperature,
-        transcript_text=truncate(transcript_text, max_len=120),
     )
 
     payload: dict[str, Any] = {
@@ -442,7 +424,6 @@ def generator_node(state: AgentState) -> dict:
             elapsed_ms=int((time.monotonic() - t_call) * 1000),
         )
         raise
-    llm_ms = int((time.monotonic() - t_call) * 1000)
 
     # --- Validate reply count and fix if needed ---
     gen_out = validate_and_fix_replies(gen_out)
@@ -455,22 +436,6 @@ def generator_node(state: AgentState) -> dict:
         recommended_strategy_label=gen_out.recommended_strategy_label,
     )
     drafts = WriterOutput(replies=gen_out.replies)
-
-    recommended_idx = next(
-        (i for i, r in enumerate(gen_out.replies) if r.is_recommended), -1
-    )
-
-    logger.info(
-        "agent_v2_generator_done",
-        user_id=user_id,
-        total_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=llm_ms,
-        llm_temperature=llm_temperature,
-        is_rewrite=is_rewrite,
-        reply_count=len(gen_out.replies),
-        strategy_labels=[r.strategy_label for r in gen_out.replies],
-        recommended_index=recommended_idx,
-    )
 
     return {
         "strategy": strategy,

@@ -102,13 +102,4 @@ def invoke_structured_gemini(
     llm = build_llm(model=model, temperature=temperature, structured_output=schema)
     result = llm.invoke(messages, config={"callbacks": [cb]})
     row = cb.to_usage_row()
-    logger.info(
-        "gemini_langchain_usage",
-        phase=phase,
-        model=row["model"],
-        prompt_tokens=row["prompt_tokens"],
-        candidates_tokens=row["candidates_tokens"],
-        cost_usd=row["cost_usd"],
-        cost_inr=row["cost_inr"],
-    )
     return result, row

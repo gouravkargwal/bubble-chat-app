@@ -28,6 +28,52 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    labels:
+      logging: promtail
+
+  # Observability (host ports): Loki http://localhost:3110  Grafana http://localhost:3333
+  loki:
+    image: grafana/loki:3.5.0
+    # Named volumes are root-owned; the image’s default user (10001) cannot create rules/ under /tmp/loki.
+    user: "0:0"
+    volumes:
+      - ./docker/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki_data_dev:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3110:3100"
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.5.0
+    volumes:
+      - ./docker/promtail-config.yaml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail_positions_dev:/tmp
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data_dev:/var/lib/grafana
+    ports:
+      - "3333:3000"
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   pgdata_dev:
+  loki_data_dev:
+  grafana_data_dev:
+  promtail_positions_dev:

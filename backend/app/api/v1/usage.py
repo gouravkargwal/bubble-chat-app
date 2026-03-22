@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import structlog
 from app.api.v1.deps import get_current_user
 from datetime import datetime, timedelta, timezone
 from app.api.v1.schemas.schemas import UsageResponse
@@ -15,7 +14,6 @@ from app.infrastructure.database.models import Purchase, User
 from app.services.quota_manager import QuotaManager
 
 router = APIRouter()
-logger = structlog.get_logger()
 
 
 @router.get("/usage", response_model=UsageResponse)
@@ -66,23 +64,6 @@ async def get_usage(
                 billing_period = "weekly"
             elif "monthly" in product_id:
                 billing_period = "monthly"
-
-    logger.info(
-        "usage_response",
-        user_id=user.id,
-        tier=effective_tier,
-        billing_period=billing_period,
-        daily_limit=daily_limit,
-        effective_limit=effective_limit,
-        bonus_replies=user.bonus_replies,
-        daily_used=daily_used,
-        weekly_used=weekly_used,
-        monthly_used=monthly_used,
-        weekly_audits_used=weekly_audits_used,
-        weekly_blueprints_used=weekly_blueprints_used,
-        total_replies_generated=total_generated,
-        total_replies_copied=total_copied,
-    )
 
     return UsageResponse(
         daily_limit=effective_limit if daily_limit > 0 else 0,

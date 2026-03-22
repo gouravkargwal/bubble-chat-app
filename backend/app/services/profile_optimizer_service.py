@@ -1,7 +1,6 @@
 """Service for generating an optimized dating profile blueprint from audited photos."""
 
 import json
-import time
 import uuid
 from typing import Any
 
@@ -231,12 +230,6 @@ async def generate_blueprint(
         )
         existing = existing_result.scalar_one_or_none()
         if existing:
-            logger.info(
-                "profile_blueprint_idempotency_hit",
-                user_id=user_id,
-                idempotency_key=idempotency_key,
-                blueprint_id=existing.id,
-            )
             return _build_blueprint_response(existing)
 
     # --- Input validation ---------------------------------------------------
@@ -304,7 +297,6 @@ async def generate_blueprint(
 
     # --- LLM call -----------------------------------------------------------
     client = _get_client()
-    start_time = time.monotonic()
 
     try:
         raw = await client.vision_generate(
@@ -316,19 +308,6 @@ async def generate_blueprint(
             max_output_tokens=4096,
             response_schema=PROFILE_BLUEPRINT_SCHEMA,
         )
-        latency_ms = int((time.monotonic() - start_time) * 1000)
-        logger.debug(
-            "profile_blueprint_llm_raw",
-            latency_ms=latency_ms,
-            raw_preview=str(raw)[:1000],
-            lang=lang,
-            user_id=user_id,
-        )
-        logger.info(
-            "profile_blueprint_llm_success",
-            latency_ms=latency_ms,
-            raw_length=len(raw),
-        )
         parsed = json.loads(raw)
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("profile_blueprint_gemini_failed", error=str(exc))
@@ -336,13 +315,6 @@ async def generate_blueprint(
 
     try:
         blueprint = ProfileBlueprint(**parsed)
-        logger.info(
-            "profile_blueprint_parsed",
-            user_id=user_id,
-            lang=lang,
-            slots=len(blueprint.slots),
-            overall_theme=blueprint.overall_theme[:120],
-        )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error(
             "profile_blueprint_parse_failed",

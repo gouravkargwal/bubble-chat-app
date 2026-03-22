@@ -10,7 +10,6 @@ Also fetches librarian context (core_lore + past_memories) from the DB inline.
 Model: gemini-3.1-flash-lite-preview at temperature 0 (deterministic)
 """
 
-import time
 from typing import Any, cast
 
 import structlog
@@ -23,7 +22,6 @@ from agent.nodes_v2._shared import (
     encode_image_from_state,
     fetch_librarian_context,
     normalize_raw_ocr_text,
-    truncate,
 )
 from agent.state import AgentState, AnalystOutput, ChatBubble
 
@@ -210,9 +208,7 @@ def vision_node(state: AgentState) -> dict:
 
     Returns partial state update (LangGraph merges into full state).
     """
-    t0 = time.monotonic()
     user_id = state.get("user_id", "")
-    logger.info("agent_v2_vision_start", user_id=user_id)
 
     image_url = encode_image_from_state(state)
     core_lore = ""
@@ -244,7 +240,6 @@ def vision_node(state: AgentState) -> dict:
         {"type": "image_url", "image_url": {"url": image_url}},
     ]
 
-    t_call = time.monotonic()
     result, usage_row = invoke_structured_gemini(
         model=VISION_MODEL,
         temperature=0,
@@ -256,20 +251,6 @@ def vision_node(state: AgentState) -> dict:
         phase="v2_vision",
     )
     out = cast(VisionNodeOutput, result)
-    llm_ms = int((time.monotonic() - t_call) * 1000)
-
-    logger.info(
-        "agent_v2_vision_done",
-        total_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=llm_ms,
-        is_valid_chat=out.is_valid_chat,
-        bouncer_reason=truncate(out.bouncer_reason),
-        detected_dialect=out.detected_dialect,
-        detected_archetype=out.detected_archetype,
-        their_effort=out.their_effort,
-        conversation_temperature=out.conversation_temperature,
-        transcript_count=len(out.visual_transcript),
-    )
 
     if not out.is_valid_chat:
         return {

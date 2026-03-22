@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 
 import firebase_admin
+import structlog
 from firebase_admin import auth as firebase_auth, credentials
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _firebase_app: firebase_admin.App | None = None
 

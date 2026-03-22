@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # App
     environment: str = "development"
     log_level: str = "INFO"
+    # One JSON object per line (Loki-friendly). Set LOG_JSON=false for pretty console locally.
+    log_json: bool = True
+    # Same value as the Docker Compose service name so Promtail `service_name` matches JSON logs.
+    log_service_name: str = "api"
     cors_origins: list[str] = ["*"]
     base_url: str = "https://nonconscientious-annette-saddeningly.ngrok-free.dev"
 

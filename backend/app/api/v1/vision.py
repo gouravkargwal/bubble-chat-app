@@ -780,10 +780,6 @@ async def generate_replies(
                 if getattr(msg, "side", "").lower() == "right" or getattr(msg, "sender", "").lower() == "user":
                     user_organic_text = msg.actual_new_message
                     break
-        logger.info(
-            "vision_timing_agent",
-            timing_agent_ms=int((time.monotonic() - start) * 1000),
-        )
 
     if parsed is None:
         # Legacy path: build prompt and call Gemini directly
@@ -842,7 +838,6 @@ async def generate_replies(
         # 10. Dynamic temperature routing + call Gemini with retry on JSON truncation
         client = _get_client()
         start = time.monotonic()
-        t1 = t2 = t3 = start
 
         # Dynamic Temperature Routing:
         # Different directions and custom hints need different creativity levels.
@@ -901,13 +896,6 @@ async def generate_replies(
         raw = ""
         parsed = None
 
-        # Phase 1: setup completed (everything before the first LLM call)
-        t1 = time.monotonic()
-        logger.info(
-            "vision_timing_phase_1_setup",
-            timing_phase_1_setup_ms=int((t1 - start) * 1000),
-        )
-
         for attempt in range(1, 3):
             try:
                 raw = await client.vision_generate(
@@ -918,13 +906,6 @@ async def generate_replies(
                     model=settings.gemini_model,
                     max_output_tokens=int(max_tokens),
                     response_schema=response_schema,
-                )
-
-                # Phase 2: LLM call latency
-                t2 = time.monotonic()
-                logger.info(
-                    "vision_timing_phase_2_llm",
-                    timing_phase_2_llm_ms=int((t2 - t1) * 1000),
                 )
 
                 parsed = parse_llm_response(raw)
@@ -965,20 +946,11 @@ async def generate_replies(
                         ]
                         if is_echo_text(clean_text, past_replies):
                             is_echo = True
-                            logger.info(
-                                "voice_dna_echo_detected", user_id=user.id, text=clean_text
-                            )
                             user_organic_text = None
                             break
 
                     if not is_echo:
                         # The user typed this themselves! It is organic data.
-                        logger.info(
-                            "voice_dna_organic_text_found",
-                            user_id=user.id,
-                            text=clean_text,
-                        )
-
                         # Update Voice DNA stats and recent organic messages
                         voice_result = await db.execute(
                             select(UserVoiceDNA).where(UserVoiceDNA.user_id == user.id).with_for_update()
@@ -1017,19 +989,6 @@ async def generate_replies(
                                 messages=messages_list,
                             )
 
-                # Phase 3: parsing latency
-                t3 = time.monotonic()
-                logger.info(
-                    "vision_timing_phase_3_parse",
-                    timing_phase_3_parse_ms=int((t3 - t2) * 1000),
-                )
-                logger.info(
-                    "replies_generated",
-                    attempt=attempt,
-                    replies_count=len(parsed.replies),
-                    reply_lengths=[len(r.text) for r in parsed.replies],
-                    reply_previews=[r.text[:50] for r in parsed.replies],
-                )
                 break
             except json.JSONDecodeError as e:
                 # Handle Gemini sometimes truncating JSON strings.
@@ -1199,29 +1158,10 @@ async def generate_replies(
     await db.commit()
     await db.refresh(interaction)
 
-    logger.info(
-        "reply_generated",
-        user_id=user.id,
-        tier=effective_tier,
-        person=parsed.analysis.person_name,
-        stage=parsed.analysis.stage,
-        direction=request.direction.value,
-        screenshot_count=len(images),
-        latency_ms=latency_ms,
-    )
-
     if daily_limit > 0:
         remaining = max(0, effective_limit - daily_used)
     else:
         remaining = 9999
-
-    # Phase 4: DB writes and response construction latency
-    t4 = time.monotonic()
-    logger.info(
-        "vision_timing_phase_4_db_writes",
-        # For the agent path, we didn't set t3; measure from overall start instead.
-        timing_phase_4_db_writes_ms=int((t4 - start) * 1000),
-    )
 
     reply_payloads: list[ReplyOptionPayload] = []
     for opt in parsed.replies[:4]:

@@ -10,7 +10,6 @@ Model: gemini-3.1-flash-lite-preview at temperature 0 (deterministic judgment)
 """
 
 import json
-import time
 from typing import cast
 
 import structlog
@@ -22,7 +21,6 @@ from agent.nodes_v2._shared import (
     AUDITOR_MODEL,
     MAX_REWRITES,
     transcript_text_from_analysis,
-    truncate,
 )
 from agent.state import AgentState, AnalystOutput, WriterOutput
 
@@ -158,11 +156,6 @@ def auditor_node(state: AgentState) -> dict:
 
     # Safety valve: if we've already rewritten max times, approve regardless
     if revision_count > MAX_REWRITES:
-        logger.info(
-            "auditor_node_max_rewrites_reached",
-            user_id=user_id,
-            revision_count=revision_count,
-        )
         return {"is_cringe": False, "auditor_feedback": ""}
 
     direction = state.get("direction", "quick_reply")
@@ -194,7 +187,6 @@ def auditor_node(state: AgentState) -> dict:
         ],
     }
 
-    t_call = time.monotonic()
     try:
         result, usage_row = invoke_structured_gemini(
             model=AUDITOR_MODEL,
@@ -217,21 +209,7 @@ def auditor_node(state: AgentState) -> dict:
         )
         return {"is_cringe": False, "auditor_feedback": ""}
 
-    llm_ms = int((time.monotonic() - t_call) * 1000)
-
     failed_verdicts = [v for v in audit.verdicts if not v.passes]
-
-    logger.info(
-        "agent_v2_auditor_done",
-        user_id=user_id,
-        llm_ms=llm_ms,
-        overall_passes=audit.overall_passes,
-        failed_count=len(failed_verdicts),
-        failed_indices=[v.reply_index for v in failed_verdicts],
-        summary=truncate(audit.summary, max_len=200),
-        revision_count=revision_count,
-        verbatim_last_preview=truncate(verbatim_last_message, max_len=120),
-    )
 
     if audit.overall_passes:
         return {

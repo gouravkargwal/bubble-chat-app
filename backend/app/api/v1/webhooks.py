@@ -35,8 +35,8 @@ async def revenuecat_webhook(
                 provided_auth=authorization[:20] if authorization else None,
             )
             raise HTTPException(status_code=401, detail="Unauthorized")
-    else:
-        # No secret configured - log warning but allow request (for development/testing)
+    elif settings.environment != "development":
+        # Production/staging should always verify webhooks.
         logger.warning(
             "revenuecat_webhook_secret_not_configured",
             message="Webhook secret not configured - allowing request without authentication",
@@ -45,8 +45,6 @@ async def revenuecat_webhook(
     # Parse request body
     try:
         body = await request.json()
-        # Log full raw payload for debugging entitlements / tiers (staging only)
-        logger.info("revenuecat_webhook_raw_body", body=body)
     except Exception as e:
         logger.error("revenuecat_webhook_invalid_json", error=str(e))
         raise HTTPException(status_code=400, detail="Invalid JSON")
@@ -57,14 +55,12 @@ async def revenuecat_webhook(
     app_user_id = event_data.get("app_user_id") or body.get("app_user_id")
 
     if not app_user_id:
-        logger.warning("revenuecat_webhook_no_user_id", body=body)
+        logger.warning(
+            "revenuecat_webhook_no_user_id",
+            event_type=event_type,
+            has_event_key=bool(body.get("event")),
+        )
         return {"status": "ignored", "reason": "No app_user_id"}
-
-    logger.info(
-        "revenuecat_webhook_received",
-        event_type=event_type,
-        app_user_id=app_user_id,
-    )
 
     # Find user by app_user_id (which should match our backend user_id)
     result = await db.execute(select(User).where(User.id == app_user_id))
@@ -127,24 +123,14 @@ async def revenuecat_webhook(
         and new_tier is not None
     ):
 
-        # Capture pre-commit tier so we don't touch expired objects after apply_plan_upgrade.
-        old_tier_snapshot = user.tier
-
         await apply_plan_upgrade(
             db=db,
             user_id=user.id,
             new_tier=new_tier,
             billing_period=billing_period,
+            webhook_event_type=event_type,
         )
 
-        logger.info(
-            "revenuecat_webhook_tier_updated",
-            app_user_id=app_user_id,
-            old_tier=old_tier_snapshot,
-            new_tier=new_tier,
-            event_type=event_type,
-            billing_period=billing_period,
-        )
         return {
             "status": "success",
             "user_id": app_user_id,
@@ -235,11 +221,6 @@ async def revenuecat_webhook(
 
     # 3) Other event types (RESTORE / UNCANCELLATION / CANCELLATION)
     # Note: CANCELLATION just means auto-renew is off. They keep their tier until EXPIRATION.
-    logger.info(
-        "revenuecat_webhook_event_ignored",
-        app_user_id=app_user_id,
-        event_type=event_type,
-    )
     return {
         "status": "ignored",
         "user_id": app_user_id,

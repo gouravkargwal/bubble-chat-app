@@ -1,8 +1,8 @@
 """Authentication endpoints — Firebase Google Sign-In."""
 
-import logging
 from datetime import datetime, timedelta, timezone
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +14,7 @@ from app.infrastructure.auth.jwt import create_token
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import User, UserQuota
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -92,11 +92,6 @@ async def firebase_auth(
                 user.google_provider_id = google_provider_id
             await db.commit()
             await db.refresh(user)
-            logger.info(
-                "Migrated anonymous user %s to Firebase uid %s",
-                user.id,
-                firebase_uid,
-            )
         else:
             # --- 4. Brand-new user ------------------------------------------
             is_new_user = True
@@ -114,7 +109,6 @@ async def firebase_auth(
 
             await db.commit()
             await db.refresh(user)
-            logger.info("Created new Firebase user %s", user.id)
 
     # --- 5. Ensure UserQuota row exists for this google_provider_id ----------
     if google_provider_id:

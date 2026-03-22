@@ -72,7 +72,9 @@ async def store_pending_hybrid_resolution(
     )
     db.add(row)
     await db.commit()
-    await db.refresh(row)
+    # Avoid refresh(): callers do not need server defaults on the instance, and a follow-up
+    # SELECT can hit asyncpg "another operation is in progress" if a prior result was not
+    # fully closed on this session (e.g. hybrid stitch embedding score path).
     return row
 
 

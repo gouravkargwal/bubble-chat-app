@@ -232,7 +232,9 @@ async def _embedding_content_score(
         )
         # asyncpg requires pgvector params as a string "[x, y, ...]", not a Python list
         embedding_str = f"[{','.join(str(x) for x in query_embedding)}]"
-        result = await db.execute(
+        # Use scalar() so the result is fully consumed; .mappings().first() can leave an
+        # asyncpg cursor active and cause "another operation is in progress" on the next query.
+        best_distance = await db.scalar(
             vector_sql,
             {
                 "user_id": user_id,
@@ -240,12 +242,11 @@ async def _embedding_content_score(
                 "query_embedding": embedding_str,
             },
         )
-        row = result.mappings().first()
-        if not row or row["best_distance"] is None:
+        if best_distance is None:
             return 0.0
 
         # Convert cosine distance (0=identical, 2=opposite) to similarity score (0-1)
-        cosine_distance = float(row["best_distance"])
+        cosine_distance = float(best_distance)
         similarity = max(0.0, 1.0 - cosine_distance)
         return similarity
 
@@ -343,12 +344,6 @@ async def resolve_hybrid_stitch_conversation_id(
         )
         convo = convo_result.scalar_one_or_none()
         if convo:
-            logger.info(
-                "stitch_alias_hit",
-                user_id=user_id,
-                alias_name=normalize_name(ocr_person_name),
-                conversation_id=alias_convo_id,
-            )
             # Reactivate if needed
             if not convo.is_active:
                 convo.is_active = True
@@ -373,7 +368,6 @@ async def resolve_hybrid_stitch_conversation_id(
     # ---------------------------------------------------------------
     best_convo: Conversation | None = None
     best_composite: float = 0.0
-    best_name_score: float = 0.0
 
     for convo in convos:
         ns = name_similarity(ocr_person_name, convo.person_name)
@@ -390,21 +384,9 @@ async def resolve_hybrid_stitch_conversation_id(
 
         composite = (_W_NAME * ns) + (_W_CONTENT * cs) + (_W_RECENCY * rs)
 
-        logger.debug(
-            "stitch_candidate_score",
-            user_id=user_id,
-            conversation_id=convo.id,
-            person_name=convo.person_name,
-            name_score=round(ns, 3),
-            content_score=round(cs, 3),
-            recency_score=round(rs, 3),
-            composite=round(composite, 3),
-        )
-
         if composite > best_composite:
             best_composite = composite
             best_convo = convo
-            best_name_score = ns
 
     # ---------------------------------------------------------------
     # Step 4: Apply thresholds
@@ -425,12 +407,6 @@ async def resolve_hybrid_stitch_conversation_id(
         if not best_convo.is_active:
             best_convo.is_active = True
             await db.commit()
-        logger.info(
-            "stitch_auto_stitch",
-            user_id=user_id,
-            conversation_id=best_convo.id,
-            composite_score=round(best_composite, 3),
-        )
         return "auto_stitch", best_convo.id, None
 
     # ---------------------------------------------------------------
@@ -482,14 +458,6 @@ async def resolve_hybrid_stitch_conversation_id(
         },
         "match_confidence": round(best_composite, 2),
     }
-
-    logger.info(
-        "stitch_requires_confirmation",
-        user_id=user_id,
-        conversation_id=best_convo.id,
-        composite_score=round(best_composite, 3),
-        name_score=round(best_name_score, 3),
-    )
 
     return "requires_user_confirmation", best_convo.id, payload
 
@@ -652,10 +620,8 @@ async def extract_organic_text(
             except (json.JSONDecodeError, TypeError):
                 past_replies.append(raw.lower().strip())
         if is_echo_text(clean_text, past_replies):
-            logger.info("voice_dna_echo_detected", user_id=user.id, text=clean_text)
             return None
 
-    logger.info("voice_dna_organic_text_found", user_id=user.id, text=clean_text)
     return user_organic_text
 
 

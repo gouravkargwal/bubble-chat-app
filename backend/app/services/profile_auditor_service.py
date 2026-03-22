@@ -126,7 +126,6 @@ async def analyze_profile_photos(
     base64_images = [b64 for b64, _, _ in encoded_images]
     image_hashes = [img_hash for _, _, img_hash in encoded_images]
 
-    logger.info("profile_audit_started", image_count=len(base64_images))
     if not base64_images:
         raise ValueError("Failed to read any image data for profile audit.")
 
@@ -144,19 +143,12 @@ async def analyze_profile_photos(
         existing = result.scalar_one_or_none()
         if existing:
             existing_photos[img_hash] = existing
-            logger.info(
-                "profile_audit_duplicate_found",
-                photo_id=existing.id,
-                hash=img_hash[:16],
-            )
         else:
             new_image_indices.append(idx)
             new_base64_images.append(base64_images[idx])
 
     # If all images are duplicates, return cached results
     if not new_base64_images:
-        logger.info("profile_audit_all_duplicates", total_images=len(image_hashes))
-
         cached_photos = []
         for img_hash in image_hashes:
             existing = existing_photos[img_hash]
@@ -227,7 +219,6 @@ async def analyze_profile_photos(
     )
 
     client = _get_client()
-    start_time = time.monotonic()
 
     try:
         raw = await client.vision_generate(
@@ -238,14 +229,6 @@ async def analyze_profile_photos(
             model=settings.gemini_model,
             max_output_tokens=8192,
             response_schema=PROFILE_AUDIT_SCHEMA,
-        )
-        latency_ms = int((time.monotonic() - start_time) * 1000)
-        logger.info(
-            "profile_audit_llm_success",
-            latency_ms=latency_ms,
-            raw_length=len(raw),
-            new_images=new_image_count,
-            cached_images=len(existing_photos),
         )
     except Exception as e:  # pragma: no cover - defensive logging
         logger.error(
@@ -368,15 +351,4 @@ async def analyze_profile_photos(
             logger.warning("profile_audit_save_skip", error=str(e), idx=idx)
             continue
 
-    score_summary = [
-        {"id": p.photo_id, "score": p.score, "tier": p.tier}
-        for p in parsed_response.photos
-    ]
-    logger.info(
-        "profile_audit_complete",
-        total=parsed_response.total_analyzed,
-        passed=parsed_response.passed_count,
-        is_hard_reset=parsed_response.is_hard_reset,
-        scores=score_summary,
-    )
     return parsed_response

@@ -55,7 +55,6 @@ async def upload(object_name: str, data: bytes, content_type: str = "image/jpeg"
             data,
             content_type=content_type,
         )
-        logger.info("oci_upload_success", object_name=object_name, size=len(data))
         return object_name
     except Exception as e:
         logger.error("oci_upload_failed", object_name=object_name, error=str(e))
@@ -95,7 +94,6 @@ async def delete(object_name: str) -> bool:
     try:
         client, namespace = _get_oci_client()
         client.delete_object(namespace, settings.oci_bucket_name, object_name)
-        logger.info("oci_delete_success", object_name=object_name)
         return True
     except Exception as e:
         logger.warning("oci_delete_failed", object_name=object_name, error=str(e))
@@ -112,7 +110,6 @@ async def get_bytes(object_name: str) -> bytes | None:
         from oci.exceptions import ServiceError  # type: ignore[import-untyped]
 
         if isinstance(e, ServiceError) and e.status == 404:
-            logger.info("oci_get_bytes_not_found", object_name=object_name)
             return None
         logger.error("oci_get_bytes_failed", object_name=object_name, error=str(e))
         raise

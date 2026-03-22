@@ -18,6 +18,8 @@ async def apply_plan_upgrade(
     user_id: str,
     new_tier: str,
     billing_period: str,
+    *,
+    webhook_event_type: str | None = None,
 ) -> None:
     """Apply a subscription change (INITIAL / RENEWAL / PRODUCT_CHANGE) and adjust quotas.
 
@@ -105,38 +107,24 @@ async def apply_plan_upgrade(
             if new_tier != old_tier:
                 # Plan changed: reset all usage counts so the user starts fresh
                 # on the new tier without carrying over old-tier usage.
-                logger.info(
-                    "apply_plan_change_usage_reset",
-                    user_id=user_id,
-                    old_tier=old_tier,
-                    new_tier=new_tier,
-                    previous_daily_usage=quota.daily_usage_count,
-                    previous_weekly_usage=quota.weekly_usage_count,
-                )
                 quota.daily_usage_count = 0
                 quota.weekly_usage_count = 0
                 quota.weekly_audits_count = 0
                 quota.weekly_blueprints_count = 0
-            else:
-                # Same-tier renewal: keep usage history, just move the windows.
-                logger.info(
-                    "apply_plan_renewal_window_realigned",
-                    user_id=user_id,
-                    old_tier=old_tier,
-                    new_tier=new_tier,
-                    daily_usage_count=quota.daily_usage_count,
-                    weekly_usage_count=quota.weekly_usage_count,
-                )
+            # Same-tier renewal: keep usage history; reset windows already updated above.
 
     # 4. Commit changes
     await db.commit()
 
-    logger.info(
-        "apply_plan_upgrade_success",
-        user_id=user_id,
-        new_tier=new_tier,
-        billing_period=billing_period,
-        tier_expires_at=(
+    log_payload: dict = {
+        "user_id": user_id,
+        "old_tier": old_tier,
+        "new_tier": new_tier,
+        "billing_period": billing_period,
+        "tier_expires_at": (
             user.tier_expires_at.isoformat() if user.tier_expires_at else None
         ),
-    )
+    }
+    if webhook_event_type:
+        log_payload["webhook_event_type"] = webhook_event_type
+    logger.info("apply_plan_upgrade_success", **log_payload)

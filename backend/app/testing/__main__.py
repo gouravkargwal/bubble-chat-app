@@ -19,7 +19,7 @@ async def main() -> None:
     parser.add_argument("--judge-model", type=str, default="gemini-2.5-flash-lite", help="Judge model (default: gemini-2.0-flash)")
     args = parser.parse_args()
 
-    setup_logging("INFO")
+    setup_logging("INFO", json_logs=False)
 
     from app.testing.runner import TestRunner
     from app.testing.reporter import generate_report

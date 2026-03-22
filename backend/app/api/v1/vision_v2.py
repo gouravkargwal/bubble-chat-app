@@ -51,7 +51,6 @@ from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Conversation, User, UserVoiceDNA
 from app.llm.gemini_client import GeminiClient
-from app.llm.gemini_pricing import sum_usage_records
 from app.services.hybrid_stitch_pending import (
     has_pending_hybrid_resolution,
     store_pending_hybrid_resolution,
@@ -213,14 +212,6 @@ async def generate_replies_v2(
             images[-1], usage_sink=pre_agent_usage
         )
 
-        logger.info(
-            "v2_hybrid_stitch_ocr_signals",
-            user_id=user.id,
-            ocr_person_name=ocr_person_name,
-            extracted_texts_count=len(extracted_texts),
-            extracted_texts_preview=[t[:60] for t in extracted_texts[:4]],
-        )
-
         outcome, matched_conversation_id, payload = (
             await resolve_hybrid_stitch_conversation_id(
                 user_id=user.id,
@@ -228,13 +219,6 @@ async def generate_replies_v2(
                 extracted_texts=extracted_texts,
                 db=db,
             )
-        )
-
-        logger.info(
-            "v2_hybrid_stitch_outcome",
-            user_id=user.id,
-            outcome=outcome,
-            matched_conversation_id=matched_conversation_id,
         )
 
         if outcome == "requires_user_confirmation" and payload:
@@ -276,19 +260,8 @@ async def generate_replies_v2(
             return JSONResponse(status_code=409, content=payload)
 
         if outcome == "auto_stitch" and matched_conversation_id:
-            logger.info(
-                "v2_hybrid_stitch_auto_stitch",
-                user_id=user.id,
-                stitched_conversation_id=matched_conversation_id,
-                ocr_person_name=ocr_person_name,
-            )
             effective_conversation_id = matched_conversation_id
         elif outcome == "new_match":
-            logger.info(
-                "v2_hybrid_stitch_new_match",
-                user_id=user.id,
-                ocr_person_name=ocr_person_name,
-            )
             new_conversation_person_name = ocr_person_name
 
     # ------------------------------------------------------------------ #
@@ -390,19 +363,6 @@ async def generate_replies_v2(
     from dataclasses import replace as _replace
     parsed.replies = [_replace(r, text=c.text) for r, c in zip(parsed.replies, _cleaned.replies)]
 
-    graph_usage = final_state.get("gemini_usage_log") or []
-    cost_tot = sum_usage_records(pre_agent_usage + graph_usage)
-    logger.info(
-        "vision_v2_timing",
-        timing_ms=latency_ms,
-        user_id=user.id,
-        gemini_cost_usd=cost_tot["cost_usd"],
-        gemini_cost_inr=cost_tot["cost_inr"],
-        gemini_prompt_tokens=cost_tot["prompt_tokens"],
-        gemini_candidates_tokens=cost_tot["candidates_tokens"],
-        gemini_calls=cost_tot["call_count"],
-    )
-
     # ------------------------------------------------------------------ #
     # 10. Voice DNA: extract organic text, run echo filter, update stats
     # ------------------------------------------------------------------ #
@@ -441,17 +401,6 @@ async def generate_replies_v2(
     if quota_manager and user.google_provider_id:
         daily_used, _ = await quota_manager.increment(user.google_provider_id)
         await db.commit()
-
-    logger.info(
-        "reply_generated_v2",
-        user_id=user.id,
-        tier=effective_tier,
-        person=parsed.analysis.person_name,
-        stage=parsed.analysis.stage,
-        direction=request.direction.value,
-        screenshot_count=len(images),
-        latency_ms=latency_ms,
-    )
 
     # ------------------------------------------------------------------ #
     # 13. Build and return response

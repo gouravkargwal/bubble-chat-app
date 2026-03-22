@@ -209,7 +209,6 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
             )
 
             client = _get_client()
-            start_time = time.monotonic()
 
             try:
                 raw_response = await client.vision_generate(
@@ -221,8 +220,6 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                     max_output_tokens=8192,
                     response_schema=PROFILE_AUDIT_SCHEMA,
                 )
-                latency_ms = int((time.monotonic() - start_time) * 1000)
-                logger.info("audit_worker_gemini_success", job_id=job_id, latency_ms=latency_ms)
             except Exception as e:
                 logger.error("audit_worker_gemini_failed", job_id=job_id, error=str(e))
                 await _update_job(db, job_id, status="failed", error="AI analysis failed. Please retry.")

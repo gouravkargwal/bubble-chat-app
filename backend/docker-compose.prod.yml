@@ -19,6 +19,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    labels:
+      logging: promtail
     networks:
       - default # Needed to talk to Postgres
       - milk_bridge # Needed to talk to the existing milk network
@@ -35,8 +37,58 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # Logs → Loki (Promtail tails Docker logs for containers labeled logging=promtail)
+  loki:
+    image: grafana/loki:3.5.0
+    # Named volumes are root-owned; default Loki user cannot mkdir ruler paths under /tmp/loki.
+    user: "0:0"
+    volumes:
+      - ./docker/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "127.0.0.1:3110:3100"
+    restart: unless-stopped
+    networks:
+      - default
+
+  promtail:
+    image: grafana/promtail:3.5.0
+    volumes:
+      - ./docker/promtail-config.yaml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail_positions:/tmp
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - default
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD for Grafana (e.g. in .env.prod)}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3333:3000"
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - default
+
 volumes:
   pgdata_prod:
+  loki_data:
+  grafana_data:
+  promtail_positions:
 
 networks:
   milk_bridge:

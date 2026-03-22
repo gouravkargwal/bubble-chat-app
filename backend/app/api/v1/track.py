@@ -64,7 +64,7 @@ async def track_copy(
             logger.error(
                 "semantic_memory_failed",
                 error=str(e),
-                reply_preview=reply_text[:120] if reply_text else "",
+                reply_len=len(reply_text) if reply_text else 0,
             )
             interaction.embedding = None
 
@@ -87,7 +87,6 @@ async def track_copy(
                 convo, analysis, request.reply_index, db
             )
 
-    logger.info("copy_tracked", user_id=user.id, reply_index=request.reply_index)
     return {"status": "ok"}
 
 
@@ -112,10 +111,4 @@ async def track_rating(
     interaction.rating_positive = request.is_positive
     await db.commit()
 
-    logger.info(
-        "rating_tracked",
-        user_id=user.id,
-        reply_index=request.reply_index,
-        positive=request.is_positive,
-    )
     return {"status": "ok"}

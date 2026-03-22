@@ -4,7 +4,9 @@ from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
-engine = create_async_engine(settings.database_url, echo=settings.environment == "development")
+# echo=False: echo=True attaches SQLAlchemy's own StreamHandler (plain text), which bypasses
+# app JSON logging and duplicates lines in Loki. Use logging.getLogger("sqlalchemy.engine") instead.
+engine = create_async_engine(settings.database_url, echo=False)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 # LangGraph runs sync nodes inside asyncio.to_thread() with a fresh event loop per librarian
@@ -15,7 +17,7 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 librarian_engine = create_async_engine(
     settings.database_url,
     poolclass=NullPool,
-    echo=settings.environment == "development",
+    echo=False,
 )
 librarian_async_session = async_sessionmaker(
     librarian_engine, class_=AsyncSession, expire_on_commit=False

@@ -39,14 +39,6 @@ async def embed_text(text: str, dimensions: int | None = None) -> Optional[List[
     model = _get_embeddings_model()
     try:
         dimensions_to_use = dimensions or EMBEDDING_DIMENSIONS
-        # Useful for debugging pgvector dimension mismatch issues.
-        logger.debug(
-            "embed_text_dimensions",
-            requested_dim=dimensions,
-            used_dim=dimensions_to_use,
-            embedding_model=EMBEDDING_MODEL_NAME,
-            text_preview=text[:60] if text else "",
-        )
 
         # CRITICAL: output_dimensionality must be passed here, NOT in the constructor
         embedding = await asyncio.to_thread(

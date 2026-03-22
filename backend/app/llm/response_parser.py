@@ -66,9 +66,6 @@ def _parse_json(text: str) -> ParsedLlmResponse:
                 )
             )
 
-    if visual_transcript:
-        logger.debug("parse_visual_transcript", items=len(visual_transcript))
-
     # Handle error response
     if "error" in data:
         raise ValueError(f"LLM returned error: {data['error']}")
@@ -109,29 +106,15 @@ def _parse_json(text: str) -> ParsedLlmResponse:
         )
         raise ValueError("No replies in JSON response")
 
-    logger.debug(
-        "parse_json_raw_replies",
-        replies_type=type(replies).__name__,
-        replies_count=len(replies),
-        first_reply_type=type(replies[0]).__name__ if replies else None,
-        first_reply_preview=str(replies[0])[:200] if replies else None,
-    )
-
     # Parse replies into structured ReplyOption objects
     reply_options: list[ReplyOption] = []
-    for idx, reply in enumerate(replies[:4]):
+    for reply in replies[:4]:
         if isinstance(reply, dict):
             text = str(reply.get("text", "")).strip()
             strategy_label = str(reply.get("strategy_label", "")).strip()
             is_recommended = bool(reply.get("is_recommended", False))
             coach_reasoning = str(reply.get("coach_reasoning", "")).strip()
 
-            logger.debug(
-                "parse_dict_reply",
-                index=idx,
-                keys=list(reply.keys()),
-                text_preview=text[:100],
-            )
         else:
             # Defensive fallback: support legacy plain-string replies if Gemini ever ignores schema
             text = str(reply).strip()
@@ -161,12 +144,6 @@ def _parse_json(text: str) -> ParsedLlmResponse:
             data_preview=str(data)[:500],
         )
         raise ValueError("All replies were empty after cleaning")
-
-    logger.info(
-        "parse_json_success",
-        cleaned_count=len(reply_options),
-        reply_lengths=[len(r.text) for r in reply_options],
-    )
 
     return ParsedLlmResponse(
         visual_transcript=visual_transcript,

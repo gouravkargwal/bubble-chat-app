@@ -96,30 +96,8 @@ class GeminiClient(LlmClient):
                         candidates_tokens=usage.get("candidatesTokenCount"),
                         total_tokens=usage.get("totalTokenCount"),
                     )
-                    logger.info(
-                        "gemini_usage",
-                        model=model,
-                        prompt_token_count=row["prompt_tokens"],
-                        candidates_token_count=row["candidates_tokens"],
-                        total_token_count=usage.get("totalTokenCount"),
-                        thoughts_token_count=usage.get("thoughtsTokenCount"),
-                        cost_usd=row["cost_usd"],
-                        cost_inr=row["cost_inr"],
-                    )
                     if usage_sink is not None:
                         usage_sink.append(row)
-
-                # Log the raw Gemini response (truncated) for debugging
-                try:
-                    logger.debug(
-                        "gemini_raw_json",
-                        raw=response.text[:4000],
-                        model=model,
-                        attempt=attempt,
-                    )
-                except Exception:
-                    # Logging should never break the request flow
-                    pass
 
                 # Extract text from Gemini response
                 candidates = data.get("candidates", [])
@@ -149,19 +127,6 @@ class GeminiClient(LlmClient):
                 if not text:
                     raise ValueError("Empty text in Gemini response")
 
-                logger.debug(
-                    "gemini_parsed_response",
-                    parts_count=len(parts),
-                    thought_parts=sum(1 for p in parts if p.get("thought")),
-                    text_preview=text[:300],
-                )
-
-                logger.info(
-                    "gemini_success",
-                    model=model,
-                    attempt=attempt,
-                    response_length=len(text),
-                )
                 return text
 
             except httpx.HTTPStatusError as e:
@@ -243,16 +208,6 @@ class GeminiClient(LlmClient):
                 prompt_tokens=usage.get("promptTokenCount"),
                 candidates_tokens=usage.get("candidatesTokenCount"),
                 total_tokens=usage.get("totalTokenCount"),
-            )
-            logger.info(
-                "gemini_usage",
-                model=model,
-                prompt_token_count=row["prompt_tokens"],
-                candidates_token_count=row["candidates_tokens"],
-                total_token_count=usage.get("totalTokenCount"),
-                thoughts_token_count=usage.get("thoughtsTokenCount"),
-                cost_usd=row["cost_usd"],
-                cost_inr=row["cost_inr"],
             )
             if usage_sink is not None:
                 usage_sink.append(row)

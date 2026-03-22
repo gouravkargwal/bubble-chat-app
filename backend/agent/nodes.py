@@ -2,7 +2,6 @@ from typing import cast, Any, Literal
 import asyncio
 import base64
 import json
-import time
 
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -37,19 +36,6 @@ def _truncate(val: Any, max_len: int = 220) -> Any:
     if isinstance(val, dict):
         return {k: _truncate(v, max_len=max_len) for k, v in list(val.items())[:30]}
     return val
-
-
-def _state_meta(state: AgentState) -> dict[str, Any]:
-    analysis = state.get("analysis")
-    return {
-        "direction": state.get("direction"),
-        "revision_count": state.get("revision_count", 0),
-        "is_valid_chat": state.get("is_valid_chat", None),
-        "is_cringe": state.get("is_cringe", None),
-        "detected_archetype": getattr(analysis, "detected_archetype", None),
-        "conversation_temperature": getattr(analysis, "conversation_temperature", None),
-        "detected_dialect": getattr(analysis, "detected_dialect", None),
-    }
 
 
 def has_forbidden_punctuation(text: str) -> bool:
@@ -507,8 +493,6 @@ def ocr_extractor_node(state: AgentState) -> AgentState:
     """
     Extracts the verbatim text and participants out of the vision state.
     """
-    t0 = time.monotonic()
-    logger.info("agent_ocr_start", **_state_meta(state))
     image_url = _encode_image_from_state(state)
 
     llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite-preview", temperature=0).with_structured_output(OcrExtractorOutput)
@@ -518,14 +502,12 @@ def ocr_extractor_node(state: AgentState) -> AgentState:
         {"type": "image_url", "image_url": {"url": image_url}},
     ]
 
-    t_call = time.monotonic()
     result = llm.invoke([
         SystemMessage(content=OCR_EXTRACTOR_SYSTEM_PROMPT),
         HumanMessage(content=content)
     ])
     out = cast(OcrExtractorOutput, result)
 
-    logger.info("agent_ocr_done", llm_ms=int((time.monotonic() - t_call) * 1000))
     # Store plain dicts so downstream json.dumps + logging never fails.
     return {**state, "raw_ocr_text": _normalize_raw_ocr_text(out.raw_ocr_text)}
 
@@ -535,8 +517,6 @@ def analyst_node(state: AgentState) -> AgentState:
     LangGraph node that runs the visual analysis on the screenshot and
     populates the `analysis` portion of the AgentState.
     """
-    t0 = time.monotonic()
-    logger.info("agent_analyst_start", **_state_meta(state))
     image_url = _encode_image_from_state(state)
     raw_ocr_text = state.get("raw_ocr_text", [])
     raw_ocr_text_str = json.dumps(
@@ -566,7 +546,6 @@ def analyst_node(state: AgentState) -> AgentState:
         },
     ]
 
-    t_call = time.monotonic()
     result = llm.invoke(
         [
             SystemMessage(content=ANALYST_SYSTEM_PROMPT),
@@ -575,35 +554,6 @@ def analyst_node(state: AgentState) -> AgentState:
     )
 
     analysis = cast(AnalystOutput, result)
-
-    logger.info("analyst_visual_hooks", hooks=getattr(analysis, "visual_hooks", []))
-
-    logger.info(
-        "agent_analyst_done",
-        duration_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=int((time.monotonic() - t_call) * 1000),
-        detected_dialect=analysis.detected_dialect,
-        their_tone=analysis.their_tone,
-        their_effort=analysis.their_effort,
-        conversation_temperature=analysis.conversation_temperature,
-        detected_archetype=analysis.detected_archetype,
-        key_detail=analysis.key_detail,
-        person_name=getattr(analysis, "person_name", "unknown"),
-        stage=getattr(analysis, "stage", "early_talking"),
-        their_last_message=_truncate(getattr(analysis, "their_last_message", "")),
-        transcript_count=len(analysis.visual_transcript),
-        transcript_preview=_truncate(
-            [
-                {
-                    "sender": b.sender,
-                    "quoted_context": b.quoted_context,
-                    "actual_new_message": b.actual_new_message,
-                }
-                for b in analysis.visual_transcript
-            ],
-            max_len=120,
-        ),
-    )
 
     return {
         **state,
@@ -617,8 +567,6 @@ def bouncer_node(state: AgentState) -> AgentState:
     """
     Validates that the provided image is a chat/dating conversation screenshot.
     """
-    t0 = time.monotonic()
-    logger.info("agent_bouncer_start", **_state_meta(state))
     image_url = _encode_image_from_state(state)
 
     llm = ChatGoogleGenerativeAI(
@@ -640,7 +588,6 @@ def bouncer_node(state: AgentState) -> AgentState:
         },
     ]
 
-    t_call = time.monotonic()
     result = llm.invoke(
         [
             SystemMessage(content="You are a strict validator for chat screenshots."),
@@ -649,18 +596,6 @@ def bouncer_node(state: AgentState) -> AgentState:
     )
 
     out = cast(BouncerOutput, result)
-
-    logger.info(
-        "agent_bouncer_done",
-        duration_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=int((time.monotonic() - t_call) * 1000),
-        is_valid_chat=out.is_valid_chat,
-        reason=_truncate(out.reason, max_len=240),
-        image_input_type=type(state.get("image_bytes")).__name__,
-        image_input_len=(
-            len(state.get("image_bytes")) if isinstance(state.get("image_bytes"), str) else None
-        ),
-    )
 
     return {
         **state,
@@ -727,8 +662,6 @@ def strategist_node(state: AgentState) -> AgentState:
     LangGraph node that takes the prior analysis + direction + conversation context
     and decides the psychological strategy only (no actual reply text).
     """
-    t0 = time.monotonic()
-    logger.info("agent_strategist_start", **_state_meta(state))
     analysis = state.get("analysis")
     if analysis is None:
         raise ValueError("Strategist node requires 'analysis' in state.")
@@ -772,7 +705,6 @@ def strategist_node(state: AgentState) -> AgentState:
         model="gemini-3.1-flash-lite-preview", temperature=0.4
     ).with_structured_output(StrategyOutput)
 
-    t_call = time.monotonic()
     result = llm.invoke(
         [
             SystemMessage(content=STRATEGIST_SYSTEM_PROMPT),
@@ -791,16 +723,6 @@ def strategist_node(state: AgentState) -> AgentState:
     )
 
     strategy = cast(StrategyOutput, result)
-
-    logger.info(
-        "agent_strategist_done",
-        duration_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=int((time.monotonic() - t_call) * 1000),
-        wrong_moves=strategy.wrong_moves,
-        right_energy=strategy.right_energy,
-        hook_point=strategy.hook_point,
-        recommended_strategy_label=strategy.recommended_strategy_label,
-    )
 
     return {
         **state,
@@ -840,8 +762,6 @@ def writer_node(state: AgentState) -> AgentState:
     LangGraph node that generates the actual reply text options using the
     analysis, strategy, direction, and rich context dictionaries.
     """
-    t0 = time.monotonic()
-    logger.info("agent_writer_start", **_state_meta(state))
     analysis = state.get("analysis")
     strategy = state.get("strategy")
     if analysis is None or strategy is None:
@@ -853,11 +773,6 @@ def writer_node(state: AgentState) -> AgentState:
     auditor_feedback = state.get("auditor_feedback", "")
 
     temperature = _compute_writer_temperature(state)
-    logger.info(
-        "agent_writer_temperature",
-        **_state_meta(state),
-        temperature=temperature,
-    )
     writer_llm = ChatGoogleGenerativeAI(
         model="gemini-3.1-flash-lite-preview", temperature=temperature
     ).with_structured_output(WriterOutput)
@@ -878,7 +793,6 @@ def writer_node(state: AgentState) -> AgentState:
             f"CRITICAL — match this style in every reply: {semantic_profile}"
         )
 
-    t_call = time.monotonic()
     result = writer_llm.invoke(
         [
             SystemMessage(content=WRITER_SYSTEM_PROMPT),
@@ -887,29 +801,6 @@ def writer_node(state: AgentState) -> AgentState:
     )
 
     drafts = cast(WriterOutput, result)
-
-    logger.info(
-        "agent_writer_done",
-        duration_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=int((time.monotonic() - t_call) * 1000),
-        reply_count=len(drafts.replies),
-        strategy_labels=[r.strategy_label for r in drafts.replies],
-        recommended_index=next(
-            (i for i, r in enumerate(drafts.replies) if r.is_recommended), -1
-        ),
-        replies_preview=_truncate(
-            [
-                {
-                    "text": r.text,
-                    "strategy_label": r.strategy_label,
-                    "is_recommended": r.is_recommended,
-                    "coach_reasoning": r.coach_reasoning,
-                }
-                for r in drafts.replies
-            ],
-            max_len=140,
-        ),
-    )
 
     return {
         **state,
@@ -923,8 +814,6 @@ def auditor_node(state: AgentState) -> AgentState:
     LangGraph node that reviews the drafts as a brutal cringe filter and
     either approves them or returns concrete feedback for revision.
     """
-    t0 = time.monotonic()
-    logger.info("agent_auditor_start", **_state_meta(state))
     drafts = state.get("drafts")
     if drafts is None:
         raise ValueError("Auditor node requires 'drafts' in state.")
@@ -946,7 +835,6 @@ def auditor_node(state: AgentState) -> AgentState:
         model="gemini-3.1-flash-lite-preview", temperature=0
     ).with_structured_output(AuditorOutput)
 
-    t_call = time.monotonic()
     result = llm.invoke(
         [
             SystemMessage(content=AUDITOR_SYSTEM_PROMPT),
@@ -969,17 +857,8 @@ def auditor_node(state: AgentState) -> AgentState:
         logger.warning(
             "auditor_rejection",
             revision=state.get("revision_count", 0),
-            feedback=audit.feedback,
+            feedback=_truncate(audit.feedback, max_len=400),
         )
-
-    logger.info(
-        "agent_auditor_done",
-        duration_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=int((time.monotonic() - t_call) * 1000),
-        is_cringe=audit.is_cringe,
-        feedback=_truncate(audit.feedback, max_len=400),
-        revision_count=state.get("revision_count", 0),
-    )
 
     return {
         **state,

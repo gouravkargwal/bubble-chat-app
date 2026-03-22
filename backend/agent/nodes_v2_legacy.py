@@ -501,7 +501,6 @@ ARCHETYPE STRATEGY — THE BANTER GIRL:
 - Tone: cocky, playful, unbothered. Tease her, misinterpret her in a funny way, or flip tests back.
 - Do NOT be sincere or reassuring — she wants a sparring partner, not a therapist.
 - If she accuses you of something playfully, do NOT confirm or deny. Suspend the tension.""",
-
     "THE INTELLECTUAL": """
 ARCHETYPE STRATEGY — THE INTELLECTUAL:
 - She sent a substantive message with a real topic. Engage with it.
@@ -509,7 +508,6 @@ ARCHETYPE STRATEGY — THE INTELLECTUAL:
 - Tone: witty, thoughtful, culturally aware. Reference ideas, observations, or shared interests.
 - Show depth without writing a lecture — match her message length.
 - Avoid low-effort one-liners; they signal you dont match her investment.""",
-
     "THE WARM/STEADY": """
 ARCHETYPE STRATEGY — THE WARM/STEADY:
 - She is being normal, friendly, and engaged. This is the most common archetype.
@@ -518,7 +516,6 @@ ARCHETYPE STRATEGY — THE WARM/STEADY:
 - Do NOT go full cocky/sarcastic — she is not testing you, she is just talking.
 - Do NOT be overly sincere or serious either — keep it light and fun.
 - This is where most conversations live. Be the fun, confident version of yourself.""",
-
     "THE GUARDED/TESTER": """
 ARCHETYPE STRATEGY — THE GUARDED/TESTER:
 - She is screening you. This is NOT banter — she wants a real answer.
@@ -529,7 +526,6 @@ ARCHETYPE STRATEGY — THE GUARDED/TESTER:
 - Show you have standards and know what you want. Confidence comes from clarity, not mystery.
 - One reply can add a light human touch after the honest answer ("but honestly...").
 - wrong_moves MUST include "being evasive" and "deflecting with humor".""",
-
     "THE EAGER/DIRECT": """
 ARCHETYPE STRATEGY — THE EAGER/DIRECT:
 - She is clearly interested and moving forward. Do NOT play games.
@@ -539,7 +535,6 @@ ARCHETYPE STRATEGY — THE EAGER/DIRECT:
 - If she is flirting explicitly, flirt back but lead toward logistics.
 - Do NOT tease or create artificial tension — she is past that stage.
 - At least one reply should include a concrete next step.""",
-
     "THE LOW-INVESTMENT": """
 ARCHETYPE STRATEGY — THE LOW-INVESTMENT:
 - Her entire message was under 4 words of filler. She is on autopilot.
@@ -559,19 +554,16 @@ DIRECTION — OPENER:
 - A good comment is a playful assumption based on a specific visual detail.
 - Example: "i bet you spent more time picking that camera than actually taking photos with it".
 - Every reply MUST reference a concrete visual detail — generic openers are cringe.""",
-
     "quick_reply": """
 DIRECTION — QUICK REPLY:
 - Standard conversational reply. Respond naturally to what she said.
 - No special constraints — let the archetype strategy guide the tone.""",
-
     "change_topic": """
 DIRECTION — CHANGE TOPIC:
 - Use LONG TERM MEMORY & PROFILE CONTEXT from conversation_context_dict as your ONLY source for new topics.
 - BANNED: pineapple on pizza, zombie apocalypse, teleportation, winning lottery, generic travel questions.
 - Study the topic exhaustion map and do NOT repeat listed themes.
 - Pivot to a genuinely fresh, specific angle grounded in their actual profile or earlier chemistry.""",
-
     "tease": """
 DIRECTION — TEASE:
 - The goal is playful teasing — misinterpret something she said in a funny way, make a cocky observation,
@@ -579,7 +571,6 @@ DIRECTION — TEASE:
 - Tone: cocky-funny, not mean. The tease should make her laugh or roll her eyes, not feel attacked.
 - At least 2 replies should use PUSH-PULL or PATTERN INTERRUPT.
 - Do NOT tease about sensitive topics (appearance, intelligence, family).""",
-
     "revive_chat": """
 DIRECTION — REVIVE CHAT:
 - The conversation has gone quiet. Your job is a high-energy fresh restart.
@@ -587,7 +578,6 @@ DIRECTION — REVIVE CHAT:
   IF it creates a natural callback. You may also ignore it entirely and go fresh.
 - At least one reply should be a bold, unexpected angle (not "hey how are you").
 - At least one reply should reference something from core_lore or past_memories if available.""",
-
     "get_number": """
 DIRECTION — GET NUMBER / MOVE OFF APP:
 - At least one reply MUST include a clear transition to moving off the app.
@@ -595,14 +585,12 @@ DIRECTION — GET NUMBER / MOVE OFF APP:
 - If temperature is "hot", be more direct and confident.
 - If temperature is "warm", frame the close as a natural next step, not a demand.
 - Teasing is allowed ONLY if it still leads to an explicit "move off app" line in that reply.""",
-
     "ask_out": """
 DIRECTION — ASK OUT:
 - The goal is to ASK THEM OUT. Be specific with a concrete plan.
 - Include a place, activity, or time suggestion — not just "we should meet".
 - Match the vibe: if the conversation is playful, frame the ask-out playfully.
 - At least one reply should be a bold, direct ask. At least one can be a softer suggestion.""",
-
     "de_escalate": """
 DIRECTION — DE-ESCALATE:
 - She is upset, annoyed, testing aggressively, or the conversation has gotten tense.
@@ -702,9 +690,7 @@ def vision_node(state: AgentState) -> dict:
 
     Returns partial state update (LangGraph merges into full state).
     """
-    t0 = time.monotonic()
     user_id = state.get("user_id", "")
-    logger.info("agent_v2_vision_start", user_id=user_id)
 
     image_url = _encode_image_from_state(state)
     core_lore = ""
@@ -743,7 +729,6 @@ def vision_node(state: AgentState) -> dict:
         {"type": "image_url", "image_url": {"url": image_url}},
     ]
 
-    t_call = time.monotonic()
     result = llm.invoke(
         [
             SystemMessage(content=VISION_NODE_SYSTEM_PROMPT),
@@ -751,20 +736,6 @@ def vision_node(state: AgentState) -> dict:
         ]
     )
     out = cast(VisionNodeOutput, result)
-    llm_ms = int((time.monotonic() - t_call) * 1000)
-
-    logger.info(
-        "agent_v2_vision_done",
-        total_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=llm_ms,
-        is_valid_chat=out.is_valid_chat,
-        bouncer_reason=_truncate(out.bouncer_reason),
-        detected_dialect=out.detected_dialect,
-        detected_archetype=out.detected_archetype,
-        their_effort=out.their_effort,
-        conversation_temperature=out.conversation_temperature,
-        transcript_count=len(out.visual_transcript),
-    )
 
     if not out.is_valid_chat:
         # Return only the keys this node owns (partial state update)
@@ -833,7 +804,6 @@ def generator_node(state: AgentState) -> dict:
     Uses dynamic temperature from direction × conversation state.
     Returns partial state update (LangGraph merges into full state).
     """
-    t0 = time.monotonic()
     user_id = state.get("user_id", "")
     revision_count = state.get("revision_count", 0)
     auditor_feedback = state.get("auditor_feedback", "")
@@ -891,22 +861,6 @@ def generator_node(state: AgentState) -> dict:
     detected_archetype = (
         getattr(analysis, "detected_archetype", "THE LOW-INVESTMENT")
         or "THE LOW-INVESTMENT"
-    )
-
-    logger.info(
-        "agent_v2_generator_start",
-        user_id=user_id,
-        direction=direction,
-        is_rewrite=is_rewrite,
-        revision_count=revision_count,
-        person_name=person_name,
-        detected_archetype=detected_archetype,
-        detected_dialect=getattr(analysis, "detected_dialect", None),
-        their_effort=getattr(analysis, "their_effort", None),
-        conversation_temperature=conversation_temperature,
-        stage=stage,
-        llm_temperature=llm_temperature,
-        transcript_text=_truncate(transcript_text, max_len=120),
     )
 
     payload: dict[str, Any] = {
@@ -971,7 +925,6 @@ def generator_node(state: AgentState) -> dict:
             elapsed_ms=int((time.monotonic() - t_call) * 1000),
         )
         raise
-    llm_ms = int((time.monotonic() - t_call) * 1000)
 
     # --- Validate reply count and fix if needed ---
     gen_out = _validate_and_fix_replies(gen_out)
@@ -984,22 +937,6 @@ def generator_node(state: AgentState) -> dict:
         recommended_strategy_label=gen_out.recommended_strategy_label,
     )
     drafts = WriterOutput(replies=gen_out.replies)
-
-    recommended_idx = next(
-        (i for i, r in enumerate(gen_out.replies) if r.is_recommended), -1
-    )
-
-    logger.info(
-        "agent_v2_generator_done",
-        user_id=user_id,
-        total_ms=int((time.monotonic() - t0) * 1000),
-        llm_ms=llm_ms,
-        llm_temperature=llm_temperature,
-        is_rewrite=is_rewrite,
-        reply_count=len(gen_out.replies),
-        strategy_labels=[r.strategy_label for r in gen_out.replies],
-        recommended_index=recommended_idx,
-    )
 
     return {
         "strategy": strategy,
@@ -1108,7 +1045,6 @@ def auditor_node(state: AgentState) -> dict:
       - is_cringe: True if replies need a rewrite
       - auditor_feedback: Specific instructions for the generator on what to fix
     """
-    t0 = time.monotonic()
     user_id = state.get("user_id", "")
     revision_count = state.get("revision_count", 0)
 
@@ -1130,11 +1066,6 @@ def auditor_node(state: AgentState) -> dict:
 
     # Safety valve: if we've already rewritten max times, approve regardless
     if revision_count > _MAX_REWRITES:
-        logger.info(
-            "auditor_node_max_rewrites_reached",
-            user_id=user_id,
-            revision_count=revision_count,
-        )
         return {"is_cringe": False, "auditor_feedback": ""}
 
     direction = state.get("direction", "quick_reply")
@@ -1168,7 +1099,6 @@ def auditor_node(state: AgentState) -> dict:
         structured_output=AuditorNodeOutput,
     )
 
-    t_call = time.monotonic()
     try:
         result = llm.invoke(
             [
@@ -1187,20 +1117,7 @@ def auditor_node(state: AgentState) -> dict:
         )
         return {"is_cringe": False, "auditor_feedback": ""}
 
-    llm_ms = int((time.monotonic() - t_call) * 1000)
-
     failed_verdicts = [v for v in audit.verdicts if not v.passes]
-
-    logger.info(
-        "agent_v2_auditor_done",
-        user_id=user_id,
-        llm_ms=llm_ms,
-        overall_passes=audit.overall_passes,
-        failed_count=len(failed_verdicts),
-        failed_indices=[v.reply_index for v in failed_verdicts],
-        summary=_truncate(audit.summary, max_len=200),
-        revision_count=revision_count,
-    )
 
     if audit.overall_passes:
         return {"is_cringe": False, "auditor_feedback": ""}

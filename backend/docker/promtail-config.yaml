@@ -1,0 +1,50 @@
+# Ships Docker container logs to Loki. Requires access to the host Docker socket.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    # Applied to every stream on push — fixes 400 "at least one label pair" when buffered
+    # batches survive a container recreate (target labels can be empty for a tick).
+    external_labels:
+      cluster: bubble-chat
+      shipper: promtail
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: [__meta_docker_container_label_logging]
+        regex: ^promtail$
+        action: keep
+      - action: replace
+        source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        regex: (.+)
+        target_label: service_name
+        replacement: $1
+      - action: replace
+        source_labels: [service_name]
+        regex: ^$
+        target_label: service_name
+        replacement: api
+      - action: replace
+        source_labels: [__meta_docker_container_id]
+        regex: (.+)
+        target_label: container_id
+        replacement: $1
+      - action: replace
+        source_labels: [__meta_docker_container_name]
+        regex: "/?(.*)"
+        target_label: container
+        replacement: $1
+    pipeline_stages:
+      # Unwrap Docker json-file lines {"log":"...","stream":"stdout",...} so Loki gets raw app JSON.
+      - docker: {}
+      - static_labels:
+          promtail_scrape: docker

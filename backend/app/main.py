@@ -23,8 +23,6 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    setup_logging(settings.log_level)
-
     if settings.sentry_dsn:
         import sentry_sdk
 
@@ -42,6 +40,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 def create_app() -> FastAPI:
+    setup_logging(settings.log_level, json_logs=settings.log_json)
+
     app = FastAPI(
         title="RizzBot API",
         version="2.0.0",
@@ -82,13 +82,30 @@ def create_app() -> FastAPI:
 
         return response
 
-    # Correlation ID middleware
+    # Correlation ID: header passthrough (gateway / client) or new UUID; bound to structlog
+    # for the whole request so JSON logs shipped to Loki share one correlation_id per lifecycle.
     @app.middleware("http")
     async def add_correlation_id(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
-        request.state.correlation_id = str(uuid.uuid4())
-        response: Response = await call_next(request)
-        response.headers["X-Correlation-ID"] = request.state.correlation_id
-        return response
+        incoming = (
+            request.headers.get("X-Correlation-ID")
+            or request.headers.get("X-Request-ID")
+            or ""
+        ).strip()
+        cid = incoming or str(uuid.uuid4())
+        request.state.correlation_id = cid
+        structlog.contextvars.bind_contextvars(
+            correlation_id=cid,
+            http_method=request.method,
+            http_path=request.url.path,
+        )
+        try:
+            response: Response = await call_next(request)
+            response.headers["X-Correlation-ID"] = cid
+            return response
+        finally:
+            structlog.contextvars.unbind_contextvars(
+                "correlation_id", "http_method", "http_path"
+            )
 
     # Global exception handler — must NOT intercept HTTPException
     @app.exception_handler(Exception)

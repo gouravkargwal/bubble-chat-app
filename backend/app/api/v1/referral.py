@@ -129,17 +129,19 @@ async def apply_referral(
 
     user.referred_by = referrer.id
     now = datetime.now(timezone.utc)
-    
+
     # Stack time for referee (user applying the code)
     if user.god_mode_expires_at and user.god_mode_expires_at > now:
         user.god_mode_expires_at = user.god_mode_expires_at + timedelta(hours=24)
     else:
         user.god_mode_expires_at = now + timedelta(hours=24)
-    
+
     # Stack time for referrer (user who owns the code) - only if not fraud
     if should_grant_reward:
         if referrer.god_mode_expires_at and referrer.god_mode_expires_at > now:
-            referrer.god_mode_expires_at = referrer.god_mode_expires_at + timedelta(hours=24)
+            referrer.god_mode_expires_at = referrer.god_mode_expires_at + timedelta(
+                hours=24
+            )
         else:
             referrer.god_mode_expires_at = now + timedelta(hours=24)
 
@@ -171,8 +173,16 @@ async def apply_referral(
         "referral_applied",
         referee_id=user.id,
         referrer_id=referrer.id,
-        referee_god_mode_expires_at=int(user.god_mode_expires_at.timestamp()) if user.god_mode_expires_at else None,
-        referrer_god_mode_expires_at=int(referrer.god_mode_expires_at.timestamp()) if referrer.god_mode_expires_at else None,
+        referee_god_mode_expires_at=(
+            int(user.god_mode_expires_at.timestamp())
+            if user.god_mode_expires_at
+            else None
+        ),
+        referrer_god_mode_expires_at=(
+            int(referrer.god_mode_expires_at.timestamp())
+            if referrer.god_mode_expires_at
+            else None
+        ),
         duration_hours=24,
         fraud_detected=not should_grant_reward,
         device_id=body.device_id,
@@ -181,5 +191,9 @@ async def apply_referral(
     return ApplyReferralResponse(
         tier_granted="premium",
         duration_hours=24,
-        expires_at=int(user.god_mode_expires_at.timestamp()) if user.god_mode_expires_at else None,
+        expires_at=(
+            int(user.god_mode_expires_at.timestamp())
+            if user.god_mode_expires_at
+            else None
+        ),
     )
