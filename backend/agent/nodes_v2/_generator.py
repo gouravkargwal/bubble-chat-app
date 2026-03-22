@@ -426,6 +426,17 @@ def generator_node(state: AgentState) -> dict:
 
     t_call = time.monotonic()
     phase = "v2_generator_rewrite" if is_rewrite else "v2_generator"
+    logger.info(
+        "llm_lifecycle",
+        stage="generator_node_start",
+        user_id=user_id,
+        direction=direction,
+        detected_archetype=detected_archetype,
+        llm_temperature=llm_temperature,
+        is_rewrite=is_rewrite,
+        revision_count=revision_count,
+        has_custom_hint=bool(custom_hint),
+    )
     try:
         result, usage_row = invoke_structured_gemini(
             model=GENERATOR_MODEL,
@@ -450,6 +461,16 @@ def generator_node(state: AgentState) -> dict:
 
     # --- Validate reply count and fix if needed ---
     gen_out = validate_and_fix_replies(gen_out)
+
+    logger.info(
+        "llm_lifecycle",
+        stage="generator_node_complete",
+        user_id=user_id,
+        phase=phase,
+        elapsed_ms=int((time.monotonic() - t_call) * 1000),
+        recommended_strategy_label=gen_out.recommended_strategy_label,
+        reply_count=len(gen_out.replies),
+    )
 
     # Build StrategyOutput and WriterOutput from GeneratorOutput
     strategy = StrategyOutput(

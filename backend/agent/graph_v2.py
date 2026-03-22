@@ -12,14 +12,26 @@ direction compliance, cringe, diversity, dialect). Style/punctuation fixes are
 handled deterministically by _post_process_replies() in the endpoint layer.
 """
 
+import structlog
 from langgraph.graph import StateGraph, END
 
 from agent.state import AgentState
 from agent.nodes_v2 import vision_node, generator_node, auditor_node
 
+logger = structlog.get_logger(__name__)
+
 
 def check_valid_chat(state: AgentState) -> str:
-    return "generate" if state.get("is_valid_chat", False) else "end"
+    valid = bool(state.get("is_valid_chat", False))
+    route = "generate" if valid else "end"
+    logger.info(
+        "llm_lifecycle",
+        stage="graph_route_after_vision",
+        route=route,
+        user_id=state.get("user_id", ""),
+        bouncer_reason=(state.get("bouncer_reason") or "")[:200] if not valid else "",
+    )
+    return route
 
 
 def check_audit(state: AgentState) -> str:
@@ -32,11 +44,36 @@ def check_audit(state: AgentState) -> str:
     revision_count = state.get("revision_count", 0)
 
     if not is_cringe:
+        logger.info(
+            "llm_lifecycle",
+            stage="graph_route_after_auditor",
+            route="end",
+            user_id=state.get("user_id", ""),
+            revision_count=revision_count,
+            auditor_approved=True,
+        )
         return "end"
 
     if revision_count >= 2:
+        logger.info(
+            "llm_lifecycle",
+            stage="graph_route_after_auditor",
+            route="end",
+            user_id=state.get("user_id", ""),
+            revision_count=revision_count,
+            auditor_approved=True,
+            note="max_rewrites_cap",
+        )
         return "end"
 
+    logger.info(
+        "llm_lifecycle",
+        stage="graph_route_after_auditor",
+        route="rewrite",
+        user_id=state.get("user_id", ""),
+        revision_count=revision_count,
+        auditor_approved=False,
+    )
     return "rewrite"
 
 

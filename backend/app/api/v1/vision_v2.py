@@ -127,6 +127,12 @@ async def _extract_ocr_signals(
             for b in (data.get("extracted_bubbles") or [])
             if isinstance(b, dict) and isinstance(b.get("text"), str) and b["text"].strip()
         ]
+        logger.info(
+            "llm_lifecycle",
+            stage="v2_pre_agent_ocr_signals",
+            person_name=person_name,
+            extracted_bubble_text_count=len(extracted_texts),
+        )
         return person_name, extracted_texts
     except Exception as e:
         logger.error("v2_hybrid_stitch_ocr_failed", error=str(e))
@@ -199,6 +205,18 @@ async def generate_replies_v2(
     else:
         custom_hint = request.custom_hint
 
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_request_begin",
+        endpoint="generate_v2",
+        user_id=user.id,
+        tier=str(effective_tier),
+        direction=request.direction.value,
+        screenshot_count=len(images),
+        conversation_id_supplied=bool(request.conversation_id),
+        has_custom_hint=bool(custom_hint),
+    )
+
     # ------------------------------------------------------------------ #
     # 5. Hybrid Stitch: resolve conversation_id before agent runs
     # ------------------------------------------------------------------ #
@@ -257,12 +275,39 @@ async def generate_replies_v2(
                 conflict_reason=conflict_reason,
                 conflict_detail=payload.get("detail"),
             )
+            logger.info(
+                "llm_lifecycle",
+                stage="v2_hybrid_stitch_requires_confirmation",
+                user_id=user.id,
+                outcome="requires_user_confirmation",
+                ocr_person_name=ocr_person_name,
+                suggested_conversation_id=matched_id,
+            )
             return JSONResponse(status_code=409, content=payload)
 
         if outcome == "auto_stitch" and matched_conversation_id:
             effective_conversation_id = matched_conversation_id
         elif outcome == "new_match":
             new_conversation_person_name = ocr_person_name
+
+        logger.info(
+            "llm_lifecycle",
+            stage="v2_hybrid_stitch",
+            user_id=user.id,
+            outcome=outcome,
+            ocr_person_name=ocr_person_name,
+            extracted_bubble_text_count=len(extracted_texts),
+            effective_conversation_id=effective_conversation_id or "",
+            new_match_person=new_conversation_person_name or "",
+        )
+    else:
+        logger.info(
+            "llm_lifecycle",
+            stage="v2_hybrid_stitch",
+            user_id=user.id,
+            outcome="skipped_client_conversation_id",
+            effective_conversation_id=effective_conversation_id or "",
+        )
 
     # ------------------------------------------------------------------ #
     # 6. Quota: check-only before running the expensive agent
@@ -284,6 +329,15 @@ async def generate_replies_v2(
                 status_code=429,
                 detail="Daily limit reached. Upgrade to Premium for more replies.",
             )
+
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_quota_checked",
+        user_id=user.id,
+        google_quota_enforced=bool(quota_manager),
+        daily_limit=daily_limit,
+        effective_limit=effective_limit,
+    )
 
     # ------------------------------------------------------------------ #
     # 7. Voice DNA — load if tier supports it
@@ -323,6 +377,20 @@ async def generate_replies_v2(
         if convo and convo.is_active:
             conversation_context = await build_conversation_context(convo, db)
 
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_context_ready",
+        user_id=user.id,
+        conversation_id=effective_conversation_id or "",
+        voice_dna_loaded=voice_dna is not None,
+        chemistry_context_loaded=conversation_context is not None,
+        interaction_count=(
+            getattr(conversation_context, "interaction_count", 0)
+            if conversation_context
+            else 0
+        ),
+    )
+
     # ------------------------------------------------------------------ #
     # 9. Build initial state and run the 2-node agent
     # ------------------------------------------------------------------ #
@@ -339,6 +407,14 @@ async def generate_replies_v2(
     # Pass OCR text so vision_node can use it for semantic memory search
     initial_state["ocr_hint_text"] = " ".join(extracted_texts[-2:]) if extracted_texts else ""
 
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_agent_run_start",
+        user_id=user.id,
+        conversation_id=effective_conversation_id or "",
+        ocr_hint_chars=len(initial_state["ocr_hint_text"] or ""),
+    )
+
     try:
         final_state = await _run_v2_agent(initial_state)
     except Exception as e:
@@ -352,6 +428,16 @@ async def generate_replies_v2(
         )
 
     latency_ms = int((time.monotonic() - start) * 1000)
+    usage_log = final_state.get("gemini_usage_log") or []
+    gemini_call_count = len(usage_log) if isinstance(usage_log, list) else 0
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_agent_run_complete",
+        user_id=user.id,
+        latency_ms=latency_ms,
+        is_valid_chat=bool(final_state.get("is_valid_chat", True)),
+        gemini_call_count=gemini_call_count,
+    )
     parsed = _parsed_from_agent_state(final_state)
 
     # Deterministic style post-processing — strip punctuation, force lowercase
@@ -394,6 +480,16 @@ async def generate_replies_v2(
         prompt_variant="v2_2node",
     )
 
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_persist_complete",
+        user_id=user.id,
+        interaction_id=interaction.id,
+        conversation_id=convo.id if convo else "",
+        person_name=parsed.analysis.person_name if parsed else "",
+        detected_stage=parsed.analysis.stage if parsed else "",
+    )
+
     # ------------------------------------------------------------------ #
     # 12. Increment quota now that we have a successful result
     # ------------------------------------------------------------------ #
@@ -405,7 +501,7 @@ async def generate_replies_v2(
     # ------------------------------------------------------------------ #
     # 13. Build and return response
     # ------------------------------------------------------------------ #
-    return build_vision_response(
+    response = build_vision_response(
         parsed=parsed,
         interaction=interaction,
         convo=convo,
@@ -413,3 +509,11 @@ async def generate_replies_v2(
         effective_limit=effective_limit,
         daily_used=daily_used,
     )
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_response_ready",
+        user_id=user.id,
+        interaction_id=interaction.id,
+        usage_remaining=response.usage_remaining,
+    )
+    return response

@@ -127,6 +127,18 @@ class GeminiClient(LlmClient):
                 if not text:
                     raise ValueError("Empty text in Gemini response")
 
+                logger.info(
+                    "llm_lifecycle",
+                    stage="rest_gemini_complete",
+                    phase=usage_phase,
+                    model=model,
+                    prompt_tokens=(usage.get("promptTokenCount") if usage else None),
+                    candidates_tokens=(
+                        usage.get("candidatesTokenCount") if usage else None
+                    ),
+                    total_tokens=(usage.get("totalTokenCount") if usage else None),
+                )
+
                 return text
 
             except httpx.HTTPStatusError as e:

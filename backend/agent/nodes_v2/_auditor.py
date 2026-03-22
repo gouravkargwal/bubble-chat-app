@@ -139,6 +139,12 @@ def auditor_node(state: AgentState) -> dict:
     """
     user_id = state.get("user_id", "")
     revision_count = state.get("revision_count", 0)
+    logger.info(
+        "llm_lifecycle",
+        stage="auditor_node_start",
+        user_id=user_id,
+        revision_count=revision_count,
+    )
 
     analysis = state.get("analysis")
     if isinstance(analysis, dict):
@@ -149,6 +155,13 @@ def auditor_node(state: AgentState) -> dict:
     drafts = state.get("drafts")
     if drafts is None:
         logger.warning("auditor_node_no_drafts", user_id=user_id)
+        logger.info(
+            "llm_lifecycle",
+            stage="auditor_node_complete",
+            user_id=user_id,
+            skipped=True,
+            reason="no_drafts",
+        )
         return {"is_cringe": False, "auditor_feedback": ""}
 
     if isinstance(drafts, dict):
@@ -158,6 +171,13 @@ def auditor_node(state: AgentState) -> dict:
 
     # Safety valve: if we've already rewritten max times, approve regardless
     if revision_count > MAX_REWRITES:
+        logger.info(
+            "llm_lifecycle",
+            stage="auditor_node_complete",
+            user_id=user_id,
+            skipped=True,
+            reason="max_rewrites_skip_audit",
+        )
         return {"is_cringe": False, "auditor_feedback": ""}
 
     direction = state.get("direction", "quick_reply")
@@ -211,11 +231,25 @@ def auditor_node(state: AgentState) -> dict:
             error=str(e),
             error_type=type(e).__name__,
         )
+        logger.info(
+            "llm_lifecycle",
+            stage="auditor_node_complete",
+            user_id=user_id,
+            skipped=True,
+            reason="llm_error_approved",
+        )
         return {"is_cringe": False, "auditor_feedback": ""}
 
     failed_verdicts = [v for v in audit.verdicts if not v.passes]
 
     if audit.overall_passes:
+        logger.info(
+            "llm_lifecycle",
+            stage="auditor_node_complete",
+            user_id=user_id,
+            overall_passes=True,
+            failed_reply_count=0,
+        )
         return {
             "is_cringe": False,
             "auditor_feedback": "",
@@ -226,6 +260,15 @@ def auditor_node(state: AgentState) -> dict:
     feedback_lines = [audit.summary, ""]
     for v in failed_verdicts:
         feedback_lines.append(f"- Reply {v.reply_index}: {v.issue}")
+
+    logger.info(
+        "llm_lifecycle",
+        stage="auditor_node_complete",
+        user_id=user_id,
+        overall_passes=False,
+        failed_reply_count=len(failed_verdicts),
+        summary_preview=(audit.summary or "")[:160],
+    )
 
     return {
         "is_cringe": True,

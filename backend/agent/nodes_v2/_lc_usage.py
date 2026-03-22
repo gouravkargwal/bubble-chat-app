@@ -5,6 +5,7 @@ and attach exact costs via app.llm.gemini_pricing.
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import structlog
@@ -100,6 +101,20 @@ def invoke_structured_gemini(
     """
     cb = GeminiLangChainUsageCallback(phase=phase, model=model)
     llm = build_llm(model=model, temperature=temperature, structured_output=schema)
+    t0 = time.monotonic()
     result = llm.invoke(messages, config={"callbacks": [cb]})
     row = cb.to_usage_row()
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "llm_lifecycle",
+        stage="structured_gemini_complete",
+        phase=phase,
+        model=model,
+        temperature=temperature,
+        elapsed_ms=elapsed_ms,
+        prompt_tokens=row.get("prompt_tokens"),
+        candidates_tokens=row.get("candidates_tokens"),
+        total_tokens=row.get("total_tokens"),
+        cost_usd=row.get("cost_usd"),
+    )
     return result, row

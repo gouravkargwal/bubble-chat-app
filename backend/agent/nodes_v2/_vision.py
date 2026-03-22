@@ -209,13 +209,20 @@ def vision_node(state: AgentState) -> dict:
     Returns partial state update (LangGraph merges into full state).
     """
     user_id = state.get("user_id", "")
+    conversation_id = state.get("conversation_id")
+    logger.info(
+        "llm_lifecycle",
+        stage="vision_node_start",
+        user_id=user_id,
+        conversation_id=conversation_id or "",
+        has_ocr_hint=bool((state.get("ocr_hint_text") or "").strip()),
+    )
 
     image_url = encode_image_from_state(state)
     core_lore = ""
     past_memories = ""
 
     # --- Librarian fetch (before the LLM call so lore is available) ---
-    conversation_id = state.get("conversation_id")
     if conversation_id and user_id:
         try:
             librarian = fetch_librarian_context(
@@ -253,6 +260,13 @@ def vision_node(state: AgentState) -> dict:
     out = cast(VisionNodeOutput, result)
 
     if not out.is_valid_chat:
+        logger.info(
+            "llm_lifecycle",
+            stage="vision_node_complete",
+            is_valid_chat=False,
+            user_id=user_id,
+            bouncer_reason=(out.bouncer_reason or "")[:200],
+        )
         return {
             "is_valid_chat": False,
             "bouncer_reason": out.bouncer_reason,
@@ -291,6 +305,21 @@ def vision_node(state: AgentState) -> dict:
     )
 
     raw_ocr_text = normalize_raw_ocr_text(out.raw_ocr_text)
+
+    logger.info(
+        "llm_lifecycle",
+        stage="vision_node_complete",
+        is_valid_chat=True,
+        user_id=user_id,
+        bubble_count=len(raw_ocr_text),
+        detected_archetype=out.detected_archetype,
+        detected_dialect=out.detected_dialect,
+        conversation_temperature=out.conversation_temperature,
+        analysis_stage=out.stage,
+        person_name=out.person_name,
+        core_lore_chars=len(core_lore or ""),
+        past_memories_chars=len(past_memories or ""),
+    )
 
     return {
         "is_valid_chat": True,
