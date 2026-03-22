@@ -79,7 +79,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rizzbot.v2.domain.model.TierQuota
-import com.rizzbot.v2.ui.paywall.PaywallDialog
 import kotlinx.coroutines.delay
 
 enum class PhotoTier {
@@ -117,6 +116,13 @@ fun ProfileAuditorScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val maxPhotos = state.maxPhotosPerAudit
+
+    LaunchedEffect(state.showPaywall) {
+        if (state.showPaywall) {
+            onShowPaywall()
+            viewModel.dismissPaywall()
+        }
+    }
 
     val weeklyAuditLimit = state.profileAuditsPerWeek
     val weeklyAuditsUsed = state.weeklyAuditsUsed.coerceAtLeast(0)
@@ -557,12 +563,6 @@ fun ProfileAuditorScreen(
         }
     }
     
-    // Paywall Dialog
-    if (state.showPaywall) {
-        PaywallDialog(
-            onDismiss = { viewModel.dismissPaywall() }
-        )
-    }
 }
 
 @Composable

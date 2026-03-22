@@ -53,7 +53,6 @@ import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
 import com.rizzbot.v2.overlay.ui.theme.OverlayShapes
 import com.rizzbot.v2.ui.theme.LocalAppGodMode
-import com.rizzbot.v2.ui.paywall.PaywallDialog
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -73,8 +72,6 @@ fun BubbleOverlay(
     isGalleryMode: StateFlow<Boolean>,
     onEvent: (OverlayEvent) -> Unit,
     onCollapsedOverlayMotionEvent: (MotionEvent) -> Boolean,
-    showPaywall: Boolean = false,
-    onDismissPaywall: () -> Unit = {}
 ) {
     val currentState by state.collectAsState()
     val usage by usageState.collectAsState()
@@ -176,10 +173,6 @@ fun BubbleOverlay(
                     onEvent = onEvent
                 )
             }
-            }
-
-            if (showPaywall) {
-                PaywallDialog(onDismiss = onDismissPaywall)
             }
         }
     }

@@ -104,8 +104,6 @@ class BubbleManager @Inject constructor(
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Hidden)
     val state: StateFlow<BubbleState> = _state.asStateFlow()
 
-    private val _showPaywall = MutableStateFlow(false)
-    val showPaywall: StateFlow<Boolean> = _showPaywall.asStateFlow()
 
     // Public flow for UI to check if bubble is actually visible (not just pref = true).
     // Must not use [ensureScope]: that scope is cancelled in [hide] and would stop updates.
@@ -377,7 +375,6 @@ class BubbleManager @Inject constructor(
         val params = createParams(isFullScreenState(_state.value))
         val view = ComposeView(context).apply {
             setContent {
-                val showPaywallState by _showPaywall.collectAsState()
                 BubbleOverlay(
                     state = _state,
                     usageState = hostedRepository.usageState,
@@ -385,8 +382,6 @@ class BubbleManager @Inject constructor(
                     isGalleryMode = isGalleryMode,
                     onEvent = { handleEvent(it) },
                     onCollapsedOverlayMotionEvent = { event -> handleCollapsedOverlayMotionEvent(this@apply, event) },
-                    showPaywall = showPaywallState,
-                    onDismissPaywall = { _showPaywall.value = false }
                 )
             }
         }

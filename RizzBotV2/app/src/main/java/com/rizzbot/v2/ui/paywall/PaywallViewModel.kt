@@ -14,6 +14,7 @@ import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.revenuecat.purchases.interfaces.ReceiveOfferingsCallback
 import com.rizzbot.v2.data.subscription.SubscriptionManager
 import com.rizzbot.v2.util.HapticHelper
+import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,9 @@ class PaywallViewModel @Inject constructor(
     private val _state = MutableStateFlow(PaywallState())
     val state: StateFlow<PaywallState> = _state.asStateFlow()
 
+    /** Live app tier + limits (same source as Settings) for paywall context copy */
+    val usageState: StateFlow<UsageState> = hostedRepository.usageState
+
     init {
         fetchOfferings()
         observeActiveTier()
@@ -93,6 +97,10 @@ class PaywallViewModel @Inject constructor(
                 }
             }
         )
+    }
+
+    fun retryLoadOfferings() {
+        fetchOfferings()
     }
 
     private fun fetchOfferings() {
@@ -224,16 +232,18 @@ class PaywallViewModel @Inject constructor(
 
                 override fun onError(error: PurchasesError, userCancelled: Boolean) {
                     val errorMessage = if (userCancelled) {
-                        "Purchase cancelled"
+                        null
                     } else {
                         "Purchase failed: ${error.message}"
                     }
-                    Log.e("PaywallViewModel", errorMessage)
-                    _state.update { 
+                    if (!userCancelled) {
+                        Log.e("PaywallViewModel", "Purchase failed: ${error.message}")
+                    }
+                    _state.update {
                         it.copy(
                             purchaseError = errorMessage,
                             purchaseSuccess = false
-                        ) 
+                        )
                     }
                 }
             }
