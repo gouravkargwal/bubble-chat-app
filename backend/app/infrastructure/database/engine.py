@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -10,6 +11,8 @@ async def init_db() -> None:
     from app.infrastructure.database.models import Base
 
     async with engine.begin() as conn:
+        # pgvector type is only available after this; initdb scripts also run it on fresh volumes.
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
 
 

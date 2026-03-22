@@ -4,6 +4,7 @@ services:
     env_file: .env.prod # <--- Read everything from here!
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cookd}"]
       interval: 10s
