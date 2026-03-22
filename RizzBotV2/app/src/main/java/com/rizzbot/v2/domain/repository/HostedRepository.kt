@@ -1,6 +1,7 @@
 package com.rizzbot.v2.domain.repository
 
 import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
+import com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse
 import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
@@ -8,6 +9,7 @@ import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.ReferralInfo
 import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.domain.model.UsageState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 interface HostedRepository {
@@ -40,11 +42,15 @@ interface HostedRepository {
     // Billing
     suspend fun verifyPurchase(purchaseToken: String, productId: String, orderId: String?): Boolean
 
-    // Profile Auditor
-    suspend fun uploadPhotosForAudit(
+    // Profile Auditor (async job-based)
+    suspend fun submitAuditJob(
         compressedPhotos: List<ByteArray>,
         lang: String? = null
-    ): Result<AuditResponse>
+    ): Result<String>  // Returns job_id
+
+    suspend fun pollAuditJobUntilDone(jobId: String): Result<AuditResponse>
+
+    fun streamAuditProgress(jobId: String): Flow<AuditJobStatusResponse>
     suspend fun getProfileAuditHistory(limit: Int = 20, offset: Int = 0): List<com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto>
     suspend fun deleteProfileAuditPhoto(photoId: String): Result<Unit>
     suspend fun downloadProfileAuditShareCard(): Result<ByteArray>

@@ -28,3 +28,7 @@ static/
 alembic/**/__pycache__/
 firebase/
 
+# OCI secrets — never commit real config or *.pem (template: oci/config.example)
+oci/*
+!oci/config.example
+

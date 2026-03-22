@@ -243,3 +243,22 @@ class AuditedPhotoListResponse(BaseModel):
     total_count: int
     limit: int
     offset: int
+
+
+# Profile Audit Job (async processing)
+from app.models.profile_auditor import AuditResponse  # noqa: E402
+
+
+class AuditJobSubmitResponse(BaseModel):
+    job_id: str
+    status: str = "pending"
+
+
+class AuditJobStatusResponse(BaseModel):
+    job_id: str
+    status: str  # pending, processing, completed, failed
+    progress_current: int = 0
+    progress_total: int = 0
+    progress_step: str = "uploading"  # uploading, reading, dedup_check, analyzing, saving, done
+    error: str | None = None
+    result: AuditResponse | None = None

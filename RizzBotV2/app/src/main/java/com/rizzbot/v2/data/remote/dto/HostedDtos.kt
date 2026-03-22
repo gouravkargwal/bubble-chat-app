@@ -274,6 +274,25 @@ data class AuditedPhotoListResponse(
     val offset: Int
 )
 
+// ── Profile Audit Job (async processing) ──
+
+@Serializable
+data class AuditJobSubmitResponse(
+    @SerialName("job_id") val jobId: String,
+    val status: String = "pending"
+)
+
+@Serializable
+data class AuditJobStatusResponse(
+    @SerialName("job_id") val jobId: String,
+    val status: String,
+    @SerialName("progress_current") val progressCurrent: Int = 0,
+    @SerialName("progress_total") val progressTotal: Int = 0,
+    @SerialName("progress_step") val progressStep: String = "uploading",
+    val error: String? = null,
+    val result: AuditResponse? = null
+)
+
 // ── Profile Optimizer ──
 
 @Serializable

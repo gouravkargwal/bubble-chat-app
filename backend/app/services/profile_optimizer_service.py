@@ -2,10 +2,11 @@
 
 import json
 import time
+import uuid
 from typing import Any
 
 import structlog
-from sqlalchemy import Select, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,7 @@ from app.config import settings
 from app.infrastructure.database.models import (
     AuditedPhoto,
     BlueprintSlot,
+    BlueprintUniversalPrompt,
     ProfileBlueprint as ProfileBlueprintDB,
 )
 from app.llm.gemini_client import GeminiClient
@@ -21,6 +23,23 @@ from app.schemas.profile_blueprint import ProfileBlueprintResponse
 
 logger = structlog.get_logger()
 
+# Allowlist guards against prompt injection via the lang query parameter.
+ALLOWED_LANGS: frozenset[str] = frozenset(
+    {
+        "English",
+        "Hindi",
+        "Hinglish",
+        "Gen-Z Slang",
+        "Spanish",
+        "French",
+        "Portuguese",
+        "Tamil",
+        "Telugu",
+    }
+)
+
+# Absolute maximum slots — kept in sync with the JSON schema and Pydantic model.
+MAX_BLUEPRINT_SLOTS = 6
 
 PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
@@ -28,7 +47,7 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
         "slots": {
             "type": "ARRAY",
             "minItems": 1,
-            "maxItems": 6,
+            "maxItems": MAX_BLUEPRINT_SLOTS,
             "items": {
                 "type": "OBJECT",
                 "properties": {
@@ -36,7 +55,7 @@ PROFILE_BLUEPRINT_SCHEMA: dict[str, Any] = {
                     "slot_number": {
                         "type": "INTEGER",
                         "minimum": 1,
-                        "maximum": 6,
+                        "maximum": MAX_BLUEPRINT_SLOTS,
                     },
                     "role": {"type": "STRING"},
                     "caption": {"type": "STRING"},
@@ -98,32 +117,131 @@ def _get_client() -> GeminiClient:
     return _client
 
 
+def _validate_lang(lang: str) -> str:
+    """Return lang if it is in the allowlist, otherwise fall back to English.
+
+    This prevents prompt injection via the lang query parameter.
+    """
+    if lang not in ALLOWED_LANGS:
+        logger.warning("blueprint_lang_rejected", lang=lang)
+        return "English"
+    return lang
+
+
 async def _fetch_top_audited_photos(
     user_id: str, db: AsyncSession
 ) -> list[AuditedPhoto]:
-    """Fetch up to 10 highest scoring audited photos for a user (score >= 6)."""
-    stmt: Select[tuple[AuditedPhoto]] = (
+    """Fetch up to MAX_BLUEPRINT_SLOTS highest-scoring audited photos (score >= 6).
+
+    The fetch limit is capped at MAX_BLUEPRINT_SLOTS so the LLM receives exactly
+    as many photos as the schema allows slots — no schema/prompt contradiction.
+    """
+    result = await db.execute(
         select(AuditedPhoto)
         .where(AuditedPhoto.user_id == user_id, AuditedPhoto.score >= 6)
         .order_by(AuditedPhoto.score.desc(), AuditedPhoto.created_at.desc())
-        .limit(10)
+        .limit(MAX_BLUEPRINT_SLOTS)
     )
-    result = await db.execute(stmt)
-    photos: list[AuditedPhoto] = list(result.scalars().all())
-    return photos
+    return list(result.scalars().all())
+
+
+def _derive_image_url(storage_path: str) -> str:
+    """Derive a full image URL from a storage path at read time.
+
+    Deriving at read time (rather than baking in base_url at write time) means
+    URL records stay valid across domain changes and CDN migrations.
+    """
+    return f"{settings.base_url.rstrip('/')}/static/{storage_path.lstrip('/')}"
+
+
+def _build_blueprint_response(db_blueprint: ProfileBlueprintDB) -> ProfileBlueprintResponse:
+    """Construct a ProfileBlueprintResponse from a fully-loaded ORM object.
+
+    Expects db_blueprint.slots and db_blueprint.universal_prompts to be loaded
+    (either via selectinload or because they were just added to the session).
+    """
+    slot_responses = sorted(
+        [
+            {
+                "id": s.id,
+                "photo_id": s.photo_id,
+                "slot_number": s.slot_number,
+                "role": s.role,
+                "caption": s.caption,
+                "universal_hook": s.universal_hook,
+                "hinge_prompt": s.hinge_prompt,
+                "aisle_prompt": s.aisle_prompt,
+                # Re-derive from storage_path when available so the URL stays
+                # fresh even if base_url has changed since the record was created.
+                "image_url": (
+                    _derive_image_url(s.storage_path)
+                    if s.storage_path
+                    else s.image_url
+                ),
+            }
+            for s in db_blueprint.slots
+        ],
+        key=lambda x: x["slot_number"],
+    )
+
+    universal_prompts = (
+        [
+            {"category": up.category, "suggested_text": up.suggested_text}
+            for up in db_blueprint.universal_prompts
+        ]
+        or None
+    )
+
+    return ProfileBlueprintResponse(
+        id=db_blueprint.id,
+        user_id=db_blueprint.user_id,
+        overall_theme=db_blueprint.overall_theme,
+        bio=db_blueprint.bio,
+        created_at=db_blueprint.created_at,
+        slots=slot_responses,
+        universal_prompts=universal_prompts,
+    )
 
 
 async def generate_blueprint(
     user_id: str,
     db: AsyncSession,
     lang: str = "English",
+    idempotency_key: str | None = None,
 ) -> ProfileBlueprintResponse:
     """Generate a ProfileBlueprint from a user's top audited photos using Gemini.
 
-    The LLM receives only previously audited photos, and must select exactly six
-    of them with slots 1–6. The JSON response is validated against a strict
-    schema and then enriched with concrete storage URLs for each selected photo.
+    If idempotency_key is provided and a blueprint with that key already exists,
+    the existing blueprint is returned without calling the LLM again — protecting
+    against double-charges on network retries or double-taps.
+
+    The LLM receives up to MAX_BLUEPRINT_SLOTS previously audited photos and
+    assigns each a slot number 1–N. The JSON response is validated against a
+    strict schema and saved to DB within the caller's transaction.
     """
+    # --- Idempotency check --------------------------------------------------
+    if idempotency_key:
+        existing_result = await db.execute(
+            select(ProfileBlueprintDB)
+            .where(ProfileBlueprintDB.idempotency_key == idempotency_key)
+            .options(
+                selectinload(ProfileBlueprintDB.slots),
+                selectinload(ProfileBlueprintDB.universal_prompts),
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            logger.info(
+                "profile_blueprint_idempotency_hit",
+                user_id=user_id,
+                idempotency_key=idempotency_key,
+                blueprint_id=existing.id,
+            )
+            return _build_blueprint_response(existing)
+
+    # --- Input validation ---------------------------------------------------
+    lang = _validate_lang(lang)
+
     photos = await _fetch_top_audited_photos(user_id=user_id, db=db)
     if not photos:
         raise ValueError("No eligible audited photos found for this user.")
@@ -184,12 +302,11 @@ async def generate_blueprint(
         f"{photos_json}"
     )
 
+    # --- LLM call -----------------------------------------------------------
     client = _get_client()
     start_time = time.monotonic()
 
     try:
-        # Use the vision_generate helper in text-only mode with an empty image list
-        # so we can take advantage of responseSchema + JSON mime type.
         raw = await client.vision_generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -234,26 +351,37 @@ async def generate_blueprint(
         )
         raise ValueError("Failed to parse profile blueprint response") from exc
 
-    # Build lookup map for storage URL construction
+    # --- Persist to DB (within caller's transaction) -----------------------
     photos_by_id = {photo.id: photo for photo in photos}
 
-    # Save to database (within the caller's transaction)
     db_blueprint = ProfileBlueprintDB(
+        id=str(uuid.uuid4()),
         user_id=user_id,
         overall_theme=blueprint.overall_theme,
         bio=blueprint.bio,
+        idempotency_key=idempotency_key,
     )
     db.add(db_blueprint)
-    await db.flush()  # Flush to get the blueprint.id
 
-    # Create BlueprintSlot records (store image_url so history is recreatable even if photo is deleted)
+    db_slots: list[BlueprintSlot] = []
     for slot in blueprint.slots:
         matching_photo = photos_by_id.get(slot.photo_id)
         if not matching_photo:
-            continue  # Skip invalid photo references
+            # The LLM hallucinated a photo_id that was never sent — treat as a
+            # hard error so the caller can rollback and refund quota.
+            logger.warning(
+                "blueprint_slot_unknown_photo",
+                slot_photo_id=slot.photo_id,
+                user_id=user_id,
+                available_ids=list(photos_by_id.keys()),
+            )
+            raise ValueError(
+                f"Blueprint references unknown photo '{slot.photo_id}'. "
+                "Please try again."
+            )
 
-        stored_image_url = f"{settings.base_url.rstrip('/')}/static/{matching_photo.storage_path.lstrip('/')}"
         db_slot = BlueprintSlot(
+            id=str(uuid.uuid4()),
             blueprint_id=db_blueprint.id,
             photo_id=slot.photo_id,
             slot_number=slot.slot_number,
@@ -262,55 +390,31 @@ async def generate_blueprint(
             universal_hook=slot.contextual_hook,
             hinge_prompt=slot.hinge_prompt,
             aisle_prompt=slot.aisle_prompt,
-            image_url=stored_image_url,
+            coach_reasoning=slot.coach_reasoning,
+            storage_path=matching_photo.storage_path,
+            # image_url cached for backward compat; prefer deriving from storage_path at read time.
+            image_url=_derive_image_url(matching_photo.storage_path),
         )
         db.add(db_slot)
+        db_slots.append(db_slot)
 
-    # NOTE: We do not commit here — the caller controls the transaction, so quota
-    # and blueprint creation succeed or fail together.
-
-    # Reload blueprint with slots relationship within the same transaction
-    result = await db.execute(
-        select(ProfileBlueprintDB)
-        .where(ProfileBlueprintDB.id == db_blueprint.id)
-        .options(selectinload(ProfileBlueprintDB.slots))
-    )
-    db_blueprint = result.scalar_one()
-
-    # Build response schema (excludes coach_reasoning and other internal fields)
-    slot_responses = []
-    for db_slot in db_blueprint.slots:
-        slot_responses.append(
-            {
-                "id": db_slot.id,
-                "photo_id": db_slot.photo_id,
-                "slot_number": db_slot.slot_number,
-                "role": db_slot.role,
-                "caption": db_slot.caption,
-                "universal_hook": db_slot.universal_hook,
-                "hinge_prompt": db_slot.hinge_prompt,
-                "aisle_prompt": db_slot.aisle_prompt,
-                "image_url": db_slot.image_url,
-            }
+    db_universal_prompts: list[BlueprintUniversalPrompt] = []
+    for up in blueprint.universal_prompts:
+        db_up = BlueprintUniversalPrompt(
+            id=str(uuid.uuid4()),
+            blueprint_id=db_blueprint.id,
+            category=up.category,
+            suggested_text=up.suggested_text,
         )
+        db.add(db_up)
+        db_universal_prompts.append(db_up)
 
-    # Sort slots by slot_number
-    slot_responses.sort(key=lambda x: x["slot_number"])
+    # Flush to validate DB constraints before we hand the response back.
+    # We do NOT commit here — the caller controls the transaction so quota
+    # and blueprint creation succeed or fail atomically.
+    await db.flush()
 
-    # Include universal_prompts from the LLM response (not saved to DB)
-    universal_prompts_response = None
-    if blueprint.universal_prompts:
-        universal_prompts_response = [
-            {"category": prompt.category, "suggested_text": prompt.suggested_text}
-            for prompt in blueprint.universal_prompts
-        ]
-
-    return ProfileBlueprintResponse(
-        id=db_blueprint.id,
-        user_id=db_blueprint.user_id,
-        overall_theme=db_blueprint.overall_theme,
-        bio=db_blueprint.bio,
-        created_at=db_blueprint.created_at,
-        slots=slot_responses,
-        universal_prompts=universal_prompts_response,
-    )
+    # Build response from in-memory objects — no extra DB round-trip needed.
+    db_blueprint.slots = db_slots
+    db_blueprint.universal_prompts = db_universal_prompts
+    return _build_blueprint_response(db_blueprint)

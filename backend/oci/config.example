@@ -1,0 +1,10 @@
+# Copy to config (same folder) and fill in real values. Never commit config or *.pem.
+# The [DEFAULT] line is required — without it you get: MissingSectionHeaderError
+
+[DEFAULT]
+user=ocid1.user.oc1.<REGION>.aaaaaaaaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+fingerprint=aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99
+tenancy=ocid1.tenancy.oc1..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+region=ap-hyderabad-1
+# Docker (compose mounts backend at /app): use /app/oci/...
+key_file=/app/oci/your-api-key.pem

@@ -508,10 +508,10 @@ class HostedRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun uploadPhotosForAudit(
+    override suspend fun submitAuditJob(
         compressedPhotos: List<ByteArray>,
         lang: String?
-    ): Result<AuditResponse> {
+    ): Result<String> {
         return try {
             if (compressedPhotos.isEmpty()) {
                 return Result.failure(IllegalArgumentException("No photos to upload"))
@@ -527,11 +527,11 @@ class HostedRepositoryImpl @Inject constructor(
                 )
             }
 
-            val response = hostedApi.auditProfilePhotos(parts, lang)
+            val response = hostedApi.submitAuditJob(parts, lang)
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null) {
-                    Result.success(body)
+                    Result.success(body.jobId)
                 } else {
                     Result.failure(Exception("Empty response from server"))
                 }
@@ -545,6 +545,73 @@ class HostedRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    override suspend fun pollAuditJobUntilDone(jobId: String): Result<com.rizzbot.v2.data.remote.dto.AuditResponse> {
+        val maxAttempts = 60 // 60 * 2s = 2 minute timeout
+        return try {
+            repeat(maxAttempts) {
+                val status = hostedApi.getAuditJobStatus(jobId)
+                when (status.status) {
+                    "completed" -> {
+                        val result = status.result
+                            ?: return Result.failure(Exception("Job completed but no result"))
+                        return Result.success(result)
+                    }
+                    "failed" -> {
+                        return Result.failure(Exception(status.error ?: "Audit processing failed"))
+                    }
+                    else -> {
+                        kotlinx.coroutines.delay(2000)
+                    }
+                }
+            }
+            Result.failure(Exception("Audit timed out. Please try again."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun streamAuditProgress(jobId: String): kotlinx.coroutines.flow.Flow<com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse> {
+        return kotlinx.coroutines.flow.flow {
+            val maxAttempts = 90 // 90 * 1.5s = ~2 minute timeout
+            var attempts = 0
+            var consecutiveErrors = 0
+            while (attempts < maxAttempts) {
+                attempts++
+                try {
+                    val status = hostedApi.getAuditJobStatus(jobId)
+                    consecutiveErrors = 0 // Reset on success
+                    emit(status)
+                    if (status.status == "completed" || status.status == "failed") {
+                        return@flow
+                    }
+                } catch (e: Exception) {
+                    consecutiveErrors++
+                    android.util.Log.w("HostedRepo", "streamAuditProgress poll error #$consecutiveErrors: ${e.message}")
+                    // Give up after 3 consecutive network errors
+                    if (consecutiveErrors >= 3) {
+                        emit(
+                            com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse(
+                                jobId = jobId,
+                                status = "failed",
+                                error = "Connection lost. Please check your network and try again."
+                            )
+                        )
+                        return@flow
+                    }
+                }
+                kotlinx.coroutines.delay(1500)
+            }
+            // Timed out
+            emit(
+                com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse(
+                    jobId = jobId,
+                    status = "failed",
+                    error = "Audit timed out. Please try again."
+                )
+            )
         }
     }
 

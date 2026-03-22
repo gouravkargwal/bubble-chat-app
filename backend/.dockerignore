@@ -24,6 +24,9 @@ dist/
 .env.*
 !.env.example
 
+# OCI keys (use bind mount in dev; inject in prod — never bake into image)
+oci/
+
 # Large or irrelevant for the image
 .langgraph_api/
 profile_results.html

@@ -2,6 +2,8 @@ package com.rizzbot.v2.data.remote.api
 
 import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
 import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
+import com.rizzbot.v2.data.remote.dto.AuditJobSubmitResponse
+import com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse
 import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.data.remote.dto.AuthResponse
 import com.rizzbot.v2.data.remote.dto.BillingStatusResponse
@@ -100,13 +102,18 @@ interface HostedApi {
     @GET("api/v1/preferences")
     suspend fun getUserPreferences(): UserPreferencesResponse
 
-    // Profile Auditor
+    // Profile Auditor (async job-based)
     @Multipart
     @POST("api/v1/profile-audit")
-    suspend fun auditProfilePhotos(
+    suspend fun submitAuditJob(
         @Part images: List<MultipartBody.Part>,
         @Query("lang") lang: String? = null
-    ): Response<AuditResponse>
+    ): Response<AuditJobSubmitResponse>
+
+    @GET("api/v1/profile-audit/{job_id}/status")
+    suspend fun getAuditJobStatus(
+        @Path("job_id") jobId: String
+    ): AuditJobStatusResponse
 
     @GET("api/v1/profile-audit/history")
     suspend fun getProfileAuditHistory(

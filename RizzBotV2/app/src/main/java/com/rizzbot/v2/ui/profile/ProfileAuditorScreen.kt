@@ -229,8 +229,14 @@ fun ProfileAuditorScreen(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             if (state.isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color.Black,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Analyzing...",
+                                    text = state.auditProgress?.displayText ?: "Submitting...",
                                     color = Color.Black,
                                     fontSize = 15.sp
                                 )
@@ -390,7 +396,7 @@ fun ProfileAuditorScreen(
 
             when {
                 state.isLoading -> {
-                    ProfileAuditorSkeleton()
+                    AuditProgressView(progress = state.auditProgress ?: AuditProgress())
                 }
                 state.result != null -> {
                     val result = state.result
@@ -481,6 +487,82 @@ private fun SkeletonTextLines(modifier: Modifier = Modifier, lines: Int = 3) {
 }
 
 @Composable
+private fun AuditProgressView(progress: AuditProgress) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Animated progress ring
+        Box(contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(
+                progress = { if (progress.progress > 0f) progress.progress else 0f },
+                modifier = Modifier.size(100.dp),
+                color = Color(0xFFFFD700),
+                trackColor = Color(0xFF252542),
+                strokeWidth = 6.dp,
+            )
+            // Indeterminate spinner overlay when progress is 0
+            if (progress.progress <= 0f) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(100.dp),
+                    color = Color(0xFFFFD700).copy(alpha = 0.5f),
+                    strokeWidth = 4.dp,
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (progress.total > 0 && progress.current > 0) {
+                    Text(
+                        text = "${progress.current}/${progress.total}",
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                }
+            }
+        }
+
+        // Step description
+        Text(
+            text = progress.displayText,
+            color = Color.White,
+            fontSize = 16.sp,
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        // Fun roasting messages that rotate
+        val roastingMessages = listOf(
+            "Judging your selfie game...",
+            "Checking for bathroom mirrors...",
+            "Analyzing cringe levels...",
+            "Rating your main character energy...",
+            "Scanning for red flags..."
+        )
+        var messageIndex by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(2500)
+                messageIndex = (messageIndex + 1) % roastingMessages.size
+            }
+        }
+        Text(
+            text = roastingMessages[messageIndex],
+            color = Color.Gray,
+            fontSize = 13.sp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Skeleton cards underneath
+        repeat(2) {
+            SkeletonAuditCard()
+        }
+    }
+}
+
+@Composable
 private fun ProfileAuditorSkeleton() {
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -492,7 +574,7 @@ private fun ProfileAuditorSkeleton() {
                 .height(24.dp)
                 .shimmerEffect()
         )
-        
+
         // Skeleton audit cards
         repeat(3) {
             SkeletonAuditCard()

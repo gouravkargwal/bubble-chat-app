@@ -1,31 +1,48 @@
-from functools import lru_cache
+import asyncio
+import json
+import time
 from io import BytesIO
 from pathlib import Path
 from typing import Tuple
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi import Response
+from fastapi.responses import StreamingResponse
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from sqlalchemy import Date, cast, desc, func, select
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user
-from app.api.v1.schemas.schemas import AuditedPhotoItem, AuditedPhotoListResponse
+from app.api.v1.schemas.schemas import (
+    AuditedPhotoItem,
+    AuditedPhotoListResponse,
+    AuditJobStatusResponse,
+    AuditJobSubmitResponse,
+)
 from app.config import settings
 from app.core.tier_config import TIER_CONFIG
 from app.domain.tiers import get_effective_tier
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import AuditedPhoto, BlueprintSlot, User
+from app.infrastructure.database.models import AuditedPhoto, AuditJob, BlueprintSlot, User
+from app.infrastructure.oci_storage import (
+    delete as oci_delete,
+    get_bytes as oci_get_bytes,
+    get_signed_url as oci_get_signed_url,
+    upload as oci_upload,
+)
 from app.models.profile_auditor import AuditResponse
-from app.services.profile_auditor_service import analyze_profile_photos
+from app.services.audit_worker import process_audit_job
 from app.services.quota_manager import QuotaExceededException, QuotaManager
-
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/profile-audit", tags=["Profile Auditor"])
+
+# Endpoint-specific rate limiter (stricter than the global 120/min default)
+limiter = Limiter(key_func=get_remote_address)
 
 STATIC_ROOT = Path("static")
 CARD_WIDTH = 1080
@@ -258,19 +275,18 @@ def _composite_shadow(
     return Image.alpha_composite(card, shadow)
 
 
-def _paste_photo(
+def _paste_photo_from_bytes(
     card: Image.Image,
-    storage_path: str,
+    photo_bytes: bytes,
     left: int,
     top: int,
     width: int,
     height: int,
     corner_radius: int = 40,
 ) -> Image.Image:
-    """Load, crop-to-fill, round-corner mask, and paste a photo onto the card."""
-    photo_path = STATIC_ROOT / storage_path
+    """Load photo from bytes, crop-to-fill, round-corner mask, and paste onto the card."""
     try:
-        with Image.open(photo_path).convert("RGB") as raw:
+        with Image.open(BytesIO(photo_bytes)).convert("RGB") as raw:
             rw, rh = raw.size
             target_r = width / height
             current_r = rw / rh
@@ -420,43 +436,17 @@ def _draw_divider(
 # ─── Main Renderer ────────────────────────────────────────────────────
 
 
-@lru_cache(maxsize=256)
-def render_share_card_cached(
-    user_id: str,
-    photo_id: str,
-    storage_path: str,
+def render_share_card(
+    photo_bytes: bytes,
     score: int,
     archetype_title: str,
     roast_summary: str,
     share_card_color: str,
 ) -> bytes:
     """
-    Render a 1080×1920 premium share card. Returns PNG bytes.
+    Render a 1080x1920 premium share card. Returns PNG bytes.
 
-    Layout (top → bottom):
-      ┌────────────────────────────┐
-      │  (aurora glow background)  │
-      │                            │
-      │   ┌──────────────────┐     │
-      │   │  TIER RIBBON     │     │
-      │   │                  │     │
-      │   │     PHOTO        │     │
-      │   │   (4:5 crop)     │     │
-      │   │                  │     │
-      │   │  ┌────────────┐  │     │
-      │   └──┤ RIZZ SCORE ├──┘     │
-      │      └────────────┘        │
-      │                            │
-      │     ── divider ──          │
-      │                            │
-      │     ARCHETYPE TITLE        │
-      │     roast summary text     │
-      │                            │
-      │     ── divider ──          │
-      │                            │
-      │       🔥 cookd.ai         │
-      │    "Get your rizz rated"   │
-      └────────────────────────────┘
+    Now accepts photo bytes directly from OCI instead of a file path.
     """
     base_rgb = parse_hex(share_card_color, default=(168, 85, 247))
     rizz_score = max(0, min(score * 10, 100))
@@ -500,9 +490,9 @@ def render_share_card_cached(
     )
     card = Image.alpha_composite(card, border_layer)
 
-    # Paste actual photo
-    card = _paste_photo(
-        card, storage_path, photo_l, photo_t, photo_w, photo_h, corner_radius=40
+    # Paste actual photo from bytes
+    card = _paste_photo_from_bytes(
+        card, photo_bytes, photo_l, photo_t, photo_w, photo_h, corner_radius=40
     )
 
     # Subtle gradient vignette over bottom of photo (so badge reads well)
@@ -631,8 +621,14 @@ def render_share_card_cached(
     return buf.getvalue()
 
 
-@router.post("", response_model=AuditResponse)
+# ─── Endpoints ────────────────────────────────────────────────────────
+
+
+@router.post("", response_model=AuditJobSubmitResponse)
+@limiter.limit("10/minute")
 async def profile_audit(
+    request: Request,
+    background_tasks: BackgroundTasks,
     images: list[UploadFile] = File(
         ..., description="Up to 12 profile photos for brutal auditing"
     ),
@@ -641,16 +637,34 @@ async def profile_audit(
     lang: str = Query(
         "English", description="Language/dialect for feedback and roasts"
     ),
-) -> AuditResponse:
-    """Brutally audit up to 12 dating profile photos."""
+    x_idempotency_key: str | None = Header(default=None),
+) -> AuditJobSubmitResponse:
+    """Submit photos for async audit. Returns a job_id immediately.
+
+    The client should then connect to GET /profile-audit/{job_id}/stream (SSE)
+    or poll GET /profile-audit/{job_id}/status to track progress and receive results.
+    """
     if not images:
         raise HTTPException(status_code=400, detail="At least one image is required.")
+
+    # Idempotency: if a completed job exists with this key, return its ID
+    if x_idempotency_key:
+        existing_job = await db.execute(
+            select(AuditJob).where(
+                AuditJob.user_id == user.id,
+                AuditJob.idempotency_key == x_idempotency_key,
+            ).limit(1)
+        )
+        cached_job = existing_job.scalar_one_or_none()
+        if cached_job:
+            logger.info("profile_audit_idempotent_hit", key=x_idempotency_key, job_id=cached_job.id)
+            return AuditJobSubmitResponse(job_id=cached_job.id, status=cached_job.status)
 
     effective_tier = get_effective_tier(user)
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
     audits_per_week = tier_config["limits"]["profile_audits_per_week"]
 
-    # 1. Enforce weekly audit limit via QuotaManager when we have a stable Google ID.
+    # Enforce weekly audit limit
     if audits_per_week > 0 and user.google_provider_id:
         qm = QuotaManager(db)
         try:
@@ -664,36 +678,41 @@ async def profile_audit(
                 detail=f"Weekly photo audit limit reached ({audits_per_week}/week). Resets on Monday.",
             )
 
-    # 2. Execute heavy AI/Vision call with explicit transaction control.
-    try:
-        response = await analyze_profile_photos(
-            images=images, user=user, db=db, lang=lang
-        )
-        # 3. SUCCESS: commit quota increment + new audits, release locks.
-        await db.commit()
-        return response
-    except ValueError as e:
-        # Known, user-facing error (bad images, etc.) — rollback to refund quota.
+    # Cap to 12 images
+    upload_images = images[:12]
+
+    # Upload images to temp OCI storage and create job
+    image_keys: list[str] = []
+    for i, upload in enumerate(upload_images):
+        data = await upload.read()
+        if not data:
+            continue
+        temp_key = f"temp-audits/{user.id}/{int(time.time() * 1000)}_{i}.jpg"
+        await oci_upload(temp_key, data, content_type="image/jpeg")
+        image_keys.append(temp_key)
+
+    if not image_keys:
         await db.rollback()
-        logger.error("profile_audit_failed", error=str(e))
-        raise HTTPException(
-            status_code=400, detail=str(e) or "Failed to audit profile photos."
-        ) from e
-    except Exception as e:
-        # Unexpected failure — rollback so quota isn't charged on server error.
-        await db.rollback()
-        logger.error(
-            "profile_audit_unexpected_error",
-            error=str(e),
-            error_type=type(e).__name__,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "An unexpected error occurred while auditing photos. "
-                "Your quota was not charged."
-            ),
-        ) from e
+        raise HTTPException(status_code=400, detail="Failed to read any image data.")
+
+    # Create the job row
+    job = AuditJob(
+        user_id=user.id,
+        status="pending",
+        progress_total=len(image_keys),
+        lang=lang,
+        idempotency_key=x_idempotency_key,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info("profile_audit_job_created", job_id=job.id, images=len(image_keys))
+
+    # Kick off background processing
+    background_tasks.add_task(process_audit_job, job.id, image_keys)
+
+    return AuditJobSubmitResponse(job_id=job.id, status="pending")
 
 
 @router.get("/history", response_model=AuditedPhotoListResponse)
@@ -704,8 +723,6 @@ async def list_profile_audits(
     db: AsyncSession = Depends(get_db),
 ) -> AuditedPhotoListResponse:
     """Return previously audited photos for the current user with pagination."""
-    from sqlalchemy import func, select
-
     # Get total count
     count_result = await db.execute(
         select(func.count(AuditedPhoto.id)).where(AuditedPhoto.user_id == user.id)
@@ -722,10 +739,10 @@ async def list_profile_audits(
     )
     rows = result.scalars().all()
 
-    base_static = settings.base_url.rstrip("/") + "/static/"
     items: list[AuditedPhotoItem] = []
     for row in rows:
-        image_url = base_static + row.storage_path.lstrip("/")
+        # Generate signed URL from OCI
+        image_url = await oci_get_signed_url(row.storage_path)
         items.append(
             AuditedPhotoItem(
                 id=row.id,
@@ -782,23 +799,18 @@ async def delete_profile_audit_photo(
 
     storage_path = photo.storage_path  # keep path before deleting DB row
 
+    # Also delete the share card if it exists
+    share_card_key = f"share-cards/{user.id}/{photo_id}.png"
+
     # 1. Delete the database record FIRST and commit.
     await db.delete(photo)
     await db.commit()
 
     logger.info("profile_audit_delete_db_success", photo_id=photo_id, user_id=user.id)
 
-    # 2. Delete the physical file SECOND.
-    try:
-        file_path = Path("static") / storage_path.lstrip("/")
-        if file_path.exists():
-            file_path.unlink()
-            logger.info("profile_audit_delete_file_removed", path=str(file_path))
-    except Exception as e:
-        # Log only — DB is already consistent; orphaned files can be cleaned later.
-        logger.warning(
-            "profile_audit_delete_file_failed", error=str(e), path=storage_path
-        )
+    # 2. Delete from OCI Object Storage SECOND.
+    await oci_delete(storage_path)
+    await oci_delete(share_card_key)
 
     return {"success": True, "message": "Photo deleted successfully."}
 
@@ -811,11 +823,8 @@ async def get_share_card(
     """
     Generate (or return cached) 1080x1920 shareable roast card for the given user.
 
-    Logic:
-    - Fetch latest audited photos for this user (most recent created_at).
-    - Among that "session", pick the photo with highest score to feature.
-    - Render a branded PNG card using archetype_title, roast_summary, share_card_color.
-    - Use an in-memory LRU cache so repeated requests don't re-render.
+    Share cards are stored in OCI Object Storage
+    cache, avoiding the ~2.5 GB memory leak from caching 256 full-resolution PNGs.
     """
     result = await db.execute(
         select(AuditedPhoto)
@@ -840,11 +849,22 @@ async def get_share_card(
     )
     share_card_color = best_photo.share_card_color or "#FFD700"
 
+    # Check if pre-rendered share card already exists in OCI
+    share_card_key = f"share-cards/{user_id}/{best_photo.id}.png"
+    cached_png = await oci_get_bytes(share_card_key)
+    if cached_png:
+        return Response(content=cached_png, media_type="image/png")
+
+    # Load the source photo from OCI
+    photo_bytes = await oci_get_bytes(best_photo.storage_path)
+    if not photo_bytes:
+        raise HTTPException(
+            status_code=404, detail="Source photo not found in storage."
+        )
+
     try:
-        png_bytes = render_share_card_cached(
-            user_id=user_id,
-            photo_id=best_photo.id,
-            storage_path=best_photo.storage_path,
+        png_bytes = render_share_card(
+            photo_bytes=photo_bytes,
             score=best_photo.score,
             archetype_title=archetype_title,
             roast_summary=roast_summary,
@@ -856,4 +876,109 @@ async def get_share_card(
             status_code=500, detail="Failed to generate share card."
         ) from e
 
+    # Persist rendered card to OCI so subsequent requests skip rendering
+    await oci_upload(share_card_key, png_bytes, content_type="image/png")
+
     return Response(content=png_bytes, media_type="image/png")
+
+
+# ─── Job Progress Endpoints (parameterized — must come AFTER fixed routes) ────
+
+
+@router.get("/{job_id}/stream")
+async def stream_audit_progress(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """SSE endpoint that streams real-time progress events for an audit job.
+
+    Events:
+      - event: progress  data: {"step": "analyzing", "current": 3, "total": 8}
+      - event: complete  data: {full AuditResponse JSON}
+      - event: error     data: {"message": "..."}
+    """
+    result = await db.execute(
+        select(AuditJob).where(AuditJob.id == job_id, AuditJob.user_id == user.id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Audit job not found.")
+
+    async def event_generator():
+        """Yield SSE events by polling the job row until terminal state."""
+        last_step = ""
+        last_current = -1
+
+        while True:
+            await db.expire_all()
+            res = await db.execute(select(AuditJob).where(AuditJob.id == job_id))
+            current_job = res.scalar_one_or_none()
+
+            if not current_job:
+                yield f"event: error\ndata: {json.dumps({'message': 'Job not found'})}\n\n"
+                return
+
+            if current_job.progress_step != last_step or current_job.progress_current != last_current:
+                last_step = current_job.progress_step
+                last_current = current_job.progress_current
+                progress_data = {
+                    "step": current_job.progress_step,
+                    "current": current_job.progress_current,
+                    "total": current_job.progress_total,
+                    "status": current_job.status,
+                }
+                yield f"event: progress\ndata: {json.dumps(progress_data)}\n\n"
+
+            if current_job.status == "completed" and current_job.result_json:
+                yield f"event: complete\ndata: {current_job.result_json}\n\n"
+                return
+
+            if current_job.status == "failed":
+                error_msg = current_job.error or "Processing failed"
+                yield f"event: error\ndata: {json.dumps({'message': error_msg})}\n\n"
+                return
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/{job_id}/status", response_model=AuditJobStatusResponse)
+async def get_audit_status(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AuditJobStatusResponse:
+    """Polling fallback: returns current status of an audit job."""
+    result = await db.execute(
+        select(AuditJob).where(AuditJob.id == job_id, AuditJob.user_id == user.id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Audit job not found.")
+
+    audit_result = None
+    if job.status == "completed" and job.result_json:
+        try:
+            audit_result = AuditResponse(**json.loads(job.result_json))
+        except Exception:
+            pass
+
+    return AuditJobStatusResponse(
+        job_id=job.id,
+        status=job.status,
+        progress_current=job.progress_current,
+        progress_total=job.progress_total,
+        progress_step=job.progress_step,
+        error=job.error,
+        result=audit_result,
+    )

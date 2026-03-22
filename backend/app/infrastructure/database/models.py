@@ -341,6 +341,38 @@ class Purchase(Base):
     )
 
 
+class AuditJob(Base):
+    """Tracks async profile audit jobs.
+
+    When a user submits photos, a job row is created immediately and processing
+    happens in the background.  The SSE / polling endpoints read this row to
+    stream progress back to the client.
+    """
+
+    __tablename__ = "audit_jobs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    # pending → processing → completed | failed
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    progress_current: Mapped[int] = mapped_column(Integer, default=0)
+    progress_total: Mapped[int] = mapped_column(Integer, default=0)
+    progress_step: Mapped[str] = mapped_column(String(50), default="uploading")
+    lang: Mapped[str] = mapped_column(String(30), default="English")
+    # JSON-serialised AuditResponse on completion
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class AuditedPhoto(Base):
     __tablename__ = "audited_photos"
     __table_args__ = (
@@ -361,6 +393,8 @@ class AuditedPhoto(Base):
     archetype_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
     roast_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     share_card_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    # Idempotency key: allows safe retries without double-charging Gemini API credits.
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -377,12 +411,21 @@ class ProfileBlueprint(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     overall_theme: Mapped[str] = mapped_column(String(500))
     bio: Mapped[str] = mapped_column(Text, default="")
+    # Prevents double-charges on network retries: if the same key is submitted
+    # twice before the first response is received, the second call returns the
+    # already-generated blueprint without calling the LLM again.
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     user: Mapped[User] = relationship(back_populates="profile_blueprints")
     slots: Mapped[list["BlueprintSlot"]] = relationship(
+        back_populates="blueprint", cascade="all, delete-orphan"
+    )
+    universal_prompts: Mapped[list["BlueprintUniversalPrompt"]] = relationship(
         back_populates="blueprint", cascade="all, delete-orphan"
     )
 
@@ -405,6 +448,27 @@ class BlueprintSlot(Base):
     universal_hook: Mapped[str] = mapped_column(String(500))
     hinge_prompt: Mapped[str] = mapped_column(String(500), default="")
     aisle_prompt: Mapped[str] = mapped_column(String(500), default="")
+    # coach_reasoning is stored for future admin/debug tooling.
+    coach_reasoning: Mapped[str] = mapped_column(Text, default="")
+    # storage_path is stored so the image_url can be re-derived if base_url changes.
+    storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     image_url: Mapped[str] = mapped_column(String(1000), default="")
 
     blueprint: Mapped[ProfileBlueprint] = relationship(back_populates="slots")
+
+
+class BlueprintUniversalPrompt(Base):
+    """Universal cross-app prompt hooks generated per blueprint."""
+
+    __tablename__ = "blueprint_universal_prompts"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    blueprint_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("profile_blueprints.id"), index=True
+    )
+    category: Mapped[str] = mapped_column(String(200))
+    suggested_text: Mapped[str] = mapped_column(Text)
+
+    blueprint: Mapped[ProfileBlueprint] = relationship(back_populates="universal_prompts")

@@ -8,7 +8,6 @@ import base64
 import hashlib
 import json
 import time
-from pathlib import Path
 from typing import Sequence
 
 import structlog
@@ -19,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.infrastructure.database.models import AuditedPhoto, User
+from app.infrastructure.oci_storage import upload as oci_upload
 from app.llm.gemini_client import GeminiClient
 from app.models.profile_auditor import AuditResponse, PhotoFeedback, PhotoTier
 
@@ -92,7 +92,6 @@ def _score_to_tier(score: int) -> PhotoTier:
 
 _client: GeminiClient | None = None
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB per image safety limit
-STATIC_ROOT = Path("static")
 
 
 def _get_client() -> GeminiClient:
@@ -124,6 +123,7 @@ async def analyze_profile_photos(
     user: User,
     db: AsyncSession,
     lang: str = "English",
+    idempotency_key: str | None = None,
 ) -> AuditResponse:
     """Analyze up to 12 profile photos and return a brutal audit."""
     if not images:
@@ -358,24 +358,16 @@ async def analyze_profile_photos(
         photos=all_photos,
     )
 
-    # Persist audit results and images for history viewing (within caller's transaction)
-    STATIC_ROOT.mkdir(parents=True, exist_ok=True)
-    audits_root = STATIC_ROOT / "audits" / user.id
-    audits_root.mkdir(parents=True, exist_ok=True)
-
-    # Only save new photos (skip duplicates)
+    # Persist audit results and images to OCI Object Storage
     photo_idx = 0
     for idx, img_hash in enumerate(image_hashes):
         if img_hash in existing_photos:
-            # Skip - already exists
             continue
 
-        # This is a new photo - save it
         try:
             original_idx = new_image_indices[photo_idx]
             _, raw_bytes, _ = encoded_images[original_idx]
 
-            # Find corresponding feedback from merged results
             photo_feedback = None
             for pf in parsed_response.photos:
                 if pf.photo_id == f"photo_{idx + 1}":
@@ -387,15 +379,13 @@ async def analyze_profile_photos(
                 continue
 
             filename = f"{photo_feedback.photo_id}_{int(time.time() * 1000)}.jpg"
-            storage_rel_path = f"audits/{user.id}/{filename}"
-            file_path = STATIC_ROOT / storage_rel_path
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_bytes(raw_bytes)
+            object_key = f"audits/{user.id}/{filename}"
+            await oci_upload(object_key, raw_bytes, content_type="image/jpeg")
 
             db.add(
                 AuditedPhoto(
                     user_id=user.id,
-                    storage_path=storage_rel_path,
+                    storage_path=object_key,
                     hash=img_hash,
                     score=photo_feedback.score,
                     tier=photo_feedback.tier,
@@ -404,6 +394,7 @@ async def analyze_profile_photos(
                     archetype_title=new_parsed_response.archetype_title,
                     roast_summary=new_parsed_response.roast_summary,
                     share_card_color=new_parsed_response.share_card_color,
+                    idempotency_key=idempotency_key,
                 )
             )
             photo_idx += 1

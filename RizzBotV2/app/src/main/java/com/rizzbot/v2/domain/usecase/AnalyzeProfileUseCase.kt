@@ -19,17 +19,26 @@ class AnalyzeProfileUseCase @Inject constructor(
         
         return try {
             val byteArrays = bitmaps.map { imageCompressor.bitmapToJpegByteArray(it) }
-            val result = repository.uploadPhotosForAudit(byteArrays)
-            
-            result.fold(
+
+            // Step 1: Submit the audit job (returns job_id immediately)
+            val submitResult = repository.submitAuditJob(byteArrays)
+            val jobId = submitResult.getOrElse { error ->
+                android.util.Log.e("AnalyzeProfileUC", "Submit failed", error)
+                return ProfileAnalysisResult.Error(error.message ?: "Failed to submit photos")
+            }
+            android.util.Log.d("AnalyzeProfileUC", "Job submitted: $jobId")
+
+            // Step 2: Poll until completion
+            val auditResult = repository.pollAuditJobUntilDone(jobId)
+
+            auditResult.fold(
                 onSuccess = { auditResponse ->
                     android.util.Log.d("AnalyzeProfileUC", "Audit success: ${auditResponse.totalAnalyzed} photos")
-                    
-                    // Map AuditResponse to ProfileAnalysisResult.Success
+
                     val photoFeedbacks = auditResponse.photos.map { photo ->
                         "Photo ${photo.photoId.replace("photo_", "")}: [${photo.tier}] Score: ${photo.score}/10\n${photo.brutalFeedback}\nTip: ${photo.improvementTip}"
                     }
-                    
+
                     val avgScore = if (auditResponse.photos.isNotEmpty()) {
                         auditResponse.photos.map { it.score }.average().toFloat()
                     } else 0f

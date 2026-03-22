@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.1
 
+    # OCI Object Storage (Always Free tier: 20 GB standard)
+    oci_config_file: str = "~/.oci/config"  # path to OCI config file
+    oci_config_profile: str = "DEFAULT"
+    oci_bucket_name: str = "cookd-assets"
+    oci_namespace: str = ""  # auto-detected if empty
+    oci_par_expiry_hours: int = 1  # signed URL lifetime
+
     # App
     environment: str = "development"
     log_level: str = "INFO"

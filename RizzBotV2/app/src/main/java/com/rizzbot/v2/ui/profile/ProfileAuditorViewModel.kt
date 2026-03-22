@@ -24,11 +24,31 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+data class AuditProgress(
+    val step: String = "uploading",
+    val current: Int = 0,
+    val total: Int = 0
+) {
+    val displayText: String
+        get() = when (step) {
+            "uploading" -> "Uploading photos..."
+            "reading" -> "Reading photo $current of $total..."
+            "dedup_check" -> "Checking for duplicates..."
+            "analyzing" -> "Roasting your photos..."
+            "saving" -> "Saving results..."
+            "done" -> "Done!"
+            else -> "Processing..."
+        }
+
+    val progress: Float
+        get() = if (total > 0) current.toFloat() / total else 0f
+}
+
 data class ProfileAuditorState(
     val selectedUris: List<Uri> = emptyList(),
     val isLoading: Boolean = false,
     val result: AuditResponseUi? = null,
-    val resultPhotoIdToUri: Map<String, Uri> = emptyMap(), // Preserve URIs for result display
+    val resultPhotoIdToUri: Map<String, Uri> = emptyMap(),
     val error: String? = null,
     val selectedLanguage: String = "English",
     val maxPhotosPerAudit: Int = 3,
@@ -36,7 +56,8 @@ data class ProfileAuditorState(
     val tier: String = "free",
     val weeklyAuditsUsed: Int = 0,
     val profileAuditsPerWeek: Int = 1,
-    val isSharing: Boolean = false
+    val isSharing: Boolean = false,
+    val auditProgress: AuditProgress? = null  // Non-null while processing
 )
 
 @HiltViewModel
@@ -97,7 +118,12 @@ class ProfileAuditorViewModel @Inject constructor(
 
         viewModelScope.launch {
             Log.d("ProfileAuditorVM", "analyzePhotos: starting with ${uris.size} uris")
-            _state.value = _state.value.copy(isLoading = true, error = null, result = null)
+            _state.value = _state.value.copy(
+                isLoading = true,
+                error = null,
+                result = null,
+                auditProgress = AuditProgress(step = "uploading", total = uris.size)
+            )
 
             try {
                 // 1. Compress all images concurrently on IO dispatcher
@@ -111,9 +137,9 @@ class ProfileAuditorViewModel @Inject constructor(
                 if (compressedBytes.isEmpty()) {
                     _state.value = _state.value.copy(
                         isLoading = false,
-                        error = "Failed to read photos."
+                        error = "Failed to read photos.",
+                        auditProgress = null
                     )
-                    Log.w("ProfileAuditorVM", "analyzePhotos: no compressed photos, aborting")
                     return@launch
                 }
 
@@ -122,35 +148,74 @@ class ProfileAuditorViewModel @Inject constructor(
                     "photo_${index + 1}" to uri
                 }.toMap()
 
-                // 3. Upload to backend
-                Log.d("ProfileAuditorVM", "analyzePhotos: calling uploadPhotosForAudit")
+                // 3. Submit job to backend (returns immediately with job_id)
                 val currentLang = _state.value.selectedLanguage
-                val result = hostedRepository.uploadPhotosForAudit(
+                val submitResult = hostedRepository.submitAuditJob(
                     compressedBytes,
                     lang = currentLang
                 )
-                result
-                    .onSuccess { dto ->
-                        Log.d("ProfileAuditorVM", "analyzePhotos: success, totalAnalyzed=${dto.totalAnalyzed}")
-                        _state.value = _state.value.copy(
-                            isLoading = false,
-                            result = dto.toUiModel(),
-                            resultPhotoIdToUri = photoIdToUri, // Preserve URIs for result display
-                            selectedUris = emptyList() // Clear selected photos after successful audit
+
+                submitResult.onFailure { e ->
+                    Log.e("ProfileAuditorVM", "analyzePhotos: submit failed", e)
+                    _state.value = _state.value.copy(
+                        isLoading = false,
+                        error = e.message ?: "Failed to submit photos.",
+                        auditProgress = null
+                    )
+                    return@launch
+                }
+
+                val jobId = submitResult.getOrThrow()
+                Log.d("ProfileAuditorVM", "analyzePhotos: job submitted, id=$jobId")
+
+                // 4. Stream progress via polling flow
+                hostedRepository.streamAuditProgress(jobId).collect { status ->
+                    Log.d("ProfileAuditorVM", "analyzePhotos: progress step=${status.progressStep} ${status.progressCurrent}/${status.progressTotal}")
+
+                    _state.value = _state.value.copy(
+                        auditProgress = AuditProgress(
+                            step = status.progressStep,
+                            current = status.progressCurrent,
+                            total = status.progressTotal
                         )
+                    )
+
+                    when (status.status) {
+                        "completed" -> {
+                            val dto = status.result
+                            if (dto != null) {
+                                Log.d("ProfileAuditorVM", "analyzePhotos: complete, totalAnalyzed=${dto.totalAnalyzed}")
+                                _state.value = _state.value.copy(
+                                    isLoading = false,
+                                    result = dto.toUiModel(),
+                                    resultPhotoIdToUri = photoIdToUri,
+                                    selectedUris = emptyList(),
+                                    auditProgress = null
+                                )
+                            } else {
+                                _state.value = _state.value.copy(
+                                    isLoading = false,
+                                    error = "Completed but no results received.",
+                                    auditProgress = null
+                                )
+                            }
+                        }
+                        "failed" -> {
+                            Log.e("ProfileAuditorVM", "analyzePhotos: job failed: ${status.error}")
+                            _state.value = _state.value.copy(
+                                isLoading = false,
+                                error = status.error ?: "Audit processing failed.",
+                                auditProgress = null
+                            )
+                        }
                     }
-                    .onFailure { e ->
-                        Log.e("ProfileAuditorVM", "analyzePhotos: failed", e)
-                        _state.value = _state.value.copy(
-                            isLoading = false,
-                            error = e.message ?: "Failed to audit photos."
-                        )
-                    }
+                }
             } catch (e: Exception) {
                 Log.e("ProfileAuditorVM", "analyzePhotos: exception", e)
                 _state.value = _state.value.copy(
                     isLoading = false,
-                    error = e.message ?: "Failed to audit photos."
+                    error = e.message ?: "Failed to audit photos.",
+                    auditProgress = null
                 )
             }
         }

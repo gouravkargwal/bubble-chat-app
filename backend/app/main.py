@@ -7,12 +7,18 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 import structlog
 from pyinstrument import Profiler
 
 from app.config import settings
 from app.infrastructure.database.engine import init_db
 from app.infrastructure.logging import setup_logging
+
+# Infrastructure-level rate limiter (IP-based, complements application-level quotas)
+limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
 
 
 @asynccontextmanager
@@ -41,6 +47,10 @@ def create_app() -> FastAPI:
         version="2.0.0",
         lifespan=lifespan,
     )
+
+    # Infrastructure-level rate limiting (IP-based, defense-in-depth)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # CORS — never combine wildcard origins with credentials
     is_wildcard = settings.cors_origins == ["*"]

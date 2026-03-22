@@ -230,12 +230,14 @@ async def _embedding_content_score(
               AND i.embedding IS NOT NULL
             """
         )
+        # asyncpg requires pgvector params as a string "[x, y, ...]", not a Python list
+        embedding_str = f"[{','.join(str(x) for x in query_embedding)}]"
         result = await db.execute(
             vector_sql,
             {
                 "user_id": user_id,
                 "conversation_id": conversation_id,
-                "query_embedding": query_embedding,
+                "query_embedding": embedding_str,
             },
         )
         row = result.mappings().first()
