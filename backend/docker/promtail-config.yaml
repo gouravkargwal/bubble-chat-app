@@ -46,5 +46,8 @@ scrape_configs:
     pipeline_stages:
       # Unwrap Docker json-file lines {"log":"...","stream":"stdout",...} so Loki gets raw app JSON.
       - docker: {}
+      # Grafana Logs Drilldown shows "unknown_service" when the Loki stream has no service_name label.
+      # Compose meta labels can be missing on some setups; this job only scrapes logging=promtail (the API).
       - static_labels:
           promtail_scrape: docker
+          service_name: api
