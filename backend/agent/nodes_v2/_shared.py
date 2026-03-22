@@ -119,6 +119,42 @@ def normalize_raw_ocr_text(raw_ocr_text: Any) -> list[dict[str, Any]]:
     return []
 
 
+def transcript_text_from_analysis(analysis: Any) -> str:
+    """
+    Verbatim text the user is replying to: latest left-aligned ("them") bubble's
+    actual_new_message only (ignores quoted_context). Matches generator_node logic.
+    """
+    visual_transcript = getattr(analysis, "visual_transcript", None) or []
+    if not isinstance(visual_transcript, list):
+        return ""
+
+    def _sender(bubble: Any) -> str:
+        if isinstance(bubble, dict):
+            return str(bubble.get("sender") or "")
+        return str(getattr(bubble, "sender", "") or "")
+
+    def _actual(bubble: Any) -> str:
+        if isinstance(bubble, dict):
+            return str(bubble.get("actual_new_message") or "")
+        return str(getattr(bubble, "actual_new_message", "") or "")
+
+    transcript_text = ""
+    for bubble in reversed(visual_transcript):
+        if _sender(bubble) == "them":
+            transcript_text = _actual(bubble)
+            break
+
+    if transcript_text:
+        return transcript_text
+
+    for bubble in reversed(visual_transcript):
+        text = _actual(bubble)
+        if text:
+            return text
+
+    return ""
+
+
 def has_forbidden_punctuation(text: str) -> bool:
     """Check if text contains any forbidden punctuation characters."""
     forbidden = ["'", '"', ",", ".", "!", "?", ";"]

@@ -28,6 +28,7 @@ from agent.state import (
 from agent.nodes_v2._shared import (
     GENERATOR_MODEL,
     build_llm,
+    transcript_text_from_analysis,
     truncate,
 )
 from agent.nodes_v2._post_processor import validate_and_fix_replies
@@ -343,18 +344,7 @@ def generator_node(state: AgentState) -> dict:
     if convo_ctx_person and str(convo_ctx_person).lower() != "unknown":
         person_name = str(convo_ctx_person)
 
-    # Build transcript_text from the latest "them" bubble
-    transcript_text = ""
-    for bubble in reversed(getattr(analysis, "visual_transcript", []) or []):
-        if getattr(bubble, "sender", "") == "them":
-            transcript_text = getattr(bubble, "actual_new_message", "") or ""
-            break
-    if not transcript_text:
-        for bubble in reversed(getattr(analysis, "visual_transcript", []) or []):
-            actual = getattr(bubble, "actual_new_message", "") or ""
-            if actual:
-                transcript_text = actual
-                break
+    transcript_text = transcript_text_from_analysis(analysis)
 
     # --- Dynamic temperature from the matrix ---
     conversation_temperature = (

@@ -22,6 +22,7 @@ from agent.nodes_v2._shared import (
     AUDITOR_MODEL,
     MAX_REWRITES,
     build_llm,
+    transcript_text_from_analysis,
     truncate,
 )
 
@@ -77,7 +78,10 @@ NOTE: Punctuation, capitalization, and formatting are fixed automatically by cod
 after your review. Do NOT evaluate or fail replies for style/punctuation issues.
 Focus ONLY on substantive quality:
 
-1. CONTEXT FIT: Does the reply actually respond to what she said (transcript_text)?
+1. CONTEXT FIT: Does the reply actually respond to what she said?
+   PRIMARY ground truth is verbatim_last_message — the exact text from her latest message
+   bubble (same string the generator used). Use their_last_message_paraphrase only as
+   secondary context; do not fail a reply for paraphrase wording differences.
    A reply that ignores her message or talks about something unrelated = FAIL.
 
 2. ARCHETYPE MATCH: Does the tone match the detected archetype?
@@ -164,6 +168,9 @@ def auditor_node(state: AgentState) -> dict:
 
     direction = state.get("direction", "quick_reply")
 
+    verbatim_last_message = transcript_text_from_analysis(analysis)
+    their_last_message_paraphrase = getattr(analysis, "their_last_message", "") or ""
+
     # Build a concise evaluation payload (don't send the whole kitchen sink)
     eval_payload = {
         "detected_archetype": getattr(analysis, "detected_archetype", ""),
@@ -172,7 +179,8 @@ def auditor_node(state: AgentState) -> dict:
         "their_effort": getattr(analysis, "their_effort", ""),
         "conversation_temperature": getattr(analysis, "conversation_temperature", ""),
         "stage": getattr(analysis, "stage", ""),
-        "transcript_text": getattr(analysis, "their_last_message", ""),
+        "verbatim_last_message": verbatim_last_message,
+        "their_last_message_paraphrase": their_last_message_paraphrase,
         "key_detail": getattr(analysis, "key_detail", ""),
         "direction": direction,
         "replies": [
@@ -225,6 +233,7 @@ def auditor_node(state: AgentState) -> dict:
         failed_indices=[v.reply_index for v in failed_verdicts],
         summary=truncate(audit.summary, max_len=200),
         revision_count=revision_count,
+        verbatim_last_preview=truncate(verbatim_last_message, max_len=120),
     )
 
     if audit.overall_passes:
