@@ -42,10 +42,6 @@ PROFILE_AUDIT_SCHEMA: dict = {
             "type": "STRING",
             "description": "A single savage sentence summarizing the user's overall dating vibe.",
         },
-        "share_card_color": {
-            "type": "STRING",
-            "description": "Hex color code (e.g., #FF0055) that matches the overall archetype vibe.",
-        },
         "photos": {
             "type": "ARRAY",
             "items": {
@@ -75,7 +71,6 @@ PROFILE_AUDIT_SCHEMA: dict = {
         "is_hard_reset",
         "archetype_title",
         "roast_summary",
-        "share_card_color",
         "photos",
     ],
 }
@@ -181,7 +176,6 @@ async def analyze_profile_photos(
             )
 
         # Use archetype/roast metadata from the most recent matching photo if available.
-        # This keeps the viral share-card experience consistent for duplicate uploads.
         latest_existing = list(existing_photos.values())[-1]
         return AuditResponse(
             total_analyzed=len(image_hashes),
@@ -189,7 +183,6 @@ async def analyze_profile_photos(
             is_hard_reset=all(p.tier == "GRAVEYARD" for p in cached_photos),
             archetype_title=latest_existing.archetype_title,
             roast_summary=latest_existing.roast_summary,
-            share_card_color=latest_existing.share_card_color,
             photos=cached_photos,
         )
 
@@ -229,11 +222,7 @@ async def analyze_profile_photos(
         "- Lean into meme-able, shareable phrasing.\n"
         "ROAST_SUMMARY RULES:\n"
         '- Write a single, punchy sentence that would make an influencer\'s audience go "OOF".\n'
-        "- 8/10 savage, but still playful and entertaining, not bullying.\n"
-        "SHARE_CARD_COLOR RULES:\n"
-        "- Return a single hex color code (e.g., #FF0055) that matches the overall vibe.\n"
-        "- Examples: neon red for chaotic red-flag energy, gold for 'unintentional rizz', cold blue for "
-        "LinkedIn-maxxing energy, pastel for beige flag vibes.\n\n"
+        "- 8/10 savage, but still playful and entertaining, not bullying.\n\n"
         "Score each photo on a strict 1-10 integer scale using this rubric:\n"
         "  1-3: Face not visible, blurry, heavy filter, or group shot where subject is unclear.\n"
         "  4-5: Visible face but poor lighting, bad background, unflattering angle, or low effort.\n"
@@ -354,7 +343,6 @@ async def analyze_profile_photos(
         is_hard_reset=all(p.tier == "GRAVEYARD" for p in all_photos),
         archetype_title=new_parsed_response.archetype_title,
         roast_summary=new_parsed_response.roast_summary,
-        share_card_color=new_parsed_response.share_card_color,
         photos=all_photos,
     )
 
@@ -393,7 +381,6 @@ async def analyze_profile_photos(
                     improvement_tip=photo_feedback.improvement_tip,
                     archetype_title=new_parsed_response.archetype_title,
                     roast_summary=new_parsed_response.roast_summary,
-                    share_card_color=new_parsed_response.share_card_color,
                     idempotency_key=idempotency_key,
                 )
             )

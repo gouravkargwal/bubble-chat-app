@@ -53,6 +53,5 @@ interface HostedRepository {
     fun streamAuditProgress(jobId: String): Flow<AuditJobStatusResponse>
     suspend fun getProfileAuditHistory(limit: Int = 20, offset: Int = 0): List<com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto>
     suspend fun deleteProfileAuditPhoto(photoId: String): Result<Unit>
-    suspend fun downloadProfileAuditShareCard(): Result<ByteArray>
     suspend fun deleteAllUserData(): Result<Unit>
 }

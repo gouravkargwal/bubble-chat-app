@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = 0.1
 
     # OCI Object Storage (Always Free tier: 20 GB standard)
+    # IMPORTANT: Create a lifecycle rule in OCI Console to auto-delete objects
+    # with prefix "temp-audits/" after 1 day. This cleans up orphans from
+    # interrupted uploads or crashed workers. See:
+    # OCI Console → Object Storage → Bucket → Lifecycle Policy Rules
     oci_config_file: str = "~/.oci/config"  # path to OCI config file
     oci_config_profile: str = "DEFAULT"
     oci_bucket_name: str = "cookd-assets"

@@ -248,7 +248,6 @@ data class AuditResponse(
     @SerialName("is_hard_reset") val isHardReset: Boolean,
     @SerialName("archetype_title") val archetypeTitle: String = "",
     @SerialName("roast_summary") val roastSummary: String = "",
-    @SerialName("share_card_color") val shareCardColor: String = "#FFD700",
     val photos: List<PhotoFeedbackDto>
 )
 
@@ -261,7 +260,6 @@ data class AuditedPhotoItemDto(
     @SerialName("improvement_tip") val improvementTip: String,
     @SerialName("archetype_title") val archetypeTitle: String = "",
     @SerialName("roast_summary") val roastSummary: String = "",
-    @SerialName("share_card_color") val shareCardColor: String = "#FFD700",
     @SerialName("image_url") val imageUrl: String,
     @SerialName("created_at") val createdAt: Long
 )

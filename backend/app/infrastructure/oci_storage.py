@@ -13,11 +13,12 @@ logger = structlog.get_logger(__name__)
 
 _oci_client = None
 _oci_namespace: str | None = None
+_oci_region: str | None = None
 
 
 def _get_oci_client():
-    """Lazily initialise the OCI ObjectStorageClient and namespace."""
-    global _oci_client, _oci_namespace
+    """Lazily initialise the OCI ObjectStorageClient, namespace, and region."""
+    global _oci_client, _oci_namespace, _oci_region
 
     if _oci_client is not None:
         return _oci_client, _oci_namespace
@@ -27,6 +28,7 @@ def _get_oci_client():
     config_path = os.path.expanduser(settings.oci_config_file)
     config = oci.config.from_file(config_path, settings.oci_config_profile)
     _oci_client = oci.object_storage.ObjectStorageClient(config)
+    _oci_region = (config.get("region") or "").strip() or "us-ashburn-1"
 
     if settings.oci_namespace:
         _oci_namespace = settings.oci_namespace
@@ -37,6 +39,7 @@ def _get_oci_client():
         "oci_storage_initialised",
         namespace=_oci_namespace,
         bucket=settings.oci_bucket_name,
+        region=_oci_region,
     )
     return _oci_client, _oci_namespace
 
@@ -79,7 +82,7 @@ async def get_signed_url(object_name: str) -> str:
             par_details,
         )
         par = par_response.data
-        region = client.base_client.region if hasattr(client, "base_client") else "us-ashburn-1"
+        region = _oci_region or "us-ashburn-1"
         base = f"https://objectstorage.{region}.oraclecloud.com"
         return f"{base}{par.access_uri}"
     except Exception as e:

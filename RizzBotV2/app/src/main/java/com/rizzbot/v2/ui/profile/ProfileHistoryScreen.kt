@@ -74,7 +74,6 @@ data class HistoryItem(
     val createdAt: Long,
     val archetypeTitle: String,
     val roastSummary: String,
-    val shareCardColor: String,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,7 +85,6 @@ fun ProfileHistoryScreen(
 ) {
     val auditsState = viewModel.audits.collectAsState()
     val isLoadingState = viewModel.isLoadingState.collectAsState()
-    val isSharingState = viewModel.isSharingState.collectAsState()
     val listState = rememberLazyListState()
 
     // Detect scroll near bottom and load more
@@ -171,8 +169,6 @@ fun ProfileHistoryScreen(
                     items(auditsState.value, key = { it.id }) { audit ->
                         AuditHistoryCard(
                             audit = audit,
-                            isSharing = isSharingState.value,
-                            onShare = { viewModel.shareLatestRoast() },
                             onDelete = { viewModel.deletePhoto(audit.id) }
                         )
                     }
@@ -202,8 +198,6 @@ fun ProfileHistoryScreen(
 @Composable
 private fun AuditHistoryCard(
     audit: HistoryItem,
-    isSharing: Boolean,
-    onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(

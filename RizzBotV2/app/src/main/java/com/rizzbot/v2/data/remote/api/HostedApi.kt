@@ -26,7 +26,6 @@ import com.rizzbot.v2.data.remote.dto.ResolveConversationRequest
 import com.rizzbot.v2.data.remote.dto.ProfileBlueprintDto
 import com.rizzbot.v2.data.remote.dto.ProfileBlueprintListResponse
 import okhttp3.MultipartBody
-import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -123,11 +122,6 @@ interface HostedApi {
 
     @DELETE("api/v1/profile-audit/{photo_id}")
     suspend fun deleteProfileAuditPhoto(@Path("photo_id") photoId: String)
-
-    @GET("api/v1/profile-audit/share-card/{user_id}")
-    suspend fun getProfileAuditShareCard(
-        @Path("user_id") userId: String
-    ): ResponseBody
 
     // Profile Optimizer
     @POST("api/v1/profile-audit/optimize")

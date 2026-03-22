@@ -350,6 +350,18 @@ class AuditJob(Base):
     """
 
     __tablename__ = "audit_jobs"
+    __table_args__ = (
+        # Partial unique index: only one non-failed job per (user, key).
+        # NULL keys are excluded by Postgres (NULLs are never equal).
+        # Failed jobs don't participate, allowing retries with the same key.
+        Index(
+            "uq_audit_jobs_user_idempotency",
+            "user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where="status != 'failed'",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -389,10 +401,9 @@ class AuditedPhoto(Base):
     tier: Mapped[str] = mapped_column(String(20))
     brutal_feedback: Mapped[str] = mapped_column(Text)
     improvement_tip: Mapped[str] = mapped_column(Text)
-    # Optional per-audit vibe metadata used for history + share-card surfaces.
+    # Optional per-audit vibe metadata (archetype + roast copy).
     archetype_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
     roast_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    share_card_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     # Idempotency key: allows safe retries without double-charging Gemini API credits.
     idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -1,9 +1,6 @@
 package com.rizzbot.v2.ui.profile
 
 import android.content.Context
-import android.content.Intent
-import android.graphics.BitmapFactory
-import androidx.core.content.FileProvider
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -56,7 +53,6 @@ data class ProfileAuditorState(
     val tier: String = "free",
     val weeklyAuditsUsed: Int = 0,
     val profileAuditsPerWeek: Int = 1,
-    val isSharing: Boolean = false,
     val auditProgress: AuditProgress? = null  // Non-null while processing
 )
 
@@ -91,14 +87,14 @@ class ProfileAuditorViewModel @Inject constructor(
         val maxPhotos = _state.value.maxPhotosPerAudit
         val selectedPhotos = uris.take(maxPhotos)
         val exceededLimit = uris.size > maxPhotos
-        
+
         _state.value = _state.value.copy(
             selectedUris = selectedPhotos,
             error = null,
             showPaywall = exceededLimit && hostedRepository.usageState.value.tier == "free"
         )
     }
-    
+
     fun dismissPaywall() {
         _state.value = _state.value.copy(showPaywall = false)
     }
@@ -126,7 +122,6 @@ class ProfileAuditorViewModel @Inject constructor(
             )
 
             try {
-                // 1. Compress all images concurrently on IO dispatcher
                 val compressedBytes = withContext(Dispatchers.IO) {
                     uris.map { uri ->
                         async { compressImage(context, uri) }
@@ -143,12 +138,10 @@ class ProfileAuditorViewModel @Inject constructor(
                     return@launch
                 }
 
-                // 2. Create photoIdToUri mapping before clearing selectedUris
                 val photoIdToUri = uris.mapIndexed { index, uri ->
                     "photo_${index + 1}" to uri
                 }.toMap()
 
-                // 3. Submit job to backend (returns immediately with job_id)
                 val currentLang = _state.value.selectedLanguage
                 val submitResult = hostedRepository.submitAuditJob(
                     compressedBytes,
@@ -168,7 +161,6 @@ class ProfileAuditorViewModel @Inject constructor(
                 val jobId = submitResult.getOrThrow()
                 Log.d("ProfileAuditorVM", "analyzePhotos: job submitted, id=$jobId")
 
-                // 4. Stream progress via polling flow
                 hostedRepository.streamAuditProgress(jobId).collect { status ->
                     Log.d("ProfileAuditorVM", "analyzePhotos: progress step=${status.progressStep} ${status.progressCurrent}/${status.progressTotal}")
 
@@ -220,60 +212,6 @@ class ProfileAuditorViewModel @Inject constructor(
             }
         }
     }
-
-    fun shareLatestRoast() {
-        val currentResult = _state.value.result ?: return
-        if (_state.value.isSharing) return
-
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isSharing = true, error = null)
-            try {
-                val bytesResult = hostedRepository.downloadProfileAuditShareCard()
-                bytesResult
-                    .onSuccess { bytes ->
-                        // Decode to bitmap and write to cache for sharing
-                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                            ?: throw IllegalStateException("Failed to decode share card image")
-
-                        val cacheDir = context.cacheDir
-                        val file = java.io.File(cacheDir, "profile_roast_share_card.png")
-                        java.io.FileOutputStream(file).use { out ->
-                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                        }
-
-                        val uri = FileProvider.getUriForFile(
-                            context,
-                            context.packageName + ".fileprovider",
-                            file
-                        )
-
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/*"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(
-                            Intent.createChooser(
-                                shareIntent,
-                                "Share your roast"
-                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
-                    .onFailure { e ->
-                        _state.value = _state.value.copy(
-                            error = e.message ?: "Failed to generate share card."
-                        )
-                    }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    error = e.message ?: "Failed to generate share card."
-                )
-            } finally {
-                _state.value = _state.value.copy(isSharing = false)
-            }
-        }
-    }
 }
 
 private fun AuditResponse.toUiModel(): AuditResponseUi =
@@ -283,7 +221,6 @@ private fun AuditResponse.toUiModel(): AuditResponseUi =
         isHardReset = isHardReset,
         archetypeTitle = archetypeTitle,
         roastSummary = roastSummary,
-        shareCardColor = shareCardColor,
         overallScore = photos.takeIf { it.isNotEmpty() }
             ?.map { it.score }
             ?.average()
@@ -304,4 +241,3 @@ private fun AuditResponse.toUiModel(): AuditResponseUi =
             )
         }
     )
-

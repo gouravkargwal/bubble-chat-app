@@ -578,11 +578,13 @@ class HostedRepositoryImpl @Inject constructor(
             val maxAttempts = 90 // 90 * 1.5s = ~2 minute timeout
             var attempts = 0
             var consecutiveErrors = 0
+            var delayMs = 1500L
             while (attempts < maxAttempts) {
                 attempts++
                 try {
                     val status = hostedApi.getAuditJobStatus(jobId)
-                    consecutiveErrors = 0 // Reset on success
+                    consecutiveErrors = 0
+                    delayMs = 1500L // Reset delay on success
                     emit(status)
                     if (status.status == "completed" || status.status == "failed") {
                         return@flow
@@ -590,8 +592,16 @@ class HostedRepositoryImpl @Inject constructor(
                 } catch (e: Exception) {
                     consecutiveErrors++
                     android.util.Log.w("HostedRepo", "streamAuditProgress poll error #$consecutiveErrors: ${e.message}")
-                    // Give up after 3 consecutive network errors
-                    if (consecutiveErrors >= 3) {
+
+                    // Back off on 429 rate limit
+                    val is429 = e is retrofit2.HttpException && e.code() == 429
+                    if (is429) {
+                        delayMs = (delayMs * 2).coerceAtMost(10_000L) // exponential backoff, cap 10s
+                        android.util.Log.w("HostedRepo", "Rate limited, backing off to ${delayMs}ms")
+                    }
+
+                    // Give up after 3 consecutive non-429 errors
+                    if (!is429 && consecutiveErrors >= 3) {
                         emit(
                             com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse(
                                 jobId = jobId,
@@ -602,7 +612,7 @@ class HostedRepositoryImpl @Inject constructor(
                         return@flow
                     }
                 }
-                kotlinx.coroutines.delay(1500)
+                kotlinx.coroutines.delay(delayMs)
             }
             // Timed out
             emit(
@@ -628,17 +638,6 @@ class HostedRepositoryImpl @Inject constructor(
         return try {
             hostedApi.deleteProfileAuditPhoto(photoId)
             Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    override suspend fun downloadProfileAuditShareCard(): Result<ByteArray> {
-        return try {
-            val userId = authManager.get().getUserId()
-                ?: return Result.failure(IllegalStateException("Missing userId for share card"))
-            val body = hostedApi.getProfileAuditShareCard(userId)
-            Result.success(body.bytes())
         } catch (e: Exception) {
             Result.failure(e)
         }
