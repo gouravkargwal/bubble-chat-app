@@ -1,9 +1,12 @@
+import json
 import uuid
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +22,17 @@ from app.infrastructure.logging import setup_logging
 
 # Infrastructure-level rate limiter (IP-based, complements application-level quotas)
 limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+
+
+def _detail_for_log(detail: Any, *, max_len: int = 4000) -> Any:
+    """Normalize exception detail for structured logs (truncate huge bodies)."""
+    if isinstance(detail, str):
+        return detail if len(detail) <= max_len else detail[: max_len - 3] + "..."
+    try:
+        raw = json.dumps(detail, default=str)
+    except (TypeError, ValueError):
+        raw = str(detail)
+    return raw if len(raw) <= max_len else raw[: max_len - 3] + "..."
 
 
 @asynccontextmanager
@@ -51,6 +65,47 @@ def create_app() -> FastAPI:
     # Infrastructure-level rate limiting (IP-based, defense-in-depth)
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.exception_handler(HTTPException)
+    async def log_http_exception(request: Request, exc: HTTPException) -> JSONResponse:
+        """Log client/server HTTP errors with enough context to debug access-log-only 4xx/5xx."""
+        log = structlog.get_logger()
+        cid = getattr(request.state, "correlation_id", None)
+        status = exc.status_code
+        detail_log = _detail_for_log(exc.detail)
+        kw = {
+            "status_code": status,
+            "detail": detail_log,
+            "http_method": request.method,
+            "http_path": request.url.path,
+            "correlation_id": cid,
+        }
+        if status >= 500:
+            log.error("http_exception", **kw)
+        elif status >= 400:
+            log.warning("http_exception", **kw)
+        else:
+            log.info("http_exception", **kw)
+        return JSONResponse(status_code=status, content={"detail": exc.detail})
+
+    @app.exception_handler(RequestValidationError)
+    async def log_validation_exception(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        log = structlog.get_logger()
+        cid = getattr(request.state, "correlation_id", None)
+        errors = exc.errors()
+        sample = errors[:8]
+        log.warning(
+            "request_validation_error",
+            status_code=422,
+            error_count=len(errors),
+            errors=_detail_for_log(sample, max_len=8000),
+            http_method=request.method,
+            http_path=request.url.path,
+            correlation_id=cid,
+        )
+        return JSONResponse(status_code=422, content={"detail": errors})
 
     # CORS — never combine wildcard origins with credentials
     is_wildcard = settings.cors_origins == ["*"]
