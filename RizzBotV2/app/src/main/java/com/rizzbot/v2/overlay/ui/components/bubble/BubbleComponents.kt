@@ -1,5 +1,6 @@
 package com.rizzbot.v2.overlay.ui.components.bubble
 
+import android.view.MotionEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -15,7 +16,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -47,7 +48,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,7 +62,6 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun RizzButton(
-    onTap: () -> Unit,
     isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -122,9 +122,6 @@ fun RizzButton(
                     }
                 )
                 .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                .pointerInput(Unit) {
-                    detectTapGestures { onTap() }
-                }
         )
         
         // Circular loading indicator (drawn on top, NOT clipped)
@@ -164,11 +161,12 @@ fun RizzButton(
 /**
  * Bubble with contextual hints that appear based on state
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun BubbleWithHints(
     state: BubbleState,
     dockOnLeft: Boolean,
-    onTap: () -> Unit,
+    onCollapsedOverlayMotionEvent: (MotionEvent) -> Boolean,
     modifier: Modifier = Modifier
 ) {
     val showAddMoreHint = state is BubbleState.RizzButtonAddMore
@@ -187,10 +185,14 @@ fun BubbleWithHints(
         }
     }
 
-    Box(modifier = modifier.wrapContentSize()) {
+    Box(
+        modifier = modifier
+            .wrapContentSize()
+            .pointerInteropFilter { onCollapsedOverlayMotionEvent(it) }
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dockOnLeft) {
-                RizzButton(onTap = onTap, isLoading = showLoadingHint)
+                RizzButton(isLoading = showLoadingHint)
                 Box(modifier = Modifier.width(8.dp)) // Fixed spacer
                 // Hint bubble to the right (only show for "add more" hint, not loading)
                 Box(modifier = Modifier.wrapContentWidth()) {
@@ -218,7 +220,7 @@ fun BubbleWithHints(
                     }
                 }
                 Box(modifier = Modifier.width(8.dp)) // Fixed spacer
-                RizzButton(onTap = onTap, isLoading = showLoadingHint)
+                RizzButton(isLoading = showLoadingHint)
             }
         }
     }

@@ -30,6 +30,13 @@ class OverlayService : Service() {
         bubbleManager.show()
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Service may already be running (e.g. user dismissed bubble via drag) while the process
+        // stays alive; [onCreate] is skipped so we must show the bubble here too.
+        bubbleManager.show()
+        return START_STICKY
+    }
+
     override fun onDestroy() {
         bubbleManager.hide()
         super.onDestroy()

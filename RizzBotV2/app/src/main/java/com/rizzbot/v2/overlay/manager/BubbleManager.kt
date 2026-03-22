@@ -1,12 +1,14 @@
 package com.rizzbot.v2.overlay.manager
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,13 +35,19 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "BubbleManager"
+
+/** Matches snap-to-edge X inset in [handleCollapsedOverlayMotionEvent]. */
+private const val BUBBLE_EDGE_MARGIN_PX = 8
 
 @Singleton
 class BubbleManager @Inject constructor(
@@ -55,8 +63,8 @@ class BubbleManager @Inject constructor(
     private val windowManager by lazy { context.getSystemService(Context.WINDOW_SERVICE) as WindowManager }
     private var composeView: ComposeView? = null
     private val lifecycleOwner = OverlayLifecycleOwner()
-    private var bubbleX: Int
-    private var bubbleY = 400
+    private var bubbleX: Int = 0
+    private var bubbleY: Int = 0
     private var stateCollectorJob: Job? = null
     private var timeoutJob: Job? = null
     private var currentDirection: DirectionWithHint? = null
@@ -78,10 +86,19 @@ class BubbleManager @Inject constructor(
     /** Avoid redundant [WindowManager.updateViewLayout] when only in-overlay content changes. */
     private var lastAppliedExpandedLayout: Boolean? = null
 
+    private var dragInitialX = 0
+    private var dragInitialY = 0
+    private var dragInitialTouchX = 0f
+    private var dragInitialTouchY = 0f
+    private var isDraggingBubble = false
+    private var dragLayoutParams: WindowManager.LayoutParams? = null
+    private var bubbleSnapAnimator: ValueAnimator? = null
+
+    /** Never cancelled in [hide]; keeps [isActuallyShown] in sync with [_state]. */
+    private val bubbleFlowScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     init {
-        // Default position: right edge, vertically centered
-        val dm = context.resources.displayMetrics
-        bubbleX = dm.widthPixels - 180 // near right edge
+        applyDefaultBubblePositionTopRight()
     }
 
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Hidden)
@@ -90,14 +107,11 @@ class BubbleManager @Inject constructor(
     private val _showPaywall = MutableStateFlow(false)
     val showPaywall: StateFlow<Boolean> = _showPaywall.asStateFlow()
 
-    // Public flow for UI to check if bubble is actually visible (not just pref = true)
-    val isActuallyShown: StateFlow<Boolean> = MutableStateFlow(false).also { flow ->
-        ensureScope().launch {
-            _state.collect { bubbleState ->
-                flow.value = bubbleState !is BubbleState.Hidden
-            }
-        }
-    }
+    // Public flow for UI to check if bubble is actually visible (not just pref = true).
+    // Must not use [ensureScope]: that scope is cancelled in [hide] and would stop updates.
+    val isActuallyShown: StateFlow<Boolean> = _state
+        .map { bubbleState -> bubbleState !is BubbleState.Hidden }
+        .stateIn(bubbleFlowScope, SharingStarted.Eagerly, false)
 
     private fun ensureScope(): CoroutineScope {
         return scope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main).also {
@@ -114,12 +128,186 @@ class BubbleManager @Inject constructor(
 
     private fun isFullScreenState(state: BubbleState): Boolean = state.isExpandedState()
 
-    /** Small floating bubble only — Compose children otherwise consume touches before the root View listener runs. */
-    private fun isCollapsedBubbleState(state: BubbleState): Boolean = when (state) {
-        is BubbleState.RizzButton,
-        is BubbleState.RizzButtonAddMore,
-        is BubbleState.Loading -> true
-        else -> false
+    private fun cancelBubbleSnapAnimation() {
+        bubbleSnapAnimator?.cancel()
+        bubbleSnapAnimator = null
+    }
+
+    /**
+     * Drag / tap for the collapsed bubble window. Driven from Compose via [pointerInteropFilter]
+     * so [MotionEvent.rawX]/[MotionEvent.rawY] match the bottom close zone logic.
+     */
+    private fun handleCollapsedOverlayMotionEvent(view: ComposeView, event: MotionEvent): Boolean {
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Touch event: action=${event.action} state=${_state.value}")
+        }
+
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                cancelBubbleSnapAnimation()
+                val lp = view.layoutParams as? WindowManager.LayoutParams
+                    ?: run {
+                        Log.w(TAG, "ACTION_DOWN but layoutParams is not WindowManager.LayoutParams")
+                        return false
+                    }
+
+                dragLayoutParams = lp
+                dragInitialX = lp.x
+                dragInitialY = lp.y
+                dragInitialTouchX = event.rawX
+                dragInitialTouchY = event.rawY
+                isDraggingBubble = false
+                Log.d(
+                    TAG,
+                    "ACTION_DOWN at raw=(${event.rawX}, ${event.rawY}) lp=(${lp.x}, ${lp.y})"
+                )
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val lp = dragLayoutParams ?: return true
+                val dx = event.rawX - dragInitialTouchX
+                val dy = event.rawY - dragInitialTouchY
+
+                val density = context.resources.displayMetrics.density
+                val dragThreshold = 4f * density
+                if (!isDraggingBubble &&
+                    (kotlin.math.abs(dx) > dragThreshold || kotlin.math.abs(dy) > dragThreshold)
+                ) {
+                    isDraggingBubble = true
+                    Log.d(TAG, "Starting drag: dx=$dx dy=$dy threshold=$dragThreshold")
+                    showCloseTarget()
+                }
+
+                if (isDraggingBubble) {
+                    val dm = context.resources.displayMetrics
+                    val maxX = (dm.widthPixels - view.width).coerceAtLeast(0)
+                    val maxY = (dm.heightPixels - view.height).coerceAtLeast(0)
+
+                    lp.x = (dragInitialX + dx.toInt()).coerceIn(0, maxX)
+                    lp.y = (dragInitialY + dy.toInt()).coerceIn(0, maxY)
+
+                    bubbleX = lp.x
+                    bubbleY = lp.y
+
+                    try {
+                        windowManager.updateViewLayout(view, lp)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to update layout during drag", e)
+                    }
+
+                    checkCloseTargetHover(event.rawX, event.rawY)
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                val lp = dragLayoutParams
+
+                if (isDraggingBubble && lp != null) {
+                    val droppedOnClose = _isHoveringClose.value
+                    Log.d(TAG, "ACTION_UP after drag. droppedOnClose=$droppedOnClose x=${lp.x}, y=${lp.y}")
+                    hideCloseTarget()
+
+                    if (droppedOnClose) {
+                        hide()
+                    } else {
+                        val dm = context.resources.displayMetrics
+                        val midX = dm.widthPixels / 2
+                        val bubbleCenterX = lp.x + (view.width / 2)
+                        val dockLeft = bubbleCenterX < midX
+                        _dockOnLeft.value = dockLeft
+                        val targetX = if (dockLeft) BUBBLE_EDGE_MARGIN_PX
+                        else dm.widthPixels - view.width - BUBBLE_EDGE_MARGIN_PX
+
+                        cancelBubbleSnapAnimation()
+                        bubbleSnapAnimator = ValueAnimator.ofInt(lp.x, targetX).apply {
+                            duration = 300
+                            interpolator = android.view.animation.OvershootInterpolator(0.5f)
+                            addUpdateListener { animator ->
+                                val newX = animator.animatedValue as Int
+                                lp.x = newX
+                                bubbleX = newX
+                                try {
+                                    windowManager.updateViewLayout(view, lp)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to update layout during snap", e)
+                                }
+                            }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    if (bubbleSnapAnimator === animation) bubbleSnapAnimator = null
+                                }
+
+                                override fun onAnimationCancel(animation: Animator) {
+                                    if (bubbleSnapAnimator === animation) bubbleSnapAnimator = null
+                                }
+                            })
+                            start()
+                        }
+                    }
+                    dragLayoutParams = null
+                    isDraggingBubble = false
+                    return true
+                } else {
+                    dragLayoutParams = null
+                    isDraggingBubble = false
+                    val currentState = _state.value
+                    val isCollapsedState = currentState is BubbleState.RizzButton ||
+                        currentState is BubbleState.RizzButtonAddMore
+
+                    if (isCollapsedState) {
+                        Log.d(TAG, "ACTION_UP without drag in collapsed state - expanding bubble directly")
+
+                        val appendDirection = pendingAppendDirection
+                        if (appendDirection != null) {
+                            pendingAppendDirection = null
+                            ensureScope().launch {
+                                hideForCapture()
+                                kotlinx.coroutines.delay(300)
+                                try {
+                                    orchestrator.captureScreenshot()
+                                } finally {
+                                    if (composeView == null) {
+                                        composeView = createAndAttachView()
+                                    }
+                                }
+                                val previewBitmaps = orchestrator.getPreviewBitmaps()
+                                if (previewBitmaps.isNotEmpty()) {
+                                    _state.value = BubbleState.ScreenshotPreview(previewBitmaps, appendDirection)
+                                } else {
+                                    val result = orchestrator.result.value
+                                    _state.value = when (result) {
+                                        is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
+                                        is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
+                                        else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
+                                    }
+                                }
+                            }
+                        } else {
+                            val result = orchestrator.result.value
+                            val previews = orchestrator.getPreviewBitmaps()
+                            _state.value = when {
+                                result is SuggestionResult.Success -> BubbleState.Expanded(result)
+                                result is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
+                                previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
+                                    previews,
+                                    currentDirection ?: DirectionWithHint()
+                                )
+                                else -> BubbleState.DirectionPicker
+                            }
+                        }
+                    } else {
+                        Log.d(TAG, "ACTION_UP without drag in full-screen state - handling tap")
+                        handleEvent(OverlayEvent.ShowBubble)
+                    }
+                    return true
+                }
+            }
+        }
+
+        return false
     }
 
     private fun createParams(fullScreen: Boolean): WindowManager.LayoutParams {
@@ -196,196 +384,11 @@ class BubbleManager @Inject constructor(
                     dockOnLeft = dockOnLeft,
                     isGalleryMode = isGalleryMode,
                     onEvent = { handleEvent(it) },
+                    onCollapsedOverlayMotionEvent = { event -> handleCollapsedOverlayMotionEvent(this@apply, event) },
                     showPaywall = showPaywallState,
                     onDismissPaywall = { _showPaywall.value = false }
                 )
             }
-        }
-
-        var initialX = 0
-        var initialY = 0
-        var initialTouchX = 0f
-        var initialTouchY = 0f
-        var isDragging = false
-        var dragParams: WindowManager.LayoutParams? = null
-
-        view.setOnTouchListener { _, event ->
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "Touch event: action=${event.action} state=${_state.value}")
-            }
-
-            when (event.action) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    val lp = view.layoutParams as? WindowManager.LayoutParams
-                        ?: run {
-                            Log.w(TAG, "ACTION_DOWN but layoutParams is not WindowManager.LayoutParams")
-                            return@setOnTouchListener false
-                        }
-
-                    dragParams = lp
-                    initialX = lp.x
-                    initialY = lp.y
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    isDragging = false
-                    Log.d(
-                        TAG,
-                        "ACTION_DOWN at raw=(${event.rawX}, ${event.rawY}) lp=(${lp.x}, ${lp.y})"
-                    )
-                    // We need to consume ACTION_DOWN to track drags, but we'll check state on ACTION_UP
-                    // to decide whether to handle the tap or let Compose handle it
-                    return@setOnTouchListener true
-                }
-
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val lp = dragParams ?: return@setOnTouchListener true
-                    val dx = event.rawX - initialTouchX
-                    val dy = event.rawY - initialTouchY
-
-                    // Threshold to differentiate a tap from a drag (use dp-scaled threshold)
-                    val density = context.resources.displayMetrics.density
-                    val dragThreshold = 4f * density // ~4dp
-                    if (!isDragging && (kotlin.math.abs(dx) > dragThreshold || kotlin.math.abs(dy) > dragThreshold)) {
-                        isDragging = true
-                        Log.d(
-                            TAG,
-                            "Starting drag: dx=$dx dy=$dy threshold=$dragThreshold"
-                        )
-                        showCloseTarget()
-                    }
-
-                    if (isDragging) {
-                        val dm = context.resources.displayMetrics
-                        val maxY = dm.heightPixels - view.height
-
-                        lp.x = initialX + dx.toInt()
-                        // Clamp Y so it can't go off the top or bottom of the screen
-                        lp.y = (initialY + dy.toInt()).coerceIn(0, maxY)
-
-                        bubbleX = lp.x
-                        bubbleY = lp.y
-
-                        try {
-                            windowManager.updateViewLayout(view, lp)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to update layout during drag", e)
-                        }
-
-                        checkCloseTargetHover(event.rawX, event.rawY)
-                    }
-                    // Always keep consuming MOVE events while in bubble mode
-                    return@setOnTouchListener true
-                }
-
-                android.view.MotionEvent.ACTION_UP,
-                android.view.MotionEvent.ACTION_CANCEL -> {
-                    val lp = dragParams
-
-                    if (isDragging && lp != null) {
-                        val droppedOnClose = _isHoveringClose.value
-                        Log.d(TAG, "ACTION_UP after drag. droppedOnClose=$droppedOnClose x=${lp.x}, y=${lp.y}")
-                        hideCloseTarget()
-
-                        if (droppedOnClose) {
-                            hide()
-                        } else {
-                            // Snap to nearest Left or Right edge with spring animation
-                            val dm = context.resources.displayMetrics
-                            val midX = dm.widthPixels / 2
-                            val bubbleCenterX = lp.x + (view.width / 2)
-                            val dockLeft = bubbleCenterX < midX
-                            _dockOnLeft.value = dockLeft
-                            // Leave some margin so bubble doesn't go completely off-screen
-                            val targetX = if (dockLeft) 8 else dm.widthPixels - view.width - 8
-
-                            // Use spring animation for smoother, more natural edge snapping
-                            android.animation.ValueAnimator.ofInt(lp.x, targetX).apply {
-                                duration = 300 // Slightly longer for smoother feel
-                                interpolator = android.view.animation.OvershootInterpolator(0.5f)
-                                addUpdateListener { animator ->
-                                    val newX = animator.animatedValue as Int
-                                    lp.x = newX
-                                    bubbleX = newX
-                                    try {
-                                        windowManager.updateViewLayout(view, lp)
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to update layout during snap", e)
-                                    }
-                                }
-                                start()
-                            }
-                        }
-                        dragParams = null
-                        return@setOnTouchListener true
-                    } else {
-                        // No significant movement: this was a tap
-                        dragParams = null
-                        val currentState = _state.value
-                        val isCollapsedState = currentState is BubbleState.RizzButton || 
-                                             currentState is BubbleState.RizzButtonAddMore
-                        
-                        if (isCollapsedState) {
-                            // In collapsed state, we should NOT handle taps here to avoid conflicts.
-                            // The RizzButton's onTap handler (via Compose) should handle it.
-                            // However, since we consumed ACTION_DOWN, Compose won't receive the event.
-                            // So we need to manually trigger the correct behavior: just expand the bubble
-                            // WITHOUT checking daily limits or launching MainActivity.
-                            // We'll directly set the state to show the picker/expanded view.
-                            Log.d(TAG, "ACTION_UP without drag in collapsed state - expanding bubble directly")
-                            
-                            val appendDirection = pendingAppendDirection
-                            if (appendDirection != null) {
-                                // We're in "add more screenshots" mode: append another capture
-                                pendingAppendDirection = null
-                                ensureScope().launch {
-                                    hideForCapture()
-                                    kotlinx.coroutines.delay(300)
-                                    try {
-                                        orchestrator.captureScreenshot()
-                                    } finally {
-                                        if (composeView == null) {
-                                            composeView = createAndAttachView()
-                                        }
-                                    }
-                                    val previewBitmaps = orchestrator.getPreviewBitmaps()
-                                    if (previewBitmaps.isNotEmpty()) {
-                                        _state.value = BubbleState.ScreenshotPreview(previewBitmaps, appendDirection)
-                                    } else {
-                                        val result = orchestrator.result.value
-                                        _state.value = when (result) {
-                                            is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType)
-                                            is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
-                                            else -> BubbleState.Error("Screenshot capture failed", SuggestionResult.ErrorType.UNKNOWN)
-                                        }
-                                    }
-                                }
-                            } else {
-                                // Restore prior state if any, otherwise show picker
-                                val result = orchestrator.result.value
-                                val previews = orchestrator.getPreviewBitmaps()
-                                _state.value = when {
-                                    result is SuggestionResult.Success -> BubbleState.Expanded(result)
-                                    result is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
-                                    previews.isNotEmpty() -> BubbleState.ScreenshotPreview(
-                                        previews,
-                                        currentDirection ?: DirectionWithHint()
-                                    )
-                                    else -> BubbleState.DirectionPicker
-                                }
-                            }
-                        } else {
-                            // In full-screen states, handle the tap normally
-                            Log.d(TAG, "ACTION_UP without drag in full-screen state - handling tap")
-                            handleEvent(OverlayEvent.ShowBubble)
-                        }
-                        return@setOnTouchListener true
-                    }
-                }
-            }
-
-            // We should never really hit this because we early-return for each action,
-            // but keep it here as a safe default.
-            false
         }
 
         view.setViewTreeLifecycleOwner(lifecycleOwner)
@@ -397,6 +400,9 @@ class BubbleManager @Inject constructor(
     fun show() {
         if (composeView != null) return
 
+        // Service activation: always dock top-right (not a stale X/Y from a prior session).
+        applyDefaultBubblePositionTopRight()
+
         ensureScope()
         lifecycleOwner.onCreate()
         lifecycleOwner.onResume()
@@ -405,9 +411,17 @@ class BubbleManager @Inject constructor(
         if (_state.value is BubbleState.Hidden) {
             _state.value = BubbleState.RizzButton
         }
+
+        // After layout, snap X using real width so the bubble hugs the right edge.
+        composeView?.post {
+            snapCollapsedBubbleToTopRight()
+        }
     }
 
     fun hide() {
+        cancelBubbleSnapAnimation()
+        dragLayoutParams = null
+        isDraggingBubble = false
         // Cancel all pending coroutines (LLM calls, tracking, timeout, etc.)
         stateCollectorJob?.cancel()
         stateCollectorJob = null
@@ -435,9 +449,70 @@ class BubbleManager @Inject constructor(
         _isGalleryMode.value = false
         hideCloseTarget()
 
+        resetBubblePositionForNextShow()
+
         // Clear service enabled pref so HomeScreen doesn't show stale "active" state
         ensureScope().launch {
             settingsRepository.setServiceEnabled(false)
+        }
+    }
+
+    /**
+     * Default / post-[hide] position: top-right (status bar + inset), dock hints on the right.
+     * Uses an estimated window width until the real layout is known.
+     */
+    private fun applyDefaultBubblePositionTopRight() {
+        val dm = context.resources.displayMetrics
+        _dockOnLeft.value = false
+        val estimatedWidth = (220 * dm.density).toInt().coerceAtLeast(160)
+        bubbleX = (dm.widthPixels - estimatedWidth - BUBBLE_EDGE_MARGIN_PX)
+            .coerceAtLeast(BUBBLE_EDGE_MARGIN_PX)
+        val statusBarId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+        val statusBarH = if (statusBarId > 0) {
+            context.resources.getDimensionPixelSize(statusBarId)
+        } else {
+            (24 * dm.density).toInt()
+        }
+        bubbleY = (statusBarH + (12 * dm.density).toInt()).coerceAtLeast(0)
+    }
+
+    private fun resetBubblePositionForNextShow() {
+        applyDefaultBubblePositionTopRight()
+    }
+
+    /**
+     * Precise top-right dock using measured overlay size (collapsed bubble only).
+     */
+    private fun snapCollapsedBubbleToTopRight(layoutRetriesLeft: Int = 8) {
+        val view = composeView ?: return
+        if (isFullScreenState(_state.value)) return
+        if (view.width <= 0) {
+            if (layoutRetriesLeft > 0) {
+                view.post { snapCollapsedBubbleToTopRight(layoutRetriesLeft - 1) }
+            }
+            return
+        }
+        val dm = context.resources.displayMetrics
+        val lp = view.layoutParams as? WindowManager.LayoutParams ?: return
+        val newX = (dm.widthPixels - view.width - BUBBLE_EDGE_MARGIN_PX)
+            .coerceAtLeast(BUBBLE_EDGE_MARGIN_PX)
+        val statusBarId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+        val statusBarH = if (statusBarId > 0) {
+            context.resources.getDimensionPixelSize(statusBarId)
+        } else {
+            (24 * dm.density).toInt()
+        }
+        val newY = (statusBarH + (12 * dm.density).toInt()).coerceAtLeast(0)
+        val maxY = (dm.heightPixels - view.height).coerceAtLeast(0)
+        lp.x = newX
+        lp.y = newY.coerceIn(0, maxY)
+        bubbleX = lp.x
+        bubbleY = lp.y
+        _dockOnLeft.value = false
+        try {
+            windowManager.updateViewLayout(view, lp)
+        } catch (e: Exception) {
+            Log.w(TAG, "snapCollapsedBubbleToTopRight failed", e)
         }
     }
 
@@ -479,6 +554,9 @@ class BubbleManager @Inject constructor(
         }
 
         closeTargetView = ComposeView(context).apply {
+            // Required: standalone overlay windows have no Activity; Compose needs these for recomposer setup.
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setContent {
                 val hovering by _isHoveringClose.collectAsState()
                 com.rizzbot.v2.overlay.ui.components.shared.CloseTargetUI(isHovering = hovering)

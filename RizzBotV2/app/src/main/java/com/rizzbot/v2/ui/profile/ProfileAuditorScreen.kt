@@ -118,8 +118,6 @@ fun ProfileAuditorScreen(
     val state by viewModel.state.collectAsState()
     val maxPhotos = state.maxPhotosPerAudit
 
-    // Calculate if user can audit
-    val isGodMode = state.tier == "premium" || state.tier == "god_mode"
     val weeklyAuditLimit = state.profileAuditsPerWeek
     val weeklyAuditsUsed = state.weeklyAuditsUsed.coerceAtLeast(0)
     val showIntro =
@@ -205,8 +203,7 @@ fun ProfileAuditorScreen(
                             }
                         }
                         showIntro -> {
-                            if (!isGodMode &&
-                                TierQuota.isFinite(weeklyAuditLimit) &&
+                            if (TierQuota.isFinite(weeklyAuditLimit) &&
                                 state.weeklyAuditsUsed >= weeklyAuditLimit
                             ) {
                                 Text(
@@ -316,7 +313,7 @@ fun ProfileAuditorScreen(
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
                             text = when {
-                                isGodMode || TierQuota.isUnlimited(weeklyAuditLimit) ->
+                                TierQuota.isUnlimited(weeklyAuditLimit) ->
                                     "Unlimited photo audits on your plan."
                                 TierQuota.isNotOnPlan(weeklyAuditLimit) ->
                                     "Photo audits aren't included on your current plan."

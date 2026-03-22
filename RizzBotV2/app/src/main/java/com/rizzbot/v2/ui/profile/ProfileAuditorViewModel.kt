@@ -108,17 +108,12 @@ class ProfileAuditorViewModel @Inject constructor(
     }
 
     /**
-     * Tier / weekly limit is enforced here only — not on submit.
-     * [onBlocked] when user has no audits left (not Premium/God).
+     * Weekly audit quota from usage API ([profileAuditsPerWeek] / [weeklyAuditsUsed]).
+     * [onBlocked] when not on plan, at cap, or paywall needed.
      */
     fun tryBeginAuditSession(onBlocked: () -> Unit) {
         val s = _state.value
-        val isGod = s.tier == "premium" || s.tier == "god_mode"
         val limit = s.profileAuditsPerWeek
-        if (isGod) {
-            _state.update { it.copy(auditSessionStarted = true, error = null) }
-            return
-        }
         when {
             TierQuota.isNotOnPlan(limit) -> {
                 onBlocked()

@@ -1,13 +1,18 @@
 package com.rizzbot.v2.overlay.ui
 
 import android.os.Build
+import android.view.MotionEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -67,6 +72,7 @@ fun BubbleOverlay(
     dockOnLeft: StateFlow<Boolean>,
     isGalleryMode: StateFlow<Boolean>,
     onEvent: (OverlayEvent) -> Unit,
+    onCollapsedOverlayMotionEvent: (MotionEvent) -> Boolean,
     showPaywall: Boolean = false,
     onDismissPaywall: () -> Unit = {}
 ) {
@@ -94,16 +100,55 @@ fun BubbleOverlay(
                 onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
             )
 
-            // Floating bubble with hints (shown when not in full-screen mode)
+            // Floating bubble: dock-aware slide + soft spring scale + eased fade (premium entrance)
+            val bubbleEnter = remember(dockLeft) {
+                fadeIn(animationSpec = tween(340, easing = FastOutSlowInEasing)) +
+                    scaleIn(
+                        initialScale = 0.88f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
+                    ) +
+                    if (dockLeft) {
+                        slideInHorizontally(
+                            initialOffsetX = { -it / 4 },
+                            animationSpec = tween(400, easing = FastOutSlowInEasing)
+                        )
+                    } else {
+                        slideInHorizontally(
+                            initialOffsetX = { it / 4 },
+                            animationSpec = tween(400, easing = FastOutSlowInEasing)
+                        )
+                    }
+            }
+            val bubbleExit = remember(dockLeft) {
+                fadeOut(animationSpec = tween(200, easing = FastOutSlowInEasing)) +
+                    scaleOut(
+                        targetScale = 0.92f,
+                        animationSpec = tween(220, easing = FastOutSlowInEasing)
+                    ) +
+                    if (dockLeft) {
+                        slideOutHorizontally(
+                            targetOffsetX = { -it / 5 },
+                            animationSpec = tween(220, easing = FastOutSlowInEasing)
+                        )
+                    } else {
+                        slideOutHorizontally(
+                            targetOffsetX = { it / 5 },
+                            animationSpec = tween(220, easing = FastOutSlowInEasing)
+                        )
+                    }
+            }
             AnimatedVisibility(
                 visible = !isFullScreen,
-                enter = fadeIn() + scaleIn(initialScale = 0.8f),
-                exit = fadeOut() + scaleOut(targetScale = 0.8f)
+                enter = bubbleEnter,
+                exit = bubbleExit
             ) {
                 BubbleWithHints(
                     state = currentState,
                     dockOnLeft = dockLeft,
-                    onTap = { onEvent(OverlayEvent.ShowBubble) }
+                    onCollapsedOverlayMotionEvent = onCollapsedOverlayMotionEvent
                 )
             }
 
