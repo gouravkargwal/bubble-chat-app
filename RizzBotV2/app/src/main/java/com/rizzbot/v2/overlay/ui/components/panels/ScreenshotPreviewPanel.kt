@@ -67,7 +67,6 @@ fun ScreenshotPreviewPanel(
     modifier: Modifier = Modifier
 ) {
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-
     var selectedIndex by remember(bitmaps) {
         mutableIntStateOf(bitmaps.lastIndex.coerceAtLeast(0))
     }
@@ -82,8 +81,7 @@ fun ScreenshotPreviewPanel(
 
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .heightIn(max = screenHeight * 0.75f)
+            .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {

@@ -30,6 +30,9 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +56,8 @@ fun HistoryScreen(
 ) {
     val history by viewModel.history.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
+    val pullRefreshState = rememberPullToRefreshState()
     val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     val hasMore by viewModel.hasMore.collectAsState()
     val context = LocalContext.current
@@ -71,7 +76,17 @@ fun HistoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Reply History", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Reply History", fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "From screenshots & overlay",
+                            color = Color(0xFF9E9EAE),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
@@ -85,13 +100,28 @@ fun HistoryScreen(
         },
         containerColor = Color(0xFF0F0F1A)
     ) { padding ->
-        if (isLoading) {
-            HistorySkeleton(modifier = Modifier.padding(padding))
+        PullToRefreshBox(
+            isRefreshing = isPullRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = pullRefreshState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    isRefreshing = isPullRefreshing,
+                    state = pullRefreshState,
+                    containerColor = Color(0xFF1A1A2E),
+                    color = Color(0xFFE91E63),
+                )
+            },
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize(),
+        ) {
+        if (isLoading && history.isEmpty()) {
+            HistorySkeleton(modifier = Modifier.fillMaxSize())
         } else if (history.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -99,14 +129,20 @@ fun HistoryScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("No reply history yet", color = Color.Gray)
                     Text("Your generated replies will appear here", color = Color.Gray, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = onBack,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Back to home", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         } else {
             LazyColumn(
                 state = listState,
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -144,10 +180,8 @@ fun HistoryScreen(
                             onCopyReply = { reply, isHighValue ->
                                 viewModel.copyReply(reply)
                                 if (isHighValue) {
-                                    // Track high-value copy and maybe launch in-app review.
                                     viewModel.incrementHighValueCopyCount { count ->
                                         if (count == 2) {
-                                            // TODO: Ensure implementation("com.google.android.play:review:2.0.1") is added in app/build.gradle.kts
                                             launchInAppReview(context)
                                         }
                                     }
@@ -174,6 +208,7 @@ fun HistoryScreen(
                     }
                 }
             }
+        }
         }
     }
 }

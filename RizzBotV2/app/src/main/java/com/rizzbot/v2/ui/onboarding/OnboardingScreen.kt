@@ -6,7 +6,14 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
@@ -59,7 +66,6 @@ private val DarkBg = Color(0xFF0A0A14)
 private val CardBg = Color(0xFF14142B)
 private val CardBorder = Color(0xFF1E1E3F)
 private val SubtleText = Color(0xFF8888AA)
-private val Gold = Color(0xFFFFD700)
 private val ProPurple = Color(0xFF7C4DFF)
 
 @Composable
@@ -67,6 +73,9 @@ fun OnboardingScreen(
     onComplete: () -> Unit,
     onNavigateToPaywall: () -> Unit = {},
     onTryDemo: () -> Unit = {},
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacy: () -> Unit = {},
+    isResumeSignIn: Boolean = false,
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -111,25 +120,50 @@ fun OnboardingScreen(
         ) {
             Spacer(modifier = Modifier.height(56.dp))
 
-            // Step indicator — 4 steps now
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                repeat(4) { step ->
-                    Box(
-                        modifier = Modifier
-                            .height(3.dp)
-                            .weight(1f)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(
-                                if (step <= state.currentStep)
-                                    Brush.horizontalGradient(listOf(Pink, PinkDark))
-                                else
-                                    Brush.horizontalGradient(listOf(CardBorder, CardBorder))
-                            )
-                    )
+            if (isResumeSignIn && state.currentStep == 0) {
+                Text(
+                    text = "Sign in again to use Cookd",
+                    color = SubtleText,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            } else {
+                // Step indicator — 4 steps
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    repeat(4) { step ->
+                        val filled = step <= state.currentStep
+                        val trackColor by animateColorAsState(
+                            targetValue = if (filled) Pink else CardBorder,
+                            animationSpec = tween(280, easing = FastOutSlowInEasing),
+                            label = "onboardingStepColor",
+                        )
+                        val trackHeight by animateDpAsState(
+                            targetValue = if (filled) 4.dp else 3.dp,
+                            animationSpec = tween(280, easing = FastOutSlowInEasing),
+                            label = "onboardingStepHeight",
+                        )
+                        Box(
+                            modifier = Modifier
+                                .height(trackHeight)
+                                .weight(1f)
+                                .clip(RoundedCornerShape(2.dp))
+                                .then(
+                                    if (filled) {
+                                        Modifier.background(
+                                            Brush.horizontalGradient(listOf(Pink, PinkDark)),
+                                        )
+                                    } else {
+                                        Modifier.background(trackColor)
+                                    },
+                                )
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(40.dp))
             }
-
-            Spacer(modifier = Modifier.height(40.dp))
 
             AnimatedContent(
                 targetState = state.currentStep,
@@ -138,8 +172,11 @@ fun OnboardingScreen(
             ) { step ->
                 when (step) {
                     0 -> HookAndLoginStep(
+                        isResumeSignIn = isResumeSignIn,
                         isAuthenticating = state.isAuthenticating,
                         authError = state.authError,
+                        onOpenTerms = onOpenTerms,
+                        onOpenPrivacy = onOpenPrivacy,
                         onSignIn = {
                             val activity = context as? Activity
                             if (activity != null) {
@@ -150,10 +187,13 @@ fun OnboardingScreen(
                         }
                     )
                     1 -> VibeCheckStep(
-                        onNext = { viewModel.nextStep() }
+                        selectedVibe = state.onboardingVibe,
+                        onSelectVibe = { viewModel.setOnboardingVibe(it) },
+                        onNext = { viewModel.completeVibeStep() }
                     )
                     2 -> InteractiveDemoStep(
-                        onNext = { viewModel.nextStep() }
+                        onNext = { viewModel.nextStep() },
+                        onTryDemo = onTryDemo
                     )
                     3 -> TrustAndTechStep(
                         hasPermission = state.hasOverlayPermission,
@@ -176,8 +216,11 @@ fun OnboardingScreen(
 
 @Composable
 private fun HookAndLoginStep(
+    isResumeSignIn: Boolean,
     isAuthenticating: Boolean,
     authError: String?,
+    onOpenTerms: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     onSignIn: () -> Unit
 ) {
     val context = LocalContext.current
@@ -228,7 +271,7 @@ private fun HookAndLoginStep(
         Spacer(modifier = Modifier.height(32.dp))
         
         Text(
-            "Never drop the ball on a match again.",
+            if (isResumeSignIn) "Welcome back" else "Never drop the ball on a match again.",
             color = Color.White,
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
@@ -239,7 +282,11 @@ private fun HookAndLoginStep(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            "Upload a screenshot. Let Cookd write the perfect reply.",
+            if (isResumeSignIn) {
+                "Your setup is saved. Sign in with Google to keep using replies, audits, and your profile tools."
+            } else {
+                "Upload a screenshot. Let Cookd write the perfect reply."
+            },
             color = SubtleText,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
@@ -282,15 +329,37 @@ private fun HookAndLoginStep(
         }
         
         Spacer(modifier = Modifier.height(12.dp))
-        
-        // Legal text
-        Text(
-            "By continuing, you agree to our Terms of Service.",
-            color = SubtleText.copy(alpha = 0.5f),
-            fontSize = 11.sp,
-            textAlign = TextAlign.Center
-        )
-        
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "By continuing, you agree to:",
+                color = SubtleText.copy(alpha = 0.5f),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                TextButton(
+                    onClick = onOpenTerms,
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                ) {
+                    Text("Terms", color = Pink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Text("·", color = SubtleText.copy(alpha = 0.4f), fontSize = 11.sp)
+                TextButton(
+                    onClick = onOpenPrivacy,
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                ) {
+                    Text("Privacy", color = Pink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
@@ -299,16 +368,16 @@ private fun HookAndLoginStep(
 
 @Composable
 private fun VibeCheckStep(
+    selectedVibe: String?,
+    onSelectVibe: (String) -> Unit,
     onNext: () -> Unit
 ) {
-    var selectedVibe by remember { mutableStateOf<String?>(null) }
-    
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(20.dp))
-        
+
         Text(
             "What's your texting vibe?",
             color = Color.White,
@@ -316,10 +385,9 @@ private fun VibeCheckStep(
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
-        
+
         Spacer(modifier = Modifier.height(40.dp))
-        
-        // Vibe cards
+
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -328,24 +396,24 @@ private fun VibeCheckStep(
                 emoji = "🔥",
                 title = "Flirty & Direct",
                 isSelected = selectedVibe == "flirty",
-                onClick = { selectedVibe = "flirty" }
+                onClick = { onSelectVibe("flirty") }
             )
             VibeCard(
                 emoji = "😏",
                 title = "Playful & Teasing",
                 isSelected = selectedVibe == "playful",
-                onClick = { selectedVibe = "playful" }
+                onClick = { onSelectVibe("playful") }
             )
             VibeCard(
                 emoji = "🧠",
                 title = "Witty & Sarcastic",
                 isSelected = selectedVibe == "witty",
-                onClick = { selectedVibe = "witty" }
+                onClick = { onSelectVibe("witty") }
             )
         }
-        
+
         Spacer(modifier = Modifier.weight(1f))
-        
+
         Button(
             onClick = onNext,
             enabled = selectedVibe != null,
@@ -357,7 +425,7 @@ private fun VibeCheckStep(
         ) {
             Text("Next", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         }
-        
+
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
@@ -415,10 +483,12 @@ private fun VibeCard(
 
 @Composable
 private fun InteractiveDemoStep(
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    onTryDemo: () -> Unit
 ) {
     var chatState by remember { mutableStateOf(0) } // 0 = waiting, 1 = typing, 2 = done
     var typingDots by remember { mutableStateOf(".") }
+    val demoScroll = rememberScrollState()
     
     // Animate typing dots
     LaunchedEffect(chatState) {
@@ -443,16 +513,17 @@ private fun InteractiveDemoStep(
     }
     
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(20.dp))
-        
-        // Chat interface
+
+        // Chat interface (scrollable so layout works without invalid nested weights)
         Column(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .weight(1f),
+                .verticalScroll(demoScroll),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Received message (left)
@@ -481,6 +552,10 @@ private fun InteractiveDemoStep(
             // Action area or generated message
             when (chatState) {
                 0 -> {
+                    TextButton(onClick = onTryDemo) {
+                        Text("Browse full scenario examples", color = SubtleText, fontSize = 13.sp)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     // Cook a Reply button with pulsing animation
                     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
                     val scale by infiniteTransition.animateFloat(
@@ -612,7 +687,7 @@ private fun TrustAndTechStep(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            "To put that magic button inside your apps, we need Overlay Permission. Screenshots are securely processed and NEVER saved on your device.",
+            "To put that magic button inside your apps, we need overlay permission. You choose when to capture; images are sent over TLS for processing. Details are in Privacy.",
             color = SubtleText,
             fontSize = 15.sp,
             textAlign = TextAlign.Center,
@@ -627,9 +702,9 @@ private fun TrustAndTechStep(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            PrivacyItem("Screenshots are captured only when you tap the bubble")
-            PrivacyItem("Images are sent securely and never stored on our servers")
-            PrivacyItem("Screenshots are never saved on your device")
+            PrivacyItem("You trigger capture with the bubble — not automatically in the background")
+            PrivacyItem("Images are encrypted in transit; see Privacy Policy in the app for retention details")
+            PrivacyItem("Cookd does not save screenshots to your camera roll")
         }
         
         Spacer(modifier = Modifier.weight(1f))

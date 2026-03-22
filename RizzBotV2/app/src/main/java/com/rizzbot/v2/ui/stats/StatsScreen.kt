@@ -37,6 +37,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -69,10 +72,14 @@ fun StatsScreen(
     viewModel: StatsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val pullRefreshState = rememberPullToRefreshState()
 
     val DarkBg = Color(0xFF0F0F1A)
     val CardBg = Color(0xFF1A1A2E)
-    val GodModeGold = Color(0xFFFFD700)
+    val BrandPink = Color(0xFFE91E63)
+    val brandAccent = BrandPink
+    val isPremiumTier = state.tier == "premium" || state.tier == "god_mode"
     
     // Auto-refresh when screen becomes visible
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -84,9 +91,9 @@ fun StatsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Voice DNA Dashboard ✦",
+                        text = if (isPremiumTier) "Voice DNA Dashboard ✦" else "Voice DNA Dashboard",
                         fontWeight = FontWeight.Bold,
-                        color = GodModeGold
+                        color = BrandPink
                     )
                 },
                 navigationIcon = {
@@ -102,9 +109,25 @@ fun StatsScreen(
         },
         containerColor = DarkBg
     ) { padding ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            state = pullRefreshState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    isRefreshing = isRefreshing,
+                    state = pullRefreshState,
+                    containerColor = CardBg,
+                    color = BrandPink,
+                )
+            },
             modifier = Modifier
                 .padding(padding)
+                .fillMaxSize(),
+        ) {
+        Column(
+            modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
@@ -116,7 +139,7 @@ fun StatsScreen(
                 CalibratingBanner(
                     current = state.preferences.totalRatings,
                     target = 20,
-                    godModeGold = GodModeGold,
+                    brandAccent = brandAccent,
                     cardBg = CardBg
                 )
                 Spacer(modifier = Modifier.height(20.dp))
@@ -127,7 +150,7 @@ fun StatsScreen(
                 totalGenerated = state.totalGenerated,
                 totalCopied = state.totalCopied,
                 totalConversations = state.totalConversationsInfluenced,
-                godModeGold = GodModeGold,
+                brandAccent = brandAccent,
                 cardBg = CardBg
             )
 
@@ -137,13 +160,13 @@ fun StatsScreen(
             SectionCard(
                 title = "Personality Breakdown",
                 subtitle = if (hasEnoughData) "Based on ${state.preferences.totalRatings} rated conversations" else "We’re still calibrating your personality profile",
-                godModeGold = GodModeGold,
+                brandAccent = brandAccent,
                 cardBg = CardBg
             ) {
                 if (hasEnoughData) {
                     PersonalityBreakdownContent(
                         preferences = state.preferences,
-                        accent = GodModeGold
+                        accent = brandAccent
                     )
                 } else {
                     Text(
@@ -155,7 +178,7 @@ fun StatsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     ScanningProgressBar(
                         progress = state.preferences.totalRatings / 20f,
-                        accent = GodModeGold
+                        accent = brandAccent
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -172,13 +195,13 @@ fun StatsScreen(
             SectionCard(
                 title = "Linguistic Fingerprint",
                 subtitle = "Your most iconic slang and phrases",
-                godModeGold = GodModeGold,
+                brandAccent = brandAccent,
                 cardBg = CardBg
             ) {
                 if (hasEnoughData && state.preferences.topSlang.isNotEmpty()) {
                     LinguisticFingerprintContent(
                         slang = state.preferences.topSlang,
-                        accent = GodModeGold
+                        accent = brandAccent
                     )
                 } else {
                     Text(
@@ -196,22 +219,7 @@ fun StatsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Section 3: Success Metrics
-            SectionCard(
-                title = "Success Metrics",
-                subtitle = "How your AI twin is performing in the wild",
-                godModeGold = GodModeGold,
-                cardBg = CardBg
-            ) {
-                SuccessMetricsContent(
-                    totalGenerated = state.totalGenerated,
-                    totalCopied = state.totalCopied,
-                    totalConversations = state.totalConversationsInfluenced,
-                    accent = GodModeGold
-                )
-            }
+        }
         }
     }
 }
@@ -220,7 +228,7 @@ fun StatsScreen(
 private fun CalibratingBanner(
     current: Int,
     target: Int,
-    godModeGold: Color,
+    brandAccent: Color,
     cardBg: Color
 ) {
     val progress = (current.toFloat() / target).coerceIn(0f, 1f)
@@ -229,7 +237,7 @@ private fun CalibratingBanner(
         shape = RoundedCornerShape(18.dp),
         border = CardDefaults.outlinedCardBorder().copy(
             width = 1.dp,
-            brush = Brush.horizontalGradient(listOf(godModeGold, godModeGold.copy(alpha = 0.3f)))
+            brush = Brush.horizontalGradient(listOf(brandAccent, brandAccent.copy(alpha = 0.3f)))
         )
     ) {
         Box(
@@ -251,7 +259,7 @@ private fun CalibratingBanner(
             ) {
                 Text(
                     text = "Profile Calibrating…",
-                    color = godModeGold,
+                    color = brandAccent,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp
                 )
@@ -264,7 +272,7 @@ private fun CalibratingBanner(
                 Spacer(modifier = Modifier.height(10.dp))
                 ScanningProgressBar(
                     progress = progress,
-                    accent = godModeGold
+                    accent = brandAccent
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -281,7 +289,7 @@ private fun CalibratingBanner(
 private fun SectionCard(
     title: String,
     subtitle: String,
-    godModeGold: Color,
+    brandAccent: Color,
     cardBg: Color,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -293,8 +301,8 @@ private fun SectionCard(
             width = 1.dp,
             brush = Brush.horizontalGradient(
                 listOf(
-                    godModeGold.copy(alpha = 0.7f),
-                    godModeGold.copy(alpha = 0.2f)
+                    brandAccent.copy(alpha = 0.7f),
+                    brandAccent.copy(alpha = 0.2f)
                 )
             )
         )
@@ -314,7 +322,7 @@ private fun SectionCard(
         ) {
             Text(
                 text = title,
-                color = godModeGold,
+                color = brandAccent,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 15.sp
             )
@@ -337,7 +345,7 @@ private fun SuccessSummaryRow(
     totalGenerated: Int,
     totalCopied: Int,
     totalConversations: Int,
-    godModeGold: Color,
+    brandAccent: Color,
     cardBg: Color
 ) {
     val copyRate = if (totalGenerated > 0) {
@@ -352,7 +360,7 @@ private fun SuccessSummaryRow(
             label = "Rizz Score",
             value = "$copyRate%",
             helper = "Based on how often your replies are copied",
-            godModeGold = godModeGold,
+            brandAccent = brandAccent,
             cardBg = cardBg,
             modifier = Modifier.weight(1f)
         )
@@ -360,7 +368,7 @@ private fun SuccessSummaryRow(
             label = "Conversations Influenced",
             value = "$totalConversations",
             helper = "Unique chats Cookd has touched",
-            godModeGold = godModeGold,
+            brandAccent = brandAccent,
             cardBg = cardBg,
             modifier = Modifier.weight(1f)
         )
@@ -372,7 +380,7 @@ private fun SummaryStatCard(
     label: String,
     value: String,
     helper: String,
-    godModeGold: Color,
+    brandAccent: Color,
     cardBg: Color,
     modifier: Modifier = Modifier
 ) {
@@ -384,11 +392,11 @@ private fun SummaryStatCard(
             width = 1.dp,
             brush = Brush.sweepGradient(
                 colors = listOf(
-                    godModeGold.copy(alpha = 0.9f),
-                    godModeGold.copy(alpha = 0.2f),
-                    godModeGold.copy(alpha = 0.6f),
-                    godModeGold.copy(alpha = 0.2f),
-                    godModeGold.copy(alpha = 0.9f)
+                    brandAccent.copy(alpha = 0.9f),
+                    brandAccent.copy(alpha = 0.2f),
+                    brandAccent.copy(alpha = 0.6f),
+                    brandAccent.copy(alpha = 0.2f),
+                    brandAccent.copy(alpha = 0.9f)
                 )
             )
         )
@@ -418,7 +426,7 @@ private fun SummaryStatCard(
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    godModeGold.copy(alpha = 0.15f),
+                                    brandAccent.copy(alpha = 0.15f),
                                     Color.Transparent
                                 ),
                                 center = centerOffset,
@@ -454,12 +462,12 @@ private fun SummaryStatCard(
                     )
                     Text(
                         text = value,
-                        color = godModeGold,
+                        color = brandAccent,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 34.sp,
                         style = TextStyle(
                             shadow = Shadow(
-                                color = godModeGold.copy(alpha = 0.5f),
+                                color = brandAccent.copy(alpha = 0.5f),
                                 blurRadius = 8f
                             )
                         )
@@ -556,33 +564,6 @@ private fun VibeBarDashboard(
     }
 }
 
-@Composable
-private fun MetricBarDashboard(
-    label: String,
-    value: Float,
-    accent: Color
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color.White, fontSize = 13.sp)
-            Text("${(value * 100).toInt()}%", color = Color.Gray, fontSize = 12.sp)
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        LinearProgressIndicator(
-            progress = { value.coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(3.dp)),
-            color = accent,
-            trackColor = Color(0xFF252542)
-        )
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LinguisticFingerprintContent(
@@ -622,43 +603,6 @@ private fun LinguisticFingerprintContent(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SuccessMetricsContent(
-    totalGenerated: Int,
-    totalCopied: Int,
-    totalConversations: Int,
-    accent: Color
-) {
-    val copyRate = if (totalGenerated > 0) {
-        ((totalCopied.toFloat() / totalGenerated) * 100).toInt()
-    } else 0
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        MetricBarDashboard(
-            label = "Rizz Score",
-            value = copyRate / 100f,
-            accent = accent
-        )
-        Text(
-            text = "Based on how often your AI replies actually get copied.",
-            color = Color.Gray,
-            fontSize = 11.sp
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Total Conversations Influenced: $totalConversations",
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            text = "Unique chats where Cookd generated at least one reply.",
-            color = Color.Gray,
-            fontSize = 11.sp
-        )
     }
 }
 

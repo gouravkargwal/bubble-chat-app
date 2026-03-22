@@ -28,6 +28,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -67,6 +69,16 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.hilt.navigation.compose.hiltViewModel
+import java.util.Locale
+
+private fun formatAuditTierLabel(raw: String): String {
+    return when (raw.uppercase()) {
+        "GOD_TIER" -> "Top pick"
+        "FILLER" -> "Decent"
+        "GRAVEYARD" -> "Replace"
+        else -> raw.replace("_", " ").lowercase().replaceFirstChar { it.titlecase(Locale.getDefault()) }
+    }
+}
 
 data class HistoryItem(
     val id: String,
@@ -82,12 +94,12 @@ data class HistoryItem(
 @Composable
 fun ProfileHistoryScreen(
     onBack: () -> Unit,
-    onNavigateToOptimizer: () -> Unit = {},
     viewModel: ProfileHistoryViewModel = hiltViewModel(),
 ) {
     val auditsState = viewModel.audits.collectAsState()
     val isLoadingState = viewModel.isLoadingState.collectAsState()
     val listState = rememberLazyListState()
+    val pullRefreshState = rememberPullToRefreshState()
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
 
     pendingDeleteId?.let { id ->
@@ -173,6 +185,16 @@ fun ProfileHistoryScreen(
         PullToRefreshBox(
             isRefreshing = isLoadingState.value && auditsState.value.isNotEmpty(),
             onRefresh = { viewModel.refresh() },
+            state = pullRefreshState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    isRefreshing = isLoadingState.value && auditsState.value.isNotEmpty(),
+                    state = pullRefreshState,
+                    containerColor = cardBg,
+                    color = Color(0xFFE91E63),
+                )
+            },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
@@ -290,7 +312,7 @@ private fun AuditHistoryCard(
                     
                     // Tier Badge
                     val tierColor = when (audit.tier.uppercase()) {
-                        "GOD_TIER" -> Color(0xFFFFD700)
+                        "GOD_TIER" -> Color(0xFF81C784)
                         "FILLER" -> Color(0xFFFFEB3B)
                         "GRAVEYARD" -> Color(0xFFE57373)
                         else -> Color(0xFFB0BEC5)
@@ -303,7 +325,7 @@ private fun AuditHistoryCard(
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = audit.tier.replace("_", "-"),
+                            text = formatAuditTierLabel(audit.tier),
                             color = tierColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold

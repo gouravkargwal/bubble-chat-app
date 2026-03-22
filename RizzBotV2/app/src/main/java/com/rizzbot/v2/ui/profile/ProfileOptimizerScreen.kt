@@ -26,10 +26,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -70,13 +70,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.rizzbot.v2.ui.theme.DarkBg
+import com.rizzbot.v2.ui.theme.Pink
 import com.rizzbot.v2.util.HapticHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val DarkBg = Color(0xFF050510)
 private val CardBg = Color(0xFF111122)
-private val Accent = Color(0xFFFFD700)
+private val Accent = Pink
 private val AccentSoft = Accent.copy(alpha = 0.16f)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,7 +101,7 @@ fun ProfileOptimizerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Profile Optimizer",
+                        text = "Auto-Build Profile",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White
@@ -118,8 +119,8 @@ fun ProfileOptimizerScreen(
                 actions = {
                     IconButton(onClick = onViewStrategy) {
                         Icon(
-                            Icons.Default.History,
-                            contentDescription = "History",
+                            imageVector = Icons.Filled.Article,
+                            contentDescription = "Saved profile blueprints",
                             tint = Color.White
                         )
                     }
@@ -250,13 +251,13 @@ private fun IdleOptimizerCard(
                     }
                     Column {
                         Text(
-                            text = "Profile Auto-Builder",
+                            text = "Auto-Build Profile",
                             color = Color.White,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "AI-powered profile optimization",
+                            text = "AI-powered profile builder",
                             color = Color(0xFFB0B0D0),
                             fontSize = 13.sp
                         )

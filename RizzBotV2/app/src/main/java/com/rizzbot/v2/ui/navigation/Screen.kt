@@ -8,9 +8,10 @@ sealed class Screen(val route: String) {
     data object Stats : Screen("stats")
     data object Demo : Screen("demo")
     data object ProfileOptimization : Screen("profile_optimization")
-    data object SyncPerson : Screen("sync_person")
     data object Premium : Screen("premium")
     data object ProfileAuditor : Screen("profile_auditor")
     data object ProfileHistory : Screen("profile_history")
     data object ProfileStrategy : Screen("profile_strategy")
+    data object LegalTerms : Screen("legal_terms")
+    data object LegalPrivacy : Screen("legal_privacy")
 }

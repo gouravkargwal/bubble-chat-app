@@ -2,7 +2,9 @@ package com.rizzbot.v2.ui.paywall
 
 import android.app.Activity
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +47,8 @@ private val Pink = Color(0xFFE91E63)
 fun PaywallScreen(
     onDismiss: () -> Unit,
     onPurchaseSuccess: () -> Unit,
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacy: () -> Unit = {},
     viewModel: PaywallViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -146,7 +150,7 @@ fun PaywallScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             Text(
-                                "You’re in. Welcome to Premium 🎉",
+                                "You’re in — Cookd is unlocked 🎉",
                                 color = Color.White,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
@@ -156,7 +160,7 @@ fun PaywallScreen(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Text(
-                                "Your account has been upgraded. Enjoy higher limits and all premium features right away.",
+                                "Your subscription is active. Enjoy higher limits and premium features right away.",
                                 color = Color.White.copy(alpha = 0.8f),
                                 fontSize = 16.sp,
                                 textAlign = TextAlign.Center,
@@ -323,6 +327,17 @@ fun PaywallScreen(
                                 )
                             }
 
+                            if (state.uiState is PaywallUiState.Success && state.selectedPackage == null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    "Select a billing period above to continue.",
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
                             // Add bottom padding to ensure content doesn't get cut off
                             Spacer(modifier = Modifier.height(24.dp))
                         }
@@ -363,6 +378,11 @@ fun PaywallScreen(
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PaywallPolicyLinks(
+                        onOpenTerms = onOpenTerms,
+                        onOpenPrivacy = onOpenPrivacy
+                    )
                 } else {
                     // Purchase CTA
                     val selectedPackage = state.selectedPackage
@@ -435,7 +455,7 @@ fun PaywallScreen(
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
-                        TextButton(onClick = { /* TODO: Open Terms */ }) {
+                        TextButton(onClick = onOpenTerms) {
                             Text(
                                 "Terms",
                                 color = Color.Gray,
@@ -447,7 +467,7 @@ fun PaywallScreen(
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
-                        TextButton(onClick = { /* TODO: Open Privacy */ }) {
+                        TextButton(onClick = onOpenPrivacy) {
                             Text(
                                 "Privacy",
                                 color = Color.Gray,
@@ -462,6 +482,26 @@ fun PaywallScreen(
 }
 
 @Composable
+private fun PaywallPolicyLinks(
+    onOpenTerms: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onOpenTerms) {
+            Text("Terms", color = Color.Gray, fontSize = 12.sp)
+        }
+        Text(" | ", color = Color.Gray, fontSize = 12.sp)
+        TextButton(onClick = onOpenPrivacy) {
+            Text("Privacy", color = Color.Gray, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
 private fun FeatureRow(text: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -469,7 +509,7 @@ private fun FeatureRow(text: String) {
     ) {
         Icon(
             Icons.Default.Check,
-            contentDescription = null,
+            contentDescription = "Included",
             tint = Pink,
             modifier = Modifier.size(24.dp)
         )
@@ -591,10 +631,19 @@ private fun PackageCard(
     savingsPercentage: Int?,
     onClick: () -> Unit
 ) {
+    val cardScale by animateFloatAsState(
+        targetValue = if (isSelected) 1.02f else 1f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "packageCardScale",
+    )
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = if (isDisabled) 0.5f else 1f }
+            .graphicsLayer {
+                alpha = if (isDisabled) 0.5f else 1f
+                scaleX = cardScale
+                scaleY = cardScale
+            }
             .then(
                 if (!isDisabled) Modifier.clickable(onClick = onClick) else Modifier
             )

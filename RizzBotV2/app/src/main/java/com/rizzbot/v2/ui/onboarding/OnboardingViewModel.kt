@@ -11,6 +11,7 @@ import com.rizzbot.v2.data.auth.GoogleSignInResult
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.AnalyticsHelper
+import com.rizzbot.v2.util.HapticHelper
 import com.rizzbot.v2.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -32,6 +33,8 @@ data class OnboardingState(
     val onboardingDone: Boolean = false,
     val showPaywall: Boolean = false,
     val isNewUser: Boolean = false,
+    /** Selected onboarding vibe: flirty | playful | witty */
+    val onboardingVibe: String? = null,
     val userName: String? = null,
     val referralCode: String = "",
     val referralApplying: Boolean = false,
@@ -46,7 +49,8 @@ class OnboardingViewModel @Inject constructor(
     private val hostedRepository: HostedRepository,
     val googleSignInHelper: GoogleSignInHelper,
     private val permissionHelper: PermissionHelper,
-    private val analyticsHelper: AnalyticsHelper
+    private val analyticsHelper: AnalyticsHelper,
+    private val hapticHelper: HapticHelper,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(OnboardingState())
@@ -63,10 +67,26 @@ class OnboardingViewModel @Inject constructor(
         _state.update { it.copy(hasOverlayPermission = permissionHelper.canDrawOverlays()) }
     }
 
-    fun nextStep() {
+    private fun advanceOnboardingStep() {
         val next = _state.value.currentStep + 1
         _state.update { it.copy(currentStep = next) }
         analyticsHelper.onboardingStepCompleted(next)
+    }
+
+    fun nextStep() {
+        hapticHelper.lightTap()
+        advanceOnboardingStep()
+    }
+
+    fun setOnboardingVibe(vibe: String) {
+        hapticHelper.lightTap()
+        _state.update { it.copy(onboardingVibe = vibe) }
+    }
+
+    fun completeVibeStep() {
+        hapticHelper.mediumTap()
+        _state.value.onboardingVibe?.let { analyticsHelper.onboardingVibeSelected(it) }
+        advanceOnboardingStep()
     }
 
     fun signInWithGoogle(activity: Activity) {
@@ -97,6 +117,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     private suspend fun handleSuccessfulSignIn(result: GoogleSignInResult.Success) {
+        hapticHelper.successTap()
         analyticsHelper.authCompleted()
         // Refresh usage so the app knows the user's actual tier (force after auth)
         hostedRepository.refreshUsage(force = true)
@@ -111,9 +132,9 @@ class OnboardingViewModel @Inject constructor(
 
         // Smart routing based on isNewUser
         if (result.isNewUser) {
-            // New user: proceed to Vibe Check (Step 1)
+            // New user: proceed to Vibe Check (Step 1) — haptics already fired in handleSuccessfulSignIn
             _state.update { it.copy(isNewUser = true) }
-            nextStep()
+            advanceOnboardingStep()
         } else {
             // Returning user: skip Vibe Check and Demo
             refreshPermissions()
@@ -166,6 +187,7 @@ class OnboardingViewModel @Inject constructor(
             val result = hostedRepository.applyReferralCode(code)
             result.fold(
                 onSuccess = { bonus ->
+                    hapticHelper.successTap()
                     _state.update {
                         it.copy(
                             referralApplying = false,

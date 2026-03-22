@@ -14,6 +14,7 @@ import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.overlay.OverlayService
+import com.rizzbot.v2.util.HapticHelper
 import com.rizzbot.v2.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -53,11 +54,15 @@ class HomeViewModel @Inject constructor(
     private val permissionHelper: PermissionHelper,
     private val bubbleManager: dagger.Lazy<com.rizzbot.v2.overlay.manager.BubbleManager>,
     private val imageCompressor: ImageCompressor,
-    private val hostedApi: HostedApi
+    private val hostedApi: HostedApi,
+    private val hapticHelper: HapticHelper,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
+
+    private val _isPullRefreshing = MutableStateFlow(false)
+    val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -172,6 +177,67 @@ class HomeViewModel @Inject constructor(
         _state.update { it.copy(hasOverlayPermission = permissionHelper.canDrawOverlays()) }
     }
 
+    /**
+     * User pull-to-refresh: permissions, usage, recent history strip, voice profile, latest blueprint.
+     */
+    fun refresh() {
+        viewModelScope.launch {
+            _isPullRefreshing.value = true
+            try {
+                refreshPermissionStatus()
+                hostedRepository.refreshUsage(force = true)
+
+                val history = hostedRepository.getHistory(limit = 3, offset = 0)
+                val validHistory = history.filter { item ->
+                    item.replies.any { reply -> reply.text.isNotBlank() }
+                }
+                _state.update { it.copy(recentReplies = validHistory, isLoadingHistory = false) }
+
+                try {
+                    val prefs = hostedRepository.getUserPreferences()
+                    if (prefs != null) {
+                        val vibeBreakdown = prefs.vibeBreakdown.associate { it.name to it.percentage }
+                        val preferredLength = when (prefs.preferredLength) {
+                            "short" -> UserPreferences.PreferredLength.SHORT
+                            "long" -> UserPreferences.PreferredLength.LONG
+                            else -> UserPreferences.PreferredLength.MEDIUM
+                        }
+                        _state.update {
+                            it.copy(
+                                rizzProfile = UserPreferences(
+                                    totalRatings = prefs.totalRatings,
+                                    hasEnoughData = prefs.hasEnoughData,
+                                    vibeBreakdown = vibeBreakdown,
+                                    preferredLength = preferredLength
+                                )
+                            )
+                        }
+                    } else {
+                        _state.update { it.copy(rizzProfile = UserPreferences()) }
+                    }
+                } catch (_: Exception) { }
+
+                try {
+                    val response = hostedApi.getProfileBlueprints(limit = 1)
+                    if (response.isSuccessful) {
+                        val blueprint = response.body()?.items?.firstOrNull()
+                        if (blueprint != null) {
+                            _state.update {
+                                it.copy(
+                                    latestBlueprintTheme = blueprint.overallTheme,
+                                    latestBlueprintSlotCount = blueprint.slots.size,
+                                    latestBlueprintDate = blueprint.createdAt.take(10)
+                                )
+                            }
+                        }
+                    }
+                } catch (_: Exception) { }
+            } finally {
+                _isPullRefreshing.value = false
+            }
+        }
+    }
+
     fun toggleService(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setServiceEnabled(enabled)
@@ -180,6 +246,7 @@ class HomeViewModel @Inject constructor(
             } else {
                 context.stopService(Intent(context, OverlayService::class.java))
             }
+            hapticHelper.mediumTap()
         }
     }
 

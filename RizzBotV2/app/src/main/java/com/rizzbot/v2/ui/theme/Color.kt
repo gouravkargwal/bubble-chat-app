@@ -12,3 +12,10 @@ val Success = Color(0xFF4CAF50)
 val ErrorRed = Color(0xFFEF5350)
 val TextWhite = Color(0xFFFFFFFF)
 val TextGray = Color(0xFFB0B0B0)
+
+/**
+ * Gold is reserved for **locked / paywalled** affordances (lock icons, upgrade CTAs).
+ * Primary interactive accents (including for premium & referral god-mode users) use [Pink].
+ */
+val LockedFeatureGold = Color(0xFFFFD700)
+val LockedFeatureGoldMuted = LockedFeatureGold.copy(alpha = 0.15f)

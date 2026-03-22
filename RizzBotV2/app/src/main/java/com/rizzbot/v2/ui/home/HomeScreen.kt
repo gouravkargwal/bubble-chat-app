@@ -7,6 +7,8 @@ import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +20,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,13 +43,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.rizzbot.v2.ui.premium.VoiceDNACalibrationModal
+import com.rizzbot.v2.ui.theme.CardBg
+import com.rizzbot.v2.ui.theme.CardBgLight
+import com.rizzbot.v2.ui.theme.CookdDimens
+import com.rizzbot.v2.ui.theme.DarkBg
+import com.rizzbot.v2.ui.theme.LockedFeatureGold
+import com.rizzbot.v2.ui.theme.Pink
 
-private val Pink = Color(0xFFE91E63)
-private val DarkBg = Color(0xFF0F0F1A)
-private val CardBg = Color(0xFF1A1A2E)
-private val DividerColor = Color(0xFF252542)
-private val GodModeGold = Color(0xFFFFD700)
-private val GodModeGlow = Color(0xFFFFD700).copy(alpha = 0.15f)
+private val DividerColor = CardBgLight
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
@@ -53,21 +59,20 @@ fun HomeScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToStats: () -> Unit,
     onNavigateToProfileAuditor: () -> Unit,
-    onNavigateToProfileHistory: () -> Unit,
     onNavigateToProfileOptimizer: () -> Unit,
     onNavigateToProfileStrategy: () -> Unit = {},
     onShowPaywall: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
+    val pullRefreshState = rememberPullToRefreshState()
     val context = LocalContext.current
 
-    // Treat both "premium" and "god_mode" tiers as God Mode for UI purposes
     val isGodMode = state.usage.tier == "premium" || state.usage.tier == "god_mode"
-    // Pro and above can access voice DNA and auto profile builder (profile_blueprints_per_week > 0)
     val isProOrAbove = state.usage.tier == "pro" || isGodMode
-    val primaryAccent = if (isGodMode) GodModeGold else Pink
-    val heroGlow = if (isGodMode) GodModeGlow else Pink.copy(alpha = 0.05f)
+    val primaryAccent = Pink
+    val heroGlow = Pink.copy(alpha = 0.05f)
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshPermissionStatus()
@@ -80,7 +85,8 @@ fun HomeScreen(
                 title = {
                     Text(
                         text = if (isGodMode) "Cookd ✦" else "Cookd",
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
                     )
                 },
                 actions = {
@@ -90,20 +96,39 @@ fun HomeScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DarkBg,
-                    titleContentColor = if (isGodMode) GodModeGold else Color.White
+                    titleContentColor = Color.White
                 )
             )
         },
         containerColor = DarkBg
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            PullToRefreshBox(
+                isRefreshing = isPullRefreshing,
+                onRefresh = { viewModel.refresh() },
+                state = pullRefreshState,
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        isRefreshing = isPullRefreshing,
+                        state = pullRefreshState,
+                        containerColor = CardBg,
+                        color = Pink,
+                    )
+                },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(CookdDimens.screenPadding),
+                    verticalArrangement = Arrangement.spacedBy(CookdDimens.sectionSpacing)
+                ) {
             // ── PRIMARY ACTIONS ──
             SectionHeader(title = "Primary Actions", icon = "🎯")
             HeroCard(
@@ -118,16 +143,18 @@ fun HomeScreen(
                 primaryAccent = primaryAccent,
                 heroGlow = heroGlow
             )
+            ReplyHistoryQuickLink(
+                onClick = onNavigateToHistory,
+                primaryAccent = primaryAccent
+            )
 
             // ── PROFILE TOOLS ──
             SectionDivider()
             SectionHeader(title = "Profile Tools", icon = "📸")
             BrutalProfileAuditorCard(
                 primaryAccent = primaryAccent,
-                isGodMode = isGodMode,
                 maxPhotosPerAudit = state.usage.maxPhotosPerAudit,
-                onClick = onNavigateToProfileAuditor,
-                onViewHistory = onNavigateToProfileHistory
+                onRunAudit = onNavigateToProfileAuditor
             )
             AutoProfileBuilderCard(
                 primaryAccent = primaryAccent,
@@ -156,7 +183,7 @@ fun HomeScreen(
                 if (!isLoaded) {
                     HomeSkeleton()
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(CookdDimens.sectionSpacing)) {
                         // ── YOUR STATS ──
                         SectionDivider()
                         SectionHeader(title = "Your Stats", icon = "📊")
@@ -175,7 +202,7 @@ fun HomeScreen(
                             primaryAccent = primaryAccent
                         )
 
-                        // 5. HOW IT WORKS (dismissible)
+                        // How it works (dismissible)
                         if (state.showHowItWorks) {
                             HowItWorksCard(onDismiss = { viewModel.dismissHowItWorks() })
                         }
@@ -195,24 +222,26 @@ fun HomeScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-        }
+            }
+            }
 
-        if (state.showCalibrationModal) {
-            VoiceDNACalibrationModal(
-                onDismiss = { viewModel.hideCalibration() },
-                onImagesSelected = { uris ->
-                    val bitmaps = uris.mapNotNull { uri ->
-                        try {
-                            context.contentResolver.openInputStream(uri)?.use {
-                                BitmapFactory.decodeStream(it)
+            if (state.showCalibrationModal) {
+                VoiceDNACalibrationModal(
+                    onDismiss = { viewModel.hideCalibration() },
+                    onImagesSelected = { uris ->
+                        val bitmaps = uris.mapNotNull { uri ->
+                            try {
+                                context.contentResolver.openInputStream(uri)?.use {
+                                    BitmapFactory.decodeStream(it)
+                                }
+                            } catch (_: Exception) {
+                                null
                             }
-                        } catch (_: Exception) {
-                            null
                         }
+                        viewModel.calibrateVoiceDNA(uris)
                     }
-                    viewModel.calibrateVoiceDNA(uris)
-                }
-            )
+                )
+            }
         }
     }
 }
@@ -242,7 +271,7 @@ private fun FeatureCard(
                     .background(accentColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+                Icon(icon, contentDescription = title, tint = accentColor, modifier = Modifier.size(22.dp))
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -269,7 +298,16 @@ private fun HeroCard(
         shape = RoundedCornerShape(20.dp),
         border = if (isEnabled) BorderStroke(1.dp, primaryAccent.copy(alpha = 0.5f)) else null
     ) {
-        Column(modifier = Modifier.padding(20.dp).animateContentSize()) {
+        Column(
+            modifier = Modifier
+                .padding(20.dp)
+                .animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -308,7 +346,12 @@ private fun HeroCard(
                         modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = Pink, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = "Overlay permission required",
+                            tint = Pink,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Overlay permission required. Tap to grant.", color = Color.White, fontSize = 13.sp)
                     }
@@ -334,9 +377,7 @@ private fun SectionHeader(title: String, icon: String) {
         Text(
             text = title,
             color = Color.White,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.5.sp
+            style = MaterialTheme.typography.titleMedium,
         )
     }
 }
@@ -351,23 +392,69 @@ private fun SectionDivider() {
 }
 
 @Composable
-private fun BrutalProfileAuditorCard(
-    primaryAccent: Color,
-    isGodMode: Boolean,
-    maxPhotosPerAudit: Int,
+private fun ReplyHistoryQuickLink(
     onClick: () -> Unit,
-    onViewHistory: () -> Unit
+    primaryAccent: Color
 ) {
-    val borderColor = if (isGodMode) GodModeGold else primaryAccent
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clip(RoundedCornerShape(14.dp))
+            .background(CardBg.copy(alpha = 0.85f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Chat,
+                contentDescription = null,
+                tint = primaryAccent,
+                modifier = Modifier.size(22.dp)
+            )
+            Column {
+                Text(
+                    text = "Reply history",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = "AI replies from your screenshots (not photo audits)",
+                    color = Color.Gray,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = primaryAccent.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun BrutalProfileAuditorCard(
+    primaryAccent: Color,
+    maxPhotosPerAudit: Int,
+    onRunAudit: () -> Unit,
+) {
+    val borderColor = primaryAccent
+    Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(0.5.dp, primaryAccent.copy(alpha = 0.3f))
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
@@ -378,15 +465,12 @@ private fun BrutalProfileAuditorCard(
                         )
                     )
                 )
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onRunAudit)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-            // Left: Icon
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -401,49 +485,27 @@ private fun BrutalProfileAuditorCard(
                     modifier = Modifier.size(22.dp)
                 )
             }
-
-            // Middle: Title and Subtitle
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Stop Getting Ghosted. Run a Zero-BS Photo Audit.",
+                    text = "Photo audit",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Upload up to $maxPhotosPerAudit photos. We'll tell you which ones are killing your match rate.",
+                    text = "Score your dating photos (separate from reply history). Past runs open from inside this screen.",
                     color = Color.Gray,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
                 )
             }
-
-            // Right: History button and Chevron
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                IconButton(
-                    onClick = onViewHistory,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = "View Past Roasts",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = primaryAccent,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Open photo audit",
+                tint = primaryAccent,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -525,7 +587,7 @@ private fun AutoProfileBuilderCard(
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Pro Feature",
-                            tint = GodModeGold,
+                            tint = LockedFeatureGold,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -576,7 +638,7 @@ private fun AutoProfileBuilderCard(
                             }
                         }
                         Text(
-                            text = "View →",
+                            text = "Blueprints →",
                             color = primaryAccent.copy(alpha = 0.8f),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold

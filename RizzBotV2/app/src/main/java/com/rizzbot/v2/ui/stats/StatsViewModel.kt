@@ -14,7 +14,8 @@ data class StatsState(
     val totalGenerated: Int = 0,
     val totalCopied: Int = 0,
     val totalConversationsInfluenced: Int = 0,
-    val preferences: UserPreferences = UserPreferences()
+    val preferences: UserPreferences = UserPreferences(),
+    val tier: String = "free",
 )
 
 @HiltViewModel
@@ -25,14 +26,18 @@ class StatsViewModel @Inject constructor(
     private val _state = MutableStateFlow(StatsState())
     val state: StateFlow<StatsState> = _state.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     init {
         // Collect stats from backend usage state
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
-                _state.update { 
+                _state.update {
                     it.copy(
                         totalGenerated = usage.totalRepliesGenerated,
-                        totalCopied = usage.totalRepliesCopied
+                        totalCopied = usage.totalRepliesCopied,
+                        tier = usage.tier
                     )
                 }
             }
@@ -60,21 +65,19 @@ class StatsViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            hostedRepository.refreshUsage(force = true) // Force refresh on manual pull-to-refresh
-        }
-        
-        viewModelScope.launch {
-            refreshPreferences()
-        }
-
-        // Pull recent interactions to estimate "conversations influenced"
-        viewModelScope.launch {
-            val history = hostedRepository.getHistory(limit = 200, offset = 0)
-            val conversations = history
-                .mapNotNull { it.personName ?: it.id }
-                .distinct()
-                .size
-            _state.update { it.copy(totalConversationsInfluenced = conversations) }
+            _isRefreshing.value = true
+            try {
+                hostedRepository.refreshUsage(force = true)
+                refreshPreferences()
+                val history = hostedRepository.getHistory(limit = 200, offset = 0)
+                val conversations = history
+                    .mapNotNull { it.personName ?: it.id }
+                    .distinct()
+                    .size
+                _state.update { it.copy(totalConversationsInfluenced = conversations) }
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 

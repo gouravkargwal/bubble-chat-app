@@ -5,6 +5,8 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -106,6 +108,14 @@ class BubbleManager @Inject constructor(
     }
 
     private fun isFullScreenState(state: BubbleState): Boolean = state.isExpandedState()
+
+    /** Small floating bubble only — Compose children otherwise consume touches before the root View listener runs. */
+    private fun isCollapsedBubbleState(state: BubbleState): Boolean = when (state) {
+        is BubbleState.RizzButton,
+        is BubbleState.RizzButtonAddMore,
+        is BubbleState.Loading -> true
+        else -> false
+    }
 
     private fun createParams(fullScreen: Boolean): WindowManager.LayoutParams {
         return WindowManager.LayoutParams(

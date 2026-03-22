@@ -1,0 +1,45 @@
+PRIVACY POLICY — COOKD
+
+Last updated: March 22, 2026
+
+IMPORTANT: This is in-app legal text for your product. Replace or review with qualified counsel and align with your actual data practices before production use.
+
+1. WHO WE ARE
+Cookd (“we”, “us”) provides the Cookd mobile application and related services. This Policy explains how we collect, use, and share information when you use the App.
+
+2. INFORMATION WE COLLECT
+• Account data: For example, name, email, and identifiers from sign-in providers (e.g. Google), and authentication tokens we issue for your session.
+• Usage & preferences: Settings you choose in the App, feature usage, and in-app analytics events.
+• Content you submit: Text, images, or screenshots you choose to send for AI processing (for example, when you use the overlay or profile tools). Do not submit sensitive information you are not comfortable sharing.
+• Device & technical data: Device type, OS version, app version, crash logs, and similar diagnostics.
+• Purchases: Subscription status and transaction identifiers from app stores or payment partners (we do not receive your full payment card number).
+
+3. HOW WE USE INFORMATION
+We use information to: provide and improve the App; personalize features; process subscriptions; secure the service; comply with law; and communicate with you about the service.
+
+4. AI PROCESSING
+When you request AI features, we (or our subprocessors) process the inputs you provide to generate responses. Retention periods, locations, and subprocessors should match your operational setup—document them in your internal records and update this Policy when they change.
+
+5. SHARING
+We may share information with: service providers who help us host, analyze, or operate the App; analytics or crash-reporting tools; payment and authentication partners; and authorities when required by law or to protect rights and safety. We do not sell your personal information as “sale” is defined in applicable U.S. state laws, unless we notify you otherwise.
+
+6. RETENTION
+We retain information as long as needed to provide the App, comply with law, resolve disputes, and enforce agreements. You may request deletion where applicable law gives you that right (see “Your choices”).
+
+7. SECURITY
+We use reasonable technical and organizational measures to protect information. No method of transmission or storage is 100% secure.
+
+8. YOUR CHOICES
+Depending on your region, you may have rights to access, correct, delete, or export personal data, or to object to or restrict certain processing. Use in-app controls (for example, delete data in Settings) where available, or contact support.
+
+9. CHILDREN
+The App is not directed to children under 13 (or the minimum age in your jurisdiction). We do not knowingly collect personal information from children.
+
+10. INTERNATIONAL USERS
+If you use the App from outside the country where our servers operate, your information may be processed in other countries with different data protection laws.
+
+11. CHANGES
+We may update this Policy. We will post the new version in the App and update the “Last updated” date.
+
+12. CONTACT
+For privacy questions or requests, contact us through the support channel shown in the App (Settings).

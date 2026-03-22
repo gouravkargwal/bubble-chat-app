@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.sp
 private val ModalDarkBg = Color(0xFF0F0F1A)
 private val ModalCardBg = Color(0xFF1A1A2E)
 private val AccentPink = Color(0xFFE91E63)
-private val GodModeGold = Color(0xFFFFD700)
 
 @Composable
 fun VoiceDNACalibrationModal(

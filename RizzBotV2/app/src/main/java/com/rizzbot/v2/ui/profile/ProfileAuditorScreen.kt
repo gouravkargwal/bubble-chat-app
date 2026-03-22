@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,21 +31,20 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,6 +55,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.AssistChip
@@ -78,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rizzbot.v2.ui.paywall.PaywallDialog
+import com.rizzbot.v2.ui.theme.Pink
 import kotlinx.coroutines.delay
 
 enum class PhotoTier {
@@ -103,17 +105,14 @@ data class AuditResponseUi(
     val photos: List<PhotoFeedbackUi>
 )
 
-private val RoasterHeaderAccent = Color(0xFFA855F7)
-
 private val DarkBg = Color(0xFF0F0F1A)
 private val CardBg = Color(0xFF1A1A2E)
-private val WarningBg = Color(0xFFFFA726).copy(alpha = 0.18f)
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ProfileAuditorScreen(
     onBack: () -> Unit,
     onShowPaywall: () -> Unit = {},
+    onOpenPastPhotoAudits: () -> Unit = {},
     viewModel: ProfileAuditorViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -121,8 +120,17 @@ fun ProfileAuditorScreen(
 
     // Calculate if user can audit
     val isGodMode = state.tier == "premium" || state.tier == "god_mode"
-    val hasAuditsLeft = state.weeklyAuditsUsed < state.profileAuditsPerWeek
-    val canAudit = isGodMode || hasAuditsLeft
+    val weeklyAuditLimit = state.profileAuditsPerWeek
+    val weeklyAuditsUsed = state.weeklyAuditsUsed.coerceAtLeast(0)
+    val showIntro =
+        state.result == null && !state.isLoading && !state.auditSessionStarted
+
+    val flowStep = when {
+        state.result != null -> 3
+        state.isLoading -> 2
+        state.selectedUris.isNotEmpty() -> 2
+        else -> 1
+    }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxPhotos)
@@ -148,6 +156,16 @@ fun ProfileAuditorScreen(
                         )
                     }
                 },
+                actions = {
+                    TextButton(onClick = onOpenPastPhotoAudits) {
+                        Text(
+                            text = "Past audits",
+                            color = Pink,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = DarkBg,
                     titleContentColor = Color.White
@@ -163,66 +181,99 @@ fun ProfileAuditorScreen(
                     modifier = Modifier
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Button(
-                        onClick = {
-                            if (!canAudit) {
-                                onShowPaywall()
-                            } else {
-                                viewModel.analyzePhotos()
+                    when {
+                        state.result != null -> {
+                            Text(
+                                text = "Start over to run another audit. Limits are checked when you tap Run audit.",
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                            OutlinedButton(
+                                onClick = { viewModel.startNewAudit() },
+                                enabled = !state.isLoading,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, Pink),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Pink)
+                            ) {
+                                Text(text = "Start a new audit", fontSize = 15.sp)
                             }
-                        },
-                        enabled = if (state.isLoading) {
-                            false
-                        } else if (!canAudit) {
-                            true
-                        } else {
-                            state.selectedUris.isNotEmpty()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFFD700)
-                        )
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            if (state.isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = Color.Black,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        showIntro -> {
+                            if (!isGodMode &&
+                                weeklyAuditLimit > 0 &&
+                                state.weeklyAuditsUsed >= weeklyAuditLimit
+                            ) {
                                 Text(
-                                    text = state.auditProgress?.displayText ?: "Submitting...",
-                                    color = Color.Black,
-                                    fontSize = 15.sp
+                                    text = "You’ve used your weekly audits. Tap Run audit to see upgrade options.",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
                                 )
-                            } else if (!canAudit) {
-                                Icon(
-                                    imageVector = Icons.Filled.Lock,
-                                    contentDescription = null,
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(16.dp)
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.tryBeginAuditSession { onShowPaywall() }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Pink
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                            ) {
                                 Text(
-                                    text = "Unlock Unlimited Audits",
+                                    text = "Run audit",
                                     color = Color.Black,
-                                    fontSize = 15.sp
+                                    fontSize = 16.sp,
                                 )
-                            } else {
-                                Text(
-                                    text = "Analyze Photos",
-                                    color = Color.Black,
-                                    fontSize = 15.sp
+                            }
+                        }
+                        else -> {
+                            Button(
+                                onClick = { viewModel.analyzePhotos() },
+                                enabled = !state.isLoading && state.selectedUris.isNotEmpty(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Pink
                                 )
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    if (state.isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Color.Black,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = state.auditProgress?.displayText ?: "Working…",
+                                            color = Color.Black,
+                                            fontSize = 15.sp
+                                        )
+                                    } else {
+                                        Text(
+                                            text = if (state.selectedUris.isEmpty()) {
+                                                "Choose photos above"
+                                            } else {
+                                                "Submit for scoring (${state.selectedUris.size})"
+                                            },
+                                            color = Color.Black,
+                                            fontSize = 15.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -240,169 +291,269 @@ fun ProfileAuditorScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-            // Warning banner
-            Card(
-                colors = CardDefaults.cardColors(containerColor = WarningBg),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.WarningAmber,
-                        contentDescription = null,
-                        tint = Color(0xFFFFA726),
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Warning: This AI is brutal. It will reject bad lighting, bathroom selfies, and cringe poses. Bring your thick skin.",
-                        color = Color.White,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-
-            // Header copy
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "Upload Your Photos",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = "Pick up to ${maxPhotos} photos from your camera roll. We'll tell you which ones are GOD_TIER, FILLER, or belong in the graveyard.",
-                    color = Color.Gray,
-                    fontSize = 13.sp
-                )
-            }
-
-            // Language selector chips
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val options = listOf("English", "Hinglish", "Gen-Z Slang")
-                options.forEach { option ->
-                    val isSelected = option == state.selectedLanguage
-                    AssistChip(
-                        onClick = { 
-                            if (!state.isLoading) {
-                                viewModel.setLanguage(option)
-                            }
-                        },
-                        enabled = !state.isLoading,
-                        label = {
-                            Text(
-                                text = option,
-                                color = if (isSelected) Color.Black else Color.White,
-                                fontSize = 12.sp
-                            )
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (isSelected) Color(0xFFFFD700) else CardBg
-                        )
-                    )
-                }
-            }
-
-            // Picker card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        enabled = !state.isLoading,
-                        onClick = {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        }
-                    ),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (state.isLoading) CardBg.copy(alpha = 0.5f) else CardBg
-                ),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 18.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (showIntro) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = if (state.selectedUris.isEmpty()) "Tap to add photos" else "Add / Replace Photos",
+                            text = "Photo audit",
                             color = Color.White,
-                            fontSize = 14.sp
+                            fontSize = 22.sp,
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                        Text(
+                            text = "Walk through the steps below, then tap Run audit to continue. Plan limits apply at that tap only.",
+                            color = Color.Gray,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                        )
+                    }
+                    AuditIntroSteps(maxPhotos = maxPhotos)
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = when {
+                                isGodMode || weeklyAuditLimit <= 0 ->
+                                    "Unlimited photo audits on your plan."
+                                else -> {
+                                    val limit = weeklyAuditLimit
+                                    val used = weeklyAuditsUsed.coerceAtMost(limit)
+                                    val noun = if (limit == 1) "audit" else "audits"
+                                    "You've used $used of $limit $noun this week."
+                                }
+                            },
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.titleSmall
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${state.selectedUris.size} of ${maxPhotos} selected",
+                            text = "One audit = one run with up to $maxPhotos photos. Open Past audits (top) for earlier results.",
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
                     }
                 }
-            }
 
-            // Use preserved URIs from result if available, otherwise map from selectedUris
-            val photoIdToUri = if (state.result != null && state.resultPhotoIdToUri.isNotEmpty()) {
-                state.resultPhotoIdToUri
-            } else {
-                remember(state.selectedUris) {
-                    state.selectedUris.mapIndexed { index, uri ->
-                        "photo_${index + 1}" to uri
-                    }.toMap()
-                }
-            }
+                if (!showIntro) {
+                AuditFlowStepRow(
+                    currentStep = flowStep,
+                    isAnalyzing = state.isLoading,
+                )
 
-            when {
-                state.isLoading -> {
-                    AuditProgressView(progress = state.auditProgress ?: AuditProgress())
-                }
-                state.result != null -> {
-                    val result = state.result
-                    if (result != null) {
-                        ProfileAuditResultContent(
-                            result = result,
-                            photoIdToUri = photoIdToUri
-                        )
-                    }
-                }
-                state.selectedUris.isNotEmpty() -> {
-                    Text(
-                        text = "Selected Photos",
-                        color = Color.White,
-                        fontSize = 14.sp
-                    )
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 120.dp, max = 420.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        userScrollEnabled = !state.isLoading
+                state.error?.let { err ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF3A1F24)),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(state.selectedUris, key = { it.toString() }) { uri ->
-                            AsyncImage(
-                                model = uri,
-                                contentDescription = null,
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Something went wrong",
+                                    color = Color(0xFFFF8A80),
+                                    fontSize = 14.sp,
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = err,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Text(
+                                text = "Dismiss",
+                                color = Pink,
+                                fontSize = 13.sp,
                                 modifier = Modifier
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.Black),
-                                contentScale = ContentScale.Crop
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { viewModel.clearError() }
+                                    .padding(8.dp)
                             )
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(80.dp))
+                val photoIdToUri = if (state.result != null && state.resultPhotoIdToUri.isNotEmpty()) {
+                    state.resultPhotoIdToUri
+                } else {
+                    remember(state.selectedUris) {
+                        state.selectedUris.mapIndexed { index, uri ->
+                            "photo_${index + 1}" to uri
+                        }.toMap()
+                    }
+                }
+
+                when {
+                    state.isLoading -> {
+                        AuditProgressView(progress = state.auditProgress ?: AuditProgress())
+                    }
+                    state.result != null -> {
+                        val result = state.result
+                        if (result != null) {
+                            Text(
+                                text = "Your audit",
+                                color = Color.White,
+                                fontSize = 20.sp,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Text(
+                                text = "Best shots for your profile, okay backups, and photos to replace. Tips are under each image.",
+                                color = Color.Gray,
+                                fontSize = 13.sp
+                            )
+                            ProfileAuditResultContent(
+                                result = result,
+                                photoIdToUri = photoIdToUri
+                            )
+                        }
+                    }
+                    else -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Step 1 — Choose photos",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Pick up to $maxPhotos photos from your gallery. You can change them until you submit for scoring.",
+                                color = Color.Gray,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Feedback style",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "Affects how the feedback is written, not the scores.",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val options = listOf("English", "Hinglish", "Gen-Z Slang")
+                                options.forEach { option ->
+                                    val isSelected = option == state.selectedLanguage
+                                    AssistChip(
+                                        onClick = {
+                                            if (!state.isLoading) {
+                                                viewModel.setLanguage(option)
+                                            }
+                                        },
+                                        enabled = !state.isLoading,
+                                        label = {
+                                            Text(
+                                                text = option,
+                                                color = if (isSelected) Color.Black else Color.White,
+                                                fontSize = 12.sp
+                                            )
+                                        },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = if (isSelected) Pink else CardBg
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(
+                                    enabled = !state.isLoading,
+                                    onClick = {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
+                                ),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (state.isLoading) CardBg.copy(alpha = 0.5f) else CardBg
+                            ),
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = if (state.selectedUris.isEmpty()) {
+                                            "Tap to choose from gallery"
+                                        } else {
+                                            "Tap to add or replace photos"
+                                        },
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "${state.selectedUris.size} of $maxPhotos selected",
+                                        color = Color.Gray,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        if (state.selectedUris.isNotEmpty()) {
+                            Text(
+                                text = "Step 2 — Review & submit",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "Use Submit for scoring below when you’re ready.",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 120.dp, max = 420.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                userScrollEnabled = !state.isLoading
+                            ) {
+                                items(state.selectedUris, key = { it.toString() }) { uri ->
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = "Selected profile photo",
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color.Black),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                }
+
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
@@ -413,6 +564,177 @@ fun ProfileAuditorScreen(
             onDismiss = { viewModel.dismissPaywall() }
         )
     }
+}
+
+@Composable
+private fun AuditIntroSteps(maxPhotos: Int) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(
+                text = "How it works",
+                color = Color.White,
+                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            AuditIntroStepRow(
+                step = 1,
+                title = "Choose photos",
+                body = "Select up to $maxPhotos dating-style pictures from your gallery. Swap them anytime before you submit.",
+            )
+            AuditIntroStepRow(
+                step = 2,
+                title = "Pick feedback style",
+                body = "English, Hinglish, or Gen-Z — only changes how the written notes sound.",
+            )
+            AuditIntroStepRow(
+                step = 3,
+                title = "Submit & see results",
+                body = "We label best picks, backups, and photos to replace. Past runs stay in Past audits (top right).",
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuditIntroStepRow(
+    step: Int,
+    title: String,
+    body: String,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Pink.copy(alpha = 0.22f))
+                .border(1.5.dp, Pink, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "$step",
+                color = Color.White,
+                fontSize = 14.sp,
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 14.sp,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = body,
+                color = Color.Gray,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuditFlowStepRow(
+    currentStep: Int,
+    isAnalyzing: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        AuditStepPill(
+            index = 1,
+            label = "Add",
+            currentStep = currentStep,
+        )
+        AuditStepConnector(done = currentStep >= 2)
+        AuditStepPill(
+            index = 2,
+            label = if (isAnalyzing) "Wait" else "Score",
+            currentStep = currentStep,
+        )
+        AuditStepConnector(done = currentStep >= 3)
+        AuditStepPill(
+            index = 3,
+            label = "Results",
+            currentStep = currentStep,
+        )
+    }
+}
+
+@Composable
+private fun AuditStepPill(
+    index: Int,
+    label: String,
+    currentStep: Int,
+) {
+    val done = index < currentStep
+    val current = index == currentStep
+    val bg = when {
+        done -> Color(0xFF1B5E20).copy(alpha = 0.45f)
+        current -> Pink.copy(alpha = 0.22f)
+        else -> CardBg
+    }
+    val ring = when {
+        done -> Color(0xFF81C784)
+        current -> Pink
+        else -> Color(0xFF252542)
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.widthIn(min = 64.dp, max = 88.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(bg)
+                .border(1.5.dp, ring, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (done) {
+                Text("✓", color = Color.White, fontSize = 14.sp)
+            } else {
+                Text(
+                    text = "$index",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            color = if (current || done) Color.White else Color.Gray,
+            fontSize = 10.sp,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun AuditStepConnector(done: Boolean) {
+    Box(
+        modifier = Modifier
+            .width(20.dp)
+            .height(3.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(if (done) Color(0xFF81C784) else Color(0xFF252542)),
+    )
 }
 
 @Composable
@@ -464,7 +786,7 @@ private fun AuditProgressView(progress: AuditProgress) {
             CircularProgressIndicator(
                 progress = { if (progress.progress > 0f) progress.progress else 0f },
                 modifier = Modifier.size(100.dp),
-                color = Color(0xFFFFD700),
+                color = Pink,
                 trackColor = Color(0xFF252542),
                 strokeWidth = 6.dp,
             )
@@ -472,7 +794,7 @@ private fun AuditProgressView(progress: AuditProgress) {
             if (progress.progress <= 0f) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(100.dp),
-                    color = Color(0xFFFFD700).copy(alpha = 0.5f),
+                    color = Pink.copy(alpha = 0.5f),
                     strokeWidth = 4.dp,
                 )
             }
@@ -610,33 +932,57 @@ private fun ProfileAuditResultContent(
         RoastSummaryBanner(result = result)
 
         if (godTier.isNotEmpty()) {
-            Text(
-                text = "🟢 GOD TIER (Use as Main)",
-                color = Color(0xFF81C784),
-                fontSize = 15.sp
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Best — lead with these",
+                    color = Color(0xFF81C784),
+                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = "Strongest shots; good light, clear face, dating-app ready.",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                )
+            }
             godTier.forEach { photo ->
                 PhotoResultRow(photo = photo, uri = photoIdToUri[photo.photoId])
             }
         }
 
         if (filler.isNotEmpty()) {
-            Text(
-                text = "🟡 THE FILLER (Use as Backups)",
-                color = Color(0xFFFFF176),
-                fontSize = 15.sp
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Okay — backup slots",
+                    color = Color(0xFFFFF176),
+                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = "Usable later or mixed in, but not your first impression.",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                )
+            }
             filler.forEach { photo ->
                 PhotoResultRow(photo = photo, uri = photoIdToUri[photo.photoId])
             }
         }
 
         if (graveyard.isNotEmpty()) {
-            Text(
-                text = "🔴 THE GRAVEYARD (Delete immediately)",
-                color = Color(0xFFEF5350),
-                fontSize = 15.sp
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Skip — replace these",
+                    color = Color(0xFFEF5350),
+                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = "Likely hurting matches; swap for new photos when you can.",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                )
+            }
             graveyard.forEach { photo ->
                 PhotoResultRow(photo = photo, uri = photoIdToUri[photo.photoId])
             }
@@ -648,8 +994,8 @@ private fun ProfileAuditResultContent(
 private fun RoastSummaryBanner(result: AuditResponseUi) {
     val gradientBrush = Brush.verticalGradient(
         colors = listOf(
-            RoasterHeaderAccent.copy(alpha = 0.45f),
-            RoasterHeaderAccent.copy(alpha = 0.12f),
+            Pink.copy(alpha = 0.45f),
+            Pink.copy(alpha = 0.12f),
             DarkBg
         )
     )
@@ -694,7 +1040,7 @@ private fun RoastSummaryBanner(result: AuditResponseUi) {
                 }
 
                 Text(
-                    text = "Overall roast",
+                    text = "Overall take",
                     color = Color.White.copy(alpha = 0.78f),
                     fontSize = 12.sp
                 )
@@ -764,6 +1110,14 @@ private fun PhotoResultRow(
                 color = Color.Gray,
                 fontSize = 12.sp
             )
+            if (photo.improvementTip.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Tip: ${photo.improvementTip}",
+                    color = Pink.copy(alpha = 0.92f),
+                    fontSize = 12.sp,
+                )
+            }
         }
     }
 }

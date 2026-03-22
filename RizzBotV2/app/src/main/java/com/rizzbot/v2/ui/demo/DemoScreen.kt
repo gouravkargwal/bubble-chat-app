@@ -70,7 +70,7 @@ private val demoScenarios = listOf(
 @Composable
 fun DemoScreen(
     onBack: () -> Unit,
-    onSetupApiKey: () -> Unit,
+    onContinue: () -> Unit,
     onPremium: () -> Unit = {}
 ) {
     Scaffold(
@@ -104,7 +104,7 @@ fun DemoScreen(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "These are real examples of AI-generated replies",
+                "Illustrative examples of AI-generated replies",
                 color = Color.Gray,
                 fontSize = 13.sp
             )
@@ -120,12 +120,12 @@ fun DemoScreen(
 
             // CTA
             Button(
-                onClick = onSetupApiKey,
+                onClick = onContinue,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Get Started", modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
+                Text("Continue", modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(12.dp))

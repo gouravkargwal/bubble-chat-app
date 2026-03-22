@@ -20,6 +20,7 @@ private val DarkColorScheme = darkColorScheme(
 fun RizzBotV2Theme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColorScheme,
+        typography = CookdTypography,
         content = content
     )
 }

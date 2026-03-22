@@ -2,9 +2,8 @@ package com.rizzbot.v2.overlay.ui
 
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -106,29 +105,17 @@ fun BubbleOverlay(
             // Full-screen card panels (shown when in full-screen mode)
             AnimatedVisibility(
                 visible = isFullScreen,
-                enter = scaleIn(
-                    initialScale = 0.2f,
-                    animationSpec = spring(
-                        dampingRatio = 0.75f,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) + fadeIn(
-                    animationSpec = spring(
-                        dampingRatio = 0.85f,
-                        stiffness = Spring.StiffnessLow
-                    )
+                enter = fadeIn(
+                    animationSpec = tween(240, easing = FastOutSlowInEasing)
+                ) + scaleIn(
+                    initialScale = 0.96f,
+                    animationSpec = tween(280, easing = FastOutSlowInEasing)
                 ),
-                exit = scaleOut(
-                    targetScale = 0.2f,
-                    animationSpec = spring(
-                        dampingRatio = 0.9f,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut(
-                    animationSpec = spring(
-                        dampingRatio = 0.9f,
-                        stiffness = Spring.StiffnessMedium
-                    )
+                exit = fadeOut(
+                    animationSpec = tween(180, easing = FastOutSlowInEasing)
+                ) + scaleOut(
+                    targetScale = 0.96f,
+                    animationSpec = tween(200, easing = FastOutSlowInEasing)
                 ),
                 modifier = Modifier.align(Alignment.Center)
             ) {
@@ -162,12 +149,8 @@ private fun BackgroundScrim(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)
-        ),
-        exit = fadeOut(
-            animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
-        )
+        enter = fadeIn(tween(220, easing = FastOutSlowInEasing)),
+        exit = fadeOut(tween(180, easing = FastOutSlowInEasing))
     ) {
         Box(
             modifier = scrimModifier
@@ -199,19 +182,12 @@ private fun FullScreenCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.7f) // Constrain height to ~70% to avoid excess empty space
-                .animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = 0.85f,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ),
+                .fillMaxHeight(0.7f),
             shape = OverlayShapes.PanelShape,
             colors = CardDefaults.cardColors(containerColor = OverlayColors.PanelColor),
             border = BorderStroke(1.dp, OverlayColors.PanelBorderColor)
         ) {
-            Column {
-                // Header with navigation
+            Column(modifier = Modifier.fillMaxSize()) {
                 BubbleHeader(
                     currentState = currentState,
                     onBack = { onEvent(OverlayEvent.Back) },
@@ -221,95 +197,110 @@ private fun FullScreenCard(
 
                 Divider(color = Color.White.copy(alpha = 0.08f))
 
-                // Route to appropriate panel based on current state
-                when (val s = currentState) {
-                    is BubbleState.DirectionPicker -> DirectionPicker(
-                        allowedDirections = usage.allowedDirections,
-                        customHintsEnabled = usage.customHintsEnabled,
-                        isGalleryMode = isGalleryMode,
-                        isLoading = isLoading,
-                        onInputModeChanged = { isGallery ->
-                            if (!isLoading) {
-                                onEvent(OverlayEvent.SetGalleryMode(isGallery))
-                            }
-                        },
-                        onDirectionSelected = { direction ->
-                            if (!isLoading) {
-                                onEvent(OverlayEvent.CaptureRequested(direction))
-                            }
-                        },
-                        onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
-                        onKeyboardFocus = { enabled -> onEvent(OverlayEvent.SetKeyboardFocus(enabled)) }
-                    )
-                    is BubbleState.ScreenshotPreview -> {
-                        val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
-                        val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
-                        val canGenerate = isGodMode || hasRepliesLeft
-                        
-                        ScreenshotPreviewPanel(
-                            bitmaps = s.bitmaps,
-                            maxScreenshots = usage.maxScreenshots,
-                            canGenerate = canGenerate && !isLoading,
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    when (val s = currentState) {
+                        is BubbleState.DirectionPicker -> DirectionPicker(
+                            allowedDirections = usage.allowedDirections,
+                            customHintsEnabled = usage.customHintsEnabled,
+                            isGalleryMode = isGalleryMode,
                             isLoading = isLoading,
-                            onConfirm = { 
+                            onInputModeChanged = { isGallery ->
                                 if (!isLoading) {
-                                    onEvent(OverlayEvent.ConfirmScreenshot(s.direction))
+                                    onEvent(OverlayEvent.SetGalleryMode(isGallery))
                                 }
                             },
-                            onAddMore = { 
+                            onDirectionSelected = { direction ->
                                 if (!isLoading) {
-                                    onEvent(OverlayEvent.AddMoreScreenshots(s.direction))
+                                    onEvent(OverlayEvent.CaptureRequested(direction))
                                 }
                             },
-                            onRetake = { 
-                                if (!isLoading) {
-                                    onEvent(OverlayEvent.RetakeLastScreenshot(s.direction))
-                                }
-                            },
-                            onRemoveScreenshot = { index ->
-                                if (!isLoading) {
-                                    onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
-                                }
-                            },
-                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
+                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
+                            onKeyboardFocus = { enabled -> onEvent(OverlayEvent.SetKeyboardFocus(enabled)) },
+                            modifier = Modifier.fillMaxSize()
                         )
-                    }
-                    is BubbleState.Loading -> {
-                        if (s.isProcessing) {
-                            ProcessingOverlay()
-                        } else {
-                            LoadingOverlay()
+                        is BubbleState.ScreenshotPreview -> {
+                            val isGodMode = usage.tier == "premium" || usage.tier == "god_mode"
+                            val hasRepliesLeft = usage.dailyUsed < usage.dailyLimit || usage.dailyLimit == 0
+                            val canGenerate = isGodMode || hasRepliesLeft
+
+                            ScreenshotPreviewPanel(
+                                bitmaps = s.bitmaps,
+                                maxScreenshots = usage.maxScreenshots,
+                                canGenerate = canGenerate && !isLoading,
+                                isLoading = isLoading,
+                                onConfirm = {
+                                    if (!isLoading) {
+                                        onEvent(OverlayEvent.ConfirmScreenshot(s.direction))
+                                    }
+                                },
+                                onAddMore = {
+                                    if (!isLoading) {
+                                        onEvent(OverlayEvent.AddMoreScreenshots(s.direction))
+                                    }
+                                },
+                                onRetake = {
+                                    if (!isLoading) {
+                                        onEvent(OverlayEvent.RetakeLastScreenshot(s.direction))
+                                    }
+                                },
+                                onRemoveScreenshot = { index ->
+                                    if (!isLoading) {
+                                        onEvent(OverlayEvent.RemoveScreenshot(index, s.direction))
+                                    }
+                                },
+                                onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
+                        is BubbleState.Loading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (s.isProcessing) {
+                                    ProcessingOverlay()
+                                } else {
+                                    LoadingOverlay()
+                                }
+                            }
+                        }
+                        is BubbleState.Expanded -> SuggestionPanel(
+                            result = s.result,
+                            onCopy = { reply, index ->
+                                onEvent(OverlayEvent.CopyReply(reply, index, s.result.interactionId))
+                            },
+                            onRate = { index, positive, text ->
+                                onEvent(OverlayEvent.RateReply(index, positive, text, s.result.interactionId))
+                            },
+                            onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
+                            onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        is BubbleState.RequiresUserConfirmation -> MergeConfirmationPanel(
+                            payload = s.payload,
+                            onYes = { onEvent(OverlayEvent.ConfirmMerge(isMatch = true)) },
+                            onNo = { onEvent(OverlayEvent.ConfirmMerge(isMatch = false)) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        is BubbleState.Error -> ErrorPanel(
+                            message = s.message,
+                            errorType = s.errorType,
+                            onRetry = {
+                                val dir = s.direction ?: DirectionWithHint()
+                                onEvent(OverlayEvent.Regenerate(dir))
+                            },
+                            onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
+                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        else -> {}
                     }
-                    is BubbleState.Expanded -> SuggestionPanel(
-                        result = s.result,
-                        onCopy = { reply, index ->
-                            onEvent(OverlayEvent.CopyReply(reply, index, s.result.interactionId))
-                        },
-                        onRate = { index, positive, text ->
-                            onEvent(OverlayEvent.RateReply(index, positive, text, s.result.interactionId))
-                        },
-                        onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
-                        onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
-                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                    )
-                    is BubbleState.RequiresUserConfirmation -> MergeConfirmationPanel(
-                        payload = s.payload,
-                        onYes = { onEvent(OverlayEvent.ConfirmMerge(isMatch = true)) },
-                        onNo = { onEvent(OverlayEvent.ConfirmMerge(isMatch = false)) }
-                    )
-                    is BubbleState.Error -> ErrorPanel(
-                        message = s.message,
-                        errorType = s.errorType,
-                        onRetry = {
-                            val dir = s.direction ?: DirectionWithHint()
-                            onEvent(OverlayEvent.Regenerate(dir))
-                        },
-                        onUpgrade = { onEvent(OverlayEvent.UpgradeTapped) },
-                        onDismiss = { onEvent(OverlayEvent.DismissSuggestions) }
-                    )
-                    else -> {}
                 }
             }
         }

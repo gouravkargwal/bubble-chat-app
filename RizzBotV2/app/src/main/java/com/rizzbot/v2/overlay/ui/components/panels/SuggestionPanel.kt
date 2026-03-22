@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,7 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.unit.dp
 import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.overlay.ui.SuggestionCard
@@ -52,11 +51,9 @@ fun SuggestionPanel(
         }
     }
 
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     Column(
         modifier = modifier
-            .fillMaxWidth()
-            .heightIn(max = screenHeight * 0.7f)
+            .fillMaxSize()
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {

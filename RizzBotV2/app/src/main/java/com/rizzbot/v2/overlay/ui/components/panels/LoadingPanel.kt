@@ -63,7 +63,7 @@ fun ProcessingOverlay(modifier: Modifier = Modifier) {
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CircularProgressIndicator(color = Color(0xFFFFD700))
+        CircularProgressIndicator(color = Color(0xFFE91E63))
         Spacer(modifier = Modifier.height(16.dp))
         Text("Analyzing her vibe...", color = Color.White)
         Spacer(modifier = Modifier.height(4.dp))

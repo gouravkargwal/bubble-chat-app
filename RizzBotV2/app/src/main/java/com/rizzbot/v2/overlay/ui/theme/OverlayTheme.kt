@@ -3,14 +3,16 @@ package com.rizzbot.v2.overlay.ui.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.rizzbot.v2.ui.theme.CardBg
+import com.rizzbot.v2.ui.theme.Pink
 
 /**
- * Design tokens and theme constants for the Bubble Overlay UI
+ * Design tokens for the bubble overlay — aligned with in-app [com.rizzbot.v2.ui.theme] colors.
  */
 object OverlayColors {
-    val PanelColor = Color(0xFF1A1A2E)
+    val PanelColor = CardBg
     val PanelBorderColor = Color.White.copy(alpha = 0.08f)
-    val AccentPink = Color(0xFFE91E63)
+    val AccentPink = Pink
     val ScrimColor = Color.Black.copy(alpha = 0.6f)
     
     val BubbleGradientColors = listOf(

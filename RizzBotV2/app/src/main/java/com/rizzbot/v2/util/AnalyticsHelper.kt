@@ -34,6 +34,11 @@ class AnalyticsHelper @Inject constructor() {
     // Onboarding
     fun onboardingStarted() = logEvent("onboarding_started")
     fun onboardingStepCompleted(step: Int) = logEvent("onboarding_step_completed", mapOf("step" to step))
+    fun onboardingVibeSelected(vibe: String) {
+        logEvent("onboarding_vibe_selected", mapOf("vibe" to vibe))
+        setUserProperty("onboarding_vibe", vibe)
+    }
+
     fun onboardingCompleted() = logEvent("onboarding_completed")
 
     // Capture & Reply

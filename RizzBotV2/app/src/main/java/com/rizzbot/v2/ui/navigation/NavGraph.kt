@@ -1,19 +1,12 @@
 package com.rizzbot.v2.ui.navigation
 
-import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import com.rizzbot.v2.ui.demo.DemoScreen
+import com.rizzbot.v2.ui.legal.LegalDocumentKind
+import com.rizzbot.v2.ui.legal.LegalDocumentScreen
 import com.rizzbot.v2.ui.history.HistoryScreen
 import com.rizzbot.v2.ui.home.HomeScreen
 import com.rizzbot.v2.ui.onboarding.OnboardingScreen
@@ -25,51 +18,23 @@ import com.rizzbot.v2.ui.paywall.PaywallScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
 
-private const val ANIM_DURATION = 300
-
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    startDestination: String
+    startDestination: String,
+    onboardingResumeForSignIn: Boolean = false
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        enterTransition = {
-            fadeIn(
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            ) + scaleIn(
-                initialScale = 0.98f,
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            )
-        },
-        exitTransition = {
-            fadeOut(
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            ) + scaleOut(
-                targetScale = 0.98f,
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            )
-        },
-        popEnterTransition = {
-            fadeIn(
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            ) + scaleIn(
-                initialScale = 0.98f,
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            )
-        },
-        popExitTransition = {
-            fadeOut(
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            ) + scaleOut(
-                targetScale = 0.98f,
-                animationSpec = tween(durationMillis = ANIM_DURATION, easing = EaseInOut)
-            )
-        }
+        enterTransition = { defaultEnterTransition() },
+        exitTransition = { defaultExitTransition() },
+        popEnterTransition = { defaultPopEnterTransition() },
+        popExitTransition = { defaultPopExitTransition() },
     ) {
         composable(Screen.Onboarding.route) {
             OnboardingScreen(
+                isResumeSignIn = onboardingResumeForSignIn,
                 onComplete = {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Onboarding.route) { inclusive = true }
@@ -82,7 +47,9 @@ fun NavGraph(
                 },
                 onTryDemo = {
                     navController.navigate(Screen.Demo.route)
-                }
+                },
+                onOpenTerms = { navController.navigate(Screen.LegalTerms.route) },
+                onOpenPrivacy = { navController.navigate(Screen.LegalPrivacy.route) }
             )
         }
         composable(Screen.Home.route) {
@@ -91,7 +58,6 @@ fun NavGraph(
                 onNavigateToHistory = { navController.navigate(Screen.ReplyHistory.route) },
                 onNavigateToStats = { navController.navigate(Screen.Stats.route) },
                 onNavigateToProfileAuditor = { navController.navigate(Screen.ProfileAuditor.route) },
-                onNavigateToProfileHistory = { navController.navigate(Screen.ProfileHistory.route) },
                 onNavigateToProfileOptimizer = { navController.navigate(Screen.ProfileOptimization.route) },
                 onNavigateToProfileStrategy = { navController.navigate(Screen.ProfileStrategy.route) },
                 onShowPaywall = { navController.navigate(Screen.Premium.route) }
@@ -105,7 +71,9 @@ fun NavGraph(
                     navController.navigate(Screen.Onboarding.route) {
                         popUpTo(0) { inclusive = true }
                     }
-                }
+                },
+                onOpenTerms = { navController.navigate(Screen.LegalTerms.route) },
+                onOpenPrivacy = { navController.navigate(Screen.LegalPrivacy.route) }
             )
         }
         composable(Screen.ReplyHistory.route) {
@@ -121,11 +89,17 @@ fun NavGraph(
         composable(Screen.Demo.route) {
             DemoScreen(
                 onBack = { navController.popBackStack() },
-                onSetupApiKey = { navController.popBackStack() },
+                onContinue = { navController.popBackStack() },
                 onPremium = { navController.navigate(Screen.Premium.route) }
             )
         }
-        composable(Screen.Premium.route) {
+        composable(
+            route = Screen.Premium.route,
+            enterTransition = { paywallEnterTransition() },
+            exitTransition = { paywallExitTransition() },
+            popEnterTransition = { paywallPopEnterTransition() },
+            popExitTransition = { paywallPopExitTransition() },
+        ) {
             val previousRoute = navController.previousBackStackEntry?.destination?.route
             val isFromOnboarding = previousRoute == Screen.Onboarding.route
             
@@ -151,19 +125,45 @@ fun NavGraph(
                         // Normal flow: just go back
                         navController.popBackStack()
                     }
-                }
+                },
+                onOpenTerms = { navController.navigate(Screen.LegalTerms.route) },
+                onOpenPrivacy = { navController.navigate(Screen.LegalPrivacy.route) }
+            )
+        }
+        composable(
+            route = Screen.LegalTerms.route,
+            enterTransition = { legalEnterTransition() },
+            exitTransition = { legalExitTransition() },
+            popEnterTransition = { legalPopEnterTransition() },
+            popExitTransition = { legalPopExitTransition() },
+        ) {
+            LegalDocumentScreen(
+                kind = LegalDocumentKind.TERMS,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Screen.LegalPrivacy.route,
+            enterTransition = { legalEnterTransition() },
+            exitTransition = { legalExitTransition() },
+            popEnterTransition = { legalPopEnterTransition() },
+            popExitTransition = { legalPopExitTransition() },
+        ) {
+            LegalDocumentScreen(
+                kind = LegalDocumentKind.PRIVACY,
+                onBack = { navController.popBackStack() }
             )
         }
         composable(Screen.ProfileAuditor.route) {
             ProfileAuditorScreen(
                 onBack = { navController.popBackStack() },
-                onShowPaywall = { navController.navigate(Screen.Premium.route) }
+                onShowPaywall = { navController.navigate(Screen.Premium.route) },
+                onOpenPastPhotoAudits = { navController.navigate(Screen.ProfileHistory.route) }
             )
         }
         composable(Screen.ProfileHistory.route) {
             ProfileHistoryScreen(
-                onBack = { navController.popBackStack() },
-                onNavigateToOptimizer = { navController.navigate(Screen.ProfileOptimization.route) }
+                onBack = { navController.popBackStack() }
             )
         }
         composable(Screen.ProfileOptimization.route) {

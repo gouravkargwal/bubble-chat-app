@@ -40,8 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val AccentPink = Color(0xFFE91E63)
-private val GodModeGold = Color(0xFFFFD700)
-private val GodModeGlow = Color(0xFFFFD700).copy(alpha = 0.2f)
+private val RecommendedGlow = AccentPink.copy(alpha = 0.22f)
 private val CardShape = RoundedCornerShape(16.dp)
 
 @Composable
@@ -59,7 +58,7 @@ fun SuggestionCard(
     var copied by remember { mutableStateOf(false) }
     var rated by remember { mutableStateOf<Boolean?>(null) }
 
-    val borderColor = if (isRecommended) GodModeGold.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.08f)
+    val borderColor = if (isRecommended) AccentPink.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.08f)
 
     Card(
         modifier = modifier
@@ -82,18 +81,16 @@ fun SuggestionCard(
         Column(
             modifier = Modifier
                 .drawBehind {
-                    // Left accent bar; for Wingman's Choice, upgrade to a subtle gold glow.
                     drawLine(
-                        color = if (isRecommended) GodModeGold else AccentPink,
+                        color = AccentPink,
                         start = Offset(0f, 0f),
                         end = Offset(0f, size.height),
                         strokeWidth = 3.dp.toPx()
                     )
 
                     if (isRecommended) {
-                        // Soft radial glow hugging the left edge of the card
                         drawCircle(
-                            color = GodModeGlow,
+                            color = RecommendedGlow,
                             radius = size.height * 0.9f,
                             center = Offset(size.width * 0.1f, size.height / 2f)
                         )
@@ -104,7 +101,7 @@ fun SuggestionCard(
             // Header: Wingman's Choice badge or original vibe label
             Text(
                 text = if (isRecommended) "✨ WINGMAN'S CHOICE" else label,
-                color = if (isRecommended) GodModeGold else AccentPink,
+                color = AccentPink,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
             )

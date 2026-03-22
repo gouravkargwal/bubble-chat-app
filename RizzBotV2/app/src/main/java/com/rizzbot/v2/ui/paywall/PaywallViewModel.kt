@@ -13,6 +13,7 @@ import com.revenuecat.purchases.interfaces.PurchaseCallback
 import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.revenuecat.purchases.interfaces.ReceiveOfferingsCallback
 import com.rizzbot.v2.data.subscription.SubscriptionManager
+import com.rizzbot.v2.util.HapticHelper
 import com.rizzbot.v2.domain.repository.HostedRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,7 +50,8 @@ data class PaywallState(
 @HiltViewModel
 class PaywallViewModel @Inject constructor(
     private val subscriptionManager: SubscriptionManager,
-    private val hostedRepository: HostedRepository
+    private val hostedRepository: HostedRepository,
+    private val hapticHelper: HapticHelper,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PaywallState())
@@ -183,6 +185,7 @@ class PaywallViewModel @Inject constructor(
     }
 
     fun selectPackage(packageToSelect: Package) {
+        hapticHelper.lightTap()
         _state.update {
             it.copy(
                 selectedPackage = packageToSelect,
@@ -209,6 +212,7 @@ class PaywallViewModel @Inject constructor(
                     customerInfo: com.revenuecat.purchases.CustomerInfo
                 ) {
                     // Show success screen immediately — no network wait for the user
+                    hapticHelper.successTap()
                     _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
 
                     // Sync tier in background so it's ready before "Start Exploring" navigates away

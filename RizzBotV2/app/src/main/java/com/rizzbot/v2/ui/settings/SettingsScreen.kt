@@ -17,11 +17,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +34,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import com.rizzbot.v2.ui.theme.LockedFeatureGold
+import com.rizzbot.v2.ui.theme.Pink
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +44,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onPremium: () -> Unit = {},
     onSignedOut: () -> Unit = {},
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacy: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -46,6 +55,10 @@ fun SettingsScreen(
     var showDeleteAllDataDialog by remember { mutableStateOf(false) }
     var isDeletingData by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+    val pullRefreshState = rememberPullToRefreshState()
+    val scrollState = rememberScrollState()
+    var inviteSectionScrollPx by remember { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.signedOut) {
         if (state.signedOut) onSignedOut()
@@ -96,8 +109,9 @@ fun SettingsScreen(
                             },
                             onError = { error ->
                                 isDeletingData = false
-                                // Show error toast or handle error
-                                android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_LONG).show()
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(error)
+                                }
                             }
                         )
                     },
@@ -126,6 +140,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
@@ -148,16 +163,26 @@ fun SettingsScreen(
                 coroutineScope.launch {
                     isRefreshing = true
                     viewModel.refresh()
-                    delay(800L)
+                    delay(350L)
                     isRefreshing = false
                 }
+            },
+            state = pullRefreshState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    isRefreshing = isRefreshing,
+                    state = pullRefreshState,
+                    containerColor = Color(0xFF1A1A2E),
+                    color = Color(0xFFE91E63),
+                )
             },
             modifier = Modifier.padding(padding)
         ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(16.dp)
         ) {
             // Account section
@@ -199,7 +224,13 @@ fun SettingsScreen(
                         godModeExpiresAt = godModeExpiresAt,
                         dailyLimit = state.dailyLimit,
                         onUpgradeClick = onPremium,
-                        onInviteClick = { /* Scroll to referral section or handle invite */ }
+                        onInviteClick = {
+                            coroutineScope.launch {
+                                scrollState.scrollTo(
+                                    inviteSectionScrollPx.coerceIn(0, scrollState.maxValue)
+                                )
+                            }
+                        }
                     )
 
                     // Active perks for God Mode users
@@ -222,7 +253,7 @@ fun SettingsScreen(
                                 )
                                 Text("• Unlimited Replies", color = Color.Gray, fontSize = 12.sp)
                                 Text("• AI Voice Cloning", color = Color.Gray, fontSize = 12.sp)
-                                Text("• Profile Roaster", color = Color.Gray, fontSize = 12.sp)
+                                Text("• Profile photo audit", color = Color.Gray, fontSize = 12.sp)
                             }
                         }
                     }
@@ -256,7 +287,15 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Referral section
-            Text("INVITE FRIENDS", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "INVITE FRIENDS",
+                color = Color.Gray,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.onGloballyPositioned { coordinates ->
+                    inviteSectionScrollPx = coordinates.positionInParent().y.roundToInt()
+                }
+            )
             Spacer(modifier = Modifier.height(8.dp))
 
             Card(
@@ -388,13 +427,14 @@ fun SettingsScreen(
                     Button(
                         onClick = onPremium,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                        colors = ButtonDefaults.buttonColors(containerColor = LockedFeatureGold),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
                             "Compare Plans & Upgrades",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
                         )
                     }
                 }
@@ -420,9 +460,9 @@ fun SettingsScreen(
                         context.startActivity(Intent.createChooser(intent, "Share Cookd"))
                     })
                     HorizontalDivider(color = Color(0xFF252542))
-                    SettingsRow(icon = Icons.Default.Policy, label = "Privacy Policy", onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://cookd.app/privacy")))
-                    })
+                    SettingsRow(icon = Icons.Default.Article, label = "Terms of Service", onClick = onOpenTerms)
+                    HorizontalDivider(color = Color(0xFF252542))
+                    SettingsRow(icon = Icons.Default.Policy, label = "Privacy Policy", onClick = onOpenPrivacy)
                     HorizontalDivider(color = Color(0xFF252542))
                     SettingsRow(icon = Icons.Default.ExitToApp, label = "Sign Out", onClick = {
                         showSignOutDialog = true
@@ -652,13 +692,13 @@ private fun PlanStatusCard(
     
     // Determine card styling based on tier
     val cardBackground = if (isGodMode || tier == "premium") {
-        Color(0xFF2A2A1E) // Subtle gold tint for God Mode
+        Color(0xFF221A22) // Subtle pink tint — gold is reserved for locked / upgrade CTAs
     } else {
-        Color(0xFF1A1A2E) // Standard background
+        Color(0xFF1A1A2E)
     }
-    
+
     val cardBorder = if (isGodMode || tier == "premium") {
-        BorderStroke(1.dp, Color(0xFFFFD700)) // Gold border for God Mode
+        BorderStroke(1.dp, Pink.copy(alpha = 0.45f))
     } else {
         null
     }
@@ -678,7 +718,7 @@ private fun PlanStatusCard(
                 Icon(
                     Icons.Default.WorkspacePremium,
                     contentDescription = null,
-                    tint = if (isGodMode || tier == "premium") Color(0xFFFFD700) else Color(0xFFE91E63),
+                    tint = Pink,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -689,7 +729,7 @@ private fun PlanStatusCard(
                         isGodMode || tier == "premium" -> {
                             Text(
                                 "GOD MODE ACTIVE",
-                                color = Color(0xFFFFD700),
+                                color = Pink,
                                 fontWeight = FontWeight.Bold
                             )
                             godModeExpiresAt?.let { expiresAt ->
@@ -755,7 +795,7 @@ private fun PlanStatusCard(
                     Button(
                         onClick = onUpgradeClick,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
+                        colors = ButtonDefaults.buttonColors(containerColor = LockedFeatureGold),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text("Upgrade Plan", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
@@ -765,12 +805,29 @@ private fun PlanStatusCard(
                     Button(
                         onClick = onUpgradeClick,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                        colors = ButtonDefaults.buttonColors(containerColor = LockedFeatureGold),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Upgrade Plan", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Upgrade Plan",
+                            fontSize = 13.sp,
+                            color = Color.Black,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
+            }
+
+            TextButton(
+                onClick = onInviteClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Invite friends — earn God Mode",
+                    color = Color(0xFF9E9EAE),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -53,7 +54,9 @@ data class ProfileAuditorState(
     val tier: String = "free",
     val weeklyAuditsUsed: Int = 0,
     val profileAuditsPerWeek: Int = 1,
-    val auditProgress: AuditProgress? = null  // Non-null while processing
+    val auditProgress: AuditProgress? = null, // Non-null while processing
+    /** After user taps Run audit (tier OK); picker + submit live here. */
+    val auditSessionStarted: Boolean = false,
 )
 
 @HiltViewModel
@@ -99,6 +102,39 @@ class ProfileAuditorViewModel @Inject constructor(
         _state.value = _state.value.copy(showPaywall = false)
     }
 
+    fun clearError() {
+        _state.update { it.copy(error = null) }
+    }
+
+    /**
+     * Tier / weekly limit is enforced here only — not on submit.
+     * [onBlocked] when user has no audits left (not Premium/God).
+     */
+    fun tryBeginAuditSession(onBlocked: () -> Unit) {
+        val s = _state.value
+        val isGod = s.tier == "premium" || s.tier == "god_mode"
+        val limit = s.profileAuditsPerWeek
+        val hasLeft = limit <= 0 || s.weeklyAuditsUsed < limit
+        if (!isGod && !hasLeft) {
+            onBlocked()
+            return
+        }
+        _state.update { it.copy(auditSessionStarted = true, error = null) }
+    }
+
+    /** After viewing results, back to intro so the next run checks limits again. */
+    fun startNewAudit() {
+        _state.update {
+            it.copy(
+                auditSessionStarted = false,
+                result = null,
+                resultPhotoIdToUri = emptyMap(),
+                error = null,
+                selectedUris = emptyList(),
+            )
+        }
+    }
+
     fun setLanguage(language: String) {
         viewModelScope.launch {
             settingsRepository.setRoastLanguage(language)
@@ -106,6 +142,10 @@ class ProfileAuditorViewModel @Inject constructor(
     }
 
     fun analyzePhotos() {
+        if (!_state.value.auditSessionStarted) {
+            Log.d("ProfileAuditorVM", "analyzePhotos: no active session")
+            return
+        }
         val uris = _state.value.selectedUris
         if (uris.isEmpty() || _state.value.isLoading) {
             Log.d("ProfileAuditorVM", "analyzePhotos: aborted, uris=${uris.size}, isLoading=${_state.value.isLoading}")

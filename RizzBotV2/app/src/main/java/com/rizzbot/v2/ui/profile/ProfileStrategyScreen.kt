@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,15 +53,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.rizzbot.v2.ui.theme.Pink
 
 private val BgColor = Color(0xFF050510)
 private val CardColor = Color(0xFF0D0D22)
-private val AccentGold = Color(0xFFFFD700)
+private val Accent = Pink
 private val TextPrimary = Color.White
 private val TextSecondary = Color(0xFFB0B0D0)
 private val TextMuted = Color(0xFF606080)
 private val HingeColor = Color(0xFFFF6B6B)
 private val AisleColor = Color(0xFF6BDDFF)
+
+private fun formatBlueprintDateLine(createdAt: String): String {
+    val t = createdAt.trim()
+    if (t.length >= 10 && t[4] == '-' && t[7] == '-') return t.take(10)
+    return try {
+        java.time.Instant.parse(t).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+    } catch (_: Exception) {
+        t.take(16).ifEmpty { "—" }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,12 +94,22 @@ fun ProfileStrategyScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = if (detailBlueprint != null) "Blueprint Detail" else "Profile Blueprints",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
+                    Column {
+                        Text(
+                            text = if (detailBlueprint != null) "Blueprint detail" else "Profile blueprints",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        if (detailBlueprint == null) {
+                            Text(
+                                text = "From Auto-Build Profile",
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = {
@@ -118,7 +141,8 @@ fun ProfileStrategyScreen(
             BlueprintHistoryListView(
                 historyState = historyState,
                 modifier = Modifier.padding(padding),
-                onBlueprintClick = { blueprint -> detailBlueprint = blueprint }
+                onBlueprintClick = { blueprint -> detailBlueprint = blueprint },
+                onRetry = { viewModel.loadHistory() }
             )
         }
     }
@@ -128,15 +152,16 @@ fun ProfileStrategyScreen(
 private fun BlueprintHistoryListView(
     historyState: BlueprintHistoryState,
     modifier: Modifier = Modifier,
-    onBlueprintClick: (ProfileBlueprint) -> Unit
+    onBlueprintClick: (ProfileBlueprint) -> Unit,
+    onRetry: () -> Unit,
 ) {
     when (historyState) {
-        is BlueprintHistoryState.Loading -> {
+        is BlueprintHistoryState.Idle, is BlueprintHistoryState.Loading -> {
             Box(
                 modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Loading blueprints...", color = TextSecondary, fontSize = 14.sp)
+                Text("Loading blueprints…", color = TextSecondary, fontSize = 14.sp)
             }
         }
 
@@ -147,7 +172,7 @@ private fun BlueprintHistoryListView(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "No blueprints yet.\nRun the Profile Optimizer to generate one.",
+                        "No blueprints yet.\nOpen Auto-Build Profile from Home to generate one.",
                         color = TextSecondary,
                         fontSize = 13.sp
                     )
@@ -176,20 +201,21 @@ private fun BlueprintHistoryListView(
         }
 
         is BlueprintHistoryState.Error -> {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(historyState.message, color = Color(0xFFFF6B6B), fontSize = 13.sp)
-            }
-        }
-
-        else -> {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Loading...", color = TextSecondary, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color.Black)
+                ) {
+                    Text("Try again", fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
@@ -211,7 +237,7 @@ private fun BlueprintListCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = label,
-                color = AccentGold,
+                color = Accent,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -225,7 +251,7 @@ private fun BlueprintListCard(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "${blueprint.slots.size} photos · ${blueprint.createdAt.take(10)}",
+                text = "${blueprint.slots.size} photos · ${formatBlueprintDateLine(blueprint.createdAt)}",
                 color = TextMuted,
                 fontSize = 12.sp
             )
@@ -248,7 +274,7 @@ private fun BlueprintDetailView(
         item {
             Text(
                 text = blueprint.overallTheme,
-                color = AccentGold,
+                color = Accent,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 lineHeight = 20.sp
@@ -289,7 +315,7 @@ private fun SlotDetailCard(slot: OptimizedSlot, onCopy: (String) -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "Slot ${slot.slotNumber}",
-                    color = AccentGold,
+                    color = Accent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -434,7 +460,7 @@ private fun BioCard(bio: String, onCopy: () -> Unit) {
                 ) {
                     Text(
                         text = "Copy",
-                        color = AccentGold,
+                        color = Accent,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )

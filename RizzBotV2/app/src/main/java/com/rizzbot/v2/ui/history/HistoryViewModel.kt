@@ -37,23 +37,43 @@ class HistoryViewModel @Inject constructor(
     private var currentOffset = 0
     private val pageSize = 20
 
+    private val _isPullRefreshing = MutableStateFlow(false)
+    val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
+
     init {
-        loadInitial()
+        viewModelScope.launch {
+            reloadFirstPage(showFullScreenLoading = true)
+        }
     }
 
-    private fun loadInitial() {
+    /** Pull-to-refresh: reload first page without full-screen skeleton. */
+    fun refresh() {
         viewModelScope.launch {
-            _isLoading.value = true
-            currentOffset = 0
+            _isPullRefreshing.value = true
             try {
-                val history = hostedRepository.getHistory(limit = pageSize, offset = 0)
-                // Filter out items with no valid replies (by text)
-                val filtered = history.filter { item ->
-                    item.replies.any { reply -> reply.text.isNotBlank() }
-                }
-                _history.value = filtered
-                _hasMore.value = filtered.size == pageSize
+                reloadFirstPage(showFullScreenLoading = false)
             } finally {
+                _isPullRefreshing.value = false
+            }
+        }
+    }
+
+    private suspend fun reloadFirstPage(showFullScreenLoading: Boolean) {
+        if (showFullScreenLoading) {
+            _isLoading.value = true
+        }
+        currentOffset = 0
+        try {
+            val history = hostedRepository.getHistory(limit = pageSize, offset = 0)
+            val filtered = history.filter { item ->
+                item.replies.any { reply -> reply.text.isNotBlank() }
+            }
+            _history.value = filtered
+            _hasMore.value = filtered.size == pageSize
+        } catch (e: Exception) {
+            android.util.Log.e("HistoryVM", "reloadFirstPage failed: ${e.message}")
+        } finally {
+            if (showFullScreenLoading) {
                 _isLoading.value = false
             }
         }

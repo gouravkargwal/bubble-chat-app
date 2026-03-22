@@ -5,20 +5,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
-import com.rizzbot.v2.BuildConfig
+import com.rizzbot.v2.BuildConfig as AppBuildConfig
 import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.local.datastore.SettingsDataStore
 import com.rizzbot.v2.data.subscription.SubscriptionManager
 import com.rizzbot.v2.ui.navigation.NavGraph
 import com.rizzbot.v2.ui.navigation.Screen
+import com.rizzbot.v2.ui.theme.Pink
 import com.rizzbot.v2.ui.theme.RizzBotV2Theme
 import com.rizzbot.v2.util.InAppUpdateHelper
 import dagger.hilt.android.AndroidEntryPoint
@@ -51,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
         // Initialize RevenueCat with API key from BuildConfig
         Purchases.configure(
-            PurchasesConfiguration.Builder(this, BuildConfig.REVENUE_CAT_PUBLIC_KEY)
+            PurchasesConfiguration.Builder(this, AppBuildConfig.REVENUE_CAT_PUBLIC_KEY)
                 .build()
         )
 
@@ -81,33 +87,41 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(Unit) {
                 val onboardingCompleted = settingsDataStore.onboardingCompleted.first()
-                android.util.Log.d("AuthDebug", "Boot onboardingCompleted=$onboardingCompleted")
+                if (AppBuildConfig.DEBUG) {
+                    android.util.Log.d("AuthDebug", "Boot onboardingCompleted=$onboardingCompleted")
+                }
 
                 var isAuthenticated = authManager.isAuthenticated()
-                android.util.Log.d(
-                    "AuthDebug",
-                    "Boot auth check: initial isAuthenticated=$isAuthenticated"
-                )
+                if (AppBuildConfig.DEBUG) {
+                    android.util.Log.d(
+                        "AuthDebug",
+                        "Boot auth check: initial isAuthenticated=$isAuthenticated"
+                    )
+                }
                 if (!isAuthenticated) {
                     // If Firebase still has a valid session, re-issue backend JWT before deciding route.
                     val refreshed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         authManager.refreshBackendTokenIfFirebaseSignedIn()
                     }
                     isAuthenticated = refreshed && authManager.isAuthenticated()
-                    android.util.Log.d(
-                        "AuthDebug",
-                        "Boot auth check: refreshAttempted=true refreshed=$refreshed postIsAuthenticated=$isAuthenticated"
-                    )
+                    if (AppBuildConfig.DEBUG) {
+                        android.util.Log.d(
+                            "AuthDebug",
+                            "Boot auth check: refreshAttempted=true refreshed=$refreshed postIsAuthenticated=$isAuthenticated"
+                        )
+                    }
                 }
 
                 bootState.value = BootState.Ready(
                     onboardingCompleted = onboardingCompleted,
                     isAuthenticated = isAuthenticated
                 )
-                android.util.Log.d(
-                    "AuthDebug",
-                    "Boot resolved: onboardingCompleted=$onboardingCompleted isAuthenticated=$isAuthenticated"
-                )
+                if (AppBuildConfig.DEBUG) {
+                    android.util.Log.d(
+                        "AuthDebug",
+                        "Boot resolved: onboardingCompleted=$onboardingCompleted isAuthenticated=$isAuthenticated"
+                    )
+                }
             }
 
             val resolvedOnboardingCompleted =
@@ -115,16 +129,26 @@ class MainActivity : ComponentActivity() {
             val canSkipOnboarding =
                 (bootState.value as? BootState.Ready)?.onboardingCompleted == true &&
                     (bootState.value as? BootState.Ready)?.isAuthenticated == true
+            val onboardingResumeForSignIn =
+                (bootState.value as? BootState.Ready)?.let { ready ->
+                    ready.onboardingCompleted && !ready.isAuthenticated
+                } == true
 
             RizzBotV2Theme {
                 when (val state = bootState.value) {
                     BootState.Refreshing -> {
-                        // Keep SplashScreen up while we decide route.
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Pink)
+                        }
                     }
                     is BootState.Ready -> {
                     NavGraph(
                         navController = navController,
-                        startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route
+                        startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route,
+                        onboardingResumeForSignIn = onboardingResumeForSignIn
                     )
                     }
                 }
