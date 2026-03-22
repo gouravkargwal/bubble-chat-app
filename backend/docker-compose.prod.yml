@@ -88,7 +88,11 @@ services:
         condition: service_started
     restart: unless-stopped
     networks:
-      - default
+      default:
+      milk_bridge:
+        # Same network as Nginx Proxy Manager — without this, NPM gets 502 (no route to Grafana).
+        aliases:
+          - bubble-grafana
 
 volumes:
   pgdata_prod:
