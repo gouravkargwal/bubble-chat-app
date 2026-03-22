@@ -12,6 +12,7 @@ from app.infrastructure.database.models import (
     AuditedPhoto,
     Conversation,
     Interaction,
+    PersonAlias,
     ProfileBlueprint,
     User,
     UserVoiceDNA,
@@ -77,7 +78,18 @@ async def delete_all_user_data(
             await db.delete(photo)
         logger.info("user_data_purge_photos", count=len(photos), user_id=user_id)
 
-        # 4. Delete all Conversations
+        # 4. Delete person aliases (FK to conversations.id) before conversations
+        aliases_result = await db.execute(
+            select(PersonAlias).where(PersonAlias.user_id == user_id)
+        )
+        aliases = aliases_result.scalars().all()
+        for alias in aliases:
+            await db.delete(alias)
+        logger.info(
+            "user_data_purge_person_aliases", count=len(aliases), user_id=user_id
+        )
+
+        # 5. Delete all Conversations
         conversations_result = await db.execute(
             select(Conversation).where(Conversation.user_id == user_id)
         )
@@ -88,7 +100,7 @@ async def delete_all_user_data(
             "user_data_purge_conversations", count=len(conversations), user_id=user_id
         )
 
-        # 5. Reset UserVoiceDNA to blank state (don't delete, just reset)
+        # 6. Reset UserVoiceDNA to blank state (don't delete, just reset)
         voice_dna_result = await db.execute(
             select(UserVoiceDNA).where(UserVoiceDNA.user_id == user_id)
         )
@@ -110,7 +122,7 @@ async def delete_all_user_data(
             voice_dna.semantic_profile = None
             logger.info("user_data_purge_voice_dna_reset", user_id=user_id)
 
-        # 6. Null out directly identifying fields on the User record
+        # 7. Null out directly identifying fields on the User record
         user.email = None
         user.display_name = None
 

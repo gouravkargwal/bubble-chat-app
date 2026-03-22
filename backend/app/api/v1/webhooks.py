@@ -27,6 +27,15 @@ async def revenuecat_webhook(
     """
     # Verify webhook secret (optional for development/testing)
     webhook_secret = settings.revenuecat_webhook_secret
+    if not webhook_secret and settings.environment != "development":
+        logger.error(
+            "revenuecat_webhook_secret_not_configured",
+            message="Webhook rejected: set REVENUECAT_WEBHOOK_SECRET in this environment",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="RevenueCat webhook is not configured on this server.",
+        )
     if webhook_secret:
         # Secret is configured - enforce authorization
         if authorization != f"Bearer {webhook_secret}":
@@ -35,12 +44,6 @@ async def revenuecat_webhook(
                 provided_auth=authorization[:20] if authorization else None,
             )
             raise HTTPException(status_code=401, detail="Unauthorized")
-    elif settings.environment != "development":
-        # Production/staging should always verify webhooks.
-        logger.warning(
-            "revenuecat_webhook_secret_not_configured",
-            message="Webhook secret not configured - allowing request without authentication",
-        )
 
     # Parse request body
     try:

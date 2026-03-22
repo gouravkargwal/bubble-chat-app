@@ -22,6 +22,9 @@ services:
     build: .
     command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --workers 4 --timeout-keep-alive 30
     env_file: .env.prod
+    # oci/ is listed in .dockerignore so API keys are never baked into the image — mount from host.
+    volumes:
+      - ./oci:/app/oci:ro
     depends_on:
       postgres:
         condition: service_healthy

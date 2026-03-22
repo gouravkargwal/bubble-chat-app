@@ -40,6 +40,10 @@ async def optimize_profile(
     ),
 ) -> ProfileBlueprintResponse:
     """Generate an optimized profile blueprint for the current user and save it to the database."""
+    # Capture before any await + rollback: after rollback the User may be expired and
+    # accessing .id lazy-loads via sync IO → MissingGreenlet in async SQLAlchemy.
+    user_id = current_user.id
+
     effective_tier = get_effective_tier(current_user)
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
     blueprints_per_week = tier_config["limits"]["profile_blueprints_per_week"]
@@ -78,7 +82,7 @@ async def optimize_profile(
 
     try:
         blueprint = await generate_blueprint(
-            user_id=current_user.id,
+            user_id=user_id,
             db=db,
             lang=lang,
             idempotency_key=x_idempotency_key,
@@ -91,7 +95,7 @@ async def optimize_profile(
         await db.rollback()
         logger.warning(
             "profile_blueprint_generation_failed",
-            user_id=current_user.id,
+            user_id=user_id,
             error=str(exc),
         )
         raise HTTPException(status_code=400, detail=str(exc))
@@ -100,7 +104,7 @@ async def optimize_profile(
         await db.rollback()
         logger.error(
             "profile_blueprint_generation_critical_failure",
-            user_id=current_user.id,
+            user_id=user_id,
             error=str(exc),
         )
         raise HTTPException(
