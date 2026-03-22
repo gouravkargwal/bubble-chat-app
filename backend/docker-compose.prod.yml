@@ -1,3 +1,9 @@
+# Variable substitution (${VAR}) only reads the default `.env` file in this directory — not `.env.prod`.
+# Services below use `env_file: .env.prod` for runtime env; Grafana's password is read the same way
+# (set GF_SECURITY_ADMIN_PASSWORD in .env.prod — no ${...} here, so `compose build` works without --env-file).
+#
+# If you still use ${VAR} elsewhere, run: docker compose --env-file .env.prod -f docker-compose.prod.yml <cmd>
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -68,9 +74,9 @@ services:
 
   grafana:
     image: grafana/grafana:11.3.0
+    env_file: .env.prod
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD for Grafana (e.g. in .env.prod)}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
