@@ -98,7 +98,6 @@ data class AuditResponseUi(
     val totalAnalyzed: Int,
     val passedCount: Int,
     val isHardReset: Boolean,
-    val archetypeTitle: String,
     val roastSummary: String,
     val overallScore: Int,
     val photos: List<PhotoFeedbackUi>
@@ -608,7 +607,7 @@ private fun ProfileAuditResultContent(
             .padding(top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        ArchetypeHeader(result = result)
+        RoastSummaryBanner(result = result)
 
         if (godTier.isNotEmpty()) {
             Text(
@@ -646,7 +645,7 @@ private fun ProfileAuditResultContent(
 }
 
 @Composable
-private fun ArchetypeHeader(result: AuditResponseUi) {
+private fun RoastSummaryBanner(result: AuditResponseUi) {
     val gradientBrush = Brush.verticalGradient(
         colors = listOf(
             RoasterHeaderAccent.copy(alpha = 0.45f),
@@ -669,21 +668,6 @@ private fun ArchetypeHeader(result: AuditResponseUi) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.Start
             ) {
-                Text(
-                    text = "Dating Archetype",
-                    color = Color.White.copy(alpha = 0.78f),
-                    fontSize = 12.sp
-                )
-
-                Text(
-                    text = result.archetypeTitle.ifBlank { "The Main Character" },
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    // Use a bold, display-style font weight; custom font family can be wired later
-                    style = MaterialTheme.typography.headlineSmall
-                )
-
-                // Overall score badge
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -709,7 +693,11 @@ private fun ArchetypeHeader(result: AuditResponseUi) {
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Overall roast",
+                    color = Color.White.copy(alpha = 0.78f),
+                    fontSize = 12.sp
+                )
 
                 Row(
                     verticalAlignment = Alignment.Top,

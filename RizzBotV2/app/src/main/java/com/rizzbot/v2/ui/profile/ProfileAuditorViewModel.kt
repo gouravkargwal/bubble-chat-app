@@ -219,7 +219,6 @@ private fun AuditResponse.toUiModel(): AuditResponseUi =
         totalAnalyzed = totalAnalyzed,
         passedCount = passedCount,
         isHardReset = isHardReset,
-        archetypeTitle = archetypeTitle,
         roastSummary = roastSummary,
         overallScore = photos.takeIf { it.isNotEmpty() }
             ?.map { it.score }

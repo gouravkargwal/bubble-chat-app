@@ -401,8 +401,7 @@ class AuditedPhoto(Base):
     tier: Mapped[str] = mapped_column(String(20))
     brutal_feedback: Mapped[str] = mapped_column(Text)
     improvement_tip: Mapped[str] = mapped_column(Text)
-    # Optional per-audit vibe metadata (archetype + roast copy).
-    archetype_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Optional per-audit one-liner roast (not stored per-photo in JSON).
     roast_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Idempotency key: allows safe retries without double-charging Gemini API credits.
     idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

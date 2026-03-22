@@ -174,7 +174,6 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                     total_analyzed=len(image_hashes),
                     passed_count=sum(1 for p in cached_photos if p.tier == "GOD_TIER"),
                     is_hard_reset=all(p.tier == "GRAVEYARD" for p in cached_photos),
-                    archetype_title=latest.archetype_title,
                     roast_summary=latest.roast_summary,
                     photos=cached_photos,
                 )
@@ -276,7 +275,6 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                 total_analyzed=len(image_hashes),
                 passed_count=sum(1 for p in all_photos if p.tier == "GOD_TIER"),
                 is_hard_reset=all(p.tier == "GRAVEYARD" for p in all_photos),
-                archetype_title=new_parsed.archetype_title,
                 roast_summary=new_parsed.roast_summary,
                 photos=all_photos,
             )
@@ -319,7 +317,6 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                                 tier=photo_feedback.tier,
                                 brutal_feedback=photo_feedback.brutal_feedback,
                                 improvement_tip=photo_feedback.improvement_tip,
-                                archetype_title=new_parsed.archetype_title,
                                 roast_summary=new_parsed.roast_summary,
                                 idempotency_key=job.idempotency_key,
                             )
@@ -426,24 +423,11 @@ def _build_system_prompt(lang: str) -> str:
         "'Cringe', or 'Chhapri' where it naturally fits the roast.\n"
         "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
         "Always match the cultural tone and norms of the requested language/dialect.\n\n"
-        "THE ROAST MASTER PROTOCOL\n"
-        "After analyzing the photos, you must categorize the user into a single overall DATING ARCHETYPE.\n"
-        "Tone: 8/10 Savage. Be brutally honest, funny, and use 2026 internet subcultures "
-        "(e.g., 'LinkedIn-maxing', 'Beige Flag Final Boss', 'Gym-Mirror Philosopher').\n"
-        "Humor over politeness: the goal is to make the user laugh or feel called out enough to share this "
-        "on social media.\n"
-        "Archetype logic examples (use them as inspiration, not a strict list):\n"
-        "- High effort but cringey posing or over-editing → label them some version of a 'Try-Hard'.\n"
-        "- Zero effort, blurry pics, or chaotic lighting → label them some version of 'Witness Protection Program'.\n"
-        "- Mostly or only gym shots → label them some version of 'Protein-Shake Narcissus' or 'Gym-Mirror Philosopher'.\n"
-        "If the photos are genuinely excellent across the board, the archetype should feel like a "
-        "'Backhanded Compliment' (e.g., 'The Ego Trip', 'Main Character Energy').\n"
-        "ARACHETYPE_TITLE RULES:\n"
-        "- Must be a bold, 2-4 word title (e.g., 'The Corporate NPC', 'Red Flag Legend', 'The Main Character').\n"
-        "- Lean into meme-able, shareable phrasing.\n"
-        "ROAST_SUMMARY RULES:\n"
-        '- Write a single, punchy sentence that would make an influencer\'s audience go "OOF".\n'
-        "- 8/10 savage, but still playful and entertaining, not bullying.\n\n"
+        "OVERALL ROAST LINE\n"
+        "After analyzing all photos, fill `roast_summary` with ONE punchy sentence about their overall "
+        "dating-photo vibe. Tone: 8/10 savage, funny, 2026 internet energy — playful, not bullying.\n"
+        "Draw from what you actually see (lighting, posing, backgrounds, try-hard vs low effort), not a "
+        "made-up persona label or title.\n\n"
         "Score each photo on a strict 1-10 integer scale using this rubric:\n"
         "  1-3: Face not visible, blurry, heavy filter, or group shot where subject is unclear.\n"
         "  4-5: Visible face but poor lighting, bad background, unflattering angle, or low effort.\n"

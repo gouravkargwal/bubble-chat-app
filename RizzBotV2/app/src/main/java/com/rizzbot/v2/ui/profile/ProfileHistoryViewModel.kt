@@ -48,8 +48,6 @@ class ProfileHistoryViewModel @Inject constructor(
                         brutalFeedback = it.brutalFeedback,
                         improvementTip = it.improvementTip,
                         createdAt = it.createdAt,
-                        archetypeTitle = it.archetypeTitle,
-                        roastSummary = it.roastSummary,
                     )
                 }
                 _audits.value = _audits.value + mapped.sortedByDescending { it.score }
@@ -85,8 +83,6 @@ class ProfileHistoryViewModel @Inject constructor(
                         brutalFeedback = it.brutalFeedback,
                         improvementTip = it.improvementTip,
                         createdAt = it.createdAt,
-                        archetypeTitle = it.archetypeTitle,
-                        roastSummary = it.roastSummary,
                     )
                 }
                 _audits.value = mapped.sortedByDescending { it.score }

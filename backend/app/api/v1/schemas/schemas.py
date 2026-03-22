@@ -230,8 +230,7 @@ class AuditedPhotoItem(BaseModel):
     tier: str
     brutal_feedback: str
     improvement_tip: str
-    # Optional archetype + roast metadata from the audit session.
-    archetype_title: str | None = None
+    # Optional overall roast line from the audit session.
     roast_summary: str | None = None
     image_url: str
     created_at: int  # unix timestamp

@@ -29,7 +29,6 @@ class AuditResponse(BaseModel):
     total_analyzed: int
     passed_count: int
     is_hard_reset: bool
-    # Archetype + roast are per-audit, not per-photo.
-    archetype_title: str | None = None
+    # One overall roast line for the set (not per-photo).
     roast_summary: str | None = None
     photos: list[PhotoFeedback]
