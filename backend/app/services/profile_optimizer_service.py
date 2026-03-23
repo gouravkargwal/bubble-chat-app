@@ -153,12 +153,25 @@ def _derive_image_url(storage_path: str) -> str:
     return f"{settings.base_url.rstrip('/')}/static/{storage_path.lstrip('/')}"
 
 
-def _build_blueprint_response(db_blueprint: ProfileBlueprintDB) -> ProfileBlueprintResponse:
+def _build_blueprint_response(
+    db_blueprint: ProfileBlueprintDB,
+    *,
+    slots: list[BlueprintSlot] | None = None,
+    universal_prompts: list[BlueprintUniversalPrompt] | None = None,
+) -> ProfileBlueprintResponse:
     """Construct a ProfileBlueprintResponse from a fully-loaded ORM object.
 
-    Expects db_blueprint.slots and db_blueprint.universal_prompts to be loaded
-    (either via selectinload or because they were just added to the session).
+    Pass ``slots`` / ``universal_prompts`` when building right after insert so we
+    never touch lazy-loaded relationships in the async session. Otherwise expects
+    relationships loaded via selectinload (e.g. list/idempotency paths).
     """
+    slot_models = slots if slots is not None else db_blueprint.slots
+    up_models = (
+        universal_prompts
+        if universal_prompts is not None
+        else db_blueprint.universal_prompts
+    )
+
     slot_responses = sorted(
         [
             {
@@ -178,15 +191,15 @@ def _build_blueprint_response(db_blueprint: ProfileBlueprintDB) -> ProfileBluepr
                     else s.image_url
                 ),
             }
-            for s in db_blueprint.slots
+            for s in slot_models
         ],
         key=lambda x: x["slot_number"],
     )
 
-    universal_prompts = (
+    universal_prompts_out = (
         [
             {"category": up.category, "suggested_text": up.suggested_text}
-            for up in db_blueprint.universal_prompts
+            for up in up_models
         ]
         or None
     )
@@ -198,7 +211,7 @@ def _build_blueprint_response(db_blueprint: ProfileBlueprintDB) -> ProfileBluepr
         bio=db_blueprint.bio,
         created_at=db_blueprint.created_at,
         slots=slot_responses,
-        universal_prompts=universal_prompts,
+        universal_prompts=universal_prompts_out,
     )
 
 
@@ -385,8 +398,13 @@ async def generate_blueprint(
     # We do NOT commit here — the caller controls the transaction so quota
     # and blueprint creation succeed or fail atomically.
     await db.flush()
+    # Server-generated columns (e.g. created_at) are not present on the instance
+    # until refreshed; accessing them triggers implicit IO and MissingGreenlet
+    # under AsyncSession.
+    await db.refresh(db_blueprint, attribute_names=["created_at"])
 
-    # Build response from in-memory objects — no extra DB round-trip needed.
-    db_blueprint.slots = db_slots
-    db_blueprint.universal_prompts = db_universal_prompts
-    return _build_blueprint_response(db_blueprint)
+    return _build_blueprint_response(
+        db_blueprint,
+        slots=db_slots,
+        universal_prompts=db_universal_prompts,
+    )

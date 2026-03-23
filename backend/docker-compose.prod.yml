@@ -8,6 +8,10 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     env_file: .env.prod # <--- Read everything from here!
+    # Host can connect with psql/DBeaver/etc. via localhost:5432 (same pattern as Loki/Grafana on 127.0.0.1).
+    # Use "5432:5432" instead if you need LAN/internet access (lock down with firewall + strong passwords).
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d
@@ -17,6 +21,9 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - default
+      - milk_bridge
 
   api:
     build: .
