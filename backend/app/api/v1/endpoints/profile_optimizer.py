@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,7 @@ from app.schemas.profile_blueprint import (
     ProfileBlueprintListResponse,
     ProfileBlueprintResponse,
 )
-from app.services.profile_optimizer_service import generate_blueprint, _build_blueprint_response
+from app.services.profile_optimizer_service import build_blueprint_response, generate_blueprint
 
 router = APIRouter(prefix="/profile-audit", tags=["profile-audit"])
 logger = structlog.get_logger()
@@ -149,7 +151,9 @@ async def list_profile_blueprints(
     )
     db_blueprints = result.scalars().all()
 
-    items = [_build_blueprint_response(bp) for bp in db_blueprints]
+    items = await asyncio.gather(
+        *[build_blueprint_response(bp) for bp in db_blueprints]
+    )
 
     return ProfileBlueprintListResponse(
         items=items, total_count=total_count, limit=limit, offset=offset

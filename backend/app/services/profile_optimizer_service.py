@@ -1,5 +1,6 @@
 """Service for generating an optimized dating profile blueprint from audited photos."""
 
+import asyncio
 import json
 import uuid
 from typing import Any
@@ -10,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.infrastructure.oci_storage import get_signed_url as oci_get_signed_url
 from app.infrastructure.database.models import (
     AuditedPhoto,
     BlueprintSlot,
@@ -145,15 +147,30 @@ async def _fetch_top_audited_photos(
 
 
 def _derive_image_url(storage_path: str) -> str:
-    """Derive a full image URL from a storage path at read time.
+    """Derive a legacy static URL (used only when persisting slot rows).
 
-    Deriving at read time (rather than baking in base_url at write time) means
-    URL records stay valid across domain changes and CDN migrations.
+    Audited photos live in OCI; API responses use signed URLs via
+    ``_resolve_slot_image_url`` instead of this path.
     """
     return f"{settings.base_url.rstrip('/')}/static/{storage_path.lstrip('/')}"
 
 
-def _build_blueprint_response(
+async def _resolve_slot_image_url(slot: BlueprintSlot) -> str:
+    """Return a client-loadable URL for the slot photo (OCI PAR, same as audit history)."""
+    if not slot.storage_path:
+        return slot.image_url or ""
+    try:
+        return await oci_get_signed_url(slot.storage_path)
+    except Exception as exc:  # pragma: no cover - OCI/network
+        logger.warning(
+            "blueprint_slot_signed_url_failed",
+            slot_id=slot.id,
+            error=str(exc)[:200],
+        )
+        return slot.image_url or ""
+
+
+async def build_blueprint_response(
     db_blueprint: ProfileBlueprintDB,
     *,
     slots: list[BlueprintSlot] | None = None,
@@ -172,29 +189,10 @@ def _build_blueprint_response(
         else db_blueprint.universal_prompts
     )
 
-    slot_responses = sorted(
-        [
-            {
-                "id": s.id,
-                "photo_id": s.photo_id,
-                "slot_number": s.slot_number,
-                "role": s.role,
-                "caption": s.caption,
-                "universal_hook": s.universal_hook,
-                "hinge_prompt": s.hinge_prompt,
-                "aisle_prompt": s.aisle_prompt,
-                # Re-derive from storage_path when available so the URL stays
-                # fresh even if base_url has changed since the record was created.
-                "image_url": (
-                    _derive_image_url(s.storage_path)
-                    if s.storage_path
-                    else s.image_url
-                ),
-            }
-            for s in slot_models
-        ],
-        key=lambda x: x["slot_number"],
+    slot_dicts = await asyncio.gather(
+        *[_slot_dict_async(s) for s in slot_models]
     )
+    slot_responses = sorted(slot_dicts, key=lambda x: x["slot_number"])
 
     universal_prompts_out = (
         [
@@ -213,6 +211,21 @@ def _build_blueprint_response(
         slots=slot_responses,
         universal_prompts=universal_prompts_out,
     )
+
+
+async def _slot_dict_async(s: BlueprintSlot) -> dict[str, Any]:
+    image_url = await _resolve_slot_image_url(s)
+    return {
+        "id": s.id,
+        "photo_id": s.photo_id,
+        "slot_number": s.slot_number,
+        "role": s.role,
+        "caption": s.caption,
+        "universal_hook": s.universal_hook,
+        "hinge_prompt": s.hinge_prompt,
+        "aisle_prompt": s.aisle_prompt,
+        "image_url": image_url,
+    }
 
 
 async def generate_blueprint(
@@ -243,7 +256,7 @@ async def generate_blueprint(
         )
         existing = existing_result.scalar_one_or_none()
         if existing:
-            return _build_blueprint_response(existing)
+            return await build_blueprint_response(existing)
 
     # --- Input validation ---------------------------------------------------
     lang = _validate_lang(lang)
@@ -403,7 +416,7 @@ async def generate_blueprint(
     # under AsyncSession.
     await db.refresh(db_blueprint, attribute_names=["created_at"])
 
-    return _build_blueprint_response(
+    return await build_blueprint_response(
         db_blueprint,
         slots=db_slots,
         universal_prompts=db_universal_prompts,
