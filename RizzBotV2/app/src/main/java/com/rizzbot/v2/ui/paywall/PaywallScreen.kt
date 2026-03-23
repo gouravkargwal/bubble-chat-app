@@ -226,7 +226,7 @@ fun PaywallScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             TextButton(
-                                onClick = { viewModel.restorePurchases(onPurchaseSuccess) },
+                                onClick = { viewModel.restorePurchases() },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text("Restore", color = FooterLinkColor, fontSize = 12.sp)

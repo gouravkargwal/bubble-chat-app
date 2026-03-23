@@ -12,6 +12,7 @@ import com.revenuecat.purchases.models.StoreTransaction
 import com.revenuecat.purchases.interfaces.PurchaseCallback
 import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.revenuecat.purchases.interfaces.ReceiveOfferingsCallback
+import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.subscription.SubscriptionManager
 import com.rizzbot.v2.util.HapticHelper
 import com.rizzbot.v2.domain.model.UsageState
@@ -53,6 +54,7 @@ class PaywallViewModel @Inject constructor(
     private val subscriptionManager: SubscriptionManager,
     private val hostedRepository: HostedRepository,
     private val hapticHelper: HapticHelper,
+    private val authManager: AuthManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PaywallState())
@@ -67,29 +69,10 @@ class PaywallViewModel @Inject constructor(
     }
 
     private fun observeActiveTier() {
-        // Read current entitlements from RevenueCat to infer active tier
         Purchases.sharedInstance.getCustomerInfo(
             object : ReceiveCustomerInfoCallback {
                 override fun onReceived(customerInfo: com.revenuecat.purchases.CustomerInfo) {
-                    val premiumEntitlement = customerInfo.entitlements["premium"]
-                    val proEntitlement = customerInfo.entitlements["pro"]
-
-                    val hasPremium = premiumEntitlement?.isActive == true
-                    val hasPro = proEntitlement?.isActive == true
-
-                    val tier = when {
-                        hasPremium -> PaywallTier.Premium
-                        hasPro -> PaywallTier.Pro
-                        else -> null
-                    }
-
-                    val activeId = when {
-                        hasPremium -> premiumEntitlement?.productIdentifier
-                        hasPro -> proEntitlement?.productIdentifier
-                        else -> null
-                    }
-
-                    _state.update { it.copy(activeTier = tier, activeProductId = activeId) }
+                    applyRcCustomerInfo(customerInfo)
                 }
 
                 override fun onError(error: PurchasesError) {
@@ -97,6 +80,34 @@ class PaywallViewModel @Inject constructor(
                 }
             }
         )
+    }
+
+    /** Align paywall UI with RevenueCat entitlements (same keys as [SubscriptionManager]). */
+    private fun applyRcCustomerInfo(customerInfo: com.revenuecat.purchases.CustomerInfo) {
+        val premiumEntitlement = customerInfo.entitlements["premium"]
+        val proEntitlement = customerInfo.entitlements["pro"]
+
+        val hasPremium = premiumEntitlement?.isActive == true
+        val hasPro = proEntitlement?.isActive == true
+
+        val tier = when {
+            hasPremium -> PaywallTier.Premium
+            hasPro -> PaywallTier.Pro
+            else -> null
+        }
+
+        val activeId = when {
+            hasPremium -> premiumEntitlement?.productIdentifier
+            hasPro -> proEntitlement?.productIdentifier
+            else -> null
+        }
+
+        _state.update { it.copy(activeTier = tier, activeProductId = activeId) }
+    }
+
+    private fun hasCookdPaidEntitlement(customerInfo: com.revenuecat.purchases.CustomerInfo): Boolean {
+        return customerInfo.entitlements["premium"]?.isActive == true ||
+            customerInfo.entitlements["pro"]?.isActive == true
     }
 
     fun retryLoadOfferings() {
@@ -221,6 +232,7 @@ class PaywallViewModel @Inject constructor(
                 ) {
                     // Show success screen immediately — no network wait for the user
                     hapticHelper.successTap()
+                    applyRcCustomerInfo(customerInfo)
                     _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
 
                     // Sync tier in background so it's ready before "Start Exploring" navigates away
@@ -259,34 +271,45 @@ class PaywallViewModel @Inject constructor(
         purchasePackage(activity, packageToBuy, onSuccess)
     }
 
-    fun restorePurchases(onSuccess: () -> Unit) {
+    fun restorePurchases() {
         _state.update { it.copy(purchaseError = null) }
-        
-        Purchases.sharedInstance.restorePurchases(
-            object : ReceiveCustomerInfoCallback {
-                override fun onReceived(customerInfo: com.revenuecat.purchases.CustomerInfo) {
-                    // Check if user has active entitlements and update tier
-                    viewModelScope.launch {
-                        subscriptionManager.updateUserTier()
-                        
-                        val hasActiveEntitlements = customerInfo.entitlements.active.isNotEmpty()
-                        if (hasActiveEntitlements) {
-                            _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
-                        } else {
-                            _state.update {
-                                it.copy(purchaseError = "No active subscriptions found")
+
+        // Restore must run after RevenueCat knows the same app user ID as the backend, otherwise
+        // Play purchases stay on the anonymous RC profile and won't unlock this account.
+        viewModelScope.launch {
+            val userId = authManager.getUserId()
+            if (!userId.isNullOrEmpty()) {
+                subscriptionManager.setUserId(userId)
+            }
+
+            Purchases.sharedInstance.restorePurchases(
+                object : ReceiveCustomerInfoCallback {
+                    override fun onReceived(customerInfo: com.revenuecat.purchases.CustomerInfo) {
+                        viewModelScope.launch {
+                            subscriptionManager.updateUserTier()
+                            applyRcCustomerInfo(customerInfo)
+
+                            if (hasCookdPaidEntitlement(customerInfo)) {
+                                hapticHelper.successTap()
+                                _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
+                            } else {
+                                _state.update {
+                                    it.copy(
+                                        purchaseError = "No active Cookd subscription found for this Google account."
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                override fun onError(error: PurchasesError) {
-                    _state.update {
-                        it.copy(purchaseError = "Restore failed: ${error.message}")
+                    override fun onError(error: PurchasesError) {
+                        _state.update {
+                            it.copy(purchaseError = "Restore failed: ${error.message}")
+                        }
                     }
                 }
-            }
-        )
+            )
+        }
     }
 
     /**
