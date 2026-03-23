@@ -7,7 +7,7 @@ Single Gemini multimodal call that performs:
   3. Conversation analysis (archetype, tone, effort, temperature, dialect)
 
 Also fetches librarian context (core_lore + past_memories) from the DB inline.
-Model: gemini-3.1-flash-lite-preview at temperature 0 (deterministic)
+Model: `settings.gemini_model` (GEMINI_MODEL) at temperature 0 (deterministic)
 """
 
 from typing import Any, cast

@@ -82,15 +82,6 @@ class RequiresUserConfirmation(BaseModel):
     suggested_match: SuggestedMatch
 
 
-class CalibrationRequest(BaseModel):
-    images: list[str] = Field(..., description="Base64 screenshots for calibration")
-
-
-class CalibrationResponse(BaseModel):
-    messages_extracted: int
-    success: bool
-
-
 class ResolveConversationRequest(BaseModel):
     user_id: str
     suggested_conversation_id: str

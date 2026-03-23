@@ -258,5 +258,4 @@ async def to_domain(db_model: UserVoiceDNA, db: AsyncSession) -> VoiceDNA:
             if getattr(db_model, "recent_organic_messages", None)
             else []
         ),
-        semantic_profile=getattr(db_model, "semantic_profile", None),
     )

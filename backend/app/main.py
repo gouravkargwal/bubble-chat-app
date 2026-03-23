@@ -121,7 +121,7 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def profile_request(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
         # Only profile the vision generate endpoint
-        if "vision/generate" not in request.url.path:
+        if "vision/generate_v2" not in request.url.path:
             return await call_next(request)
 
         profiler = Profiler(interval=0.001, async_mode="enabled")

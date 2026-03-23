@@ -1,7 +1,7 @@
 """
 DB-backed pending resolution store for the "Hybrid Stitch" flow.
 
-When `POST /api/v1/vision/generate` detects ambiguity, it halts and returns
+When `POST /api/v1/vision/generate_v2` detects ambiguity, it halts and returns
 `REQUIRES_USER_CONFIRMATION`. The follow-up `POST /api/v1/conversations/resolve`
 needs enough context (direction, screenshots, etc.) to re-run generation.
 

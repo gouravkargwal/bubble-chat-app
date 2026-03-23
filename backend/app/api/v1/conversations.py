@@ -1,7 +1,7 @@
 """Conversation management endpoints."""
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,7 @@ from app.services.hybrid_stitch_pending import (
     parse_pending_images,
 )
 
-from app.api.v1.vision import generate_replies as vision_generate_replies
+from app.api.v1.vision_v2 import generate_replies_v2 as vision_generate_replies
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -98,14 +98,13 @@ async def delete_conversation(
 @router.post("/conversations/resolve")
 async def resolve_conversation(
     request: ResolveConversationRequest,
-    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Resolve Hybrid Stitch after user confirmation.
 
-    The initial ambiguity detection occurs in `POST /api/v1/vision/generate`.
+    The initial ambiguity detection occurs in `POST /api/v1/vision/generate_v2`.
     Here we:
     - pick the conversation_id (existing vs newly created),
     - persist the alias for future instant lookups (feedback loop),
@@ -208,7 +207,6 @@ async def resolve_conversation(
 
     vision_response = await vision_generate_replies(
         request=vision_request,
-        background_tasks=background_tasks,
         user=user,
         db=db,
     )

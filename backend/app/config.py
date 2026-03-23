@@ -23,9 +23,11 @@ class Settings(BaseSettings):
 
     # LLM — Gemini is the primary (and only) provider
     gemini_api_key: str = ""
-    # Used by GeminiClient, vision_v2 hybrid OCR, audits/blueprints, and v2 LangGraph nodes
-    # (vision / generator / auditor) via agent.nodes_v2._shared.
+    # Used by GeminiClient, LangGraph nodes (v1 + v2), hybrid OCR, audits/blueprints.
+    # Set GEMINI_MODEL in env (see .env.example).
     gemini_model: str = "gemini-2.5-flash"
+    # Embeddings for pgvector / semantic memory (LangChain GoogleGenerativeAIEmbeddings model id).
+    gemini_embedding_model: str = "models/gemini-embedding-001"
 
     # OpenRouter — used by v2 agent generator_node
     openrouter_api_key: str = ""

@@ -119,7 +119,6 @@ async def delete_all_user_data(
             voice_dna.ellipsis_count = 0
             voice_dna.word_frequency = "{}"
             voice_dna.recent_organic_messages = "[]"
-            voice_dna.semantic_profile = None
             logger.info("user_data_purge_voice_dna_reset", user_id=user_id)
 
         # 7. Null out directly identifying fields on the User record

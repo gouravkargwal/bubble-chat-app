@@ -3,6 +3,7 @@
 import httpx
 import structlog
 
+from app.config import settings
 from app.llm.base import LlmClient
 from app.llm.gemini_pricing import usage_record
 
@@ -13,9 +14,9 @@ _RETRY_DELAY = 1.0
 
 
 class GeminiClient(LlmClient):
-    def __init__(self, api_key: str, default_model: str = "gemini-2.5-flash") -> None:
+    def __init__(self, api_key: str, default_model: str | None = None) -> None:
         self.api_key = api_key
-        self.default_model = default_model
+        self.default_model = default_model or settings.gemini_model
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=60.0))
 
     async def vision_generate(
@@ -184,13 +185,14 @@ class GeminiClient(LlmClient):
         self,
         system_prompt: str,
         user_prompt: str,
-        model: str = "gemini-2.5-flash",
+        model: str | None = None,
         temperature: float = 0.3,
         max_output_tokens: int = 1024,
         usage_sink: list[dict] | None = None,
         usage_phase: str = "gemini_generate_content",
     ) -> str:
         """Generic text-only content generation helper."""
+        model = model or self.default_model
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
             f":generateContent?key={self.api_key}"

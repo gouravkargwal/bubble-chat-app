@@ -186,14 +186,7 @@ TERMINAL DIRECTION: GET NUMBER / MOVE OFF APP (CRITICAL)
             else "none detected yet"
         )
 
-        base_dna = ""
-        if voice.semantic_profile:
-            base_dna += (
-                "\n\n🧠 PSYCHOLOGICAL STYLE GUIDE (CRITICAL):\n"
-                f"{voice.semantic_profile}\n"
-            )
-
-        base_dna += f"""
+        base_dna = f"""
 ══════════════════════════════════════
 USER'S TEXTING STYLE (Voice DNA — match this closely)
 ══════════════════════════════════════

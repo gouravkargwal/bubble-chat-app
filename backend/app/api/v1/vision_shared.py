@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,7 +36,6 @@ from app.infrastructure.database.models import (
     UserVoiceDNA,
 )
 from app.services.quota_manager import QuotaManager
-from app.services.voice_dna import generate_semantic_profile_background
 
 logger = structlog.get_logger(__name__)
 
@@ -630,10 +629,8 @@ async def update_voice_dna(
     db: AsyncSession,
     user: User,
     organic_text: str,
-    effective_tier: str,
-    background_tasks: BackgroundTasks,
 ) -> None:
-    """Update Voice DNA stats and optionally trigger semantic profile refresh."""
+    """Update Voice DNA stats from organic user text."""
     if not settings.voice_dna_enabled:
         return
     voice_result = await db.execute(
@@ -644,34 +641,8 @@ async def update_voice_dna(
         voice_db = UserVoiceDNA(user_id=user.id)
         db.add(voice_db)
 
-    updated_dna = update_voice_dna_stats(voice_db, organic_text.lower().strip())
+    update_voice_dna_stats(voice_db, organic_text.lower().strip())
     await db.commit()
-
-    # Trigger semantic profile background refresh for premium users
-    try:
-        messages_list = (
-            json.loads(updated_dna.recent_organic_messages)
-            if getattr(updated_dna, "recent_organic_messages", None)
-            else []
-        )
-    except (json.JSONDecodeError, TypeError):
-        messages_list = []
-
-    should_refresh = (
-        not getattr(updated_dna, "semantic_profile", None)
-        or (updated_dna.sample_count % 25 == 0 and updated_dna.sample_count > 0)
-    )
-    if (
-        effective_tier in ["premium", "pro"]
-        and len(messages_list) >= 5
-        and should_refresh
-    ):
-        background_tasks.add_task(
-            generate_semantic_profile_background,
-            user_id=user.id,
-            db=db,
-            messages=messages_list,
-        )
 
 
 # ---------------------------------------------------------------------------

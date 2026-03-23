@@ -6,7 +6,7 @@ Does NOT check style/punctuation (handled by deterministic post-processor).
 Returns per-reply verdicts with specific rewrite instructions.
 If any reply fails → routes back to generator with feedback (max 1 rewrite).
 
-Model: gemini-3.1-flash-lite-preview at temperature 0 (deterministic judgment)
+Model: `settings.gemini_model` (GEMINI_MODEL) at temperature 0 (deterministic judgment)
 """
 
 import json

@@ -4,6 +4,7 @@ import asyncio
 import argparse
 import sys
 
+from app.config import settings
 from app.infrastructure.logging import setup_logging
 
 
@@ -16,7 +17,12 @@ async def main() -> None:
     parser.add_argument("--judge", action="store_true", help="Enable LLM judge evaluation")
     parser.add_argument("--api-key", type=str, default=None, help="Gemini API key override")
     parser.add_argument("--model", type=str, default=None, help="Model override")
-    parser.add_argument("--judge-model", type=str, default="gemini-2.5-flash-lite", help="Judge model (default: gemini-2.0-flash)")
+    parser.add_argument(
+        "--judge-model",
+        type=str,
+        default=settings.gemini_model,
+        help=f"Judge model (default: GEMINI_MODEL / {settings.gemini_model})",
+    )
     args = parser.parse_args()
 
     setup_logging("INFO", json_logs=False)

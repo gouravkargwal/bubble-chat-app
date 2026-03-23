@@ -21,8 +21,7 @@ from datasets import Dataset
 
 from app.infrastructure.database.engine import async_session
 from app.services.memory_service import get_match_context
-from agent.nodes import strategist_node
-from agent.state import AgentState, AnalystOutput
+from agent.state import AgentState, AnalystOutput, StrategyOutput
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -103,7 +102,7 @@ async def generate_synthetic_dataset(documents: list[Document]):
     
     generator_llm = ChatGoogleGenerativeAI(model=settings.gemini_model, temperature=0.7)
     critic_llm = ChatGoogleGenerativeAI(model=settings.gemini_model, temperature=0.0)
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    embeddings = GoogleGenerativeAIEmbeddings(model=settings.gemini_embedding_model)
     
     generator = TestsetGenerator.from_langchain(
         generator_llm,
@@ -215,8 +214,16 @@ async def run_evaluation_pipeline():
                 revision_count=0
             )
 
-            # Call Chef
-            result_state = strategist_node(mock_state)
+            # Legacy v1 strategist removed; stub strategy for offline RAG eval only.
+            result_state = {
+                **mock_state,
+                "strategy": StrategyOutput(
+                    wrong_moves=["stub"],
+                    right_energy="playful",
+                    hook_point="stub",
+                    recommended_strategy_label="PATTERN INTERRUPT",
+                ),
+            }
             strategy = result_state["strategy"]
             if strategy:
                 answer = strategy.model_dump_json()
@@ -233,7 +240,7 @@ async def run_evaluation_pipeline():
     # 4. RAG Triad Scoring
     logger.info("Executing RAG Triad Evaluation...")
     judge_llm = ChatGoogleGenerativeAI(model=settings.gemini_model, temperature=0.0)
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    embeddings = GoogleGenerativeAIEmbeddings(model=settings.gemini_embedding_model)
     
     result = evaluate(
         eval_hf_dataset,

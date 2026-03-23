@@ -224,7 +224,6 @@ class UserVoiceDNA(Base):
     recent_organic_messages: Mapped[str] = mapped_column(
         Text, default="[]"
     )  # JSON array
-    semantic_profile: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

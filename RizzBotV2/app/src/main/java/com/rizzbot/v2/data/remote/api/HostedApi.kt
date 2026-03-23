@@ -7,8 +7,6 @@ import com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse
 import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.data.remote.dto.AuthResponse
 import com.rizzbot.v2.data.remote.dto.BillingStatusResponse
-import com.rizzbot.v2.data.remote.dto.CalibrationRequest
-import com.rizzbot.v2.data.remote.dto.CalibrationResponse
 import com.rizzbot.v2.data.remote.dto.ConversationListResponse
 import com.rizzbot.v2.data.remote.dto.FirebaseAuthRequest
 import com.rizzbot.v2.data.remote.dto.HistoryListResponse
@@ -45,9 +43,6 @@ interface HostedApi {
     // Vision
     @POST("api/v1/vision/generate_v2")
     suspend fun generateReply(@Body request: VisionGenerateRequest): VisionGenerateResponse
-
-    @POST("api/v1/vision/calibrate")
-    suspend fun calibrate(@Body request: CalibrationRequest): CalibrationResponse
 
     // Tracking
     @POST("api/v1/track/copy")

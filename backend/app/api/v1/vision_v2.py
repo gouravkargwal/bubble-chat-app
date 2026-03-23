@@ -3,14 +3,14 @@ V2 reply generation endpoint — 2-node agent (vision_node + generator_node).
 
 Route: POST /api/v1/vision/generate_v2
 
-Node 1 (vision_node)    : gemini-3.1-flash-lite-preview  — bouncer + OCR + analysis in one call
-Node 2 (generator_node) : qwen3:4b via local Ollama      — strategy + write + self-audit in one call
+Node 1 (vision_node)    : GEMINI_MODEL — bouncer + OCR + analysis in one call
+Node 2 (generator_node) : GEMINI_MODEL — strategy + write + self-audit in one call
 
-Full feature parity with /vision/generate:
+Primary reply generation endpoint (v2 agent):
   - Tier config enforcement (direction guard, screenshot limit, custom hint, coach_reasoning gate)
   - Hybrid Stitch conversation resolution (auto-stitch, 409 requires-confirmation, new match)
   - Quota check-before / increment-after pattern
-  - Voice DNA (when enabled): organic text extraction + echo filter + stats update + semantic profile refresh
+  - Voice DNA (when enabled): organic text extraction + echo filter + stats update
   - Full Interaction persistence (all reply fields, latency, model, temperature)
   - Correct VisionResponse with interaction_id, usage_remaining, conversation_id, person_name, stage
 """
@@ -21,7 +21,7 @@ import asyncio
 import time
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,7 @@ from app.api.v1.schemas.schemas import (
     VisionRequest,
     VisionResponse,
 )
-from app.api.v1.vision import (
+from app.api.v1.vision_agent_state import (
     _build_agent_initial_state,
     _parsed_from_agent_state,
 )
@@ -159,13 +159,12 @@ async def _run_v2_agent(initial_state: dict) -> dict:
 @router.post("/vision/generate_v2", response_model=VisionResponse | RequiresUserConfirmation)
 async def generate_replies_v2(
     request: VisionRequest,
-    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> VisionResponse | RequiresUserConfirmation:
     """
     Analyze a chat screenshot and generate 4 reply suggestions using the 2-node agent.
-    Full feature parity with /vision/generate.
+    Analyze a chat screenshot and generate 4 reply suggestions (v2 pipeline).
     """
 
     # ------------------------------------------------------------------ #
@@ -458,8 +457,6 @@ async def generate_replies_v2(
             db=db,
             user=user,
             organic_text=organic_text,
-            effective_tier=effective_tier,
-            background_tasks=background_tasks,
         )
 
     # ------------------------------------------------------------------ #
@@ -473,7 +470,7 @@ async def generate_replies_v2(
         direction=request.direction.value,
         custom_hint=custom_hint,
         user_organic_text=organic_text,
-        llm_model="gemini-3.1-flash-lite-preview+qwen3:4b",
+        llm_model=settings.gemini_model,
         llm_temperature=0.7,
         latency_ms=latency_ms,
         screenshot_count=len(images),

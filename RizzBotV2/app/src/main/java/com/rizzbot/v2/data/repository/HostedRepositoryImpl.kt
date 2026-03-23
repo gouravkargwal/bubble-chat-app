@@ -9,7 +9,6 @@ import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.data.remote.dto.ApplyReferralRequest
 import com.rizzbot.v2.data.remote.dto.ApplyReferralResponse
 import com.rizzbot.v2.data.remote.dto.AuditResponse
-import com.rizzbot.v2.data.remote.dto.CalibrationRequest
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
 import com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto
 import com.rizzbot.v2.data.remote.dto.TrackCopyRequest
@@ -440,23 +439,6 @@ class HostedRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             android.util.Log.w("HostedRepo", "getUserPreferences failed: ${e.message}")
             null
-        }
-    }
-
-    override suspend fun calibrateVoiceDNA(base64Images: List<String>): Result<Int> {
-        return try {
-            val response = hostedApi.calibrate(CalibrationRequest(images = base64Images))
-            Result.success(response.messagesExtracted)
-        } catch (e: HttpException) {
-            val message = when (e.code()) {
-                400 -> "Images required."
-                else -> "Server error: ${e.code()}"
-            }
-            Result.failure(Exception(message))
-        } catch (e: SocketTimeoutException) {
-            Result.failure(Exception("Calibration timed out. Try again."))
-        } catch (e: Exception) {
-            Result.failure(Exception(e.message ?: "Unknown error during calibration"))
         }
     }
 

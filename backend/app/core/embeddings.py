@@ -6,10 +6,9 @@ from typing import List, Optional
 import structlog
 from langchain_google_genai import GoogleGenerativeAIEmbeddings  # type: ignore[reportMissingImports]
 
-logger = structlog.get_logger()
+from app.config import settings
 
-# The actual active 2026 model
-EMBEDDING_MODEL_NAME = "models/gemini-embedding-001"
+logger = structlog.get_logger()
 # We must strictly enforce this to match the Postgres pgvector schema
 # Default embedding dimensionality.
 #
@@ -22,7 +21,7 @@ EMBEDDING_DIMENSIONS = 768
 @lru_cache(maxsize=1)
 def _get_embeddings_model() -> GoogleGenerativeAIEmbeddings:
     """Return a cached Gemini embeddings client."""
-    return GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL_NAME)
+    return GoogleGenerativeAIEmbeddings(model=settings.gemini_embedding_model)
 
 
 async def embed_text(text: str, dimensions: int | None = None) -> Optional[List[float]]:
@@ -48,7 +47,7 @@ async def embed_text(text: str, dimensions: int | None = None) -> Optional[List[
         if not embedding or len(embedding) != dimensions_to_use:
             logger.error(
                 "embedding_dimension_mismatch",
-                embedding_model=EMBEDDING_MODEL_NAME,
+                embedding_model=settings.gemini_embedding_model,
                 expected_dim=dimensions_to_use,
                 actual_dim=len(embedding) if embedding else 0,
                 text_preview=text[:120] if text else "",
@@ -62,7 +61,7 @@ async def embed_text(text: str, dimensions: int | None = None) -> Optional[List[
             "embedding_api_failed",
             error=str(e),
             text_preview=text[:120] if text else "",
-            embedding_model=EMBEDDING_MODEL_NAME,
+            embedding_model=settings.gemini_embedding_model,
         )
         # Important: embeddings are non-critical; callers should continue with None.
         return None

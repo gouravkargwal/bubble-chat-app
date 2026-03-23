@@ -1,7 +1,6 @@
 package com.rizzbot.v2.ui.home
 
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
@@ -39,7 +38,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.rizzbot.v2.FeatureFlags
 import com.rizzbot.v2.domain.model.UserPreferences
-import com.rizzbot.v2.ui.premium.VoiceDNACalibrationModal
 import com.rizzbot.v2.ui.theme.CardBg
 import com.rizzbot.v2.ui.theme.CardBgLight
 import com.rizzbot.v2.ui.theme.CookdDimens
@@ -188,16 +186,6 @@ fun HomeScreen(
                                 RizzProfileCard(
                                     preferences = state.rizzProfile,
                                     onSeeFullStats = onNavigateToStats,
-                                    isGodMode = isGodMode,
-                                    isProOrAbove = isProOrAbove,
-                                    voiceDnaEnabled = FeatureFlags.VOICE_DNA_ENABLED,
-                                    onTrainVoiceDNA = {
-                                        if (isProOrAbove) {
-                                            viewModel.showCalibration()
-                                        } else {
-                                            onShowPaywall()
-                                        }
-                                    },
                                     primaryAccent = primaryAccent
                                 )
 
@@ -222,23 +210,6 @@ fun HomeScreen(
             }
             }
 
-            if (FeatureFlags.VOICE_DNA_ENABLED && state.showCalibrationModal) {
-                VoiceDNACalibrationModal(
-                    onDismiss = { viewModel.hideCalibration() },
-                    onImagesSelected = { uris ->
-                        val bitmaps = uris.mapNotNull { uri ->
-                            try {
-                                context.contentResolver.openInputStream(uri)?.use {
-                                    BitmapFactory.decodeStream(it)
-                                }
-                            } catch (_: Exception) {
-                                null
-                            }
-                        }
-                        viewModel.calibrateVoiceDNA(uris)
-                    }
-                )
-            }
         }
     }
 }
@@ -726,10 +697,6 @@ private fun StepItem(number: String, text: String) {
 private fun RizzProfileCard(
     preferences: UserPreferences?,
     onSeeFullStats: () -> Unit,
-    isGodMode: Boolean,
-    isProOrAbove: Boolean,
-    voiceDnaEnabled: Boolean,
-    onTrainVoiceDNA: () -> Unit,
     primaryAccent: Color
 ) {
     Card(
@@ -833,44 +800,6 @@ private fun RizzProfileCard(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Pro / God Mode messaging (Voice DNA training)
-                    if (voiceDnaEnabled) {
-                        if (!isProOrAbove) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text(
-                                        "AI Voice Cloning: \uD83D\uDD12",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp
-                                    )
-                                    Text(
-                                        "Upgrade to Pro so the AI learns your exact humor, slang, and texting style.",
-                                        color = Color.Gray,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
-                        } else {
-                            TextButton(onClick = onTrainVoiceDNA) {
-                                Text(
-                                    text = "\uD83E\uDDEC Add sample chats to sharpen your style",
-                                    color = Color(0xFFA5D6A7),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
                 }
 
                 // ── STATE 3: Zero data → onboarding CTA (no fake metrics) ──
@@ -892,27 +821,12 @@ private fun RizzProfileCard(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Use Cookd in your chats or upload screenshots so it can learn your humor, slang, and vibe.",
+                            text = "Keep using Cookd and rating replies — your style profile fills in as you go.",
                             color = Color.Gray,
                             fontSize = 13.sp,
                             modifier = Modifier.padding(horizontal = 8.dp),
                             lineHeight = 18.sp
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        if (voiceDnaEnabled) {
-                            Button(
-                                onClick = onTrainVoiceDNA,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
-                            ) {
-                                Text(
-                                    text = if (isProOrAbove) "Upload Chat Screenshots" else "🔒 Unlock AI Voice DNA",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
                     }
                 }
 
@@ -960,21 +874,6 @@ private fun RizzProfileCard(
                         color = primaryAccent,
                         trackColor = DividerColor
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    if (voiceDnaEnabled) {
-                        Button(
-                            onClick = onTrainVoiceDNA,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
-                        ) {
-                            Text(
-                                text = if (isProOrAbove) "Upload Screenshots to Speed Up" else "🔒 Unlock AI Voice DNA",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
                 }
             }
         }

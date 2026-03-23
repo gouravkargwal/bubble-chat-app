@@ -6,7 +6,7 @@ Single Gemini call with structured output that performs:
   2. Write 4 reply options
   3. On rewrites: incorporates auditor feedback to fix flagged replies
 
-Model: gemini-3.1-flash-lite-preview with dynamic temperature
+Model: `settings.gemini_model` (GEMINI_MODEL) with dynamic temperature
 """
 
 import json
@@ -397,14 +397,6 @@ def generator_node(state: AgentState) -> dict:
         "conversation_context_dict": conversation_context,
         "user_custom_hint": custom_hint,
     }
-
-    semantic_profile = (
-        voice_dna.get("semantic_profile") if isinstance(voice_dna, dict) else None
-    )
-    if semantic_profile:
-        payload["USER_PSYCHOLOGICAL_STYLE_GUIDE"] = (
-            f"CRITICAL — match this style in every reply: {semantic_profile}"
-        )
 
     # --- On rewrite: inject the previous drafts + auditor feedback ---
     if is_rewrite:

@@ -62,7 +62,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import com.rizzbot.v2.FeatureFlags
 import com.rizzbot.v2.domain.model.UserPreferences
 import kotlin.math.roundToInt
 
@@ -91,11 +90,7 @@ fun StatsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = when {
-                            !FeatureFlags.VOICE_DNA_ENABLED -> if (isPremiumTier) "Your Stats ✦" else "Your Stats"
-                            isPremiumTier -> "Voice DNA Dashboard ✦"
-                            else -> "Voice DNA Dashboard"
-                        },
+                        text = if (isPremiumTier) "Your Stats ✦" else "Your Stats",
                         fontWeight = FontWeight.Bold,
                         color = brandAccent
                     )
@@ -138,17 +133,6 @@ fun StatsScreen(
         ) {
             val hasEnoughData = state.preferences.hasEnoughData
 
-            // Global calibrating banner if data is low
-            if (!hasEnoughData) {
-                CalibratingBanner(
-                    current = state.preferences.totalRatings,
-                    target = 20,
-                    brandAccent = brandAccent,
-                    cardBg = CardBg
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-
             // Section 0: High-level usage + success summary
             SuccessSummaryRow(
                 totalGenerated = state.totalGenerated,
@@ -163,7 +147,11 @@ fun StatsScreen(
             // Section 1: Personality Breakdown
             SectionCard(
                 title = "Personality Breakdown",
-                subtitle = if (hasEnoughData) "Based on ${state.preferences.totalRatings} rated conversations" else "We’re still calibrating your personality profile",
+                subtitle = if (hasEnoughData) {
+                    "Based on ${state.preferences.totalRatings} rated conversations"
+                } else {
+                    "More ratings unlock the full breakdown"
+                },
                 brandAccent = brandAccent,
                 cardBg = CardBg
             ) {
@@ -174,7 +162,7 @@ fun StatsScreen(
                     )
                 } else {
                     Text(
-                        text = "Profile Calibrating...",
+                        text = "Not enough data yet",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
@@ -209,14 +197,14 @@ fun StatsScreen(
                     )
                 } else {
                     Text(
-                        text = "Profile Calibrating...",
+                        text = "Not enough data yet",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "We’ll surface your most-used slang and phrases once we’ve seen a few more chats.",
+                        text = "We’ll surface your most-used slang and phrases after a few more rated replies.",
                         color = Color.Gray,
                         fontSize = 12.sp
                     )
@@ -224,71 +212,6 @@ fun StatsScreen(
             }
 
         }
-        }
-    }
-}
-
-@Composable
-private fun CalibratingBanner(
-    current: Int,
-    target: Int,
-    brandAccent: Color,
-    cardBg: Color
-) {
-    val progress = (current.toFloat() / target).coerceIn(0f, 1f)
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        shape = RoundedCornerShape(18.dp),
-        border = CardDefaults.outlinedCardBorder().copy(
-            width = 1.dp,
-            brush = Brush.horizontalGradient(listOf(brandAccent, brandAccent.copy(alpha = 0.3f)))
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            cardBg.copy(alpha = 0.96f),
-                            cardBg.copy(alpha = 0.85f)
-                        )
-                    )
-                )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    text = "Profile Calibrating…",
-                    color = brandAccent,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = if (FeatureFlags.VOICE_DNA_ENABLED) {
-                        "Keep chatting and rating replies so your Voice DNA Dashboard can fully unlock."
-                    } else {
-                        "Keep chatting and rating replies to sharpen your reply style insights."
-                    },
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                ScanningProgressBar(
-                    progress = progress,
-                    accent = brandAccent
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "$current/$target signals collected",
-                    color = Color.Gray,
-                    fontSize = 11.sp
-                )
-            }
         }
     }
 }
