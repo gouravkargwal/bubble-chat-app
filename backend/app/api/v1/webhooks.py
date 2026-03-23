@@ -15,6 +15,22 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 
+def _revenuecat_authorization_ok(header_value: str | None, webhook_secret: str) -> bool:
+    """Match RevenueCat's webhook Authorization header.
+
+    RevenueCat sends the dashboard \"Authorization header value\" as the full
+    ``Authorization`` header (often the raw secret). We also accept standard
+    ``Bearer <secret>`` for compatibility.
+    """
+    if not header_value:
+        return False
+    if header_value == webhook_secret:
+        return True
+    if header_value == f"Bearer {webhook_secret}":
+        return True
+    return False
+
+
 @router.post("/webhooks/revenuecat")
 async def revenuecat_webhook(
     request: Request,
@@ -37,11 +53,10 @@ async def revenuecat_webhook(
             detail="RevenueCat webhook is not configured on this server.",
         )
     if webhook_secret:
-        # Secret is configured - enforce authorization
-        if authorization != f"Bearer {webhook_secret}":
+        if not _revenuecat_authorization_ok(authorization, webhook_secret):
             logger.warning(
                 "revenuecat_webhook_unauthorized",
-                provided_auth=authorization[:20] if authorization else None,
+                has_authorization_header=bool(authorization),
             )
             raise HTTPException(status_code=401, detail="Unauthorized")
 

@@ -88,6 +88,14 @@ async def test_webhook_with_secret_requires_auth(client):
         )
         assert response.status_code == 200
 
+        # RevenueCat sends the dashboard value as the full Authorization header (often no "Bearer " prefix)
+        response = await client.post(
+            "/api/v1/webhooks/revenuecat",
+            json=payload,
+            headers={"Authorization": "test-secret-123"},
+        )
+        assert response.status_code == 200
+
 
 @pytest.mark.asyncio
 async def test_webhook_missing_app_user_id(client):
