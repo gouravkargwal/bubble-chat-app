@@ -10,6 +10,7 @@ Model: `settings.gemini_model` (GEMINI_MODEL) at temperature 0 (deterministic ju
 """
 
 import json
+import time
 from typing import cast
 
 import structlog
@@ -21,6 +22,7 @@ from agent.nodes_v2._shared import (
     AUDITOR_MODEL,
     MAX_REWRITES,
     transcript_text_from_analysis,
+    sanitize_llm_messages_for_logging,
 )
 from agent.state import AgentState, AnalystOutput, WriterOutput
 
@@ -138,11 +140,17 @@ def auditor_node(state: AgentState) -> dict:
       - auditor_feedback: Specific instructions for the generator on what to fix
     """
     user_id = state.get("user_id", "")
+    trace_id = state.get("trace_id", "")
+    conversation_id = state.get("conversation_id", "") or ""
     revision_count = state.get("revision_count", 0)
+    t_start = time.monotonic()
     logger.info(
         "llm_lifecycle",
         stage="auditor_node_start",
+        trace_id=trace_id,
         user_id=user_id,
+        conversation_id=conversation_id,
+        direction=state.get("direction", "quick_reply"),
         revision_count=revision_count,
     )
 
@@ -154,13 +162,21 @@ def auditor_node(state: AgentState) -> dict:
 
     drafts = state.get("drafts")
     if drafts is None:
-        logger.warning("auditor_node_no_drafts", user_id=user_id)
+        logger.warning(
+            "auditor_node_no_drafts",
+            trace_id=trace_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+        )
         logger.info(
             "llm_lifecycle",
             stage="auditor_node_complete",
+            trace_id=trace_id,
             user_id=user_id,
+            conversation_id=conversation_id,
             skipped=True,
             reason="no_drafts",
+            elapsed_ms=int((time.monotonic() - t_start) * 1000),
         )
         return {"is_cringe": False, "auditor_feedback": ""}
 
@@ -174,9 +190,12 @@ def auditor_node(state: AgentState) -> dict:
         logger.info(
             "llm_lifecycle",
             stage="auditor_node_complete",
+            trace_id=trace_id,
             user_id=user_id,
+            conversation_id=conversation_id,
             skipped=True,
             reason="max_rewrites_skip_audit",
+            elapsed_ms=int((time.monotonic() - t_start) * 1000),
         )
         return {"is_cringe": False, "auditor_feedback": ""}
 
@@ -210,33 +229,77 @@ def auditor_node(state: AgentState) -> dict:
             for i, r in enumerate(drafts.replies[:4])
         ],
     }
+    logger.info(
+        "llm_lifecycle",
+        stage="auditor_node_pre_llm",
+        trace_id=trace_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        direction=direction,
+        model=AUDITOR_MODEL,
+        reply_count=len(eval_payload["replies"]),
+        verbatim_last_message_chars=len(verbatim_last_message or ""),
+        has_custom_hint=bool(custom_hint),
+    )
+
+    messages = [
+        SystemMessage(content=_AUDITOR_SYSTEM_PROMPT),
+        HumanMessage(content=json.dumps(eval_payload)),
+    ]
+
+    logger.info(
+        "auditor_node_llm_messages",
+        trace_id=trace_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        direction=direction,
+        phase="v2_auditor",
+        model=AUDITOR_MODEL,
+        messages=sanitize_llm_messages_for_logging(messages),
+    )
 
     try:
         result, usage_row = invoke_structured_gemini(
             model=AUDITOR_MODEL,
             temperature=0,
             schema=AuditorNodeOutput,
-            messages=[
-                SystemMessage(content=_AUDITOR_SYSTEM_PROMPT),
-                HumanMessage(content=json.dumps(eval_payload)),
-            ],
+            messages=messages,
             phase="v2_auditor",
         )
         audit = cast(AuditorNodeOutput, result)
+        logger.info(
+            "auditor_node_llm_result",
+            trace_id=trace_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            direction=direction,
+            phase="v2_auditor",
+            out=audit.model_dump(),
+            usage_phase=usage_row.get("phase"),
+            usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
+            usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
+        )
     except Exception as e:
         # Auditor failure should never block the response — approve and ship
         logger.error(
             "auditor_node_llm_error",
+            trace_id=trace_id,
             user_id=user_id,
+            conversation_id=conversation_id,
+            direction=direction,
             error=str(e),
             error_type=type(e).__name__,
+            elapsed_ms=int((time.monotonic() - t_start) * 1000),
         )
         logger.info(
             "llm_lifecycle",
             stage="auditor_node_complete",
+            trace_id=trace_id,
             user_id=user_id,
+            conversation_id=conversation_id,
             skipped=True,
             reason="llm_error_approved",
+            elapsed_ms=int((time.monotonic() - t_start) * 1000),
         )
         return {"is_cringe": False, "auditor_feedback": ""}
 
@@ -244,11 +307,34 @@ def auditor_node(state: AgentState) -> dict:
 
     if audit.overall_passes:
         logger.info(
+            "auditor_node_full_verdicts",
+            trace_id=trace_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            direction=direction,
+            overall_passes=True,
+            summary=audit.summary,
+            verdicts=[
+                {
+                    "reply_index": v.reply_index,
+                    "passes": v.passes,
+                    "issue": v.issue,
+                }
+                for v in audit.verdicts[:4]
+            ],
+        )
+        logger.info(
             "llm_lifecycle",
             stage="auditor_node_complete",
+            trace_id=trace_id,
             user_id=user_id,
+            conversation_id=conversation_id,
             overall_passes=True,
             failed_reply_count=0,
+            elapsed_ms=int((time.monotonic() - t_start) * 1000),
+            usage_phase=usage_row.get("phase"),
+            usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
+            usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
         )
         return {
             "is_cringe": False,
@@ -262,12 +348,36 @@ def auditor_node(state: AgentState) -> dict:
         feedback_lines.append(f"- Reply {v.reply_index}: {v.issue}")
 
     logger.info(
+        "auditor_node_full_verdicts",
+        trace_id=trace_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        direction=direction,
+        overall_passes=False,
+        summary=audit.summary,
+        verdicts=[
+            {
+                "reply_index": v.reply_index,
+                "passes": v.passes,
+                "issue": v.issue,
+            }
+            for v in audit.verdicts[:4]
+        ],
+    )
+
+    logger.info(
         "llm_lifecycle",
         stage="auditor_node_complete",
+        trace_id=trace_id,
         user_id=user_id,
+        conversation_id=conversation_id,
         overall_passes=False,
         failed_reply_count=len(failed_verdicts),
         summary_preview=(audit.summary or "")[:160],
+        elapsed_ms=int((time.monotonic() - t_start) * 1000),
+        usage_phase=usage_row.get("phase"),
+        usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
+        usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
     )
 
     return {

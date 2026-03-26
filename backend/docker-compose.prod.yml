@@ -55,7 +55,9 @@ services:
 
   # Logs → Loki (Promtail tails Docker logs for containers labeled logging=promtail)
   loki:
-    image: grafana/loki:3.5.0
+    # 3.5.0 logs noisy false-positive "negative structured metadata bytes received".
+    # Use patched 3.5.1+.
+    image: grafana/loki:3.5.1
     # Named volumes are root-owned; default Loki user cannot mkdir ruler paths under /tmp/loki.
     user: "0:0"
     volumes:
@@ -69,7 +71,7 @@ services:
       - default
 
   promtail:
-    image: grafana/promtail:3.5.0
+    image: grafana/promtail:3.5.1
     volumes:
       - ./docker/promtail-config.yaml:/etc/promtail/config.yml
       - /var/run/docker.sock:/var/run/docker.sock:ro

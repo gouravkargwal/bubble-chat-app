@@ -33,7 +33,9 @@ services:
 
   # Observability (host ports): Loki http://localhost:3110  Grafana http://localhost:3333
   loki:
-    image: grafana/loki:3.5.0
+    # 3.5.0 logs noisy false-positive "negative structured metadata bytes received".
+    # Use patched 3.5.1+.
+    image: grafana/loki:3.5.1
     # Named volumes are root-owned; the image’s default user (10001) cannot create rules/ under /tmp/loki.
     user: "0:0"
     volumes:
@@ -45,7 +47,7 @@ services:
     restart: unless-stopped
 
   promtail:
-    image: grafana/promtail:3.5.0
+    image: grafana/promtail:3.5.1
     volumes:
       - ./docker/promtail-config.yaml:/etc/promtail/config.yml
       - /var/run/docker.sock:/var/run/docker.sock:ro

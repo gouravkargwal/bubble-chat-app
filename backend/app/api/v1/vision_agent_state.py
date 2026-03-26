@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from uuid import uuid4
 
 from app.domain.models import (
     AnalysisResult,
@@ -28,6 +29,7 @@ def _build_agent_initial_state(
     voice_dict = dataclasses.asdict(voice_dna) if voice_dna else {}
     context_dict = dataclasses.asdict(conversation_context) if conversation_context else {}
     return {
+        "trace_id": str(uuid4()),
         "image_bytes": image_base64,
         "direction": direction,
         "custom_hint": custom_hint,
@@ -46,6 +48,7 @@ def _build_agent_initial_state(
         "core_lore": "",
         "past_memories": "",
         "raw_ocr_text": [],
+        "detected_contradictions": [],
         "ocr_hint_text": "",
         "gemini_usage_log": [],
     }

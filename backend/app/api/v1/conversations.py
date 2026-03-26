@@ -19,6 +19,7 @@ from app.models.enums import ConversationDirection
 from app.services.hybrid_stitch_pending import (
     pop_pending_hybrid_resolution,
     parse_pending_images,
+    store_pending_hybrid_resolution,
 )
 
 from app.api.v1.vision_v2 import generate_replies_v2 as vision_generate_replies
@@ -126,6 +127,10 @@ async def resolve_conversation(
         )
 
     effective_conversation_id: str
+    # Track if we created a placeholder conversation in the "No, New Person"
+    # branch. If the re-run gets bounced by the vision bouncer (400), we
+    # deactivate that placeholder so it won't be matched later.
+    placeholder_conversation_id: str | None = None
     if request.is_match:
         # User confirmed: link to the suggested existing conversation.
         # Don't gate on is_active — the stitch engine may have matched an inactive convo.
@@ -176,6 +181,7 @@ async def resolve_conversation(
         await db.commit()
         await db.refresh(convo)
         effective_conversation_id = convo.id
+        placeholder_conversation_id = convo.id
 
         # Save alias for the NEW conversation so future OCR of this name resolves correctly
         await save_alias(
@@ -205,11 +211,53 @@ async def resolve_conversation(
         is_match=request.is_match,
     )
 
-    vision_response = await vision_generate_replies(
-        request=vision_request,
-        user=user,
-        db=db,
-    )
+    try:
+        vision_response = await vision_generate_replies(
+            request=vision_request,
+            user=user,
+            db=db,
+        )
+    except HTTPException as e:
+        if (
+            placeholder_conversation_id
+            and getattr(e, "status_code", None) == 400
+        ):
+            try:
+                placeholder_convo_result = await db.execute(
+                    select(Conversation).where(
+                        Conversation.id == placeholder_conversation_id,
+                        Conversation.user_id == user.id,
+                    )
+                )
+                placeholder_convo = placeholder_convo_result.scalar_one_or_none()
+                if placeholder_convo and placeholder_convo.is_active:
+                    placeholder_convo.is_active = False
+                    await db.commit()
+            except Exception:
+                # Best-effort cleanup only; never mask the original error.
+                logger.warning(
+                    "resolve_placeholder_convo_rollback_failed",
+                    user_id=user.id,
+                    placeholder_conversation_id=placeholder_conversation_id,
+                    exc_info=True,
+                )
+
+        # `pop_pending_hybrid_resolution` consumes the pending row. If generation fails
+        # (e.g. transient 429/5xx or validation 400), restore pending context so the
+        # user can retry `/conversations/resolve` instead of hitting a confusing 404.
+        await store_pending_hybrid_resolution(
+            db=db,
+            user_id=user.id,
+            suggested_conversation_id=request.suggested_conversation_id,
+            images=images,
+            direction=pending.direction,
+            custom_hint=pending.custom_hint,
+            extracted_person_name=pending.extracted_person_name,
+            conflict_reason=pending.conflict_reason,
+            conflict_detail=pending.conflict_detail,
+        )
+        raise
+
     # FastAPI expects a plain JSON-serializable dict for the declared return type.
     # `vision_response` is a Pydantic model (VisionResponse), so return its dump.
     if hasattr(vision_response, "model_dump"):

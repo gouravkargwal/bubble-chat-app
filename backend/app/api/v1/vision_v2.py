@@ -55,6 +55,7 @@ from app.services.hybrid_stitch_pending import (
     has_pending_hybrid_resolution,
     store_pending_hybrid_resolution,
 )
+from app.services.memory_service import scrub_lore_from_contradictions
 from app.services.quota_manager import QuotaExceededException, QuotaManager
 
 router = APIRouter()
@@ -355,6 +356,10 @@ async def generate_replies_v2(
     # ------------------------------------------------------------------ #
     conversation_context = None
     convo = None
+    # Track if we created a placeholder conversation before the bouncer finishes.
+    # If the bouncer rejects the screenshot (`is_valid_chat=false`), we will deactivate
+    # the placeholder so it doesn't get matched later.
+    placeholder_conversation_id: str | None = None
 
     if effective_conversation_id is None and new_conversation_person_name is not None:
         convo = Conversation(
@@ -364,6 +369,7 @@ async def generate_replies_v2(
         await db.commit()
         await db.refresh(convo)
         effective_conversation_id = convo.id
+        placeholder_conversation_id = convo.id
 
     if tier_config["features"]["chemistry_tracking_enabled"] and effective_conversation_id:
         convo_result = await db.execute(
@@ -403,12 +409,14 @@ async def generate_replies_v2(
         voice_dna,
         conversation_context,
     )
+    trace_id = initial_state.get("trace_id", "")
     # Pass OCR text so vision_node can use it for semantic memory search
     initial_state["ocr_hint_text"] = " ".join(extracted_texts[-2:]) if extracted_texts else ""
 
     logger.info(
         "llm_lifecycle",
         stage="v2_agent_run_start",
+        trace_id=trace_id,
         user_id=user.id,
         conversation_id=effective_conversation_id or "",
         ocr_hint_chars=len(initial_state["ocr_hint_text"] or ""),
@@ -417,10 +425,40 @@ async def generate_replies_v2(
     try:
         final_state = await _run_v2_agent(initial_state)
     except Exception as e:
-        logger.error("agent_v2_run_failed", error=str(e), user_id=user.id)
+        logger.error(
+            "agent_v2_run_failed",
+            trace_id=trace_id,
+            error=str(e),
+            user_id=user.id,
+            conversation_id=effective_conversation_id or "",
+        )
         raise HTTPException(status_code=502, detail="Failed to generate replies. Try again.") from e
 
     if not final_state.get("is_valid_chat", True):
+        # Roll back placeholder conversation on bouncer rejection.
+        # This prevents empty "link chats" / matches based on placeholder rows.
+        if placeholder_conversation_id and effective_conversation_id == placeholder_conversation_id:
+            try:
+                # Re-fetch to ensure the instance is attached to this session state.
+                placeholder_convo_result = await db.execute(
+                    select(Conversation).where(
+                        Conversation.id == placeholder_conversation_id,
+                        Conversation.user_id == user.id,
+                    )
+                )
+                placeholder_convo = placeholder_convo_result.scalar_one_or_none()
+                if placeholder_convo and placeholder_convo.is_active:
+                    placeholder_convo.is_active = False
+                    await db.commit()
+            except Exception:
+                # Never mask the original bouncer error; best-effort cleanup only.
+                logger.warning(
+                    "v2_placeholder_convo_rollback_failed",
+                    user_id=user.id,
+                    placeholder_conversation_id=placeholder_conversation_id,
+                    exc_info=True,
+                )
+
         raise HTTPException(
             status_code=400,
             detail=final_state.get("bouncer_reason", "Image is not a valid chat or dating app screenshot."),
@@ -429,13 +467,41 @@ async def generate_replies_v2(
     latency_ms = int((time.monotonic() - start) * 1000)
     usage_log = final_state.get("gemini_usage_log") or []
     gemini_call_count = len(usage_log) if isinstance(usage_log, list) else 0
+    detected_contradictions = final_state.get("detected_contradictions") or []
+    if (
+        isinstance(detected_contradictions, list)
+        and detected_contradictions
+        and effective_conversation_id
+    ):
+        scrub_result = await scrub_lore_from_contradictions(
+            db,
+            user_id=user.id,
+            conversation_id=effective_conversation_id,
+            contradictions=[str(c) for c in detected_contradictions if str(c).strip()],
+        )
+        logger.warning(
+            "llm_lifecycle",
+            stage="v2_lore_memory_scrub",
+            trace_id=trace_id,
+            user_id=user.id,
+            conversation_id=effective_conversation_id,
+            contradiction_count=len(detected_contradictions),
+            scrub_updated=bool(scrub_result.get("updated", False)),
+            scrub_removed_lines=int(scrub_result.get("removed_lines", 0)),
+        )
     logger.info(
         "llm_lifecycle",
         stage="v2_agent_run_complete",
+        trace_id=trace_id,
         user_id=user.id,
         latency_ms=latency_ms,
         is_valid_chat=bool(final_state.get("is_valid_chat", True)),
         gemini_call_count=gemini_call_count,
+        contradiction_count=(
+            len(detected_contradictions)
+            if isinstance(detected_contradictions, list)
+            else 0
+        ),
     )
     parsed = _parsed_from_agent_state(final_state)
 
@@ -480,6 +546,7 @@ async def generate_replies_v2(
     logger.info(
         "llm_lifecycle",
         stage="v2_persist_complete",
+        trace_id=trace_id,
         user_id=user.id,
         interaction_id=interaction.id,
         conversation_id=convo.id if convo else "",
@@ -506,9 +573,30 @@ async def generate_replies_v2(
         effective_limit=effective_limit,
         daily_used=daily_used,
     )
+    # Full response observability (what the client receives).
+    logger.info(
+        "v2_response_full",
+        trace_id=trace_id,
+        user_id=user.id,
+        interaction_id=interaction.id,
+        conversation_id=response.conversation_id,
+        person_name=response.person_name,
+        stage=response.stage,
+        replies=[
+            {
+                "text": r.text,
+                "strategy_label": r.strategy_label,
+                "is_recommended": r.is_recommended,
+                "coach_reasoning": r.coach_reasoning,
+            }
+            for r in (response.replies or [])
+        ],
+        usage_remaining=response.usage_remaining,
+    )
     logger.info(
         "llm_lifecycle",
         stage="v2_response_ready",
+        trace_id=trace_id,
         user_id=user.id,
         interaction_id=interaction.id,
         usage_remaining=response.usage_remaining,

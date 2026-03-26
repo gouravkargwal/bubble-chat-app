@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=os.getenv("ENV_FILE", ".env.dev"),
         env_file_encoding="utf-8",
+        # Ignore unrelated env vars (e.g. legacy GROQ_* keys) so app startup
+        # doesn't fail when extra keys exist in deployment environments.
+        extra="ignore",
     )
 
     # Database

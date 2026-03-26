@@ -23,9 +23,20 @@ scrape_configs:
       - source_labels: [__meta_docker_container_label_logging]
         regex: ^promtail$
         action: keep
+      # Only ship the backend API container in this job.
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        regex: ^api$
+        action: keep
       - action: replace
         source_labels: [__meta_docker_container_label_com_docker_compose_service]
         regex: (.+)
+        target_label: service_name
+        replacement: $1
+      # Fallback when compose service label is absent (plain docker run, some runtimes).
+      - action: replace
+        source_labels: [service_name, __meta_docker_container_name]
+        separator: ;
+        regex: ^;/?(.+)$
         target_label: service_name
         replacement: $1
       - action: replace
@@ -46,8 +57,6 @@ scrape_configs:
     pipeline_stages:
       # Unwrap Docker json-file lines {"log":"...","stream":"stdout",...} so Loki gets raw app JSON.
       - docker: {}
-      # Grafana Logs Drilldown shows "unknown_service" when the Loki stream has no service_name label.
-      # Compose meta labels can be missing on some setups; this job only scrapes logging=promtail (the API).
+      # Preserve scrape provenance as a separate label.
       - static_labels:
           promtail_scrape: docker
-          service_name: api

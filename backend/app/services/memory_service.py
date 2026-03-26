@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
+import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embeddings import embed_text
 from app.infrastructure.database.models import Interaction
+
+logger = structlog.get_logger(__name__)
 
 
 async def get_match_context(
@@ -170,4 +174,105 @@ async def get_match_context(
             "core_lore": core_lore,
             "past_memories": "",
         }
+
+
+def _line_should_be_scrubbed(line: str, contradictions: list[str]) -> bool:
+    """
+    Heuristic: scrub lore lines that match contradiction text signals.
+
+    We keep this conservative to avoid deleting the whole lore blob.
+    """
+    line_l = line.lower()
+    for contradiction in contradictions:
+        c = (contradiction or "").strip().lower()
+        if not c:
+            continue
+        if c in line_l:
+            return True
+        # Token overlap fallback when phrasing differs.
+        tokens = [t for t in re.findall(r"[a-z0-9]+", c) if len(t) >= 4]
+        if not tokens:
+            continue
+        overlap = sum(1 for t in tokens if t in line_l)
+        if overlap >= 2:
+            return True
+    return False
+
+
+async def scrub_lore_from_contradictions(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    conversation_id: str,
+    contradictions: list[str],
+) -> dict[str, Any]:
+    """
+    Memory scrub for poisoned/stale lore.
+
+    If lore exists, remove lines that appear to conflict with visual truth signals
+    reported by vision_node. Safe no-op if lore column is absent.
+    """
+    if not conversation_id or not contradictions:
+        return {"updated": False, "removed_lines": 0, "new_lore_chars": 0}
+
+    try:
+        row = await db.execute(
+            text(
+                """
+                SELECT lore
+                FROM conversations
+                WHERE id = :conversation_id
+                  AND user_id = :user_id
+                  AND is_active = true
+                """
+            ),
+            {"conversation_id": conversation_id, "user_id": user_id},
+        )
+        row_map = row.mappings().first()
+        lore = str((row_map or {}).get("lore") or "")
+        if not lore.strip():
+            return {"updated": False, "removed_lines": 0, "new_lore_chars": 0}
+
+        lines = lore.splitlines()
+        kept = [ln for ln in lines if not _line_should_be_scrubbed(ln, contradictions)]
+        removed = len(lines) - len(kept)
+        if removed <= 0:
+            return {"updated": False, "removed_lines": 0, "new_lore_chars": len(lore)}
+
+        new_lore = "\n".join(kept).strip()
+        await db.execute(
+            text(
+                """
+                UPDATE conversations
+                SET lore = :new_lore
+                WHERE id = :conversation_id
+                  AND user_id = :user_id
+                """
+            ),
+            {
+                "new_lore": new_lore,
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+            },
+        )
+        await db.commit()
+
+        logger.warning(
+            "lore_memory_scrub_applied",
+            user_id=user_id,
+            conversation_id=conversation_id,
+            contradiction_count=len(contradictions),
+            removed_lines=removed,
+            new_lore_chars=len(new_lore),
+        )
+        return {"updated": True, "removed_lines": removed, "new_lore_chars": len(new_lore)}
+    except Exception as e:
+        # No hard-fail path: some deployments may not have `lore` column yet.
+        logger.warning(
+            "lore_memory_scrub_skipped",
+            user_id=user_id,
+            conversation_id=conversation_id,
+            error=str(e),
+        )
+        return {"updated": False, "removed_lines": 0, "new_lore_chars": 0}
 

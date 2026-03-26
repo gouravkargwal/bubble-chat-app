@@ -21,14 +21,50 @@ from agent.nodes_v2 import vision_node, generator_node, auditor_node
 logger = structlog.get_logger(__name__)
 
 
+def _state_snapshot(state: AgentState) -> dict:
+    analysis = state.get("analysis")
+    has_analysis = analysis is not None
+    visual_transcript_count = 0
+    if isinstance(analysis, dict):
+        visual_transcript_count = len(analysis.get("visual_transcript") or [])
+    elif analysis is not None and hasattr(analysis, "visual_transcript"):
+        visual_transcript_count = len(getattr(analysis, "visual_transcript") or [])
+
+    drafts = state.get("drafts")
+    reply_count = 0
+    if isinstance(drafts, dict):
+        reply_count = len(drafts.get("replies") or [])
+    elif drafts is not None and hasattr(drafts, "replies"):
+        reply_count = len(getattr(drafts, "replies") or [])
+
+    return {
+        "direction": state.get("direction", ""),
+        "conversation_id": state.get("conversation_id", "") or "",
+        "revision_count": state.get("revision_count", 0),
+        "is_valid_chat": bool(state.get("is_valid_chat", False)),
+        "has_analysis": has_analysis,
+        "visual_transcript_count": visual_transcript_count,
+        "has_drafts": drafts is not None,
+        "reply_count": reply_count,
+        "has_auditor_feedback": bool(state.get("auditor_feedback", "")),
+        "core_lore_chars": len(state.get("core_lore", "") or ""),
+        "past_memories_chars": len(state.get("past_memories", "") or ""),
+    }
+
+
 def check_valid_chat(state: AgentState) -> str:
     valid = bool(state.get("is_valid_chat", False))
     route = "generate" if valid else "end"
     logger.info(
         "llm_lifecycle",
         stage="graph_route_after_vision",
+        trace_id=state.get("trace_id", ""),
         route=route,
         user_id=state.get("user_id", ""),
+        conversation_id=state.get("conversation_id", "") or "",
+        direction=state.get("direction", ""),
+        revision_count=state.get("revision_count", 0),
+        state_snapshot=_state_snapshot(state),
         bouncer_reason=(state.get("bouncer_reason") or "")[:200] if not valid else "",
     )
     return route
@@ -47,10 +83,14 @@ def check_audit(state: AgentState) -> str:
         logger.info(
             "llm_lifecycle",
             stage="graph_route_after_auditor",
+            trace_id=state.get("trace_id", ""),
             route="end",
             user_id=state.get("user_id", ""),
+            conversation_id=state.get("conversation_id", "") or "",
+            direction=state.get("direction", ""),
             revision_count=revision_count,
             auditor_approved=True,
+            state_snapshot=_state_snapshot(state),
         )
         return "end"
 
@@ -58,21 +98,29 @@ def check_audit(state: AgentState) -> str:
         logger.info(
             "llm_lifecycle",
             stage="graph_route_after_auditor",
+            trace_id=state.get("trace_id", ""),
             route="end",
             user_id=state.get("user_id", ""),
+            conversation_id=state.get("conversation_id", "") or "",
+            direction=state.get("direction", ""),
             revision_count=revision_count,
             auditor_approved=True,
             note="max_rewrites_cap",
+            state_snapshot=_state_snapshot(state),
         )
         return "end"
 
     logger.info(
         "llm_lifecycle",
         stage="graph_route_after_auditor",
+        trace_id=state.get("trace_id", ""),
         route="rewrite",
         user_id=state.get("user_id", ""),
+        conversation_id=state.get("conversation_id", "") or "",
+        direction=state.get("direction", ""),
         revision_count=revision_count,
         auditor_approved=False,
+        state_snapshot=_state_snapshot(state),
     )
     return "rewrite"
 

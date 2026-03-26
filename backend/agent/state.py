@@ -92,6 +92,7 @@ class BouncerOutput(BaseModel):
 
 class AgentState(TypedDict):
     # Inputs
+    trace_id: str
     image_bytes: str
     direction: str
     custom_hint: str
@@ -113,6 +114,7 @@ class AgentState(TypedDict):
     past_memories: str
     # OCR output is now structured so ownership can be handled deterministically.
     raw_ocr_text: List["RawOcrTextItem"]
+    detected_contradictions: List[str]
 
     # Auditor state
     is_cringe: bool

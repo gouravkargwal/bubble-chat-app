@@ -211,3 +211,60 @@ def fetch_librarian_context(
         return loop.run_until_complete(_fetch())
     finally:
         loop.close()
+
+
+def sanitize_llm_messages_for_logging(messages: list[Any]) -> list[dict[str, Any]]:
+    """
+    Convert LangChain message objects into JSON-serializable logs.
+
+    Important: we intentionally omit/replace base64 image URLs because they are
+    extremely large and not useful for debugging text behavior.
+    """
+
+    def _sanitize_content(content: Any) -> Any:
+        # HumanMessage content can be either a string or a list of parts
+        # (e.g. [{type: "text", text: ...}, {type: "image_url", image_url: {url: ...}}]).
+        if isinstance(content, str):
+            return content
+
+        if isinstance(content, list):
+            sanitized_parts: list[Any] = []
+            for part in content:
+                if isinstance(part, dict):
+                    part_type = part.get("type")
+                    if part_type == "image_url":
+                        url = (
+                            (part.get("image_url") or {}).get("url")
+                            if isinstance(part.get("image_url"), dict)
+                            else None
+                        )
+                        url_str = str(url or "")
+                        sanitized_parts.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": "<omitted_image_base64>",
+                                    "url_length": len(url_str),
+                                },
+                            }
+                        )
+                        continue
+                    sanitized_parts.append(part)
+                else:
+                    sanitized_parts.append(part)
+            return sanitized_parts
+
+        # Fallback: keep it as-is (must remain JSON-serializable at callsite)
+        return content
+
+    sanitized: list[dict[str, Any]] = []
+    for msg in messages:
+        role = msg.__class__.__name__
+        content = getattr(msg, "content", None)
+        sanitized.append(
+            {
+                "role": role,
+                "content": _sanitize_content(content),
+            }
+        )
+    return sanitized

@@ -22,6 +22,7 @@ from agent.nodes_v2._post_processor import validate_and_fix_replies
 from agent.nodes_v2._shared import (
     GENERATOR_MODEL,
     transcript_text_from_analysis,
+    sanitize_llm_messages_for_logging,
 )
 from agent.state import (
     AgentState,
@@ -49,7 +50,10 @@ class GeneratorOutput(BaseModel):
     right_energy: str = Field(description="Single best tone phrase.")
     hook_point: str = Field(description="The specific topic or detail to build around.")
     recommended_strategy_label: StrategyLabel = Field(
-        description="ONE of: PUSH-PULL, FRAME CONTROL, SOFT CLOSE, VALUE ANCHOR, PATTERN INTERRUPT, HONEST FRAME"
+        description=(
+            "ONE of: PUSH-PULL, FRAME CONTROL, SOFT CLOSE, VALUE ANCHOR, PATTERN INTERRUPT, HONEST FRAME. "
+            "If double-texting, prioritize PATTERN INTERRUPT or VALUE ANCHOR to re-engage."
+        )
     )
 
     # Writer output — exactly 4 reply options
@@ -78,10 +82,21 @@ You will be given a JSON payload with:
 ══════════════════════════════════════
 PHASE 1 — STRATEGY
 ══════════════════════════════════════
+--- DYNAMIC BELIEF SYSTEM ---
+You are provided with 'transcript_text' (from the current image) and 'core_lore' (from the database).
+- THE IMAGE IS TRUTH: The transcript_text is the absolute current reality. 
+- LORE IS LEGACY: Core Lore is historical context. 
+- RESOLVE CONFLICTS: If the Core Lore says the user is [X], but the transcript_text shows the other person (Them) talking as if THEY are [X], you MUST trust the transcript and ignore the Lore. Do not try to force the conversation to match old memories.
+
 Match Identity: Respond to [person_name].
 The Lore: Use core_lore to maintain the established dynamic.
 The Memories: Use past_memories to reference inside jokes ONLY if they fit naturally.
-The Transcript: Base the immediate reply on transcript_text (her latest actual new message).
+
+Weighting: Give 100% weight to the current `visual_transcript`. Give 50% weight to `core_lore`. Use Lore for personality and 'vibe' continuity, but never let it override the facts of the current chat bubbles.
+The Transcript: Base the immediate reply on transcript_text (her latest actual new message). 
+CRITICAL DOUBLE-TEXTING: Check `analysis.their_last_message`. If it contains the string '[Note: User already replied with: ...]', the user sent the final message. 
+- STRATEGY SHIFT: Do NOT answer her previous message. You are now writing a 'Follow-up' or 'Nudge'. 
+- Do not repeat what the user just said; build on the user's last organic text mentioned in the note.
 
 {archetype_rules}
 
@@ -337,6 +352,8 @@ def generator_node(state: AgentState) -> dict:
     Returns partial state update (LangGraph merges into full state).
     """
     user_id = state.get("user_id", "")
+    trace_id = state.get("trace_id", "")
+    conversation_id = state.get("conversation_id", "") or ""
     revision_count = state.get("revision_count", 0)
     auditor_feedback = state.get("auditor_feedback", "")
     is_rewrite = revision_count > 0 and bool(auditor_feedback)
@@ -421,30 +438,79 @@ def generator_node(state: AgentState) -> dict:
     logger.info(
         "llm_lifecycle",
         stage="generator_node_start",
+        trace_id=trace_id,
         user_id=user_id,
+        conversation_id=conversation_id,
         direction=direction,
         detected_archetype=detected_archetype,
         llm_temperature=llm_temperature,
         is_rewrite=is_rewrite,
         revision_count=revision_count,
         has_custom_hint=bool(custom_hint),
+        transcript_chars=len(transcript_text or ""),
+        core_lore_chars=len(core_lore),
+        past_memories_chars=len(past_memories),
+        context_interaction_count=interaction_count if isinstance(interaction_count, int) else 0,
+        has_voice_dna=bool(voice_dna),
     )
+    logger.info(
+        "llm_lifecycle",
+        stage="generator_node_pre_llm",
+        trace_id=trace_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        direction=direction,
+        model=GENERATOR_MODEL,
+        phase=phase,
+        payload_keys=sorted(payload.keys()),
+        payload_replies_count=len((payload.get("previous_replies") or {}).get("replies", []))
+        if isinstance(payload.get("previous_replies"), dict)
+        else 0,
+    )
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=json.dumps(payload)),
+    ]
+
+    logger.info(
+        "generator_node_llm_messages",
+        trace_id=trace_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        direction=direction,
+        phase=phase,
+        model=GENERATOR_MODEL,
+        messages=sanitize_llm_messages_for_logging(messages),
+    )
+
     try:
         result, usage_row = invoke_structured_gemini(
             model=GENERATOR_MODEL,
             temperature=llm_temperature,
             schema=GeneratorOutput,
-            messages=[
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=json.dumps(payload)),
-            ],
+            messages=messages,
             phase=phase,
         )
         gen_out = cast(GeneratorOutput, result)
+        logger.info(
+            "generator_node_llm_result",
+            trace_id=trace_id,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            direction=direction,
+            phase=phase,
+            out=gen_out.model_dump(),
+            usage_phase=usage_row.get("phase"),
+            usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
+            usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
+        )
     except Exception as e:
         logger.error(
             "agent_v2_generator_llm_error",
+            trace_id=trace_id,
             user_id=user_id,
+            conversation_id=conversation_id,
+            direction=direction,
             error=str(e),
             error_type=type(e).__name__,
             elapsed_ms=int((time.monotonic() - t_call) * 1000),
@@ -454,14 +520,45 @@ def generator_node(state: AgentState) -> dict:
     # --- Validate reply count and fix if needed ---
     gen_out = validate_and_fix_replies(gen_out)
 
+    # Full observability: log the exact 4 reply options we plan to ship.
+    # NOTE: This can create large log entries; intentionally no truncation.
+
+    logger.info(
+        "generator_node_full_output",
+        trace_id=trace_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        direction=direction,
+        phase=phase,
+        recommended_strategy_label=gen_out.recommended_strategy_label,
+        wrong_moves=gen_out.wrong_moves,
+        right_energy=gen_out.right_energy,
+        hook_point=gen_out.hook_point,
+        replies=[
+            {
+                "text": r.text,
+                "strategy_label": r.strategy_label,
+                "is_recommended": r.is_recommended,
+                "coach_reasoning": r.coach_reasoning,
+            }
+            for r in gen_out.replies[:4]
+        ],
+    )
+
     logger.info(
         "llm_lifecycle",
         stage="generator_node_complete",
+        trace_id=trace_id,
         user_id=user_id,
+        conversation_id=conversation_id,
+        direction=direction,
         phase=phase,
         elapsed_ms=int((time.monotonic() - t_call) * 1000),
         recommended_strategy_label=gen_out.recommended_strategy_label,
         reply_count=len(gen_out.replies),
+        usage_phase=usage_row.get("phase"),
+        usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
+        usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
     )
 
     # Build StrategyOutput and WriterOutput from GeneratorOutput
