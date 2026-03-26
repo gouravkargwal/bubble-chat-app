@@ -21,7 +21,7 @@ logger = structlog.get_logger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-LLM_TIMEOUT_SECONDS = 30
+LLM_TIMEOUT_SECONDS = 120.0
 LLM_MAX_RETRIES = 2
 REQUIRED_REPLY_COUNT = 4
 MAX_REWRITES = 1  # Max rewrite attempts before shipping as-is

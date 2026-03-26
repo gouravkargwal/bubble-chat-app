@@ -5,6 +5,7 @@ import contextvars
 import time
 from typing import cast
 
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -68,6 +69,18 @@ def _is_transient_provider_overload(exc: BaseException) -> bool:
         seen.add(id(cur))
         text = str(cur)
         if any(token in text for token in tokens):
+            return True
+        cur = cast(BaseException | None, cur.__cause__ or cur.__context__)
+    return False
+
+
+def _is_provider_timeout(exc: BaseException) -> bool:
+    """Detect upstream read timeouts across wrapped exception chains."""
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if isinstance(cur, (httpx.ReadTimeout, TimeoutError)):
             return True
         cur = cast(BaseException | None, cur.__cause__ or cur.__context__)
     return False
@@ -387,6 +400,11 @@ async def generate_replies_v2(
     try:
         vision_out = await perform_full_vision_analysis(images[-1])
     except Exception as e:
+        if _is_provider_timeout(e):
+            raise HTTPException(
+                status_code=504,
+                detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
+            ) from e
         if _is_transient_provider_overload(e):
             raise HTTPException(
                 status_code=503,
@@ -638,6 +656,11 @@ async def generate_replies_v2(
     try:
         final_state = await _run_v2_agent(initial_state)
     except Exception as e:
+        if _is_provider_timeout(e):
+            raise HTTPException(
+                status_code=504,
+                detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
+            ) from e
         if _is_transient_provider_overload(e):
             raise HTTPException(
                 status_code=503,
