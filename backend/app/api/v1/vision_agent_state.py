@@ -31,6 +31,7 @@ def _build_agent_initial_state(
     return {
         "trace_id": str(uuid4()),
         "image_bytes": image_base64,
+        "vision_out": {},
         "direction": direction,
         "custom_hint": custom_hint,
         "user_id": user_id,

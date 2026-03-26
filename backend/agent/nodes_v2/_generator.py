@@ -110,9 +110,14 @@ THE INTENTIONS OVERRIDE:
   Drop all cocky/push-pull banter. Use HONEST FRAME.
   WRONG_MOVES must include being evasive about seriousness.
 
+VULNERABLE MOMENT OVERRIDE:
+- If analysis.their_tone is "upset" or "vulnerable", avoid teasing, sarcasm, and aggressive escalation even outside de_escalate direction.
+- In that case, prefer HONEST FRAME or VALUE ANCHOR and prioritize emotional steadiness over cleverness.
+
 CONVERSION RULE:
 - Do NOT generate "SOFT CLOSE" or ask for number unless their_effort is HIGH or temperature is HOT.
 - If she is LOW-INVESTMENT or WARM/STEADY with medium effort, your ONLY goal is to spark curiosity.
+- If she is LOW-INVESTMENT, do NOT reward that with over-enthusiastic validation or eager multi-part questions.
 
 STRATEGY LABELS:
 - PUSH-PULL: create tension with a mix of interest and playful withdrawal
@@ -143,6 +148,7 @@ STYLE RULE:
 LENGTH & MIRRORING:
 - Match her message length or be slightly shorter. Single punchy sentence or phrase.
 - If she gives low effort, be equally brief and unbothered.
+- Max one question per reply. Avoid interview energy.
 
 THE TENSION SUSPENSION RULE:
 - If she playfully accuses you of something, NEVER confirm or deny. Suspend the tension.
@@ -162,6 +168,7 @@ VOICE DNA & CONTEXT:
 - conversation_context_dict: use history, avoid exhausted topics, keep persona consistent.
 
 For each reply fill: text, strategy_label, is_recommended (exactly ONE true), coach_reasoning
+The strategy_label must match the actual text energy. Do not tag a reply as HONEST FRAME if the line is teasing/sarcastic.
 
 ══════════════════════════════════════
 PHASE 3 — QUICK SELF-CHECK (before outputting)
@@ -173,6 +180,15 @@ Scan your 4 replies for these SUBSTANTIVE issues only (punctuation is fixed by c
 - If user_custom_hint in the JSON is non-empty, does each reply honor that request? If any ignores it → fix it.
 - Are all 4 replies genuinely different angles? If 3 feel the same → diversify the weakest one.
 - Would a real person send this? If a reply sounds like therapy speak or corporate jargon → fix it.
+- SPECIFICITY TEST: Could this exact line be sent to almost anyone? If yes, rewrite with a concrete hook from transcript/profile/lore.
+- FORK TEST: Each reply must include an easy response path (playful assumption, false dilemma, light challenge, callback, story hook, or role-play frame).
+- STRUCTURE DIVERSITY: Use different shapes across the 4 replies (statement, question, challenge, callback, reaction, or mini-share). Do not repeat the same structure 3+ times.
+- AI-PHRASE FILTER: Rewrite if any reply contains robotic fillers like "id love to", "i appreciate", "that sounds amazing", "i totally get that", "that being said", or "it seems like".
+- OPENING FILTER: avoid dead openers in reply text such as "hey", "hi", "hello", "so", "well", "i mean".
+- LAUGH-FILLER FILTER: Avoid starting a reply with empty filler laughs like "haha", "hehe", "lol" unless it directly reacts to a specific line from her message.
+- RECIPROCATION FILTER: Avoid lazy mirror lines like "what about you" when not anchored to a specific hook.
+- QUESTION DENSITY FILTER: Never stack 2+ questions in one reply.
+- Exactly ONE reply has is_recommended=true. Never 0, never 2+.
 """
 
 # ---------------------------------------------------------------------------
@@ -247,12 +263,16 @@ DIRECTION — OPENER:
 - Generate a "Reaction Comment" for her profile photo using visual_hooks from the analysis.
 - A good comment is a playful assumption based on a specific visual detail.
 - Example: "i bet you spent more time picking that camera than actually taking photos with it".
-- Every reply MUST reference a concrete visual detail — generic openers are cringe.""",
+- Every reply MUST reference a concrete visual detail — generic openers are cringe.
+- Do NOT compliment looks generically ("youre cute", "nice smile").
+- Do NOT use dead prompts like "hows your day" or "what do you do for fun".
+- Make the 4 openers topic-diverse: avoid repeating the same hook/detail twice.""",
 
     "quick_reply": """
 DIRECTION — QUICK REPLY:
 - Standard conversational reply. Respond naturally to what she said.
-- No special constraints — let the archetype strategy guide the tone.""",
+- No special constraints — let the archetype strategy guide the tone.
+- Always bounce the ball back with a hook (tease, assumption, challenge, or light question). Do not end as a dead statement.""",
 
     "change_topic": """
 DIRECTION — CHANGE TOPIC:
@@ -275,7 +295,8 @@ DIRECTION — REVIVE CHAT:
 - You MAY reference her last text with a twist ("wait i just realized..." or "ok but you never told me...")
   IF it creates a natural callback. You may also ignore it entirely and go fresh.
 - At least one reply should be a bold, unexpected angle (not "hey how are you").
-- At least one reply should reference something from core_lore or past_memories if available.""",
+- At least one reply should reference something from core_lore or past_memories if available.
+- Forbidden stale revival lines: "hey stranger", "long time no speak", "sorry ive been mia".""",
 
     "get_number": """
 DIRECTION — GET NUMBER / MOVE OFF APP:
@@ -283,20 +304,24 @@ DIRECTION — GET NUMBER / MOVE OFF APP:
 - Use casual style: "whatsapp pe switch karein", "drop your number", etc.
 - If temperature is "hot", be more direct and confident.
 - If temperature is "warm", frame the close as a natural next step, not a demand.
-- Teasing is allowed ONLY if it still leads to an explicit "move off app" line in that reply.""",
+- Teasing is allowed ONLY if it still leads to an explicit "move off app" line in that reply.
+- AVOID stiff asks like "can i get your number", "want to text instead", or "we should move this off the app" with no context.""",
 
     "ask_out": """
 DIRECTION — ASK OUT:
 - The goal is to ASK THEM OUT. Be specific with a concrete plan.
 - Include a place, activity, or time suggestion — not just "we should meet".
 - Match the vibe: if the conversation is playful, frame the ask-out playfully.
-- At least one reply should be a bold, direct ask. At least one can be a softer suggestion.""",
+- At least one reply should be a bold, direct ask. At least one can be a softer suggestion.
+- Avoid formal/vague lines like "would you like to go on a date" or "we should hang out sometime".""",
 
     "de_escalate": """
 DIRECTION — DE-ESCALATE:
 - She is upset, annoyed, testing aggressively, or the conversation has gotten tense.
 - STRICT: Do NOT match her negative energy. Do NOT get defensive or sarcastic.
 - STRICT: Do NOT dismiss her feelings ("chill", "relax", "its not that deep").
+- STRICT: Do NOT make it about yourself and do NOT jump to generic advice platitudes.
+- Lead with acknowledgment before pivoting. If no acknowledgment is present, rewrite.
 - Prioritize HONEST FRAME and VALUE ANCHOR.
 - Tone: calm, grounded, accountable where appropriate. Show emotional maturity.
 - Acknowledge what she said without being a pushover.

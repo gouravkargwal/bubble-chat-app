@@ -194,16 +194,14 @@ def fetch_librarian_context(
     conversation_id: str,
     current_text: str,
 ) -> dict[str, str]:
-    """Runs the async DB fetch using the shared engine (no new pool per call)."""
+    """Sync wrapper for thread contexts that cannot `await` directly."""
 
     async def _fetch() -> dict[str, str]:
-        async with librarian_async_session() as local_db:
-            return await get_match_context(
-                local_db,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                current_text=current_text,
-            )
+        return await fetch_librarian_context_async(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            current_text=current_text,
+        )
 
     # LangGraph nodes run in threads via asyncio.to_thread, so we need a new loop
     loop = asyncio.new_event_loop()
@@ -211,6 +209,21 @@ def fetch_librarian_context(
         return loop.run_until_complete(_fetch())
     finally:
         loop.close()
+
+
+async def fetch_librarian_context_async(
+    user_id: str,
+    conversation_id: str,
+    current_text: str,
+) -> dict[str, str]:
+    """Async-native librarian fetch for async endpoints/tasks."""
+    async with librarian_async_session() as local_db:
+        return await get_match_context(
+            local_db,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            current_text=current_text,
+        )
 
 
 def sanitize_llm_messages_for_logging(messages: list[Any]) -> list[dict[str, Any]]:

@@ -94,6 +94,7 @@ class AgentState(TypedDict):
     # Inputs
     trace_id: str
     image_bytes: str
+    vision_out: Dict[str, Any]
     direction: str
     custom_hint: str
     user_id: str

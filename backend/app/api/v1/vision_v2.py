@@ -1,24 +1,9 @@
-"""
-V2 reply generation endpoint — 2-node agent (vision_node + generator_node).
-
-Route: POST /api/v1/vision/generate_v2
-
-Node 1 (vision_node)    : GEMINI_MODEL — bouncer + OCR + analysis in one call
-Node 2 (generator_node) : GEMINI_MODEL — strategy + write + self-audit in one call
-
-Primary reply generation endpoint (v2 agent):
-  - Tier config enforcement (direction guard, screenshot limit, custom hint, coach_reasoning gate)
-  - Hybrid Stitch conversation resolution (auto-stitch, 409 requires-confirmation, new match)
-  - Quota check-before / increment-after pattern
-  - Voice DNA (when enabled): organic text extraction + echo filter + stats update
-  - Full Interaction persistence (all reply fields, latency, model, temperature)
-  - Correct VisionResponse with interaction_id, usage_remaining, conversation_id, person_name, stage
-"""
-
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import time
+from typing import cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -50,102 +35,276 @@ from app.domain.tiers import get_effective_tier
 from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Conversation, User, UserVoiceDNA
-from app.llm.gemini_client import GeminiClient
 from app.services.hybrid_stitch_pending import (
     has_pending_hybrid_resolution,
     store_pending_hybrid_resolution,
 )
 from app.services.memory_service import scrub_lore_from_contradictions
 from app.services.quota_manager import QuotaExceededException, QuotaManager
+from agent.nodes_v2._lc_usage import invoke_structured_gemini
+from agent.nodes_v2._shared import (
+    VISION_MODEL,
+    encode_image_from_state,
+    sanitize_llm_messages_for_logging,
+    fetch_librarian_context_async,
+)
+from agent.nodes_v2._vision import VisionNodeOutput
+from agent.state import AgentState
+from langchain_core.messages import HumanMessage, SystemMessage
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
-
-_gemini_client: GeminiClient | None = None
-
-
-def _get_gemini_client() -> GeminiClient:
-    global _gemini_client
-    if _gemini_client is None:
-        _gemini_client = GeminiClient(
-            api_key=settings.gemini_api_key, default_model=settings.gemini_model
-        )
-    return _gemini_client
+_vision_usage_row_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "vision_usage_row", default=None
+)
 
 
-# ---------------------------------------------------------------------------
-# Hybrid Stitch OCR signals (lightweight pre-agent Gemini call)
-# ---------------------------------------------------------------------------
+def _is_transient_provider_overload(exc: BaseException) -> bool:
+    """Best-effort check for upstream LLM capacity errors (Gemini 503/UNAVAILABLE)."""
+    tokens = ("503", "UNAVAILABLE", "high demand", "RESOURCE_EXHAUSTED")
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        text = str(cur)
+        if any(token in text for token in tokens):
+            return True
+        cur = cast(BaseException | None, cur.__cause__ or cur.__context__)
+    return False
 
-async def _extract_ocr_signals(
-    image_base64: str,
-    usage_sink: list[dict] | None = None,
-) -> tuple[str, list[str]]:
-    """Quick Gemini call to extract person_name + last bubble texts for conversation stitching."""
-    OCR_SIGNALS_SCHEMA: dict = {
-        "type": "OBJECT",
-        "properties": {
-            "person_name": {"type": "STRING"},
-            "extracted_bubbles": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "sender": {"type": "STRING"},
-                        "text": {"type": "STRING"},
-                    },
-                    "required": ["sender", "text"],
-                },
-            },
+
+# Copied from `agent/nodes_v2/_vision.py` so the v2 endpoint can run the full
+# Vision Node LLM call before hybrid stitching.
+VISION_NODE_SYSTEM_PROMPT = """
+You are a combined chat screenshot analyzer. Process the image in THREE sequential steps.
+
+══════════════════════════════════════
+STEP 1 — BOUNCER VALIDATION
+══════════════════════════════════════
+Decide if this image is either:
+  (A) a text/chat conversation screenshot (contains chat bubbles), OR
+  (B) a dating app profile page screenshot (contains bio/prompts/overlay text and photos used for generating openers).
+
+- is_valid_chat = true → it contains chat bubbles OR it is a dating app profile page suitable for generating openers.
+- is_valid_chat = false → it is a random photo, menu, meme, blank screen, or non-chat/non-profile image.
+- Provide a short bouncer_reason indicating whether it was chat bubbles vs a dating app profile page.
+
+Dating app profiles are valid inputs for generating openers.
+
+If is_valid_chat = false, stop here. Return empty arrays for all other fields.
+
+══════════════════════════════════════
+STEP 2 — OCR EXTRACTION (only if is_valid_chat = true)
+══════════════════════════════════════
+CRITICAL: Bubble ownership and quoted-reply splitting.
+If this is a dating app profile page and there are NO chat bubbles:
+  - Extract all visible textual content from the profile (bio, prompts, interests, captions, overlay headlines/buttons).
+  - Combine the extracted text into a single object in raw_ocr_text with:
+      sender = "them"
+      actual_new_message = extracted profile text (verbatim; if multiple snippets, join with newline in screen order)
+      quoted_context = null
+      is_reply = false
+  - Then go directly to STEP 3 (analysis). Do NOT apply chat-bubble/quoted-reply splitting rules.
+Otherwise (if it is a chat conversation with message bubbles), read the image from top to bottom. For each message bubble:
+
+1) Identify the Anchor (sender) using SPATIAL ALIGNMENT first, then color:
+   - RIGHT-aligned bubble = "user" (You)
+   - LEFT-aligned bubble = "them" (The Match)
+   - Color is corroboration:
+     - GRAY or WHITE usually maps to "them"
+     - BLUE, PURPLE, GREEN, or ORANGE usually maps to "user"
+   - If there are checkmarks (✓✓) or "Read" text under a bubble = "user".
+
+CRITICAL RULES:
+   - DO NOT use the "meaning" of the words to decide who sent it.
+   - When alignment and color disagree, trust alignment and receipt markers over semantic guessing.
+   - A gray bubble can still be "user" in some themes if it is right-aligned with user receipt cues.
+   - The "latest message must be user" heuristic is forbidden. Use actual alignment.
+
+* Ignore the "Type a message..." input text bar entirely.
+
+2) Detect Quoted Layers (quoted_context):
+   - If there is a nested/grey/indented faded quoted block at the TOP of the bubble, extract that quoted block text.
+   - If there are multiple faded nested quote blocks at the top, extract all of them and join with newline.
+   - If there is no quoted/faded block at the top, set quoted_context = null.
+
+3) Actual Message (actual_new_message):
+   - Extract the bold/solid actual fresh message BELOW the quoted_context (the bottom-most solid text in the bubble).
+   - actual_new_message MUST NOT include any faded/quoted text.
+
+4) is_reply:
+   - true iff quoted_context is not null and not empty.
+
+Populate raw_ocr_text as a list of objects with keys:
+  sender, actual_new_message, quoted_context, is_reply
+
+Do not translate or summarize. Extract the exact text, emojis, and punctuation as they appear on screen.
+
+══════════════════════════════════════
+STEP 3 — ANALYSIS (VISUAL GROUND TRUTH ONLY)
+══════════════════════════════════════
+You are an expert social profiler. Use ONLY what is visible in this screenshot (chat bubbles/profile text/photos).
+Do not use prior memory, lore, or historical assumptions to decide vibe, tone, or archetype.
+
+Also use the image strictly to extract visual_hooks (3-4 specific physical or environmental details
+from any photos visible, e.g. "Wearing a high-end watch", "In a library", "Holding a specific breed of dog").
+If no photos are visible, return an empty list.
+
+From the raw_ocr_text:
+- Build visual_transcript by mapping each object 1:1 into a ChatBubble dict:
+  - sender = item.sender (absolute bubble alignment; do NOT infer from text)
+  - quoted_context = item.quoted_context or "" if null
+  - actual_new_message = item.actual_new_message
+- Ownership rule:
+  - actual_new_message always belongs to the bubble's sender.
+  - quoted_context is past context and MUST NOT be used as the "latest actual message" for her last message.
+
+For ALL analysis fields below, your primary focus is the most recent bubble where sender == "them" (ignore its quoted_context). HOWEVER, you must also look at the absolute bottom of the transcript to see who sent the final message.
+
+- detected_dialect: ENGLISH, HINDI, or HINGLISH based on her most recent bubble's actual_new_message.
+- their_tone: excited / playful / flirty / neutral / dry / upset / testing / vulnerable / sarcastic
+- their_effort: high / medium / low
+- conversation_temperature: hot / warm / lukewarm / cold
+  - archetype_reasoning: FIRST, count how many words are in her most recent actual_new_message.
+  THEN classify her message structure: is it a question? a statement? an emoji-only response?
+  a sarcastic comeback with a specific punchline? a longer paragraph with a topic? a short
+  "haha ok" filler? Write 2-3 sentences analyzing her MESSAGE STRUCTURE and EFFORT PATTERN
+  before picking an archetype. Keep reasoning grounded only in currently visible message evidence.
+  Do NOT default to banter just because the message is playful —
+  most dating conversations are playful, that alone is not banter.
+- detected_archetype: Based strictly on the reasoning above, select EXACTLY ONE:
+
+    "THE BANTER GIRL"       — STRICT: She must be doing at least ONE of these: (a) explicit sarcasm
+                               with a punchline ("oh wow what a catch"), (b) flipping a question/test
+                               back at the user ("why dont YOU tell me"), (c) playful accusations
+                               ("youre definitely a catfish"). Normal playful/friendly messages like
+                               "haha thats funny" or "omg really" are NOT banter — those are WARM/STEADY.
+    "THE INTELLECTUAL"      — Her message is 15+ words AND contains a substantive topic, opinion,
+                               question about ideas/values/experiences, or cultural reference.
+                               Not just a long message — it must have DEPTH or a topic to discuss.
+    "THE WARM/STEADY"       — DEFAULT for most normal conversations. She is friendly, engaged,
+                               responsive, uses emojis/laughter naturally, asks casual questions,
+                               shares updates. This is the MOST COMMON archetype. If you are unsure
+                               between this and BANTER GIRL, pick this one.
+    "THE GUARDED/TESTER"    — She is asking qualifying/screening questions: "what are you looking
+                               for", "are you serious or just here for fun", "do you do this with
+                               all girls", "why did your last relationship end". These are TESTS
+                               that require sincerity, not banter.
+    "THE EAGER/DIRECT"      — She is showing clear forward interest: suggesting to meet, giving
+                               her number unprompted, explicit flirting ("come over", "when are we
+                               meeting"), or enthusiastically agreeing to plans. She is past games.
+    "THE LOW-INVESTMENT"    — Her ENTIRE message is under 4 words AND is filler: "haha", "ok",
+                               "yeah", "nice", "lol", single emoji. If she wrote 5+ words or asked
+                               ANY question, she is NOT low-investment.
+
+CRITICAL: STRICT SPEAKER ATTRIBUTION
+When extracting facts to save into Core Lore or Past Memories, you MUST attribute the fact to the correct speaker based strictly on who sent the message.
+- If 'them' (the Match) asks a question like 'Are you an HR?', DO NOT save 'User is an HR'. Save: 'Match asked about the User's job/HR role.'
+- Only save facts about the User if the 'user' explicitly stated or confirmed them in their own outgoing messages.
+- Never assume a playful accusation or question from the Match is a permanent factual truth about the User.
+
+- key_detail: One specific thing from her most recent actual_new_message to hook into.
+- person_name: First name of the match if discernible from the top UI header or profile text, else "unknown". Do NOT look for her name inside her own text bubbles.
+- stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument
+- their_last_message: Short paraphrase of her most recent message. CRITICAL: If the absolute last message in the chat belongs to "user", you MUST append this exact note to the end of your paraphrase: " [Note: User already replied with: '<insert user's last message>']". This ensures the downstream generator knows it is writing a double-text.
+
+Return ALL fields. Populate everything.
+"""
+
+
+async def perform_full_vision_analysis(image_base64: str) -> VisionNodeOutput:
+    """Run the full (main) Vision Node Gemini call once, returning parsed output."""
+    # The endpoint runs this LLM call before hybrid stitch resolution, so we keep lore out of
+    # the prompt. Any semantic memory fetching happens later in the endpoint.
+    ocr_hint_text = ""
+
+    # Mimic `vision_node` preprocessing: convert base64 to correct `data:<mime>;base64,...` URL.
+    image_url = encode_image_from_state(cast(AgentState, {"image_bytes": image_base64}))
+
+    content = [
+        {"type": "image_url", "image_url": {"url": image_url}},
+        {
+            "type": "text",
+            "text": (
+                f"OCR hint text (may be partial/noisy):\n{ocr_hint_text.strip()}\n\n"
+                "Process the attached image as the absolute current reality."
+            ),
         },
-        "required": ["person_name", "extracted_bubbles"],
-    }
+    ]
+    messages = [
+        SystemMessage(content=VISION_NODE_SYSTEM_PROMPT),
+        HumanMessage(content=content),
+    ]
 
-    system_prompt = (
-        "You are a strict OCR extractor for a dating app screenshot. Return valid JSON only.\n"
-        "1) person_name: visible first name of the other person, or 'unknown'.\n"
-        "2) extracted_bubbles: last 4-6 bubbles in order. sender: left='them', right='user'. "
-        "text: ACTUAL new message only, verbatim, no quoted blocks, no translation."
+    t_start = time.monotonic()
+    logger.info(
+        "llm_lifecycle",
+        stage="vision_node_pre_llm",
+        trace_id="",
+        user_id="",
+        conversation_id="",
+        direction="",
+        model=VISION_MODEL,
+        temperature=0,
+        core_lore_chars=0,
+        past_memories_chars=0,
+        ocr_hint_chars=0,
+    )
+    logger.info(
+        "vision_node_llm_messages",
+        trace_id="",
+        user_id="",
+        conversation_id="",
+        direction="",
+        phase="v2_vision",
+        model=VISION_MODEL,
+        messages=sanitize_llm_messages_for_logging(messages),
     )
 
     try:
-        client = _get_gemini_client()
-        raw = await client.vision_generate(
-            system_prompt=system_prompt,
-            user_prompt="Extract person_name and extracted_bubbles from this screenshot.",
-            base64_images=[image_base64],
-            temperature=0.1,
-            model=settings.gemini_model,
-            max_output_tokens=800,
-            response_schema=OCR_SIGNALS_SCHEMA,
-            usage_sink=usage_sink,
-            usage_phase="v2_hybrid_stitch_ocr",
+        result, usage_row = invoke_structured_gemini(
+            model=VISION_MODEL,
+            temperature=0,
+            schema=VisionNodeOutput,
+            messages=messages,
+            phase="v2_vision",
         )
-        data = __import__("json").loads(raw)
-        person_name = str(data.get("person_name") or "unknown")
-        extracted_texts = [
-            b["text"].strip()
-            for b in (data.get("extracted_bubbles") or [])
-            if isinstance(b, dict) and isinstance(b.get("text"), str) and b["text"].strip()
-        ]
+        out = cast(VisionNodeOutput, result)
+        _vision_usage_row_var.set(usage_row)
         logger.info(
-            "llm_lifecycle",
-            stage="v2_pre_agent_ocr_signals",
-            person_name=person_name,
-            extracted_bubble_text_count=len(extracted_texts),
+            "vision_node_llm_result",
+            trace_id="",
+            user_id="",
+            conversation_id="",
+            direction="",
+            out=out.model_dump(),
+            usage_phase=usage_row.get("phase"),
+            usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
+            usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
         )
-        return person_name, extracted_texts
+        return out
     except Exception as e:
-        logger.error("v2_hybrid_stitch_ocr_failed", error=str(e))
-        return "unknown", []
+        logger.error(
+            "vision_node_llm_error",
+            trace_id="",
+            user_id="",
+            conversation_id="",
+            direction="",
+            error=str(e),
+            error_type=type(e).__name__,
+            elapsed_ms=int((time.monotonic() - t_start) * 1000),
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------
 # Agent runner
 # ---------------------------------------------------------------------------
 
+
 def _run_v2_agent_sync(initial_state: dict) -> dict:
     from agent.graph_v2 import rizz_agent_v2
+
     return rizz_agent_v2.invoke(initial_state)
 
 
@@ -157,7 +316,10 @@ async def _run_v2_agent(initial_state: dict) -> dict:
 # Endpoint
 # ---------------------------------------------------------------------------
 
-@router.post("/vision/generate_v2", response_model=VisionResponse | RequiresUserConfirmation)
+
+@router.post(
+    "/vision/generate_v2", response_model=VisionResponse | RequiresUserConfirmation
+)
 async def generate_replies_v2(
     request: VisionRequest,
     user: User = Depends(get_current_user),
@@ -179,7 +341,9 @@ async def generate_replies_v2(
     # ------------------------------------------------------------------ #
     images: list[str] = request.images or ([request.image] if request.image else [])
     if not images:
-        raise HTTPException(status_code=400, detail="At least one screenshot is required.")
+        raise HTTPException(
+            status_code=400, detail="At least one screenshot is required."
+        )
     max_screenshots = tier_config["limits"]["max_screenshots_per_request"]
     if len(images) > max_screenshots:
         images = images[-max_screenshots:]
@@ -220,16 +384,31 @@ async def generate_replies_v2(
     # ------------------------------------------------------------------ #
     # 5. Hybrid Stitch: resolve conversation_id before agent runs
     # ------------------------------------------------------------------ #
+    try:
+        vision_out = await perform_full_vision_analysis(images[-1])
+    except Exception as e:
+        if _is_transient_provider_overload(e):
+            raise HTTPException(
+                status_code=503,
+                detail="Vision model is temporarily overloaded. Please retry in a few seconds.",
+            ) from e
+        raise
+
+    if not vision_out.is_valid_chat:
+        raise HTTPException(400, vision_out.bouncer_reason)
+
+    # Extract variables for stitching.
+    ocr_person_name = vision_out.person_name
+    extracted_texts = [
+        b["actual_new_message"]
+        for b in (vision_out.raw_ocr_text or [])
+        if isinstance(b, dict) and "actual_new_message" in b
+    ]
+
     effective_conversation_id = request.conversation_id
     new_conversation_person_name: str | None = None
-    extracted_texts: list[str] = []
-    pre_agent_usage: list[dict] = []
 
     if not effective_conversation_id:
-        ocr_person_name, extracted_texts = await _extract_ocr_signals(
-            images[-1], usage_sink=pre_agent_usage
-        )
-
         outcome, matched_conversation_id, payload = (
             await resolve_hybrid_stitch_conversation_id(
                 user_id=user.id,
@@ -253,7 +432,9 @@ async def generate_replies_v2(
                 )
 
             conflict_reason = "hybrid_stitch_ambiguity"
-            payload["detail"] = f"409 requires user confirmation. reason={conflict_reason}"
+            payload["detail"] = (
+                f"409 requires user confirmation. reason={conflict_reason}"
+            )
 
             suggested = payload.get("suggested_match", {})
             logger.warning(
@@ -371,7 +552,10 @@ async def generate_replies_v2(
         effective_conversation_id = convo.id
         placeholder_conversation_id = convo.id
 
-    if tier_config["features"]["chemistry_tracking_enabled"] and effective_conversation_id:
+    if (
+        tier_config["features"]["chemistry_tracking_enabled"]
+        and effective_conversation_id
+    ):
         convo_result = await db.execute(
             select(Conversation).where(
                 Conversation.id == effective_conversation_id,
@@ -400,6 +584,29 @@ async def generate_replies_v2(
     # 9. Build initial state and run the 2-node agent
     # ------------------------------------------------------------------ #
     start = time.monotonic()
+
+    # Fetch librarian context after stitching resolved so conversation_id is final.
+    ocr_hint_text = " ".join(extracted_texts[-2:]) if extracted_texts else ""
+    core_lore = ""
+    past_memories = ""
+    if effective_conversation_id:
+        try:
+            librarian = await fetch_librarian_context_async(
+                user_id=user.id,
+                conversation_id=str(effective_conversation_id),
+                current_text=ocr_hint_text,
+            )
+            core_lore = librarian.get("core_lore") or ""
+            past_memories = librarian.get("past_memories") or ""
+        except Exception as e:
+            logger.warning(
+                "agent_v2_librarian_failed",
+                trace_id="",
+                error=str(e),
+                user_id=user.id,
+                conversation_id=str(effective_conversation_id or ""),
+            )
+
     initial_state = _build_agent_initial_state(
         images[0],
         request.direction.value,
@@ -410,8 +617,14 @@ async def generate_replies_v2(
         conversation_context,
     )
     trace_id = initial_state.get("trace_id", "")
-    # Pass OCR text so vision_node can use it for semantic memory search
-    initial_state["ocr_hint_text"] = " ".join(extracted_texts[-2:]) if extracted_texts else ""
+    initial_state["ocr_hint_text"] = ocr_hint_text
+
+    # Inject the already-computed full Vision Node output + librarian context.
+    initial_state["vision_out"] = vision_out.model_dump()
+    initial_state["core_lore"] = core_lore
+    initial_state["past_memories"] = past_memories
+    if (usage_row := _vision_usage_row_var.get()) is not None:
+        initial_state["gemini_usage_log"] = [usage_row]
 
     logger.info(
         "llm_lifecycle",
@@ -425,6 +638,11 @@ async def generate_replies_v2(
     try:
         final_state = await _run_v2_agent(initial_state)
     except Exception as e:
+        if _is_transient_provider_overload(e):
+            raise HTTPException(
+                status_code=503,
+                detail="Model is temporarily overloaded. Please retry in a few seconds.",
+            ) from e
         logger.error(
             "agent_v2_run_failed",
             trace_id=trace_id,
@@ -432,12 +650,17 @@ async def generate_replies_v2(
             user_id=user.id,
             conversation_id=effective_conversation_id or "",
         )
-        raise HTTPException(status_code=502, detail="Failed to generate replies. Try again.") from e
+        raise HTTPException(
+            status_code=502, detail="Failed to generate replies. Try again."
+        ) from e
 
     if not final_state.get("is_valid_chat", True):
         # Roll back placeholder conversation on bouncer rejection.
         # This prevents empty "link chats" / matches based on placeholder rows.
-        if placeholder_conversation_id and effective_conversation_id == placeholder_conversation_id:
+        if (
+            placeholder_conversation_id
+            and effective_conversation_id == placeholder_conversation_id
+        ):
             try:
                 # Re-fetch to ensure the instance is attached to this session state.
                 placeholder_convo_result = await db.execute(
@@ -461,7 +684,9 @@ async def generate_replies_v2(
 
         raise HTTPException(
             status_code=400,
-            detail=final_state.get("bouncer_reason", "Image is not a valid chat or dating app screenshot."),
+            detail=final_state.get(
+                "bouncer_reason", "Image is not a valid chat or dating app screenshot."
+            ),
         )
 
     latency_ms = int((time.monotonic() - start) * 1000)
@@ -508,16 +733,30 @@ async def generate_replies_v2(
     # Deterministic style post-processing — strip punctuation, force lowercase
     from agent.nodes_v2 import _post_process_replies as _pp
     from agent.state import WriterOutput as _WO, ReplyOption as _RO
-    _tmp_replies = [_RO(text=r.text, strategy_label=r.strategy_label, is_recommended=r.is_recommended, coach_reasoning=r.coach_reasoning) for r in parsed.replies]
+
+    _tmp_replies = [
+        _RO(
+            text=r.text,
+            strategy_label=r.strategy_label,
+            is_recommended=r.is_recommended,
+            coach_reasoning=r.coach_reasoning,
+        )
+        for r in parsed.replies
+    ]
     _cleaned = _pp(_WO(replies=_tmp_replies))
     from app.domain.models import ReplyOption as DomainReply
     from dataclasses import replace as _replace
-    parsed.replies = [_replace(r, text=c.text) for r, c in zip(parsed.replies, _cleaned.replies)]
+
+    parsed.replies = [
+        _replace(r, text=c.text) for r, c in zip(parsed.replies, _cleaned.replies)
+    ]
 
     # ------------------------------------------------------------------ #
     # 10. Voice DNA: extract organic text, run echo filter, update stats
     # ------------------------------------------------------------------ #
-    organic_text = await extract_organic_text(db=db, user=user, parsed=parsed, conversation_id=effective_conversation_id)
+    organic_text = await extract_organic_text(
+        db=db, user=user, parsed=parsed, conversation_id=effective_conversation_id
+    )
     if organic_text and voice_dna_feature_active(tier_config):
         await update_voice_dna(
             db=db,

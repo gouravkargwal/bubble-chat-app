@@ -99,6 +99,9 @@ Focus ONLY on substantive quality:
    - "ask_out" → must include a concrete plan (place/time/activity)
    - "de_escalate" → must NOT be sarcastic, defensive, or dismissive
    - "tease" → must be playful, not mean or generic
+   - "revive_chat" → fail stale lines like "hey stranger", "long time no speak", "sorry ive been mia"
+   - "ask_out" → fail vague/formal asks like "we should hang out sometime" or "would you like to go on a date"
+   - "get_number" → fail stiff lines like "can i get your number" with no contextual reason
    - If user_custom_hint in the payload is non-empty: EVERY reply must clearly reflect that hint
      (not a generic reply that could apply without it). Missing the hint = FAIL.
    Direction violated = FAIL.
@@ -107,12 +110,36 @@ Focus ONLY on substantive quality:
    - Corporate jargon, therapy speak, motivational quotes = FAIL
    - Overly eager ("I'd love to get to know you more!") = FAIL
    - Generic ("What are you up to?", "How's your day?") = FAIL for most directions
+   - Dead openers in-body ("hey", "hi", "hello", "so", "well", "i mean") = FAIL
+   - Empty laugh-filler starts ("haha", "hehe", "lol" as filler openers) = FAIL unless clearly tied to her exact message
+   - Lazy reciprocation ("what about you" with no specific hook) = FAIL
 
 5. DIVERSITY: Are all 4 replies using clearly different angles?
    If 3+ replies feel like variations of the same approach = FAIL the weakest one.
 
-6. DIALECT MATCH: If detected_dialect is HINGLISH, replies must be in Hinglish.
+6. SPECIFICITY + FORK:
+   - Specificity: If a line could be copy-pasted into almost any chat, fail it as generic.
+   - Fork: Each reply should give an easy response path (assumption, dilemma, challenge, callback, or hook).
+     If it is a conversational dead-end, fail it.
+   - If a reply contains 2+ direct questions, fail it for interview energy unless direction explicitly requires interrogation-style framing.
+
+7. DIALECT MATCH: If detected_dialect is HINGLISH, replies must be in Hinglish.
    If ENGLISH, replies must NOT contain Hindi words. Mismatch = FAIL.
+
+8. OUTPUT SHAPE:
+   - Exactly one reply should be marked recommended.
+   - If there are zero or multiple recommended replies, fail weakest violating reply(s) and mention this in summary.
+
+9. DE-ESCALATE SAFETY:
+   - For direction="de_escalate", at least one clause should acknowledge her feeling/context before any pivot.
+   - If a reply immediately pivots without acknowledgment, fail it as emotionally tone-deaf.
+
+10. LABEL-TEXT COHERENCE:
+   - strategy_label must match the actual line.
+   - Example failures: label says HONEST FRAME but text is cocky/sarcastic; label says SOFT CLOSE but there is no escalation/logistics move.
+
+11. VULNERABLE TONE SAFETY:
+   - If their_tone is "upset" or "vulnerable", fail replies that tease, provoke, or escalate aggressively even when direction is not de_escalate.
 
 BE STRICT BUT FAIR:
 - A reply doesn't need to be perfect. It needs to be good enough to send.
