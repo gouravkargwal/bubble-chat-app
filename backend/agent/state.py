@@ -135,7 +135,8 @@ class RawOcrTextItem(TypedDict):
     - right-aligned bubble => "user"
 
     `actual_new_message` is the bold/solid fresh text below any quoted (faded) block.
-    `quoted_context` is the quoted (faded) top block text (or null if none).
+    It may be empty for reply-only bubbles that show only referenced context.
+    `quoted_context` is the quoted/referenced top block text (or null if none).
     """
 
     sender: Literal["user", "them"]

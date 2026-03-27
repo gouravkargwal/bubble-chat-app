@@ -43,8 +43,9 @@ class VisionNodeOutput(BaseModel):
         description=(
             "List of bubble objects extracted verbatim. Each has: "
             "sender ('user'=right-aligned, 'them'=left-aligned), "
-            "actual_new_message (bold fresh text below any quoted block), "
-            "quoted_context (faded top block or null), "
+            "actual_new_message (bottom-most fresh solid text below any quoted block; "
+            "may be empty for reply-only bubbles), "
+            "quoted_context (quoted/referenced top block text or null), "
             "is_reply (true iff quoted_context present)."
         ),
     )

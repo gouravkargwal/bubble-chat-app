@@ -120,18 +120,17 @@ If this is a dating app profile page and there are NO chat bubbles:
   - Then go directly to STEP 3 (analysis). Do NOT apply chat-bubble/quoted-reply splitting rules.
 Otherwise (if it is a chat conversation with message bubbles), read the image from top to bottom. For each message bubble:
 
-1) Identify the Anchor (sender) using SPATIAL ALIGNMENT first, then color:
+1) Identify the Anchor (sender) using ONLY spatial/UI cues:
    - RIGHT-aligned bubble = "user" (You)
    - LEFT-aligned bubble = "them" (The Match)
-   - Color is corroboration:
-     - GRAY or WHITE usually maps to "them"
-     - BLUE, PURPLE, GREEN, or ORANGE usually maps to "user"
-   - If there are checkmarks (✓✓) or "Read" text under a bubble = "user".
+   - If there are checkmarks (✓✓), "Read", "Delivered", or other send-status text under a bubble = "user".
+   - If alignment is ambiguous, use nearby avatar placement, bubble tail direction, and message grouping continuity.
+   - NEVER use bubble color to determine sender.
 
 CRITICAL RULES:
    - DO NOT use the "meaning" of the words to decide who sent it.
-   - When alignment and color disagree, trust alignment and receipt markers over semantic guessing.
-   - A gray bubble can still be "user" in some themes if it is right-aligned with user receipt cues.
+   - When any cue disagrees, trust alignment and send-status markers over all other cues.
+   - Ignore bubble color completely because themes differ across apps.
    - The "latest message must be user" heuristic is forbidden. Use actual alignment.
 
 * Ignore the "Type a message..." input text bar entirely.
@@ -140,10 +139,19 @@ CRITICAL RULES:
    - If there is a nested/grey/indented faded quoted block at the TOP of the bubble, extract that quoted block text.
    - If there are multiple faded nested quote blocks at the top, extract all of them and join with newline.
    - If there is no quoted/faded block at the top, set quoted_context = null.
+   - Reply-quote segmentation cues (use these in combination):
+     - visual style shift: faded/smaller/grey text vs solid main text
+     - layout shift: quoted block appears at the top and main message appears below it
+     - separator cues: vertical bar, indent, quote glyph, rounded inset container, or divider spacing
+     - metadata cues: tiny sender/timestamp line inside the quoted region belongs to quoted_context
+   - Strip UI-only artifacts from quoted_context (reply icon, chevron, quote marker glyphs) but keep message words verbatim.
+   - Never duplicate the same text in both quoted_context and actual_new_message.
+   - If uncertain whether a line belongs to quote or fresh message, prefer assigning it to quoted_context and keep actual_new_message to the clearly fresh bottom-most solid text.
 
 3) Actual Message (actual_new_message):
    - Extract the bold/solid actual fresh message BELOW the quoted_context (the bottom-most solid text in the bubble).
    - actual_new_message MUST NOT include any faded/quoted text.
+   - If a bubble appears to be reply-only with no clearly fresh text, set actual_new_message to "" and preserve all visible referenced text in quoted_context.
 
 4) is_reply:
    - true iff quoted_context is not null and not empty.
