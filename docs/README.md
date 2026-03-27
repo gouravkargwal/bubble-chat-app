@@ -7,6 +7,7 @@ This folder is ready to publish with GitHub Pages for Play Console policy links.
 - `index.html` — landing page
 - `privacy-policy.html` — public privacy policy URL
 - `delete-account.html` — public account/data deletion URL
+- `child-safety-standards.html` — child safety / CSAE standards (Play social & dating category)
 
 ## Enable GitHub Pages
 
@@ -22,9 +23,11 @@ Your URLs will look like:
 
 - `https://<github-username>.github.io/<repo>/privacy-policy.html`
 - `https://<github-username>.github.io/<repo>/delete-account.html`
+- `https://<github-username>.github.io/<repo>/child-safety-standards.html`
 
 Use these in Google Play Console:
 
 - Data safety -> **Delete account URL**
 - Data safety -> **Delete data URL** (optional, can reuse delete-account URL)
 - Store listing -> **Privacy policy URL** (privacy-policy URL)
+- App content -> **Child safety standards URL** (child-safety-standards.html)
