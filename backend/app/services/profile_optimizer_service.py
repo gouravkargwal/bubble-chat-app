@@ -256,6 +256,12 @@ async def generate_blueprint(
         )
         existing = existing_result.scalar_one_or_none()
         if existing:
+            logger.info(
+                "profile_blueprint_llm_skipped_idempotent",
+                user_id=user_id,
+                idempotency_key=idempotency_key,
+                blueprint_id=existing.id,
+            )
             return await build_blueprint_response(existing)
 
     # --- Input validation ---------------------------------------------------
@@ -279,50 +285,46 @@ async def generate_blueprint(
 
     available_count = len(photos)
     system_prompt = (
-        "You are now a Cross-Platform Rizz Architect. Your job is to design a dating profile system that "
-        "works across Tinder, Bumble, Hinge, and Aisle — not just one app.\n\n"
-        "You MUST respond with JSON that strictly matches the provided JSON schema. "
-        "Do not include any commentary outside of the JSON.\n\n"
-        f"IMPORTANT: Provide all captions, hooks, bios, prompts, and any other text in the following "
-        f"language or dialect: {lang}.\n"
-        "If the language is 'Hinglish', use a mix of Hindi and English in Latin script and lean extra sassy/savage.\n"
-        "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
-        "Always match the cultural tone and norms of the requested language/dialect."
+        "You are an elite Cross-Platform Dating Profile Architect (Tinder, Bumble, Hinge, Aisle).\n"
+        f"LANGUAGE/DIALECT: {lang}\n"
+        "* Match cultural tone exactly.\n"
+        "* If 'Hinglish': Mix Hindi/English (Latin script), lean extra sassy/savage.\n"
+        "* If 'Gen-Z Slang': Use modern TikTok-era phrasing."
     )
 
     user_prompt = (
-        "You are given a JSON array of previously audited dating profile photos.\n"
-        "- Each object has fields: id, score (1-10), tier (GOD_TIER / FILLER / GRAVEYARD), "
-        "and brutal_feedback written by another coach.\n"
-        f"- You have exactly {available_count} photo(s). Use ALL of them — one slot per photo, no repeats.\n"
-        f"- `slot_number` must be 1 through {available_count} with no gaps or duplicates.\n"
-        "- Slot 1 MUST be the single best clear face shot for first impression.\n"
-        "- Optimize for status, charisma, social proof, and variety of settings while avoiding try-hard energy.\n"
-        "- Use the brutal_feedback notes as context but feel free to disagree if you have a better framing.\n"
-        "- For each photo, write:\n"
-        "  * `caption`: A short, high-status caption to sit under the photo.\n"
-        "  * `contextual_hook`: A short hook label for this photo (e.g. 'Parent Approval', 'Adventure Flex').\n"
-        "  * `hinge_prompt`: A ready-to-paste Hinge prompt answer inspired by this photo (max 150 chars). "
-        "Make it conversational and invite a reply. Include the prompt question and answer, e.g. "
-        "'My most controversial opinion → Brunch is just breakfast for people who overslept.'\n"
-        "  * `aisle_prompt`: A ready-to-paste Aisle prompt answer for this photo. "
-        "Aisle is relationship-focused — be warm, genuine, show depth. "
-        "e.g. 'A story behind this photo → Solo trip to Kyoto. Came back knowing I want someone to share the next one with.'\n"
-        "  * `coach_reasoning`: Brief explanation of why this photo gets this slot.\n"
-        "- Also include:\n"
-        "  * `overall_theme`: one sentence summarizing the vibe of the whole profile.\n"
-        "  * `bio`: a single punchy bio (max 500 chars) that works across Tinder, Bumble, Hinge, and Aisle. "
-        "Blend 2-3 specific fun facts with a confident, low-investment tone. No cringe, no desperation.\n"
-        "  * `universal_prompts`: exactly 3 hook objects usable on ANY app. Each has:\n"
-        "      - `category`: short label (e.g. 'Parent Approval', 'Low-Key Flex', 'Wingman Energy').\n"
-        "      - `suggested_text`: concrete text ready to paste into any prompt field.\n\n"
-        "Return ONLY a JSON object that matches the schema. Do not include any extra keys.\n\n"
-        "Audited photos JSON:\n"
+        f"Design a dating profile blueprint using these {available_count} audited photos.\n\n"
+        "RULES:\n"
+        f"* Use ALL {available_count} photos. `slot_number` MUST be 1 to {available_count} (no gaps/repeats).\n"
+        "* Slot 1: Best clear face shot for first impressions.\n"
+        "* Vibe: High-status, charismatic, social proof. No try-hard/desperate energy.\n"
+        "* Context: Use the provided `brutal_feedback` to inform your framing (disagree if you have a better angle).\n\n"
+        "SLOT REQUIREMENTS:\n"
+        "* `caption`: Short, high-status.\n"
+        "* `contextual_hook`: Short label (e.g., 'Parent Approval', 'Adventure Flex').\n"
+        "* `hinge_prompt`: Ready-to-paste, conversational (max 150 chars). Include prompt + answer (e.g., 'My most controversial opinion → Brunch is just breakfast for people who overslept.').\n"
+        "* `aisle_prompt`: Ready-to-paste, relationship-focused. Warm, genuine, showing depth.\n"
+        "* `coach_reasoning`: Brief explanation for this slot choice.\n\n"
+        "GLOBAL REQUIREMENTS:\n"
+        "* `overall_theme`: 1-sentence vibe summary.\n"
+        "* `bio`: Punchy cross-platform bio (max 500 chars). Blend 2-3 specific fun facts with a confident, low-investment tone.\n"
+        "* `universal_prompts`: Exactly 3 hooks usable on ANY app. Each needs a `category` (e.g., 'Low-Key Flex') and concrete `suggested_text`.\n\n"
+        "AUDITED PHOTOS JSON:\n"
         f"{photos_json}"
     )
 
     # --- LLM call -----------------------------------------------------------
     client = _get_client()
+
+    logger.info(
+        "profile_blueprint_llm_input",
+        user_id=user_id,
+        lang=lang,
+        idempotency_key=idempotency_key,
+        available_count=available_count,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+    )
 
     try:
         raw = await client.vision_generate(
@@ -333,6 +335,13 @@ async def generate_blueprint(
             model=settings.gemini_model,
             max_output_tokens=4096,
             response_schema=PROFILE_BLUEPRINT_SCHEMA,
+        )
+        logger.info(
+            "profile_blueprint_llm_output",
+            user_id=user_id,
+            idempotency_key=idempotency_key,
+            raw_chars=len(raw),
+            raw=raw,
         )
         parsed = json.loads(raw)
     except Exception as exc:  # pragma: no cover - defensive logging

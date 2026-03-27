@@ -32,6 +32,8 @@ from app.services.profile_auditor_service import (
     MAX_FILE_SIZE,
     PROFILE_AUDIT_SCHEMA,
     _score_to_tier,
+    build_profile_audit_system_prompt,
+    build_profile_audit_user_prompt,
 )
 
 logger = structlog.get_logger(__name__)
@@ -170,6 +172,12 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                         )
                     )
                 latest = list(existing_photos.values())[-1]
+                logger.info(
+                    "profile_audit_llm_skipped_cached_only",
+                    job_id=job_id,
+                    user_id=user_id,
+                    total_analyzed=len(image_hashes),
+                )
                 response = AuditResponse(
                     total_analyzed=len(image_hashes),
                     passed_count=sum(1 for p in cached_photos if p.tier == "GOD_TIER"),
@@ -194,21 +202,23 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                 progress_current=0,
             )
 
-            system_prompt = _build_system_prompt(lang)
+            system_prompt = build_profile_audit_system_prompt(lang)
             new_image_count = len(new_base64_images)
-            user_prompt = (
-                f"I am sending you exactly {new_image_count} dating profile photos.\n"
-                "Audit these photos in the order they are provided.\n"
-                "Return a JSON object that strictly matches the given schema.\n"
-                f"- `total_analyzed` MUST be {new_image_count}.\n"
-                "- The `photos` array MUST contain exactly one object per input image: no more, no fewer.\n"
-                "- Use `photo_id` values 'photo_1', 'photo_2', ..., in the same order as the images.\n"
-                "- Do NOT invent extra photos, do NOT skip any, and do NOT reuse IDs.\n"
-                "- `passed_count` should equal the number of photos you would actually recommend keeping on a profile.\n"
-                "Focus your text on Vibe, Lighting, Grooming, and Background for each photo."
-            )
+            user_prompt = build_profile_audit_user_prompt(new_image_count)
 
             client = _get_client()
+
+            logger.info(
+                "profile_audit_llm_input",
+                job_id=job_id,
+                user_id=user_id,
+                lang=lang,
+                new_image_count=new_image_count,
+                total_uploaded=len(image_hashes),
+                base64_payload_chars_total=sum(len(b) for b in new_base64_images),
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
 
             try:
                 raw_response = await client.vision_generate(
@@ -219,6 +229,13 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                     model=settings.gemini_model,
                     max_output_tokens=8192,
                     response_schema=PROFILE_AUDIT_SCHEMA,
+                )
+                logger.info(
+                    "profile_audit_llm_output",
+                    job_id=job_id,
+                    user_id=user_id,
+                    raw_chars=len(raw_response),
+                    raw=raw_response,
                 )
             except Exception as e:
                 logger.error("audit_worker_gemini_failed", job_id=job_id, error=str(e))
@@ -398,38 +415,3 @@ async def _cleanup_temp_images(image_keys: list[str]) -> None:
             await oci_delete(key)
         except Exception:
             pass
-
-
-def _build_system_prompt(lang: str) -> str:
-    """Build the system prompt for Gemini Vision audit."""
-    return (
-        "You are a brutally honest, elite dating profile auditor speaking in first person.\n"
-        "Your job is to protect the user from looking desperate or cringey.\n"
-        'Always use \'I\' statements (e.g. "I would swipe right...", "I can\'t see your face here...").\n'
-        "Evaluate each photo across four axes: Vibe, Lighting, Grooming, and Background.\n"
-        "- Vibe: body language, expression, confidence, try-hard vs relaxed.\n"
-        "- Lighting: natural vs harsh, shadows, blown-out highlights.\n"
-        "- Grooming: clothes, hair, hygiene, overall put-together-ness.\n"
-        "- Background: clutter, bathroom mirrors, messy rooms, distracting objects.\n"
-        "Be specific and visual in your feedback (e.g. \"You look like you're hiding from the sun in a basement. "
-        'Get some natural light and stand up straight."), not generic checklists.\n'
-        "Output must match the JSON schema exactly. Do NOT be polite. Give brutal, actionable feedback.\n\n"
-        f"IMPORTANT: Generate all feedback, score explanations, and improvement tips in the following "
-        f"language or dialect: {lang}.\n"
-        "If the language is 'Hinglish', use the Latin script and include Indian slang like 'Bhai', 'Mast', "
-        "'Cringe', or 'Chhapri' where it naturally fits the roast.\n"
-        "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
-        "Always match the cultural tone and norms of the requested language/dialect.\n\n"
-        "OVERALL ROAST LINE\n"
-        "After analyzing all photos, fill `roast_summary` with ONE punchy sentence about their overall "
-        "dating-photo vibe. Tone: 8/10 savage, funny, 2026 internet energy — playful, not bullying.\n"
-        "Draw from what you actually see (lighting, posing, backgrounds, try-hard vs low effort), not a "
-        "made-up persona label or title.\n\n"
-        "Score each photo on a strict 1-10 integer scale using this rubric:\n"
-        "  1-3: Face not visible, blurry, heavy filter, or group shot where subject is unclear.\n"
-        "  4-5: Visible face but poor lighting, bad background, unflattering angle, or low effort.\n"
-        "  6-7: Acceptable photo — decent lighting and background, presentable but nothing stands out.\n"
-        "  8-9: Strong photo — good lighting, clear face, confident body language, clean background.\n"
-        "  10: Exceptional — professional feel, magnetic presence, would make anyone stop scrolling.\n"
-        "Apply this rubric consistently. Do NOT output a tier field — only output the score."
-    )

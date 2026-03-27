@@ -25,6 +25,45 @@ from app.models.profile_auditor import AuditResponse, PhotoFeedback, PhotoTier
 logger = structlog.get_logger()
 
 
+def build_profile_audit_system_prompt(lang: str) -> str:
+    """Shared by `analyze_profile_photos` and `audit_worker.process_audit_job`."""
+    return (
+        "You are an elite, cynical dating coach. Your goal is to be a gatekeeper. "
+        "Most users have terrible photos; your job is to tell them the truth so they stop failing.\n\n"
+        "STRICT SCORING CEILINGS (DO NOT EXCEED):\n"
+        "* MAX 2/10: Bathroom/Gym/Elevator mirror selfies, messy rooms, or dirty mirrors.\n"
+        "* MAX 3/10: Hiding the face (sunglasses, masks, hands, looking away), or blurry/pixelated.\n"
+        "* MAX 4/10: Car selfies, bed selfies, or 'stiff' headshots with no personality.\n"
+        "* MAX 5/10: Group shots where it is not 100% clear who the user is within 1 second.\n\n"
+        "SCORING RUBRIC:\n"
+        "* 1-3: Immediate Left Swipe. Low status, high cringe, or lazy.\n"
+        "* 4-6: The 'Friend Zone'. Fine for Instagram, but invisible on dating apps.\n"
+        "* 7-8: Solid. Shows face, lifestyle, and effort. Clear 'Right Swipe' territory.\n"
+        "* 9-10: Elite. Professional quality, magnetic energy, high social proof.\n\n"
+        f"LANGUAGE/DIALECT: {lang}\n"
+        "* Use savage 2026 internet slang. If Hinglish, use 'Chhapri', 'Larka', 'Bhai'.\n"
+        "* Use 'I' statements. Be the person swiping, not a robot checking boxes.\n\n"
+        "ROAST SUMMARY (`roast_summary`):\n"
+        "* One devastatingly honest sentence. No 'keep trying' or 'you have potential'. Just the raw vibe."
+    )
+
+
+def build_profile_audit_user_prompt(new_image_count: int) -> str:
+    """Shared by `analyze_profile_photos` and `audit_worker.process_audit_job`."""
+    return (
+        f"Audit these {new_image_count} photos. "
+        "Be a hater. If it isn't an 8/10, it's a failure.\n"
+        f"* `total_analyzed` MUST be {new_image_count}.\n"
+        f"* `photos`: exactly {new_image_count} objects, in the SAME ORDER as the images were sent (first image = first object).\n"
+        f"* `photo_id` MUST be exactly `photo_1`, `photo_2`, ... `photo_{new_image_count}` only. "
+        "Never use filenames, hashes, or invented labels.\n"
+        "* `passed_count`: ONLY count photos with a score of 8 or higher.\n"
+        "* `brutal_feedback`: 100% roast. Why does this photo kill their attraction?\n"
+        "* BANNED WORDS: Do not use 'decent', 'acceptable', 'not bad', or 'okay'. If a photo is not an 8, it is a failure. Explain the failure with zero sugar-coating.\n"
+        "* `improvement_tip`: Exactly what to change physically to make it a 9/10."
+    )
+
+
 PROFILE_AUDIT_SCHEMA: dict = {
     "type": "OBJECT",
     "properties": {
@@ -43,7 +82,13 @@ PROFILE_AUDIT_SCHEMA: dict = {
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "photo_id": {"type": "STRING"},
+                    "photo_id": {
+                        "type": "STRING",
+                        "description": (
+                            "Exactly photo_1 for the first image, photo_2 for the second, etc. "
+                            "Same order as input. No filenames, hashes, or descriptive slugs."
+                        ),
+                    },
                     "score": {
                         "type": "INTEGER",
                         "minimum": 1,
@@ -164,6 +209,12 @@ async def analyze_profile_photos(
 
         # Use roast line from the most recent matching photo if available.
         latest_existing = list(existing_photos.values())[-1]
+        logger.info(
+            "profile_audit_llm_skipped_cached_only",
+            user_id=str(user.id),
+            idempotency_key=idempotency_key,
+            total_analyzed=len(image_hashes),
+        )
         return AuditResponse(
             total_analyzed=len(image_hashes),
             passed_count=sum(1 for p in cached_photos if p.tier == "GOD_TIER"),
@@ -173,52 +224,23 @@ async def analyze_profile_photos(
         )
 
     # Only call Gemini for new images
-    system_prompt = (
-        "You are a brutally honest, elite dating profile auditor speaking in first person.\n"
-        "Your job is to protect the user from looking desperate or cringey.\n"
-        'Always use \'I\' statements (e.g. "I would swipe right...", "I can\'t see your face here...").\n'
-        "Evaluate each photo across four axes: Vibe, Lighting, Grooming, and Background.\n"
-        "- Vibe: body language, expression, confidence, try-hard vs relaxed.\n"
-        "- Lighting: natural vs harsh, shadows, blown-out highlights.\n"
-        "- Grooming: clothes, hair, hygiene, overall put-together-ness.\n"
-        "- Background: clutter, bathroom mirrors, messy rooms, distracting objects.\n"
-        "Be specific and visual in your feedback (e.g. \"You look like you're hiding from the sun in a basement. "
-        'Get some natural light and stand up straight."), not generic checklists.\n'
-        "Output must match the JSON schema exactly. Do NOT be polite. Give brutal, actionable feedback.\n\n"
-        f"IMPORTANT: Generate all feedback, score explanations, and improvement tips in the following "
-        f"language or dialect: {lang}.\n"
-        "If the language is 'Hinglish', use the Latin script and include Indian slang like 'Bhai', 'Mast', "
-        "'Cringe', or 'Chhapri' where it naturally fits the roast.\n"
-        "If it is 'Gen-Z Slang', use modern internet slang and TikTok-era phrasing.\n"
-        "Always match the cultural tone and norms of the requested language/dialect.\n\n"
-        "OVERALL ROAST LINE\n"
-        "After analyzing all photos, fill `roast_summary` with ONE punchy sentence about their overall "
-        "dating-photo vibe. Tone: 8/10 savage, funny, 2026 internet energy — playful, not bullying.\n"
-        "Draw from what you actually see (lighting, posing, backgrounds, try-hard vs low effort), not a "
-        "made-up persona label or title.\n\n"
-        "Score each photo on a strict 1-10 integer scale using this rubric:\n"
-        "  1-3: Face not visible, blurry, heavy filter, or group shot where subject is unclear.\n"
-        "  4-5: Visible face but poor lighting, bad background, unflattering angle, or low effort.\n"
-        "  6-7: Acceptable photo — decent lighting and background, presentable but nothing stands out.\n"
-        "  8-9: Strong photo — good lighting, clear face, confident body language, clean background.\n"
-        "  10: Exceptional — professional feel, magnetic presence, would make anyone stop scrolling.\n"
-        "Apply this rubric consistently. Do NOT output a tier field — only output the score."
-    )
-
     new_image_count = len(new_base64_images)
-    user_prompt = (
-        f"I am sending you exactly {new_image_count} dating profile photos.\n"
-        "Audit these photos in the order they are provided.\n"
-        "Return a JSON object that strictly matches the given schema.\n"
-        f"- `total_analyzed` MUST be {new_image_count}.\n"
-        "- The `photos` array MUST contain exactly one object per input image: no more, no fewer.\n"
-        "- Use `photo_id` values 'photo_1', 'photo_2', ..., in the same order as the images.\n"
-        "- Do NOT invent extra photos, do NOT skip any, and do NOT reuse IDs.\n"
-        "- `passed_count` should equal the number of photos you would actually recommend keeping on a profile.\n"
-        "Focus your text on Vibe, Lighting, Grooming, and Background for each photo."
-    )
+    system_prompt = build_profile_audit_system_prompt(lang)
+    user_prompt = build_profile_audit_user_prompt(new_image_count)
 
     client = _get_client()
+
+    logger.info(
+        "profile_audit_llm_input",
+        user_id=str(user.id),
+        lang=lang,
+        idempotency_key=idempotency_key,
+        new_image_count=new_image_count,
+        total_uploaded=len(image_hashes),
+        base64_payload_chars_total=sum(len(b) for b in new_base64_images),
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+    )
 
     try:
         raw = await client.vision_generate(
@@ -229,6 +251,13 @@ async def analyze_profile_photos(
             model=settings.gemini_model,
             max_output_tokens=8192,
             response_schema=PROFILE_AUDIT_SCHEMA,
+        )
+        logger.info(
+            "profile_audit_llm_output",
+            user_id=str(user.id),
+            idempotency_key=idempotency_key,
+            raw_chars=len(raw),
+            raw=raw,
         )
     except Exception as e:  # pragma: no cover - defensive logging
         logger.error(
