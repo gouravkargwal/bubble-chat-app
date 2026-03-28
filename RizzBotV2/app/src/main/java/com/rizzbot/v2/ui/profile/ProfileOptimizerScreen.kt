@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -234,50 +235,22 @@ private fun IdleOptimizerCard(
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = CardBg),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            shape = RoundedCornerShape(20.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                    .padding(horizontal = 22.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                // Header with icon
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "Auto-Build Profile",
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "AI-powered profile builder",
-                            color = Color(0xFFB0B0D0),
-                            fontSize = 13.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Uses your audited photos to produce slot order, captions, and cross-app prompts. No new uploads.",
+                    color = Color(0xFF9FA0BF),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
 
                 BlueprintLanguageRow(
                     selectedLanguage = selectedLanguage,
@@ -285,38 +258,22 @@ private fun IdleOptimizerCard(
                     enabled = true
                 )
 
-                // Main description
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "What it does:",
+                        text = "How it works",
                         color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Cookd analyzes your audited photos and automatically creates a complete dating profile blueprint. We'll select your best 6 photos, order them strategically, craft compelling captions, and provide universal hooks that work across Tinder, Bumble, and Hinge.",
-                        color = Color(0xFFB0B0D0),
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    )
-                    
-                    Spacer(modifier = Modifier.height(4.dp))
-                    
-                    Text(
-                        text = "How it works:",
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.3.sp
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FeatureBullet("Uses only photos you've already audited")
-                        FeatureBullet("AI analyzes photo quality, angles, and appeal")
-                        FeatureBullet("Creates a strategic photo order for maximum impact")
-                        FeatureBullet("Generates captions and hooks tailored to your style")
+                        FeatureBullet("Pulls from photos you’ve already run through Photo Audit")
+                        FeatureBullet("Orders slots using scores and feedback text only")
+                        FeatureBullet("Writes captions and Hinge/Aisle-style prompts in your chosen language")
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Button(
                     onClick = onGenerate,
@@ -433,16 +390,11 @@ private fun SuccessState(
     ) {
         item {
             Text(
-                text = "Profile Blueprint",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
                 text = blueprint.overallTheme,
-                color = Color(0xFFB0B0D0),
-                fontSize = 14.sp
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 26.sp
             )
             Spacer(modifier = Modifier.height(16.dp))
             BlueprintLanguageRow(
