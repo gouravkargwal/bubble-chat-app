@@ -57,11 +57,17 @@ class VisionNodeOutput(BaseModel):
     )
     visual_hooks: list[str] = Field(
         default_factory=list,
-        description="3-4 specific physical or environmental details from photos.",
+        description=(
+            "3-4 specific physical or environmental details from photos; on profiles scan "
+            "all screenshots for outfits, settings, props."
+        ),
     )
     detected_dialect: str = Field(
         default="ENGLISH",
-        description="ENGLISH, HINDI, or HINGLISH based on her most recent message.",
+        description=(
+            "ENGLISH, HINDI, or HINGLISH. Chat: match her latest message. Profile: dominant mix "
+            "across all visible profile text."
+        ),
     )
     their_tone: str = Field(default="neutral")
     their_effort: str = Field(default="medium")
@@ -69,16 +75,28 @@ class VisionNodeOutput(BaseModel):
     archetype_reasoning: str = Field(
         default="",
         description=(
-            "2-3 sentence reasoning for archetype selection. If visual evidence in the "
-            "chat screenshot contradicts Core Lore and you prioritize visuals, explicitly "
-            "state that contradiction and that visual evidence overrode Lore."
+            "2-3 sentences. Chat: structure of her latest message. Profile: cite multiple "
+            "prompts/bio elements. If chat visuals contradict Core Lore, say you prioritized visuals."
         ),
     )
     detected_archetype: str = Field(default="THE WARM/STEADY")
-    key_detail: str = Field(default="")
+    key_detail: str = Field(
+        default="",
+        description=(
+            "Chat: one hook from her newest bubble. Profile: the single best opener hook "
+            "anywhere (funny, vulnerable, controversial, story) — not only the last OCR line."
+        ),
+    )
     person_name: str = Field(default="unknown")
     stage: str = Field(default="early_talking")
-    their_last_message: str = Field(default="")
+    their_last_message: str = Field(
+        default="",
+        description=(
+            "Chat: paraphrase of her latest message; append double-text note if user's bubble is last. "
+            "Profile: holistic 1-2 sentence vibe summary of the whole profile (buffet of angles), "
+            "not one-line paraphrase."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

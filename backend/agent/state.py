@@ -67,10 +67,21 @@ class StrategyOutput(BaseModel):
 
 
 class ReplyOption(BaseModel):
-    text: str
-    strategy_label: StrategyLabel
-    is_recommended: bool
-    coach_reasoning: str
+    text: str = Field(
+        description=(
+            "The outbound message. Follow dialect enforcement and formatting rules from the system prompt "
+            "(e.g., lowercase, no proper punctuation)."
+        )
+    )
+    strategy_label: StrategyLabel = Field(
+        description="Dominant tactic for this reply; must match what the text actually does."
+    )
+    is_recommended: bool = Field(
+        description="True for exactly one reply — the single best option to send."
+    )
+    coach_reasoning: str = Field(
+        description="One short sentence: why this angle fits context and archetype."
+    )
 
 
 class WriterOutput(BaseModel):

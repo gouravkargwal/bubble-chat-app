@@ -198,12 +198,14 @@ async def list_profile_audits(
 
     items: list[AuditedPhotoItem] = []
     for row in rows:
-        # Generate signed URL; skip row on OCI failure instead of failing entire request
+        # Always return the row so pagination (limit/offset) stays consistent with
+        # total_count. Empty image_url if signing fails — otherwise the client treats a
+        # short page as the last page and never loads older audits.
+        image_url = ""
         try:
             image_url = await oci_get_signed_url(row.storage_path)
         except Exception as e:
             logger.warning("history_par_failed", photo_id=row.id, error=str(e)[:200])
-            continue
         items.append(
             AuditedPhotoItem(
                 id=row.id,

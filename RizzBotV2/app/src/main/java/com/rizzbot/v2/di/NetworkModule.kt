@@ -30,10 +30,12 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+        // generate_v2 can run 60s+ (multi-image vision + generator + auditor). A 60s read
+        // timeout causes SocketTimeoutException on the client while the server still succeeds.
         return OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(180, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .apply {
                 if (BuildConfig.DEBUG) {

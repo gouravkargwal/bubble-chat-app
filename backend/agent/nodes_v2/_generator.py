@@ -21,6 +21,7 @@ from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._post_processor import validate_and_fix_replies
 from agent.nodes_v2._shared import (
     GENERATOR_MODEL,
+    opener_hook_priority,
     transcript_text_from_analysis,
     sanitize_llm_messages_for_logging,
 )
@@ -46,19 +47,28 @@ class GeneratorOutput(BaseModel):
     """Combined strategy + writer output from a single call with structured output."""
 
     # Strategy thinking
-    wrong_moves: list[str] = Field(description="2-3 moves to avoid given the context.")
-    right_energy: str = Field(description="Single best tone phrase.")
-    hook_point: str = Field(description="The specific topic or detail to build around.")
+    wrong_moves: list[str] = Field(
+        description="2-3 concrete anti-patterns or vibes to avoid for this exact context."
+    )
+    right_energy: str = Field(
+        description="Single phrase naming the tone/energy the set of replies should embody."
+    )
+    hook_point: str = Field(
+        description="The main specific detail, tension, or thread to build around (named explicitly)."
+    )
     recommended_strategy_label: StrategyLabel = Field(
         description=(
-            "ONE of: PUSH-PULL, FRAME CONTROL, SOFT CLOSE, VALUE ANCHOR, PATTERN INTERRUPT, HONEST FRAME. "
-            "If double-texting, prioritize PATTERN INTERRUPT or VALUE ANCHOR to re-engage."
+            "The headline strategy for the recommended reply. "
+            "If double-texting, favor PATTERN INTERRUPT or VALUE ANCHOR to re-engage."
         )
     )
 
     # Writer output — exactly 4 reply options
     replies: list[ReplyOption] = Field(
-        description="Exactly 4 reply options. Exactly ONE must have is_recommended=true."
+        description=(
+            "Exactly 4 reply options. Exactly ONE must have is_recommended=true. "
+            "Four genuinely different angles — no repeated hook or parallel phrasing."
+        )
     )
 
 
@@ -67,38 +77,38 @@ class GeneratorOutput(BaseModel):
 # ---------------------------------------------------------------------------
 
 _GENERATOR_CORE_PROMPT = """
-You are a dating text coach. Process the input JSON payload in 3 sequential phases to generate exactly 4 distinct replies.
+You are a dating text coach. Process the input JSON payload in three phases: decide strategy, write exactly four distinct replies, then self-check every reply against the constraints below. Structured field names, counts, and reply shape are enforced by the output schema — focus your attention on psychology, tactics, and dialect.
 
 {custom_hint_section}
+{dialect_enforcement}
 
 PHASE 1: STRATEGY & LOGIC
-Analyze the payload. Output: wrong_moves (2-3), right_energy, hook_point, recommended_strategy_label.
+Analyze the payload and encode your conclusions in the strategy fields (schema).
 * Source of Truth: visual_transcript > core_lore. If they conflict, trust the transcript.
 * Double-Text Check: If analysis.their_last_message contains "[Note: User already replied with: ...]", DO NOT answer her previous message. Write a follow-up/nudge building on the user's last text.
 * Archetypes & Overrides:
     * THE WARM/STEADY (Default): Friendly, engaged. Mix PUSH-PULL, VALUE ANCHOR, FRAME CONTROL. Light tease, but mostly fun/confident. NO heavy sarcasm/cockiness.
     * ESCALATION: If temperature="hot" AND mentions logistics -> "SOFT CLOSE".
-    * INTENTIONS OVERRIDE: If talking dating goals/marriage -> Treat as GUARDED/TESTER. Use HONEST FRAME. wrong_moves: being evasive. No banter.
-    * VULNERABLE OVERRIDE: If tone="upset"/"vulnerable" -> No teasing. Use HONEST FRAME/VALUE ANCHOR. Prioritize steadiness.
+    * INTENTIONS OVERRIDE: If talking dating goals/marriage -> Treat as GUARDED/TESTER. Use HONEST FRAME. Among moves to avoid: being evasive. No banter.
+    * VULNERABLE OVERRIDE: If tone="upset"/"vulnerable" -> No heavy teasing. Prioritize steadiness, but DO NOT write 4 identical therapeutic replies. Mix it up: Acknowledge it directly (HONEST FRAME), pivot the topic to relieve pressure (FRAME CONTROL), or ask a gentle question about what earns her trust (PUSH-PULL).
     * CONVERSION RULE: ONLY use "SOFT CLOSE" (or ask for number) if effort=HIGH or temperature=HOT. If LOW-INVESTMENT: spark curiosity, zero eager validation.
 * Strategy Labels: PUSH-PULL (tension/interest/withdrawal), FRAME CONTROL (lead/redefine dynamic), SOFT CLOSE (escalate to plans/number), VALUE ANCHOR (substance/proof), PATTERN INTERRUPT (unexpected), HONEST FRAME (direct/sincere).
 
-PHASE 2: WRITE 4 REPLIES
-Output 4 reply objects: text, strategy_label, is_recommended (EXACTLY ONE true), coach_reasoning.
-* Language & Style: Write EXACTLY in detected_dialect (ENGLISH = lowercase only, no Hinglish; HINGLISH = Romanized Hindi-English mix). Match their vocab (e.g., "yaar").
+PHASE 2: WRITE REPLIES
 * Formatting: NO PROPER PUNCTUATION (no apostrophes, commas, periods, ? or !). Lowercase only ("dont", "im").
 * Mirroring: Match her length or be shorter. Max 1 question per reply. If she gives low effort, give low effort back.
 * Tactics:
+    * Strategic Diversity (CRITICAL): Do NOT just paraphrase the same semantic idea four times. Every reply must offer a completely different conversational path. For example: Reply 1 can be deep and empathetic. Reply 2 must pivot to a lighter topic. Reply 3 must ask a question about her boundaries. If your 4 replies mean the exact same thing, you fail.
     * Tension Suspension: NEVER confirm/deny playful accusations. Suspend tension.
     * Vibe Continuity: Use voice_dna_dict. Do not switch styles.
-    * Freshness: Do not repeat conversation_context_dict tactics. 4 genuinely different angles.
+    * Freshness: Do not repeat conversation_context_dict tactics. Four genuinely different angles.
     * Direction (Quick Reply): Standard reply, bounce ball back with a hook (tease, assumption, challenge). No dead statements.
 
 PHASE 3: AUDIT & FILTER (Strict Constraints)
 Before finalizing, ensure all 4 replies pass these checks:
-* Relevant: Responds to transcript_text and honors user_custom_hint. Direction matches (e.g., "opener" uses a visual_hook).
+* Relevant: Responds to transcript_text and honors user_custom_hint. Opener direction: follow payload.opener_hook_priority and the OPENER rules in direction_rules (text-first vs visual-first is dynamic).
 * Grounded: No corporate/therapy speak. Cannot be a generic line sent to anyone (needs a concrete hook).
-* Structured: Diverse shapes across the 4 replies. Each has an easy response path (fork test).
+* Reply craft: Diverse shapes across the four replies; each leaves an easy response path (fork test).
 * Forbidden Phrases: No robotic fillers ("id love to", "i appreciate"). No dead openers ("hey", "hi", "so"). No starting with "haha", "hehe", "lol" unless directly reacting to a specific line. No lazy mirrors ("what about you"). No stacking 2+ questions.
 
 {archetype_rules}
@@ -138,7 +148,7 @@ ARCHETYPE STRATEGY — THE GUARDED/TESTER:
 * Labels: Prioritize HONEST FRAME and VALUE ANCHOR.
 * Tone: High-status sincerity. Clear and direct without oversharing.
 * Restrictions: STRICT NO deflection/jokes. STRICT NO PUSH-PULL/sarcasm (reads as avoidance).
-* Requirement: `wrong_moves` MUST include "being evasive" and "deflecting with humor".""",
+    * Requirement: Among moves to avoid, MUST include "being evasive" and "deflecting with humor".""",
 
     "THE EAGER/DIRECT": """
 ARCHETYPE STRATEGY — THE EAGER/DIRECT:
@@ -164,9 +174,10 @@ ARCHETYPE STRATEGY — THE LOW-INVESTMENT:
 _DIRECTION_PROMPTS: dict[str, str] = {
     "opener": """
 DIRECTION — OPENER:
-* Goal: "Reaction Comment" for a photo using `visual_hooks`. Playful assumptions based on visual details.
-* Restrictions: FORBIDDEN: "hi", "hey", "hello". FORBIDDEN: Generic looks compliments ("cute"). FORBIDDEN: Dead prompts ("hows your day"). 
-* Requirement: 4 diverse hooks. Do not repeat the same detail.""",
+* OPENER STRATEGY: If profile or chat text gives high-value material (vulnerabilities, strong opinions, specific stories, emotionally loaded lines), prioritize reacting to that text first. ONLY lean on `visual_hooks` (clothes, background, objects) when the text is boring, empty, or clearly low-investment. When `opener_hook_priority` is "text_first", text-led replies are correct even if they skip a visual detail. When it is "visual_first", spread distinct visual hooks across replies. When "either", use the strongest concrete hooks available (text and/or visual).
+* Goal: Specific "reaction comment" energy — playful assumptions, callbacks, or sincere engagement — never a generic greeting.
+* Restrictions: FORBIDDEN: "hi", "hey", "hello". FORBIDDEN: Generic looks compliments ("cute"). FORBIDDEN: Dead prompts ("hows your day").
+* Requirement: Four genuinely different angles; do not repeat the same hook or paraphrase the same detail twice.""",
 
     "quick_reply": """
 DIRECTION — QUICK REPLY:
@@ -214,8 +225,17 @@ DIRECTION — DE-ESCALATE:
 }
 
 
+def _dialect_enforcement_block(detected_dialect: str) -> str:
+    d = (detected_dialect or "ENGLISH").strip().upper()
+    if d == "HINGLISH":
+        return """DIALECT ENFORCEMENT: The detected dialect is HINGLISH. You MUST weave Romanized Hindi into EVERY reply (e.g., yaar, matlab, samajh, waisa, bilkul, thoda, bas, acha). ZERO purely standard-English replies are allowed — each line needs visible Hinglish texture that matches how she mixes languages. If you ship a reply that could be sent unchanged to an American texting in clean English only, you failed."""
+    if d == "HINDI":
+        return """DIALECT ENFORCEMENT: The detected dialect is HINDI. Match her level of English vs Hindi and her script choice; do not default to stiff textbook English or generic therapy English."""
+    return """DIALECT ENFORCEMENT: The detected dialect is ENGLISH. No Romanized Hindi or Hinglish unless she clearly codeswitches that way. Casual lowercase style."""
+
+
 def _build_generator_prompt(
-    detected_archetype: str, direction: str, custom_hint: str
+    detected_archetype: str, direction: str, custom_hint: str, detected_dialect: str
 ) -> str:
     """Build the generator system prompt with only the relevant archetype and direction rules."""
     archetype_rules = _ARCHETYPE_PROMPTS.get(
@@ -230,7 +250,7 @@ def _build_generator_prompt(
             "USER-SPECIFIC REQUEST — HIGHEST PRIORITY\n"
             "══════════════════════════════════════\n"
             f"The user asked for this angle (verbatim intent): {hint!r}\n"
-            "- Strategy (wrong_moves, hook_point) and all 4 replies MUST reflect this.\n"
+            "- Strategy and all four replies MUST reflect this.\n"
             "- Do not treat it as optional flavor; it is the main creative brief.\n"
             "- Still ground replies in transcript_text and archetype rules.\n"
         )
@@ -241,6 +261,7 @@ def _build_generator_prompt(
         archetype_rules=archetype_rules,
         direction_rules=direction_rules,
         custom_hint_section=custom_hint_section,
+        dialect_enforcement=_dialect_enforcement_block(detected_dialect),
     )
 
 
@@ -322,6 +343,8 @@ def generator_node(state: AgentState) -> dict:
         "conversation_context_dict": conversation_context,
         "user_custom_hint": custom_hint,
     }
+    if direction == "opener":
+        payload["opener_hook_priority"] = opener_hook_priority(analysis, transcript_text)
 
     # --- On rewrite: inject the previous drafts + auditor feedback ---
     if is_rewrite:
@@ -339,7 +362,10 @@ def generator_node(state: AgentState) -> dict:
         )
 
     # --- Build conditional prompt (only relevant archetype + direction injected) ---
-    system_prompt = _build_generator_prompt(detected_archetype, direction, custom_hint)
+    detected_dialect = getattr(analysis, "detected_dialect", "ENGLISH") or "ENGLISH"
+    system_prompt = _build_generator_prompt(
+        detected_archetype, direction, custom_hint, str(detected_dialect)
+    )
 
     t_call = time.monotonic()
     phase = "v2_generator_rewrite" if is_rewrite else "v2_generator"

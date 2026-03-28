@@ -2,7 +2,7 @@
 Shared constants, helpers, and utilities for V2 agent nodes.
 """
 
-from typing import cast, Any
+from typing import Any, Literal, cast
 import asyncio
 import base64
 
@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.config import settings
 from app.services.memory_service import get_match_context
 from app.infrastructure.database.engine import librarian_async_session
-from agent.state import AgentState
+from agent.state import AgentState, AnalystOutput
 
 logger = structlog.get_logger(__name__)
 
@@ -47,6 +47,44 @@ _MIME_SIGNATURES: list[tuple[bytes, str]] = [
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# Substrings that suggest bio/chat text worth prioritizing over pure visual openers.
+_OPENER_TEXT_SIGNALS: tuple[str, ...] = (
+    "trust",
+    "anxiety",
+    "honest",
+    "hurt",
+    "scared",
+    "therapy",
+    "mental",
+    "depress",
+    "anxious",
+    "issue",
+    "feel ",
+    "vulnerab",
+    "opinion",
+    "believe",
+    "politic",
+    "controvers",
+)
+
+
+def opener_hook_priority(
+    analysis: AnalystOutput, transcript_text: str
+) -> Literal["text_first", "visual_first", "either"]:
+    """
+    For opener direction: prefer reacting to substantive profile/bio text vs visual_hooks.
+    Keeps generator and auditor aligned so text-led openers are not failed for skipping glasses/color.
+    """
+    t = (transcript_text or "").strip().lower()
+    hooks = [h for h in (getattr(analysis, "visual_hooks", None) or []) if str(h).strip()]
+    text_signals = any(s in t for s in _OPENER_TEXT_SIGNALS)
+    substantive = len(t) >= 40
+    if (text_signals or substantive) and len(t) >= 8:
+        return "text_first"
+    if len(hooks) >= 2:
+        return "visual_first"
+    return "either"
 
 
 def truncate(val: Any, max_len: int = 220) -> Any:

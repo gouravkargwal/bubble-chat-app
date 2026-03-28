@@ -86,14 +86,16 @@ def _is_provider_timeout(exc: BaseException) -> bool:
     return False
 
 
-# Copied from `agent/nodes_v2/_vision.py` so the v2 endpoint can run the full
-# Vision Node LLM call before hybrid stitching.
-VISION_NODE_SYSTEM_PROMPT = """
-You are a chat/profile screenshot analyzer. Process the image strictly in 3 sequential steps. Output a complete JSON object.
+# Vision system prompt: Steps 1–2 are shared; Step 3 branches on request direction (see
+# `build_vision_system_prompt`). Copied pattern supports the v2 endpoint vision call before
+# hybrid stitching.
+
+_VISION_SYSTEM_PROMPT_STEPS_1_2 = """
+You are a chat/profile screenshot analyzer. Process the image(s) strictly in 3 sequential steps. Output a complete JSON object.
 
 STEP 1: VALIDATION
-Determine if the image is valid.
-* is_valid_chat: true ONLY IF the image contains chat bubbles OR is a dating app profile. Else false (e.g., random photos, menus).
+Determine if the image(s) are valid.
+* is_valid_chat: true ONLY IF the image(s) show a chat conversation OR dating app profile (same thread across multiple screenshots counts as one valid chat). Else false (e.g., random photos, menus).
 * bouncer_reason: Brief reason for your boolean decision.
 * Stop here and return empty arrays/null for all other fields if is_valid_chat is false.
 
@@ -106,17 +108,24 @@ If valid, extract verbatim text (including emojis/punctuation). Do not translate
     * actual_new_message: The solid text below quotes. Must NOT include quoted text.
     * is_reply: true if quoted_context is not null.
 
+"""
+
+# STEP 3 when direction is not "opener" (chat / reply modes): strict thread semantics + profile fallback.
+_VISION_STEP_3_CHAT_MODE = """
 STEP 3: ANALYSIS (VISUAL GROUND TRUTH ONLY)
 Use only visible evidence. Never assume "them"'s questions/accusations are factual truths about the user.
 Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_new_message).
-Base the following fields strictly on "them"'s most recent actual_new_message (unless noted):
 
-* visual_hooks: List 3-4 physical/environmental details from visible photos (empty list if no photos).
-* detected_dialect: ENGLISH, HINDI, or HINGLISH.
-* their_tone: excited / playful / flirty / neutral / dry / upset / testing / vulnerable / sarcastic
-* their_effort: high / medium / low
-* conversation_temperature: hot / warm / lukewarm / cold
-* archetype_reasoning: 2-3 sentences. First, count words in her latest message. Then analyze message structure (question, statement, emoji, filler) and effort before assigning an archetype.
+Fields for BOTH modes:
+* visual_hooks: List 3-4 physical/environmental details from visible photos (empty list if no photos). On profiles, mine every photo across all screenshots (outfit, setting, props, vibe).
+* detected_dialect: ENGLISH, HINDI, or HINGLISH — match her dominant language/mix across the visible text.
+* person_name: Match's first name from UI header/profile (else "unknown").
+* stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument (profiles without a thread are usually new_match or opening).
+
+IF CHAT CONVERSATION (real chat bubbles with user/them alignment):
+* Base key_detail, their_last_message, and their_tone STRICTLY on her absolute newest message at the bottom of the thread (the latest bubble from "them" unless the very last bubble in the UI is the user — then follow the double-text rule below).
+* their_effort, conversation_temperature: From that latest message and immediate context.
+* archetype_reasoning: 2-3 sentences. Count words in her latest message; analyze structure (question, statement, emoji, filler) before picking an archetype.
 * detected_archetype (Pick EXACTLY ONE):
     * THE BANTER GIRL: Explicit sarcasm, playful accusations, or flipping questions. (Not just "haha nice").
     * THE INTELLECTUAL: 15+ words WITH a substantive topic, opinion, or deep question.
@@ -124,36 +133,131 @@ Base the following fields strictly on "them"'s most recent actual_new_message (u
     * THE GUARDED/TESTER: Screening questions (e.g., "what are you looking for", "are you serious").
     * THE EAGER/DIRECT: Forward interest, suggesting meets, explicit flirting.
     * THE LOW-INVESTMENT: <4 words of filler ("haha", "ok"). If 5+ words or any question, DO NOT pick this.
-* key_detail: One specific thing to hook into from her latest message.
+* key_detail: One concrete hook drawn from that newest message.
+* their_last_message: Short paraphrase of her latest message. If the absolute final message in the chat belongs to "user", append exactly: " [Note: User already replied with: '<insert user's last message>']"
+
+IF DATING PROFILE (no chat thread — prompts, bio fragments, photo captions, Bumble/Hinge-style cards only):
+* Do NOT anchor analysis on the last line of extracted text only. Treat the profile as a buffet: read ALL prompts, bios, and visible copy across every screenshot.
+* key_detail: Pick the SINGLE strongest opener hook anywhere on the profile — prioritize interesting, funny, controversial, story-driven, or emotionally vulnerable lines (e.g. a quirky prompt beat, trust issues, a bold rule). It may come from an early prompt, a photo caption, or the middle of the bio — not necessarily the last OCR line.
+* their_last_message: Summarize her overall profile vibe, energy, and what she signals she wants (playful, guarded, romantic, chaotic, etc.). This is NOT a paraphrase of one line; it is a holistic one- or two-sentence read so the reply model can choose among many angles. Do NOT use the chat double-text note here.
+* their_tone: Infer from the dominant emotional signal across the whole profile (not from one trailing fragment).
+* their_effort: high if many prompts are filled with substance; medium/low if sparse or generic.
+* conversation_temperature: hot / warm / lukewarm / cold from overall flirtiness and openness across the profile.
+* archetype_reasoning: 2-3 sentences citing multiple profile elements (which prompts, what patterns). Do not reduce to "word count on last line."
+* detected_archetype: Same enum as chat; choose based on how she presents across prompts and bio as a whole (e.g. vulnerable bio + playful prompts → weigh the mix honestly).
+"""
+
+# STEP 3 when direction == "opener": profile-first; no chronological chat tail bias.
+_VISION_STEP_3_OPENER_PROFILE_BUFFET = """
+STEP 3: ANALYSIS (PROFILE BUFFET MODE)
+You are analyzing a dating profile to find the best possible conversation starters. There is no chronological "chat" happening yet. Treat the screenshots as a buffet of information.
+
+Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_new_message) as in Step 2.
+
+* visual_hooks: Scan ALL screenshots. List 3-4 specific physical/environmental details (e.g., "red dress with balloons", "holding a matcha latte", "wearing large round glasses").
+* detected_dialect: ENGLISH, HINDI, or HINGLISH. Base this on the dominant mix across all visible profile text.
+* their_tone: The overall vibe of their profile prompts/bio.
+* their_effort: high / medium / low based on how much they wrote.
+* conversation_temperature: warm (default for profiles).
+* archetype_reasoning: 2-3 sentences analyzing multiple prompts, bio elements, and photo vibes to assign an archetype.
+* detected_archetype: Base this on the holistic tone of the profile.
+* key_detail: Scan ALL extracted text prompts and bios. Pick the single most interesting, controversial, or vulnerable hook found ANYWHERE in the profile. Do NOT default to the bottom-most text. Pick the one that makes for the best banter.
 * person_name: Match's first name from UI header/profile (else "unknown").
-* stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument
-* their_last_message: Short paraphrase of her latest message. Rule: If the absolute final message in the chat belongs to "user", you MUST append this exact note to your paraphrase: " [Note: User already replied with: '<insert user's last message>']"
+* stage: "new_match" or "opening".
+* their_last_message: Do NOT paraphrase a single line. Instead, write a 1-2 sentence "Holistic Vibe Summary" of her entire profile (e.g., "She is a foodie who loves travel and is being very vulnerable about her trust issues.").
 """
 
 
-async def perform_full_vision_analysis(image_base64: str) -> VisionNodeOutput:
-    """Run the full (main) Vision Node Gemini call once, returning parsed output."""
+def build_vision_system_prompt(direction: str) -> str:
+    """
+    Assemble the vision system prompt. Step 3 depends on UI direction: ``opener`` uses
+    profile-buffet rules; all other directions keep chat-oriented Step 3 (unchanged).
+    No user-controlled string interpolation — only a fixed branch on normalized direction.
+    """
+    d = (direction or "").strip().lower()
+    step3 = (
+        _VISION_STEP_3_OPENER_PROFILE_BUFFET
+        if d == "opener"
+        else _VISION_STEP_3_CHAT_MODE
+    )
+    return _VISION_SYSTEM_PROMPT_STEPS_1_2 + step3
+
+
+def _multi_screenshot_user_hint(image_count: int, *, is_opener: bool) -> str:
+    """Extra human-message text when multiple images are attached (no f-string user input)."""
+    if image_count <= 1:
+        return ""
+    n = image_count
+    if is_opener:
+        return (
+            f"\n\nMULTI-SCREENSHOT ({n} images): Same dating profile across scrolls or panels. "
+            "Merge every visible prompt, bio fragment, and photo into one buffet — do not treat "
+            "only the last image as the source of truth for hooks or vibe."
+        )
+    return (
+        f"\n\nMULTI-SCREENSHOT ({n} images): Chronological order — image 1 oldest, "
+        f"image {n} newest. Merge into one continuous transcript or profile view; "
+        "do not duplicate bubbles that appear across crops. "
+        "Latest speaker and their_last_message must match the NEWEST screenshot; "
+        "use earlier images only for context when the latest crop is incomplete."
+    )
+
+
+def _count_image_url_parts_in_human_content(content: list) -> int:
+    """LangChain HumanMessage content blocks with type ``image_url`` (each = one image to the model)."""
+    return sum(
+        1
+        for part in content
+        if isinstance(part, dict) and part.get("type") == "image_url"
+    )
+
+
+async def perform_full_vision_analysis(
+    images_base64: list[str],
+    *,
+    direction: str,
+    screenshots_in_request: int | None = None,
+) -> VisionNodeOutput:
+    """Run the full (main) Vision Node Gemini call once, returning parsed output.
+
+    Pass every screenshot the client sent (after tier clamp), in order: oldest first, newest last.
+    ``direction`` selects Step 3 (``opener`` = profile buffet; else chat-mode Step 3).
+    ``screenshots_in_request`` defaults to ``len(images_base64)`` for logs if omitted.
+    """
+    if not images_base64:
+        raise ValueError("images_base64 must be a non-empty list")
+
     # The endpoint runs this LLM call before hybrid stitch resolution, so we keep lore out of
     # the prompt. Any semantic memory fetching happens later in the endpoint.
     ocr_hint_text = ""
+    vision_direction = (direction or "").strip().lower()
+    is_opener = vision_direction == "opener"
+    system_prompt = build_vision_system_prompt(vision_direction)
 
-    # Mimic `vision_node` preprocessing: convert base64 to correct `data:<mime>;base64,...` URL.
-    image_url = encode_image_from_state(cast(AgentState, {"image_bytes": image_base64}))
+    content: list = []
+    for b64 in images_base64:
+        image_url = encode_image_from_state(cast(AgentState, {"image_bytes": b64}))
+        content.append({"type": "image_url", "image_url": {"url": image_url}})
 
-    content = [
-        {"type": "image_url", "image_url": {"url": image_url}},
+    n = len(images_base64)
+    multi_hint = _multi_screenshot_user_hint(n, is_opener=is_opener)
+
+    content.append(
         {
             "type": "text",
             "text": (
                 f"OCR hint text (may be partial/noisy):\n{ocr_hint_text.strip()}\n\n"
-                "Process the attached image as the absolute current reality."
+                f"Process the attached image{'s' if n > 1 else ''} as the absolute current reality."
+                + multi_hint
             ),
-        },
-    ]
+        }
+    )
     messages = [
-        SystemMessage(content=VISION_NODE_SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=content),
     ]
+
+    images_attached_to_vision_llm = _count_image_url_parts_in_human_content(content)
 
     t_start = time.monotonic()
     logger.info(
@@ -162,19 +266,22 @@ async def perform_full_vision_analysis(image_base64: str) -> VisionNodeOutput:
         trace_id="",
         user_id="",
         conversation_id="",
-        direction="",
+        direction=vision_direction,
+        vision_step3_mode="opener_profile_buffet" if is_opener else "chat",
         model=VISION_MODEL,
         temperature=0,
         core_lore_chars=0,
         past_memories_chars=0,
         ocr_hint_chars=0,
+        images_attached_to_vision_llm=images_attached_to_vision_llm,
+        screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
     )
     logger.info(
         "vision_node_llm_messages",
         trace_id="",
         user_id="",
         conversation_id="",
-        direction="",
+        direction=vision_direction,
         phase="v2_vision",
         model=VISION_MODEL,
         messages=sanitize_llm_messages_for_logging(messages),
@@ -195,11 +302,13 @@ async def perform_full_vision_analysis(image_base64: str) -> VisionNodeOutput:
             trace_id="",
             user_id="",
             conversation_id="",
-            direction="",
+            direction=vision_direction,
             out=out.model_dump(),
             usage_phase=usage_row.get("phase"),
             usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
             usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
+            images_attached_to_vision_llm=images_attached_to_vision_llm,
+            screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
         )
         return out
     except Exception as e:
@@ -208,10 +317,12 @@ async def perform_full_vision_analysis(image_base64: str) -> VisionNodeOutput:
             trace_id="",
             user_id="",
             conversation_id="",
-            direction="",
+            direction=vision_direction,
             error=str(e),
             error_type=type(e).__name__,
             elapsed_ms=int((time.monotonic() - t_start) * 1000),
+            images_attached_to_vision_llm=images_attached_to_vision_llm,
+            screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
         )
         raise
 
@@ -304,7 +415,11 @@ async def generate_replies_v2(
     # 5. Hybrid Stitch: resolve conversation_id before agent runs
     # ------------------------------------------------------------------ #
     try:
-        vision_out = await perform_full_vision_analysis(images[-1])
+        vision_out = await perform_full_vision_analysis(
+            images,
+            direction=request.direction.value,
+            screenshots_in_request=len(images),
+        )
     except Exception as e:
         if _is_provider_timeout(e):
             raise HTTPException(
@@ -532,7 +647,7 @@ async def generate_replies_v2(
             )
 
     initial_state = _build_agent_initial_state(
-        images[0],
+        images[-1],
         request.direction.value,
         custom_hint or "",
         user.id,

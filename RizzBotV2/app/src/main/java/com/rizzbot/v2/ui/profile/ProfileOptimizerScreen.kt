@@ -8,6 +8,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +33,8 @@ import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cached
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -85,6 +90,7 @@ fun ProfileOptimizerScreen(
     viewModel: ProfileOptimizerViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val selectedLanguage by viewModel.selectedLanguage.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -171,6 +177,8 @@ fun ProfileOptimizerScreen(
             when (val s = state) {
                 is OptimizerState.Idle -> {
                     IdleOptimizerCard(
+                        selectedLanguage = selectedLanguage,
+                        onLanguageSelected = { viewModel.setLanguage(it) },
                         onGenerate = { viewModel.generateBlueprint() }
                     )
                 }
@@ -182,6 +190,8 @@ fun ProfileOptimizerScreen(
                 is OptimizerState.Success -> {
                     SuccessState(
                         blueprint = s.blueprint,
+                        selectedLanguage = selectedLanguage,
+                        onLanguageSelected = { viewModel.setLanguage(it) },
                         onCopy = { text ->
                             clipboardManager.setText(AnnotatedString(text))
                             HapticHelper(context).successTap()
@@ -197,6 +207,8 @@ fun ProfileOptimizerScreen(
                 is OptimizerState.Error -> {
                     ErrorState(
                         message = s.message,
+                        selectedLanguage = selectedLanguage,
+                        onLanguageSelected = { viewModel.setLanguage(it) },
                         onRetry = { viewModel.generateBlueprint() },
                         onBackToIdle = { viewModel.reset() }
                     )
@@ -208,13 +220,17 @@ fun ProfileOptimizerScreen(
 
 @Composable
 private fun IdleOptimizerCard(
+    selectedLanguage: String,
+    onLanguageSelected: (String) -> Unit,
     onGenerate: () -> Unit
 ) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = CardBg),
@@ -262,6 +278,12 @@ private fun IdleOptimizerCard(
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
+
+                BlueprintLanguageRow(
+                    selectedLanguage = selectedLanguage,
+                    onSelect = onLanguageSelected,
+                    enabled = true
+                )
 
                 // Main description
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -322,6 +344,7 @@ private fun IdleOptimizerCard(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
@@ -393,16 +416,20 @@ private fun LoadingState() {
 @Composable
 private fun SuccessState(
     blueprint: ProfileBlueprint,
+    selectedLanguage: String,
+    onLanguageSelected: (String) -> Unit,
     onCopy: (String) -> Unit,
     onRecalibrate: () -> Unit,
     onViewStrategy: () -> Unit = {}
 ) {
+    // Extra bottom inset: extended Recalibrate FAB + nav bar — list must scroll past them.
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(bottom = 88.dp, top = 12.dp)
+        contentPadding = PaddingValues(top = 12.dp, bottom = 140.dp)
     ) {
         item {
             Text(
@@ -416,6 +443,12 @@ private fun SuccessState(
                 text = blueprint.overallTheme,
                 color = Color(0xFFB0B0D0),
                 fontSize = 14.sp
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            BlueprintLanguageRow(
+                selectedLanguage = selectedLanguage,
+                onSelect = onLanguageSelected,
+                enabled = true
             )
             Spacer(modifier = Modifier.height(12.dp))
             Button(
@@ -446,17 +479,22 @@ private fun SuccessState(
                 onClick = onRecalibrate,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Cached,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Recalibrate with a new blueprint",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cached,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Recalibrate with a new blueprint",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 13.sp
+                    )
+                }
             }
         }
     }
@@ -587,6 +625,56 @@ private fun PlatformPromptCard(
 }
 
 @Composable
+private fun BlueprintLanguageRow(
+    selectedLanguage: String,
+    onSelect: (String) -> Unit,
+    enabled: Boolean = true
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Blueprint language",
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = "Captions, bio, and app prompts. Same setting as Photo Audit feedback style.",
+            color = Color(0xFF9090B0),
+            fontSize = 12.sp
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val options = listOf("English", "Hinglish", "Gen-Z Slang")
+            options.forEach { option ->
+                val isSelected = option == selectedLanguage
+                AssistChip(
+                    onClick = {
+                        if (enabled) onSelect(option)
+                    },
+                    enabled = enabled,
+                    label = {
+                        Text(
+                            text = option,
+                            color = if (isSelected) Color.Black else Color.White,
+                            fontSize = 12.sp
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            CardBg
+                        }
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun FeatureBullet(text: String) {
     Row(
         verticalAlignment = Alignment.Top,
@@ -611,18 +699,23 @@ private fun FeatureBullet(text: String) {
 @Composable
 private fun ErrorState(
     message: String,
+    selectedLanguage: String,
+    onLanguageSelected: (String) -> Unit,
     onRetry: () -> Unit,
     onBackToIdle: () -> Unit
 ) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = CardBg),
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier
@@ -639,6 +732,12 @@ private fun ErrorState(
                     text = message,
                     color = Color(0xFFEF9A9A),
                     fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                BlueprintLanguageRow(
+                    selectedLanguage = selectedLanguage,
+                    onSelect = onLanguageSelected,
+                    enabled = true
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
@@ -670,6 +769,7 @@ private fun ErrorState(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 

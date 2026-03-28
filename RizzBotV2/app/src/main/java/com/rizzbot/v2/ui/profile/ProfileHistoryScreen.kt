@@ -263,27 +263,42 @@ private fun AuditHistoryCard(
         border = BorderStroke(1.dp, Color(0xFF252542))
     ) {
         Column {
-            // Photo with FillWidth to prevent cropping
-            SubcomposeAsyncImage(
-                model = audit.imageUrl,
-                contentDescription = "Audited Photo",
-                modifier = Modifier.fillMaxWidth(),
-                contentScale = ContentScale.FillWidth
-            ) {
-                val state = painter.state
-                if (state is AsyncImagePainter.State.Loading || state is AsyncImagePainter.State.Error) {
-                    // Show the skeleton box while downloading from the network
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(0.75f) // Standard 3:4 portrait ratio to reserve space
-                            .shimmerEffect()
+            // Photo with FillWidth to prevent cropping (empty URL = PAR failed; show placeholder)
+            if (audit.imageUrl.isBlank()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(0.75f)
+                        .background(Color(0xFF252542)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Image link expired or unavailable — feedback below is still valid.",
+                        color = Color(0xFF8080A0),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(16.dp)
                     )
-                } else {
-                    // The image is ready, show it with its natural height
-                    SubcomposeAsyncImageContent(
-                        modifier = Modifier.wrapContentHeight()
-                    )
+                }
+            } else {
+                SubcomposeAsyncImage(
+                    model = audit.imageUrl,
+                    contentDescription = "Audited Photo",
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth
+                ) {
+                    val state = painter.state
+                    if (state is AsyncImagePainter.State.Loading || state is AsyncImagePainter.State.Error) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(0.75f)
+                                .shimmerEffect()
+                        )
+                    } else {
+                        SubcomposeAsyncImageContent(
+                            modifier = Modifier.wrapContentHeight()
+                        )
+                    }
                 }
             }
             

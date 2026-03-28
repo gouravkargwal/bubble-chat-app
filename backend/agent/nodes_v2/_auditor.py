@@ -21,6 +21,7 @@ from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
     AUDITOR_MODEL,
     MAX_REWRITES,
+    opener_hook_priority,
     transcript_text_from_analysis,
     sanitize_llm_messages_for_logging,
 )
@@ -78,7 +79,7 @@ FAIL a specific reply if it violates ANY of these rules:
 * Direction Compliance:
     * "get_number": Lacks an off-app move or is too stiff ("can i get your number").
     * "ask_out": Lacks a concrete plan (vague "we should hang out" = fail).
-    * "opener": Uses a generic greeting instead of referencing a visual detail.
+    * "opener": Generic greeting or copy-paste opener. Use eval_payload.opener_hook_priority: if "text_first", replies may anchor on substantive profile/bio text (vulnerability, opinion, story) — visual_hooks optional. If "visual_first", fail replies that ignore concrete visual_hooks when bio/text is thin. If "either", require a concrete hook from text and/or visual_hooks, not a generic line.
     * "revive_chat": Uses stale lines ("hey stranger", "long time").
     * "de_escalate": Is sarcastic/defensive, OR pivots without first acknowledging her feelings.
 * Tone Safety: Teases, provokes, or escalates when `their_tone` is "upset" or "vulnerable".
@@ -176,7 +177,7 @@ def auditor_node(state: AgentState) -> dict:
     their_last_message_paraphrase = getattr(analysis, "their_last_message", "") or ""
 
     # Build a concise evaluation payload (don't send the whole kitchen sink)
-    eval_payload = {
+    eval_payload: dict = {
         "detected_archetype": getattr(analysis, "detected_archetype", ""),
         "detected_dialect": getattr(analysis, "detected_dialect", "ENGLISH"),
         "their_tone": getattr(analysis, "their_tone", ""),
@@ -199,6 +200,11 @@ def auditor_node(state: AgentState) -> dict:
             for i, r in enumerate(drafts.replies[:4])
         ],
     }
+    if direction == "opener":
+        eval_payload["visual_hooks"] = getattr(analysis, "visual_hooks", None) or []
+        eval_payload["opener_hook_priority"] = opener_hook_priority(
+            analysis, verbatim_last_message
+        )
     logger.info(
         "llm_lifecycle",
         stage="auditor_node_pre_llm",

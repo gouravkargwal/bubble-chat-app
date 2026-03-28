@@ -132,15 +132,16 @@ def _validate_lang(lang: str) -> str:
 async def _fetch_top_audited_photos(
     user_id: str, db: AsyncSession
 ) -> list[AuditedPhoto]:
-    """Fetch up to MAX_BLUEPRINT_SLOTS highest-scoring audited photos (score >= 6).
+    """Fetch up to MAX_BLUEPRINT_SLOTS audited photos (score >= 6) for blueprint generation.
 
-    The fetch limit is capped at MAX_BLUEPRINT_SLOTS so the LLM receives exactly
-    as many photos as the schema allows slots — no schema/prompt contradiction.
+    Prefer **most recently persisted** audits first, then higher score within the same
+    recency window. This keeps Optimize aligned with the user's latest audit batch after
+    deletes or new runs, instead of resurrecting old high-score rows from earlier sessions.
     """
     result = await db.execute(
         select(AuditedPhoto)
         .where(AuditedPhoto.user_id == user_id, AuditedPhoto.score >= 6)
-        .order_by(AuditedPhoto.score.desc(), AuditedPhoto.created_at.desc())
+        .order_by(AuditedPhoto.created_at.desc(), AuditedPhoto.score.desc())
         .limit(MAX_BLUEPRINT_SLOTS)
     )
     return list(result.scalars().all())
@@ -189,18 +190,13 @@ async def build_blueprint_response(
         else db_blueprint.universal_prompts
     )
 
-    slot_dicts = await asyncio.gather(
-        *[_slot_dict_async(s) for s in slot_models]
-    )
+    slot_dicts = await asyncio.gather(*[_slot_dict_async(s) for s in slot_models])
     slot_responses = sorted(slot_dicts, key=lambda x: x["slot_number"])
 
-    universal_prompts_out = (
-        [
-            {"category": up.category, "suggested_text": up.suggested_text}
-            for up in up_models
-        ]
-        or None
-    )
+    universal_prompts_out = [
+        {"category": up.category, "suggested_text": up.suggested_text}
+        for up in up_models
+    ] or None
 
     return ProfileBlueprintResponse(
         id=db_blueprint.id,
@@ -286,19 +282,24 @@ async def generate_blueprint(
     available_count = len(photos)
     system_prompt = (
         "You are an elite Cross-Platform Dating Profile Architect (Tinder, Bumble, Hinge, Aisle).\n"
-        f"LANGUAGE/DIALECT: {lang}\n"
-        "* Match cultural tone exactly.\n"
-        "* If 'Hinglish': Mix Hindi/English (Latin script), lean extra sassy/savage.\n"
-        "* If 'Gen-Z Slang': Use modern TikTok-era phrasing."
+        f"DIALECT ENFORCEMENT: The requested language/dialect is {lang}. You MUST write the `caption`, `hinge_prompt`, `aisle_prompt`, `bio`, and `universal_prompts` entirely in this exact dialect.\n"
+        "* If Hinglish: Weave Romanized Hindi into EVERY single sentence (e.g., yaar, bhai, matlab, samajh, waisa, bilkul, desi). ZERO purely standard-English sentences are allowed. If a generated prompt can be read naturally by an American, you failed.\n"
+        "* If Gen-Z Slang: Use modern TikTok-era phrasing.\n"
+        "* Match cultural tone exactly. Never use corporate or AI-sounding filler."
     )
 
     user_prompt = (
+        "CRITICAL CONSTRAINT:\n"
+        "* You CANNOT see the photos. This call includes no image pixels — only the JSON metadata below.\n"
+        "* You MUST rely entirely on each entry's `score`, `tier`, and `brutal_feedback`. Do not invent faces, poses, lighting, outfits, or settings you were not told about.\n"
+        "* Any copy must be grounded in those fields only; never hallucinate visual facts.\n\n"
         f"Design a dating profile blueprint using these {available_count} audited photos.\n\n"
         "RULES:\n"
         f"* Use ALL {available_count} photos. `slot_number` MUST be 1 to {available_count} (no gaps/repeats).\n"
-        "* Slot 1: Best clear face shot for first impressions.\n"
+        "* `photo_id`: For every slot, set `photo_id` to the EXACT `id` string copied verbatim from one object in AUDITED PHOTOS JSON below. Do NOT invent, truncate, reformat, or guess IDs — only the provided UUID strings are valid. Each listed `id` must appear exactly once across slots.\n"
+        "* Slot 1 (`slot_number` 1): Assign to the photo with the highest `score`. If multiple photos share the top score, pick the one whose `brutal_feedback` best indicates an attractive, clear-face, or strong first-impression shot (infer only from that text, not from imagined images).\n"
         "* Vibe: High-status, charismatic, social proof. No try-hard/desperate energy.\n"
-        "* Context: Use the provided `brutal_feedback` to inform your framing (disagree if you have a better angle).\n\n"
+        '* Context: Use `brutal_feedback` as creative fuel — spin it into confident, playful framing in captions and prompts; do not fabricate a "better angle" you cannot see.\n\n'
         "SLOT REQUIREMENTS:\n"
         "* `caption`: Short, high-status.\n"
         "* `contextual_hook`: Short label (e.g., 'Parent Approval', 'Adventure Flex').\n"

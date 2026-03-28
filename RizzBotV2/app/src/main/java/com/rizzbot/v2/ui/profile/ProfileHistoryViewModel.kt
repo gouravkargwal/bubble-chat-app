@@ -50,7 +50,9 @@ class ProfileHistoryViewModel @Inject constructor(
                         createdAt = it.createdAt,
                     )
                 }
-                _audits.value = _audits.value + mapped.sortedByDescending { it.score }
+                // Preserve API order (newest first per page); do not re-sort by score or
+                // pagination breaks and older audits feel "missing".
+                _audits.value = _audits.value + mapped
                 currentOffset += pageSize
                 if (dtoItems.size < pageSize) {
                     isLastPage = true
@@ -85,7 +87,7 @@ class ProfileHistoryViewModel @Inject constructor(
                         createdAt = it.createdAt,
                     )
                 }
-                _audits.value = mapped.sortedByDescending { it.score }
+                _audits.value = mapped
                 currentOffset = pageSize
                 if (dtoItems.size < pageSize) {
                     isLastPage = true

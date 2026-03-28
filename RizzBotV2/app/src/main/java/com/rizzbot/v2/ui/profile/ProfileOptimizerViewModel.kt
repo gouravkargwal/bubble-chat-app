@@ -38,13 +38,21 @@ class ProfileOptimizerViewModel @Inject constructor(
     private val _historyState = MutableStateFlow<BlueprintHistoryState>(BlueprintHistoryState.Idle)
     val historyState: StateFlow<BlueprintHistoryState> = _historyState.asStateFlow()
 
-    private val selectedLanguage = MutableStateFlow("English")
+    private val _roastLanguage = MutableStateFlow("English")
+    /** Same preference as Photo Audit — drives the `lang` query on optimize. */
+    val selectedLanguage: StateFlow<String> = _roastLanguage.asStateFlow()
 
     init {
         viewModelScope.launch {
             settingsRepository.roastLanguage.collect { lang ->
-                selectedLanguage.value = lang
+                _roastLanguage.value = lang
             }
+        }
+    }
+
+    fun setLanguage(language: String) {
+        viewModelScope.launch {
+            settingsRepository.setRoastLanguage(language)
         }
     }
 
@@ -56,7 +64,7 @@ class ProfileOptimizerViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val lang = selectedLanguage.value
+                val lang = _roastLanguage.value
                 Log.d("ProfileOptimizerVM", "optimizeProfile: requesting blueprint, lang=$lang")
                 val response = api.optimizeProfile(lang = lang)
                 Log.d(
