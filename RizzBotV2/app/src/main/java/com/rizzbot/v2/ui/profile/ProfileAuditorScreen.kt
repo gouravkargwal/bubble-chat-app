@@ -74,6 +74,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -148,7 +149,8 @@ fun ProfileAuditorScreen(
                 title = {
                     Text(
                         text = "Photo Audit",
-                        fontSize = 18.sp
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 },
                 navigationIcon = {
@@ -295,28 +297,24 @@ fun ProfileAuditorScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (showIntro) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "Photo audit",
-                            color = Color.White,
-                            fontSize = 22.sp,
-                            style = MaterialTheme.typography.headlineSmall,
-                        )
-                        Text(
-                            text = "Walk through the steps below, then tap Run audit to continue. Plan limits apply at that tap only.",
-                            color = Color.Gray,
+                            text = "Review the steps below, then tap Run audit. Your plan limit is checked only on that tap.",
+                            color = Color(0xFF9FA0BF),
                             fontSize = 14.sp,
                             lineHeight = 20.sp,
                         )
+                        AuditIntroSteps(maxPhotos = maxPhotos)
                     }
-                    AuditIntroSteps(maxPhotos = maxPhotos)
                 }
 
                 Card(
                     colors = CardDefaults.cardColors(containerColor = CardBg),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = when {
                                 TierQuota.isUnlimited(weeklyAuditLimit) ->
@@ -332,13 +330,14 @@ fun ProfileAuditorScreen(
                             },
                             color = Color.White,
                             fontSize = 14.sp,
-                            style = MaterialTheme.typography.titleSmall
+                            fontWeight = FontWeight.SemiBold,
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "One audit = one run with up to $maxPhotos photos. Open Past audits (top) for earlier results.",
-                            color = Color.Gray,
-                            fontSize = 12.sp
+                            text = "One audit = one run with up to $maxPhotos photos. Earlier runs are under Past audits.",
+                            color = Color(0xFF9FA0BF),
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
                         )
                     }
                 }
@@ -403,17 +402,6 @@ fun ProfileAuditorScreen(
                     state.result != null -> {
                         val result = state.result
                         if (result != null) {
-                            Text(
-                                text = "Your audit",
-                                color = Color.White,
-                                fontSize = 20.sp,
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                            Text(
-                                text = "Best shots for your profile, okay backups, and photos to replace. Tips are under each image.",
-                                color = Color.Gray,
-                                fontSize = 13.sp
-                            )
                             ProfileAuditResultContent(
                                 result = result,
                                 photoIdToUri = photoIdToUri
@@ -490,7 +478,9 @@ fun ProfileAuditorScreen(
                             colors = CardDefaults.cardColors(
                                 containerColor = if (state.isLoading) CardBg.copy(alpha = 0.5f) else CardBg
                             ),
-                            shape = RoundedCornerShape(18.dp)
+                            shape = RoundedCornerShape(18.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                         ) {
                             Box(
                                 modifier = Modifier
@@ -569,17 +559,20 @@ fun ProfileAuditorScreen(
 private fun AuditIntroSteps(maxPhotos: Int) {
     Card(
         colors = CardDefaults.cardColors(containerColor = CardBg),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
                 text = "How it works",
                 color = Color.White,
-                fontSize = 16.sp,
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.3.sp,
             )
             AuditIntroStepRow(
                 step = 1,
