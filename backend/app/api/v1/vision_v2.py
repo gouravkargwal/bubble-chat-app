@@ -100,12 +100,13 @@ Determine if the image(s) are valid.
 * Stop here and return empty arrays/null for all other fields if is_valid_chat is false.
 
 STEP 2: OCR EXTRACTION
-If valid, extract verbatim text (including emojis/punctuation). Do not translate/summarize. Ignore text input bars.
+If valid, extract verbatim text. Do not translate/summarize. Ignore text input bars.
 * Dating Profiles (no chat bubbles): Extract all visible profile text into a single raw_ocr_text object: sender="them", actual_new_message=all extracted text joined by newlines, quoted_context=null, is_reply=false. Skip to Step 3.
 * Chat Conversations: Read top-to-bottom. For each bubble, extract a raw_ocr_text object:
-    * sender: "user" (Right-aligned/receipt markers) or "them" (Left-aligned/gray/white). Rule: Rely STRICTLY on spatial alignment and UI cues. Never use semantic meaning to guess the sender.
-    * quoted_context: Nested/faded text at the top of a bubble (null if none). Join multiple blocks with a newline.
-    * actual_new_message: The solid text below quotes. Must NOT include quoted text.
+    * sender: "user" (if bubble is on the RIGHT side of the screen) or "them" (if bubble is on the LEFT side of the screen).
+    * Rule: Rely 100% on horizontal alignment relative to the midline. NEVER use semantic meaning to guess the sender. If a girl's profile photo is on the right, that is the "user."
+    * actual_new_message: The text inside the bubble.
+    * quoted_context: Faded/nested reply text (null if none).
     * is_reply: true if quoted_context is not null.
 
 """
@@ -123,20 +124,16 @@ Fields for BOTH modes:
 * stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument (profiles without a thread are usually new_match or opening).
 
 IF CHAT CONVERSATION (real chat bubbles with user/them alignment):
-* Base key_detail, their_last_message, and their_tone STRICTLY on her absolute newest message at the bottom of the thread (the latest bubble from "them" unless the very last bubble in the UI is the user — then follow the double-text rule below).
+* Base key_detail, their_last_message, and their_tone STRICTLY on her absolute newest message at the bottom of the thread.
 * their_effort, conversation_temperature: From that latest message and immediate context.
-* archetype_reasoning: 2-3 sentences. Count words in her latest message; analyze structure (question, statement, emoji, filler) before picking an archetype.
-* detected_archetype (Pick EXACTLY ONE):
-    * THE BANTER GIRL: Explicit sarcasm, playful accusations, or flipping questions. (Not just "haha nice").
-    * THE INTELLECTUAL: 15+ words WITH a substantive topic, opinion, or deep question.
-    * THE WARM/STEADY: Default. Friendly, uses emojis naturally, casual questions.
-    * THE GUARDED/TESTER: Screening questions (e.g., "what are you looking for", "are you serious").
-    * THE EAGER/DIRECT: Forward interest, suggesting meets, explicit flirting.
-    * THE LOW-INVESTMENT: <4 words of filler ("haha", "ok"). If 5+ words or any question, DO NOT pick this.
-* key_detail: One concrete hook drawn from that newest message.
-* their_last_message: Short paraphrase of her latest message. If the absolute final message in the chat belongs to "user", append exactly: " [Note: User already replied with: '<insert user's last message>']"
+* archetype_reasoning: 2-3 sentences analyzing her latest message structure (word count, questions, emojis) to justify the archetype.
+* detected_archetype (Pick EXACTLY ONE): THE BANTER GIRL, THE INTELLECTUAL, THE WARM/STEADY, THE GUARDED/TESTER, THE EAGER/DIRECT, THE LOW-INVESTMENT.
+* top_hooks: Exactly THREE distinct hooks from this chat turn — different angles, not the same idea reworded.
+* key_detail: MUST equal top_hooks[0].
+* their_last_message: A short, simple paraphrase of her latest message. Do not add any notes or context about the user's messages here.
 
 IF DATING PROFILE (no chat thread — prompts, bio fragments, photo captions, Bumble/Hinge-style cards only):
+* top_hooks: Use an empty list [] (profile mode does not use chat turn hooks).
 * Do NOT anchor analysis on the last line of extracted text only. Treat the profile as a buffet: read ALL prompts, bios, and visible copy across every screenshot.
 * key_detail: Pick the SINGLE strongest opener hook anywhere on the profile — prioritize interesting, funny, controversial, story-driven, or emotionally vulnerable lines (e.g. a quirky prompt beat, trust issues, a bold rule). It may come from an early prompt, a photo caption, or the middle of the bio — not necessarily the last OCR line.
 * their_last_message: Summarize her overall profile vibe, energy, and what she signals she wants (playful, guarded, romantic, chaotic, etc.). This is NOT a paraphrase of one line; it is a holistic one- or two-sentence read so the reply model can choose among many angles. Do NOT use the chat double-text note here.
@@ -154,6 +151,7 @@ You are analyzing a dating profile to find the best possible conversation starte
 
 Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_new_message) as in Step 2.
 
+* top_hooks: Use an empty list [] (opener/profile mode does not use chat turn hooks).
 * visual_hooks: Scan ALL screenshots. List 3-4 specific physical/environmental details (e.g., "red dress with balloons", "holding a matcha latte", "wearing large round glasses").
 * detected_dialect: ENGLISH, HINDI, or HINGLISH. Base this on the dominant mix across all visible profile text.
 * their_tone: The overall vibe of their profile prompts/bio.

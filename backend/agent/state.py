@@ -18,7 +18,7 @@ StrategyLabel = Literal[
 
 class ChatBubble(BaseModel):
     sender: Literal["user", "them"] = Field(
-        description="'user' if right-aligned, 'them' if left-aligned"
+        description="'user' if right of screen midline, 'them' if left of midline"
     )
     quoted_context: str = Field(
         description="If present, the grey/indented quoted box text at the top of the bubble; "
@@ -52,6 +52,10 @@ class AnalystOutput(BaseModel):
             "'THE BANTER GIRL', 'THE INTELLECTUAL', 'THE WARM/STEADY', "
             "'THE GUARDED/TESTER', 'THE EAGER/DIRECT', or 'THE LOW-INVESTMENT'."
         )
+    )
+    top_hooks: List[str] = Field(
+        default_factory=list,
+        description="Chat: three distinct hooks; first must match key_detail. Profile: empty.",
     )
     key_detail: str
     person_name: str = Field(default="unknown", description="First name if visible, else 'unknown'.")

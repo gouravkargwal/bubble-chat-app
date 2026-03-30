@@ -42,10 +42,9 @@ class VisionNodeOutput(BaseModel):
         default_factory=list,
         description=(
             "List of bubble objects extracted verbatim. Each has: "
-            "sender ('user'=right-aligned, 'them'=left-aligned), "
-            "actual_new_message (bottom-most fresh solid text below any quoted block; "
-            "may be empty for reply-only bubbles), "
-            "quoted_context (quoted/referenced top block text or null), "
+            "sender ('user'=right of midline, 'them'=left of midline), "
+            "actual_new_message (text inside the bubble), "
+            "quoted_context (faded/nested reply text or null), "
             "is_reply (true iff quoted_context present)."
         ),
     )
@@ -80,10 +79,17 @@ class VisionNodeOutput(BaseModel):
         ),
     )
     detected_archetype: str = Field(default="THE WARM/STEADY")
+    top_hooks: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Chat: exactly three distinct hooks for this turn; key_detail must equal index 0. "
+            "Profile/opener: empty list."
+        ),
+    )
     key_detail: str = Field(
         default="",
         description=(
-            "Chat: one hook from her newest bubble. Profile: the single best opener hook "
+            "Chat: must equal top_hooks[0] when in chat mode. Profile: the single best opener hook "
             "anywhere (funny, vulnerable, controversial, story) — not only the last OCR line."
         ),
     )
@@ -92,7 +98,7 @@ class VisionNodeOutput(BaseModel):
     their_last_message: str = Field(
         default="",
         description=(
-            "Chat: paraphrase of her latest message; append double-text note if user's bubble is last. "
+            "Chat: short paraphrase of her latest message only; no notes about the user's messages. "
             "Profile: holistic 1-2 sentence vibe summary of the whole profile (buffet of angles), "
             "not one-line paraphrase."
         ),
@@ -168,6 +174,7 @@ def vision_node(state: AgentState) -> dict:
         conversation_temperature=out.conversation_temperature,
         archetype_reasoning=out.archetype_reasoning,
         detected_archetype=out.detected_archetype,
+        top_hooks=out.top_hooks,
         key_detail=out.key_detail,
         person_name=out.person_name,
         stage=out.stage,
