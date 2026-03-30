@@ -136,7 +136,7 @@ IF DATING PROFILE (no chat thread — prompts, bio fragments, photo captions, Bu
 * top_hooks: Use an empty list [] (profile mode does not use chat turn hooks).
 * Do NOT anchor analysis on the last line of extracted text only. Treat the profile as a buffet: read ALL prompts, bios, and visible copy across every screenshot.
 * key_detail: Pick the SINGLE strongest opener hook anywhere on the profile — prioritize interesting, funny, controversial, story-driven, or emotionally vulnerable lines (e.g. a quirky prompt beat, trust issues, a bold rule). It may come from an early prompt, a photo caption, or the middle of the bio — not necessarily the last OCR line.
-* their_last_message: Summarize her overall profile vibe, energy, and what she signals she wants (playful, guarded, romantic, chaotic, etc.). This is NOT a paraphrase of one line; it is a holistic one- or two-sentence read so the reply model can choose among many angles. Do NOT use the chat double-text note here.
+* their_last_message: Summarize her overall profile vibe, energy, and what she signals she wants (playful, guarded, romantic, chaotic, etc.). This is NOT a paraphrase of one line; it is a holistic one- or two-sentence read so the reply model can choose among many angles.
 * their_tone: Infer from the dominant emotional signal across the whole profile (not from one trailing fragment).
 * their_effort: high if many prompts are filled with substance; medium/low if sparse or generic.
 * conversation_temperature: hot / warm / lukewarm / cold from overall flirtiness and openness across the profile.
