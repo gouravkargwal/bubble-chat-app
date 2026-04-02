@@ -84,7 +84,8 @@ FAIL a specific reply if it violates ANY of these rules:
     * "de_escalate": Is sarcastic/defensive, OR pivots without first acknowledging her feelings.
 * Tone Safety: Teases, provokes, or escalates when `their_tone` is "upset" or "vulnerable".
 * Cringe & Generic: Uses corporate/therapy speak, motivational quotes, or is overly eager. Is a generic line that could be copy-pasted into any chat.
-* Forbidden Patterns: Dead openers in-body ("hey", "hi", "so", "well"). Empty laugh-filler starts ("haha", "lol") unless directly reacting to a specific text. Lazy reciprocation ("what about you").
+* Freshness: The reply text is identical or a close paraphrase of any entry in `last_ai_replies_shown`. Recycled replies must be failed regardless of other quality.
+* Forbidden Patterns: Dead openers in-body ("hey", "hi", "so", "well"). Empty laugh-filler starts ("haha", "lol") unless directly reacting to a specific text. Lazy reciprocation ("what about you", "tumhe kya lagta hai", "tum hi batao", "tum soch ke batao" or any equivalent deflection that adds zero banter). For "tease" direction: echoing her question back word-for-word with no twist (e.g. she asks "kyu aa rahe ho" → replying "kyu aa rahi ho tum" = FAIL).
 * Structure & Coherence: Contains 2+ questions. Is a conversational dead-end (lacks a fork/hook/easy response path). `strategy_label` does not match the actual text.
 
 GLOBAL BATCH FAILURES (Evaluate the set of 4):
@@ -205,6 +206,12 @@ def auditor_node(state: AgentState) -> dict:
         eval_payload["opener_hook_priority"] = opener_hook_priority(
             analysis, verbatim_last_message
         )
+
+    # Pass previously shown replies so the auditor can enforce freshness
+    conversation_context = state.get("conversation_context_dict") or {}
+    last_ai_replies_shown = (conversation_context.get("last_ai_replies_shown") or [])
+    if last_ai_replies_shown:
+        eval_payload["last_ai_replies_shown"] = last_ai_replies_shown
     logger.info(
         "llm_lifecycle",
         stage="auditor_node_pre_llm",
@@ -306,7 +313,7 @@ def auditor_node(state: AgentState) -> dict:
             user_id=user_id,
             conversation_id=conversation_id,
             overall_passes=True,
-            failed_reply_count=0,
+            failed_reply_count=len(failed_verdicts),
             elapsed_ms=int((time.monotonic() - t_start) * 1000),
             usage_phase=usage_row.get("phase"),
             usage_prompt_tokens=usage_row.get("prompt_tokens", 0),

@@ -116,9 +116,12 @@ class VisionNodeOutput(BaseModel):
     their_last_message: str = Field(
         default="",
         description=(
-            "Chat: short paraphrase of her latest message only; no notes about the user's messages. "
-            "Profile: holistic 1-2 sentence vibe summary of the whole profile (buffet of angles), "
-            "not one-line paraphrase."
+            "Chat: short paraphrase of her latest message that preserves relational context. "
+            "If her message is a direct reaction to something the user said or hinted at, "
+            "explain WHAT she caught on to and HOW she is reacting — not just what she literally said. "
+            "Example: 'She caught on that he was hinting at meeting in Gurgaon and is playfully calling him out on it' "
+            "rather than 'She is asking why he wants to meet.' Only paraphrase in isolation if her message has no clear reaction target. "
+            "Profile: holistic 1-2 sentence vibe summary of the whole profile (buffet of angles), not one-line paraphrase."
         ),
     )
 

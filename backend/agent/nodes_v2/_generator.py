@@ -101,7 +101,7 @@ PHASE 2: WRITE REPLIES
     * Strategic Diversity (CRITICAL): Do NOT just paraphrase the same semantic idea four times. Every reply must offer a completely different conversational path. For example: Reply 1 can be deep and empathetic. Reply 2 must pivot to a lighter topic. Reply 3 must ask a question about her boundaries. If your 4 replies mean the exact same thing, you fail.
     * Tension Suspension: NEVER confirm/deny playful accusations. Suspend tension.
     * Vibe Continuity: Use voice_dna_dict. Do not switch styles.
-    * Freshness: Do not repeat conversation_context_dict tactics. Four genuinely different angles.
+    * Freshness: Do NOT reproduce or closely paraphrase any reply from conversation_context_dict.last_ai_replies_shown. Treat those as banned strings. Four genuinely different angles from what has already been shown.
     * Direction (Quick Reply): Standard reply, bounce ball back with a hook (tease, assumption, challenge). No dead statements.
 
 PHASE 3: AUDIT & FILTER (Strict Constraints)
@@ -192,9 +192,18 @@ DIRECTION — CHANGE TOPIC:
 
     "tease": """
 DIRECTION — TEASE:
-* Goal: Cocky-funny misinterpretation, cocky observation, or light challenge.
+* Goal: Cocky-funny misinterpretation, cocky observation, or light challenge anchored to something she JUST said. Generic teases that could be sent to anyone are banned.
 * Labels: >=2 replies MUST use PUSH-PULL or PATTERN INTERRUPT.
-* Restrictions: Do NOT tease sensitive topics (looks, intelligence, family).""",
+* Restrictions: Do NOT tease sensitive topics (looks, intelligence, family).
+* Craft rules — at least one reply per category below:
+    * MISINTERPRET: Take one specific word/phrase she used and playfully read it the wrong way (e.g. she says "cheat day on veg" → tease her for secretly being a health freak, or acting like veg is indulgent).
+    * FLIP THE FRAME: Turn her observation back on her as a light accusation or assumption about her character (e.g. "toh matlab tum actually gayi nahi thi kabhi" or "matlab tum sirf excuse dhundh rahi thi").
+    * MOCK OUTRAGE / FAKE DISAPPOINTMENT: Pretend to be let down, betrayed, or shocked by something harmless she revealed (e.g. "yaar itna bada raaz chhupa ke rakh raha tha tum ne" style).
+* What a good tease DOES: Creates a clear reaction hook — she should want to defend herself, deny, or playfully fight back. If she can only say "haha" and the thread dies, you failed.
+* What a bad tease looks like: A flat compliment dressed as a tease ("tum toh full healthy ho"), a confusing statement she can't respond to, or a lazy deflection with no added angle.
+* HARD BANS for tease direction:
+    - Do NOT echo her question back at her word-for-word (e.g. she asks "kyu milne aa rhe" → replying "kyu milne aa rhe ho tum" is NOT a tease, it's a mirror).
+    - Do NOT use lazy deflections: "tumhe kya lagta hai", "tum hi batao", "tum soch ke batao" — these are conversation killers with no banter value.""",
 
     "revive_chat": """
 DIRECTION — REVIVE CHAT:

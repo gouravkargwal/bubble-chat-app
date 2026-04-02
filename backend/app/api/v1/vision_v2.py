@@ -132,9 +132,10 @@ If valid, extract verbatim text. Do not translate/summarize. Ignore text input b
 
     Then read top-to-bottom. For each bubble, extract a raw_ocr_text object:
     * sender: "user" or "them" per Steps A–D (visual signals only — never from text semantics).
-    * actual_new_message: The text inside the bubble.
-    * quoted_context: Faded/nested reply text (null if none).
+    * actual_new_message: The NEW text the person typed — the main bubble content BELOW any quoted preview. NEVER copy the quoted/reply preview text here.
+    * quoted_context: The faded/smaller reply-preview text ABOVE the main bubble (null if the bubble has no reply preview). On Instagram/WhatsApp, this is the small gray bar showing the original message being replied to.
     * is_reply: true if quoted_context is not null.
+    CRITICAL RULE: actual_new_message and quoted_context must NEVER be identical. If they look the same, you are reading the quoted preview twice — re-examine the bubble to find the actual reply text below the preview. If you truly cannot find separate text, set quoted_context=null (it is likely not a reply).
 
 """
 
@@ -157,7 +158,7 @@ IF CHAT CONVERSATION (real chat bubbles with user/them alignment):
 * detected_archetype (Pick EXACTLY ONE): THE BANTER GIRL, THE INTELLECTUAL, THE WARM/STEADY, THE GUARDED/TESTER, THE EAGER/DIRECT, THE LOW-INVESTMENT.
 * top_hooks: Exactly THREE distinct hooks from this chat turn — different angles, not the same idea reworded.
 * key_detail: MUST equal top_hooks[0].
-* their_last_message: A short, simple paraphrase of her latest message. Do not add any notes or context about the user's messages here.
+* their_last_message: A short paraphrase of her latest message that preserves relational context. If her message is a direct reaction to something the user said or hinted at (a question, a word, a plan), explain WHAT she caught on to and HOW she is reacting — not just what she literally said. Example: instead of "She is asking why he wants to meet", write "She caught on that he was hinting at meeting in Gurgaon and is playfully calling him out on it." Only paraphrase in isolation if her message has no clear reaction target.
 
 IF DATING PROFILE (no chat thread — prompts, bio fragments, photo captions, Bumble/Hinge-style cards only):
 * top_hooks: Use an empty list [] (profile mode does not use chat turn hooks).
