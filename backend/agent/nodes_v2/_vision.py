@@ -37,12 +37,30 @@ class VisionNodeOutput(BaseModel):
     )
     bouncer_reason: str = Field(description="Short reason for the validity decision.")
 
+    # App & sender reasoning — chain-of-thought fields (populated when is_valid_chat is true)
+    detected_app: str = Field(
+        default="unknown",
+        description=(
+            "Which messaging/dating app is shown (e.g., Bumble, Hinge, Tinder, "
+            "WhatsApp, iMessage, Instagram, Telegram). 'unknown' if unclear."
+        ),
+    )
+    sender_signals_used: str = Field(
+        default="",
+        description=(
+            "Brief explanation of which visual signals were used to assign sender labels "
+            "(e.g., 'right-aligned bubbles with blue color = user, left-aligned gray = them, "
+            "confirmed by delivery checkmarks on right side'). This MUST be filled before "
+            "assigning any sender labels in raw_ocr_text."
+        ),
+    )
+
     # OCR fields — only populated when is_valid_chat is true
     raw_ocr_text: list[dict[str, Any]] = Field(
         default_factory=list,
         description=(
             "List of bubble objects extracted verbatim. Each has: "
-            "sender ('user'=right of midline, 'them'=left of midline), "
+            "sender ('user' or 'them' based on multi-signal triangulation), "
             "actual_new_message (text inside the bubble), "
             "quoted_context (faded/nested reply text or null), "
             "is_reply (true iff quoted_context present)."
@@ -139,6 +157,8 @@ def vision_node(state: AgentState) -> dict:
         direction=direction,
         is_valid_chat=bool(out.is_valid_chat),
         person_name=out.person_name,
+        detected_app=out.detected_app,
+        sender_signals_used=out.sender_signals_used,
     )
 
     if not out.is_valid_chat:

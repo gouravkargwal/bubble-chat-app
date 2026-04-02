@@ -102,9 +102,36 @@ Determine if the image(s) are valid.
 STEP 2: OCR EXTRACTION
 If valid, extract verbatim text. Do not translate/summarize. Ignore text input bars.
 * Dating Profiles (no chat bubbles): Extract all visible profile text into a single raw_ocr_text object: sender="them", actual_new_message=all extracted text joined by newlines, quoted_context=null, is_reply=false. Skip to Step 3.
-* Chat Conversations: Read top-to-bottom. For each bubble, extract a raw_ocr_text object:
-    * sender: "user" (if bubble is on the RIGHT side of the screen) or "them" (if bubble is on the LEFT side of the screen).
-    * Rule: Rely 100% on horizontal alignment relative to the midline. NEVER use semantic meaning to guess the sender. If a girl's profile photo is on the right, that is the "user."
+* Chat Conversations:
+    SENDER IDENTIFICATION — use multi-signal triangulation, NOT a single heuristic.
+
+    Step A: DETECT THE APP — Write the app name into the `detected_app` field.
+    Identify which messaging/dating app is shown from UI chrome, colors, fonts, icons, or layout. Common apps and their USER bubble traits:
+       - Bumble: yellow/gold accent bubbles on the RIGHT = user
+       - Hinge: blue or purple accent bubbles on the RIGHT = user
+       - Tinder: blue accent bubbles on the RIGHT = user
+       - WhatsApp: light green bubbles on the RIGHT = user; gray on LEFT = them
+       - iMessage: blue (iMessage) or green (SMS) on the RIGHT = user; gray on LEFT = them
+       - Instagram: purple/blue gradient on the RIGHT = user; gray on LEFT = them
+       - Telegram: green bubbles on the RIGHT = user; white on LEFT = them
+    If the app is not listed above, proceed with general signals in Step B.
+
+    Step B: COLLECT ALL VISUAL SIGNALS (check every one that is visible):
+       Signal 1 — TEXT INPUT BAR: The compose/text-input area at the bottom belongs to the USER (the person who would type next).
+       Signal 2 — DELIVERY INDICATORS: "Sent", "Delivered", "Read", checkmarks (✓✓), or timestamps with delivery status appear ONLY on the USER's messages. This is the strongest signal.
+       Signal 3 — BUBBLE ALIGNMENT: In most LTR apps, RIGHT-aligned = user, LEFT-aligned = them.
+       Signal 4 — BUBBLE COLOR/STYLE: Accent-colored bubbles = user, neutral/gray = them. Cross-check with alignment.
+       Signal 5 — PROFILE ICONS/AVATARS: Small circular avatars next to bubbles typically mark "them". Not all apps show these.
+       Signal 6 — HEADER NAME: The name at the top of the screen is ALWAYS "them" (the match).
+       Signal 7 — TAIL/POINTER: Right-pointing tails = user, left-pointing = them (in LTR apps).
+
+    Step C: TRIANGULATE & WRITE REASONING — Write your reasoning into the `sender_signals_used` field BEFORE assigning any sender labels.
+    State which signals you observed and how they agree. Use at least 2 agreeing signals. Priority if they conflict: delivery indicators > text input bar > bubble alignment + avatar > color.
+
+    Step D: FINAL ASSIGNMENT — Apply the triangulated result consistently to ALL bubbles. NEVER use message text content or conversational semantics to guess the sender. Every bubble on the same side of the screen gets the same sender label.
+
+    Then read top-to-bottom. For each bubble, extract a raw_ocr_text object:
+    * sender: "user" or "them" per Steps A–D (visual signals only — never from text semantics).
     * actual_new_message: The text inside the bubble.
     * quoted_context: Faded/nested reply text (null if none).
     * is_reply: true if quoted_context is not null.
