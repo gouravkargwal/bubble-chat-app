@@ -168,6 +168,12 @@ class ScreenCaptureOrchestrator @Inject constructor(
         synchronized(previewBitmaps) {
             previewBitmaps.clear()
         }
+        // Reset cooldown so the user can immediately capture again after canceling.
+        lastCaptureTime = 0L
+        // Reset stale Loading result so the next capture starts clean.
+        if (_result.value is SuggestionResult.Loading) {
+            _result.value = SuggestionResult.Idle
+        }
     }
 
     fun resetResult() {

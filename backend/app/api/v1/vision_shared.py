@@ -93,6 +93,13 @@ def name_similarity(a: str, b: str) -> float:
 
     ta, tb = trigrams(a_n), trigrams(b_n)
     jacc = (len(ta & tb) / len(ta | tb)) if ta and tb else 0.0
+    # For names >= 6 chars: zero trigram overlap = definitely different people.
+    # SequenceMatcher can produce falsely high ratios from scattered single-char
+    # coincidences (e.g. 'a','s','h' shared between "kanishthika" and "vasudha").
+    # Short names (< 6 chars) skip this guard since transliteration variants
+    # legitimately share no trigrams (e.g. "Pooja" vs "Puja").
+    if ta and tb and not (ta & tb) and len(a_n) >= 6 and len(b_n) >= 6:
+        return 0.0
     return max(seq_ratio, jacc)
 
 
