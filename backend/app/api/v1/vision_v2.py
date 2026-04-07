@@ -103,35 +103,68 @@ STEP 2: OCR EXTRACTION
 If valid, extract verbatim text. Do not translate/summarize. Ignore text input bars.
 * Dating Profiles (no chat bubbles): Extract all visible profile text into a single raw_ocr_text object: sender="them", actual_new_message=all extracted text joined by newlines, quoted_context=null, is_reply=false. Skip to Step 3.
 * Chat Conversations:
-    SENDER IDENTIFICATION — use multi-signal triangulation, NOT a single heuristic.
+    SENDER IDENTIFICATION — use the avatar as your primary anchor. Follow every step in order.
+
+    !! COLOR AND ALIGNMENT ARE UNRELIABLE — DO NOT USE THEM AS PRIMARY SIGNALS !!
+    Bubble color changes with themes and dark mode. Bubble alignment (left/right) varies by
+    app version and OS. Both have high error rates. IGNORE them as primary signals.
+    The PROFILE AVATAR is theme-independent and always correct — anchor everything on it.
 
     Step A: DETECT THE APP — Write the app name into the `detected_app` field.
-    Identify which messaging/dating app is shown from UI chrome, colors, fonts, icons, or layout. Common apps and their USER bubble traits:
-       - Bumble: yellow/gold accent bubbles on the RIGHT = user
-       - Hinge: blue or purple accent bubbles on the RIGHT = user
-       - Tinder: blue accent bubbles on the RIGHT = user
-       - WhatsApp: light green bubbles on the RIGHT = user; gray on LEFT = them
-       - iMessage: blue (iMessage) or green (SMS) on the RIGHT = user; gray on LEFT = them
-       - Instagram: purple/blue gradient on the RIGHT = user; gray on LEFT = them
-       - Telegram: green bubbles on the RIGHT = user; white on LEFT = them
-    If the app is not listed above, proceed with general signals in Step B.
+    Identify the app from navigation chrome, icon shapes, button layout, or typography ONLY.
 
-    Step B: COLLECT ALL VISUAL SIGNALS (check every one that is visible):
-       Signal 1 — TEXT INPUT BAR: The compose/text-input area at the bottom belongs to the USER (the person who would type next).
-       Signal 2 — DELIVERY INDICATORS: "Sent", "Delivered", "Read", checkmarks (✓✓), or timestamps with delivery status appear ONLY on the USER's messages. This is the strongest signal.
-       Signal 3 — BUBBLE ALIGNMENT: In most LTR apps, RIGHT-aligned = user, LEFT-aligned = them.
-       Signal 4 — BUBBLE COLOR/STYLE: Accent-colored bubbles = user, neutral/gray = them. Cross-check with alignment.
-       Signal 5 — PROFILE ICONS/AVATARS: Small circular avatars next to bubbles typically mark "them". Not all apps show these.
-       Signal 6 — HEADER NAME: The name at the top of the screen is ALWAYS "them" (the match).
-       Signal 7 — TAIL/POINTER: Right-pointing tails = user, left-pointing = them (in LTR apps).
+    Step B: FIND THE AVATAR ANCHOR (do this before reading any bubbles)
+    Look for a small circular profile photo thumbnail in the chat thread.
+    In every dating/messaging app, this thumbnail belongs to the OTHER person ("them") —
+    you never see your own avatar floating next to your own messages.
+       → Every bubble that has this circular avatar directly adjacent to it = sender is "them".
+       → Every bubble that does NOT have this avatar next to it = sender is "user".
+    If no avatar is visible anywhere in the thread, fall back to Step C.
 
-    Step C: TRIANGULATE & WRITE REASONING — Write your reasoning into the `sender_signals_used` field BEFORE assigning any sender labels.
-    State which signals you observed and how they agree. Use at least 2 agreeing signals. Priority if they conflict: delivery indicators > text input bar > bubble alignment + avatar > color.
+    Step C: FALLBACK SIGNALS (use only if avatar is not visible)
+       Signal 1 — DELIVERY INDICATORS: "Sent", "Delivered", "Read", checkmarks (✓✓) appear
+           ONLY under the USER's messages. Strongest fallback signal.
+       Signal 2 — HEADER NAME: The name at the TOP of the screen is ALWAYS "them".
+           Their messages should be consistent with being from that named person.
+       Signal 3 — TEXT INPUT BAR: The compose box at the bottom belongs to the USER.
+           The side of screen the most recent non-input-bar bubbles are on tells you alignment.
+       Signal 4 — BUBBLE ALIGNMENT: RIGHT = user, LEFT = them in most LTR apps.
+           Use this LAST — it is the least reliable signal.
 
-    Step D: FINAL ASSIGNMENT — Apply the triangulated result consistently to ALL bubbles. NEVER use message text content or conversational semantics to guess the sender. Every bubble on the same side of the screen gets the same sender label.
+    Step D: WRITE REASONING into `sender_signals_used`.
+    State which signal you used as your anchor (avatar preferred) and what you concluded.
+    Your reasoning MUST NOT mention bubble color or shade.
+
+       ✅ CORRECT: "Arushi's circular avatar appears next to left-side bubbles → those are 'them'.
+          Bubbles without avatar → 'user'. Delivery receipt visible under one right-side bubble
+          confirms it is 'user'."
+       ❌ WRONG: "Purple/blue/gray bubbles = user or them." — color reasoning is BANNED.
+
+    Step E: FINAL ASSIGNMENT — Apply avatar-anchored labels consistently to ALL bubbles.
+    Every bubble adjacent to the match's avatar = "them". All others = "user".
+    NEVER infer sender from message content or conversational tone.
+
+    !! REPLY / QUOTED BUBBLES — COMMON MISTAKE ZONE !!
+    When someone replies to a specific message, their bubble shows a small faded preview of
+    the original message at the top, with their actual reply text below it. This creates a
+    bubble-within-a-bubble appearance. The rules are:
+
+       RULE 1 — The OUTER bubble's sender is determined by the avatar anchor (Step B), NOT by
+       whose text appears in the faded preview inside it.
+       Example: If the match (them) replies to YOUR message, their outer bubble will show YOUR
+       quoted text as a faded preview at the top, but the outer bubble sender is still "them".
+
+       RULE 2 — When the user's last action was sending a reply, the screenshot may show the
+       user's reply bubble sitting visually on top of or adjacent to the match's message.
+       The user's reply bubble sender = "user". The match's message below/behind it = "them".
+       Do not let the visual overlap confuse the sender assignment.
+
+       RULE 3 — The faded quoted preview text inside a bubble is NOT a separate bubble.
+       It belongs to quoted_context, not actual_new_message. Never create a separate raw_ocr_text
+       entry for a quoted preview — it is part of the parent bubble only.
 
     Then read top-to-bottom. For each bubble, extract a raw_ocr_text object:
-    * sender: "user" or "them" per Steps A–D (visual signals only — never from text semantics).
+    * sender: "user" or "them" per Steps A–E (structural signals only — never from text semantics or color).
     * actual_new_message: The NEW text the person typed — the main bubble content BELOW any quoted preview. NEVER copy the quoted/reply preview text here.
     * quoted_context: The faded/smaller reply-preview text ABOVE the main bubble (null if the bubble has no reply preview). On Instagram/WhatsApp, this is the small gray bar showing the original message being replied to.
     * is_reply: true if quoted_context is not null.
