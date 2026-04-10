@@ -164,8 +164,11 @@ def normalize_raw_ocr_text(raw_ocr_text: Any) -> list[dict[str, Any]]:
 
 def transcript_text_from_analysis(analysis: Any) -> str:
     """
-    Verbatim text the user is replying to: latest left-aligned ("them") bubble's
-    actual_new_message only (ignores quoted_context). Matches generator_node logic.
+    Verbatim text the user is replying to.
+
+    If the match sent multiple consecutive messages at the tail (double/triple text),
+    all of them are joined so the generator sees the full context of what she said,
+    not just her last bubble.
     """
     visual_transcript = getattr(analysis, "visual_transcript", None) or []
     if not isinstance(visual_transcript, list):
@@ -181,15 +184,22 @@ def transcript_text_from_analysis(analysis: Any) -> str:
             return str(bubble.get("actual_new_message") or "")
         return str(getattr(bubble, "actual_new_message", "") or "")
 
-    transcript_text = ""
+    # Collect all consecutive "them" messages at the tail of the transcript.
+    tail_them: list[str] = []
     for bubble in reversed(visual_transcript):
-        if _sender(bubble) == "them":
-            transcript_text = _actual(bubble)
-            break
+        sender = _sender(bubble)
+        if sender == "them":
+            text = _actual(bubble)
+            if text:
+                tail_them.append(text)
+        elif sender == "user":
+            break  # hit a user bubble — stop collecting
 
-    if transcript_text:
-        return transcript_text
+    if tail_them:
+        # Reverse so messages appear in chronological order when joined.
+        return " | ".join(reversed(tail_them))
 
+    # Fallback: return any non-empty message text from the tail.
     for bubble in reversed(visual_transcript):
         text = _actual(bubble)
         if text:

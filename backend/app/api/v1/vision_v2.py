@@ -133,12 +133,16 @@ If valid, extract verbatim text. Do not translate/summarize. Ignore text input b
 
     Step D: WRITE REASONING into `sender_signals_used`.
     State which signal you used as your anchor (avatar preferred) and what you concluded.
-    Your reasoning MUST NOT mention bubble color or shade.
+    Your reasoning MUST NOT mention any color word (purple, blue, gray, green, rose, dark, light,
+    colored, styled, accent, neutral, or any shade). If a color word appears in your reasoning,
+    DELETE it and rewrite using only the avatar, alignment, delivery indicator, or header name.
 
-       ✅ CORRECT: "Arushi's circular avatar appears next to left-side bubbles → those are 'them'.
-          Bubbles without avatar → 'user'. Delivery receipt visible under one right-side bubble
-          confirms it is 'user'."
-       ❌ WRONG: "Purple/blue/gray bubbles = user or them." — color reasoning is BANNED.
+       ✅ CORRECT: "Match's circular avatar appears next to bubbles on the left → those are 'them'.
+          Bubbles on the right without any avatar → 'user'. Header name confirms match identity."
+       ❌ WRONG (auto-fail): "The purple/colored bubbles belong to the match. The gray bubbles
+          are the user." — any sentence mentioning color must be deleted and rewritten.
+       ❌ ALSO WRONG: "Avatar next to the purple bubbles = them." — even mixing avatar + color
+          is banned. Say: "Avatar next to those bubbles = them." No color words at all.
 
     Step E: FINAL ASSIGNMENT — Apply avatar-anchored labels consistently to ALL bubbles.
     Every bubble adjacent to the match's avatar = "them". All others = "user".
