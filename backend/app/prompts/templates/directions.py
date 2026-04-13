@@ -1,8 +1,8 @@
 DIRECTION_PROMPTS: dict[str, str] = {
     "opener": """
-══════════════════════════════════════
+---
 DIRECTION: FIRST MESSAGE (OPENER)
-══════════════════════════════════════
+---
 
 Generate an engaging first message based on their profile. Do NOT say "Hey", "Hi", or any generic greeting.
 
@@ -20,9 +20,9 @@ Rules:
 - End with something that invites a response (a question, a tease, a challenge).
 - NEVER say "Hey!", "Hi there!", "How's your day?", or anything that sounds like a template.""",
     "quick_reply": """
-══════════════════════════════════════
+---
 DIRECTION: QUICK REPLY
-══════════════════════════════════════
+---
 
 Reply naturally. Continue the conversation in whatever direction feels right based on the vibe.
 
@@ -34,9 +34,9 @@ Match their energy:
 
 CRITICAL RULE: Always bounce the ball back. End with a subtle hook—a statement, a tease, or a casual question that makes it effortless for them to reply. Do not just answer their question and let the conversation die.""",
     "change_topic": """
-══════════════════════════════════════
+---
 DIRECTION: CHANGE TOPIC
-══════════════════════════════════════
+---
 
 CRITICAL OVERRIDE: You are explicitly granted permission to IGNORE the rule about hooking into their last message. The current topic is DEAD, boring, or they are giving low-effort replies (like "yup", "lol", "nice").
 EXEMPT FROM WORD COUNT: You are allowed to write more than her last message to successfully pivot.
@@ -52,9 +52,9 @@ Use one of these 3 strategies for your 4 replies:
 You MUST still follow the STYLE RULE (all lowercase, no punctuation).
 """,
     "tease": """
-══════════════════════════════════════
+---
 DIRECTION: TEASE THEM
-══════════════════════════════════════
+---
 
 Playfully tease or challenge them based on what they just said. Create fun friction.
 
@@ -72,9 +72,9 @@ Rules:
 - Read the room — if they seem sensitive, dial it back.
 - NEVER tease about appearance, weight, or anything actually personal.""",
     "get_number": """
-══════════════════════════════════════
+---
 DIRECTION: GET THEIR NUMBER / IG
-══════════════════════════════════════
+---
 
 Steer toward exchanging phone numbers or Instagram handles naturally. 
 
@@ -90,9 +90,9 @@ NEVER say:
 
 Make it feel like a casual, obvious next step.""",
     "ask_out": """
-══════════════════════════════════════
+---
 DIRECTION: ASK THEM OUT
-══════════════════════════════════════
+---
 
 CRITICAL OVERRIDE: You can ignore the rule about matching their last message length when asking them out.
 EXEMPT FROM WORD COUNT: You are allowed to be longer than her text so you can clearly propose a plan.
@@ -116,9 +116,9 @@ NEVER say:
 
 You MUST still follow the STYLE RULE (all lowercase, no punctuation).""",
     "revive_chat": """
-══════════════════════════════════════
+---
 DIRECTION: REVIVE DEAD CHAT
-══════════════════════════════════════
+---
 
 CRITICAL OVERRIDE: You are allowed to ignore the previous topic and last message when reviving the chat.
 EXEMPT FROM WORD COUNT: You can use more words than her last message to restart the energy.

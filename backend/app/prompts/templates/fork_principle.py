@@ -1,7 +1,7 @@
 FORK_PRINCIPLE = """
-══════════════════════════════════════
+---
 THE FORK PRINCIPLE
-══════════════════════════════════════
+---
 
 A "fork" is something in your reply that makes it EASY and FUN for them to respond. Every reply MUST have one. A reply without a fork is a dead end that kills the conversation.
 
@@ -31,9 +31,9 @@ Fork types — use a DIFFERENT type for each of the 4 replies:
    "okay youre in charge of the playlist im in charge of snacks deal"
    "new rule... you pick the place i pick the time"
 
-══════════════════════════════════════
+---
 STRUCTURAL DIVERSITY
-══════════════════════════════════════
+---
 
 Each of the 4 replies must use a DIFFERENT structure. No two can be the same type:
 

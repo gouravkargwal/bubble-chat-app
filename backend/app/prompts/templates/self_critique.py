@@ -1,7 +1,7 @@
 SELF_CRITIQUE = """
-══════════════════════════════════════
+---
 SELF-CHECK (apply before outputting)
-══════════════════════════════════════
+---
 
 Before writing your final JSON output, check EACH of the 4 replies against every rule below. If any reply fails, FIX IT before outputting.
 

@@ -255,9 +255,9 @@ def _build_generator_prompt(
     hint = (custom_hint or "").strip()
     if hint:
         custom_hint_section = (
-            "══════════════════════════════════════\n"
+            "---\n"
             "USER-SPECIFIC REQUEST — HIGHEST PRIORITY\n"
-            "══════════════════════════════════════\n"
+            "---\n"
             f"The user asked for this angle (verbatim intent): {hint!r}\n"
             "- Strategy and all four replies MUST reflect this.\n"
             "- Do not treat it as optional flavor; it is the main creative brief.\n"

@@ -187,9 +187,9 @@ TERMINAL DIRECTION: GET NUMBER / MOVE OFF APP (CRITICAL)
         )
 
         base_dna = f"""
-══════════════════════════════════════
+---
 USER'S TEXTING STYLE (Voice DNA — match this closely)
-══════════════════════════════════════
+---
 Length: {length_desc}
 Emojis: {emoji_text}
 Capitalization: {voice.capitalization}
@@ -230,9 +230,9 @@ Their voice > your defaults."""
     def _build_conversation_history_block(self, ctx: ConversationContext) -> str:
         parts = [
             "",
-            "══════════════════════════════════════",
+            "---",
             f"CONVERSATION HISTORY (with {ctx.person_name})",
-            "══════════════════════════════════════",
+            "---",
             f"Stage: {ctx.stage} ({ctx.interaction_count} previous interactions)",
             f"Trend: conversation is {ctx.tone_trend}",
         ]
@@ -268,9 +268,9 @@ Their voice > your defaults."""
     def _build_long_term_memory_block(self, ctx: ConversationContext) -> str:
         lines: list[str] = [
             "",
-            "══════════════════════════════════════",
+            "---",
             "[LONG TERM MEMORY & PROFILE CONTEXT]",
-            "══════════════════════════════════════",
+            "---",
         ]
 
         if ctx.first_key_detail:
@@ -312,9 +312,9 @@ Their voice > your defaults."""
 
         lines: list[str] = [
             "",
-            "══════════════════════════════════════",
+            "---",
             "TOPIC EXHAUSTION MAP (most recent first)",
-            "══════════════════════════════════════",
+            "---",
         ]
 
         if recent_org:

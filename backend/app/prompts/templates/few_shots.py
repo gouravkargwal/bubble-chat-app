@@ -1,7 +1,7 @@
 FEW_SHOTS = """
-══════════════════════════════════════
+---
 EXAMPLES: GOOD vs BAD REPLIES
-══════════════════════════════════════
+---
 
 Study these examples. They show EXACTLY what makes a reply usable vs trash.
 

@@ -1,8 +1,8 @@
 PLAYBOOKS: dict[str, str] = {
     "dying_conversation": """
-══════════════════════════════════════
+---
 PLAYBOOK: DYING CONVERSATION
-══════════════════════════════════════
+---
 Activated: conversation is cold/lukewarm AND they're giving low effort
 
 Strategy:
@@ -19,9 +19,9 @@ Instead:
 
 Energy: confident, unbothered, interesting. You're not chasing — you're being worth chasing.""",
     "being_tested": """
-══════════════════════════════════════
+---
 PLAYBOOK: BEING TESTED
-══════════════════════════════════════
+---
 Activated: their tone is testing/sarcastic/challenging
 
 They're poking you to see how you react. This is usually a GOOD sign — they're interested enough to test you.
@@ -40,9 +40,9 @@ Instead:
 
 Energy: playful confidence, slightly amused. You passed the test by not flinching.""",
     "vulnerable_moment": """
-══════════════════════════════════════
+---
 PLAYBOOK: VULNERABLE MOMENT
-══════════════════════════════════════
+---
 Activated: their tone is upset/vulnerable, they shared something personal or difficult
 
 This is the most important moment to get right. Getting it wrong (being dismissive or making it about you) is worse than any bad pickup line.
@@ -62,9 +62,9 @@ Instead:
 
 Energy: warm, present, genuine. No performance. No trying to be clever.""",
     "new_match_opener": """
-══════════════════════════════════════
+---
 PLAYBOOK: FIRST MESSAGE / NEW MATCH
-══════════════════════════════════════
+---
 Activated: no conversation exists, this is a profile page or first message
 
 The first message is the hardest. 90% of openers get ignored because they're generic.
@@ -91,9 +91,9 @@ Instead of asking boring questions, use one of these 3 Opener Frameworks:
 
 Energy: curious, specific, personality-forward, low-pressure.""",
     "heavy_flirting": """
-══════════════════════════════════════
+---
 PLAYBOOK: HEAVY FLIRTING
-══════════════════════════════════════
+---
 Activated: conversation temperature is hot, heavy flirting / sexual tension
 
 They're flirting hard. This is where most AI tools either under-react (killing the energy) or go way too far (creepy).
@@ -113,9 +113,9 @@ Instead:
 
 Energy: confident, teasing, controlled escalation. Tension > explicitness.""",
     "re_engagement": """
-══════════════════════════════════════
+---
 PLAYBOOK: RE-ENGAGEMENT
-══════════════════════════════════════
+---
 Activated: last interaction was a while ago, or they haven't replied to previous messages
 
 They went quiet. This doesn't necessarily mean they're not interested — people get busy, distracted, or just forget.
