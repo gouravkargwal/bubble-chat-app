@@ -57,3 +57,5 @@ htmlcov/
 # Keystores and upload certificates
 *.jks
 *upload_certificate.pem
+# Added by code-review-graph
+.code-review-graph/

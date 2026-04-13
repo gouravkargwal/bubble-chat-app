@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Used by GeminiClient, LangGraph nodes (v1 + v2), hybrid OCR, audits/blueprints.
     # Set GEMINI_MODEL in env (see .env.example).
     gemini_model: str = "gemini-2.5-flash"
+    # Fallback model used when the primary model returns 429 or 503 (capacity spike).
+    # Set GEMINI_FALLBACK_MODEL in env to override.
+    gemini_fallback_model: str = "gemini-2.5-flash-lite"
     # Embeddings for pgvector / semantic memory (LangChain GoogleGenerativeAIEmbeddings model id).
     gemini_embedding_model: str = "models/gemini-embedding-001"
 

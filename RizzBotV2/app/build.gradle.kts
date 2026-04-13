@@ -32,7 +32,7 @@ android {
         applicationId = "com.cookd.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
+        versionCode = 29
         versionName = "2.0.1"
 
         // Set via gradle.properties or Firebase Console → Authentication → Google
