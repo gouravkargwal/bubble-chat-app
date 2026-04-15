@@ -1,4 +1,4 @@
-.PHONY: dev test lint install migrate docker-dev docker-prod docker-down docker-down-prod db-shell eval
+.PHONY: dev test lint install migrate docker-dev docker-prod docker-down docker-down-prod db-shell eval eval-compare eval-category
 
 install:
 	pip install -e ".[dev]"
@@ -32,4 +32,10 @@ db-shell:
 	docker compose exec postgres psql -U cookd
 
 eval:
-	python -m app.testing.runner
+	python -m app.testing
+
+eval-compare:
+	python -m app.testing --variants default minimal no_critique no_examples --runs 2
+
+eval-category:
+	python -m app.testing --category $(CATEGORY)

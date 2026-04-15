@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "qwen/qwen3.5-9b"
 
+    # Groq — used by prompt eval judge
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
     # Google Play Billing
     google_play_service_account: str = ""
     google_play_package_name: str = "com.cookd.app"

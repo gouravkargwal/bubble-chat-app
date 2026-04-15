@@ -1,727 +1,326 @@
 [
   {
-    "id": "new_match_rich_profile_01",
+    "id": "new_match_hinglish_profile_01",
     "category": "new_match",
-    "description": "New Hinge match with detailed profile — loves cooking, has dog named Bruno, farmers market regular",
-    "screenshot_description": "Hinge profile page. Aisha, 26. Bio: 'chef in training, bruno's mom, probably at a farmers market rn'. Photos show her cooking, at a market, and with a golden retriever. No messages exchanged yet.",
-    "direction": "quick_reply",
-    "expected_stage": "new_match",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "must_reference": ["cooking", "bruno", "farmers market"],
-      "forbidden_patterns": ["Hey", "gorgeous", "beautiful", "how are you", "What's up"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "new_match_minimal_profile_02",
-    "category": "new_match",
-    "description": "Bumble match with minimal profile — just a name and one photo at a concert",
-    "screenshot_description": "Bumble match. Priya, 24. No bio. One photo at what appears to be a music festival, wearing a band tee. No messages yet.",
-    "direction": "quick_reply",
-    "expected_stage": "new_match",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "must_reference": ["concert", "music", "festival"],
-      "forbidden_patterns": ["Hey", "Hi there", "How are you"],
-      "max_length_chars": 120,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "new_match_hinge_prompts_03",
-    "category": "new_match",
-    "description": "Hinge profile with prompts — 'biggest risk I took' and 'I geek out on'",
-    "screenshot_description": "Hinge profile. Neha, 27. Prompt 1: 'Biggest risk I took: quit my corporate job to start a bakery'. Prompt 2: 'I geek out on: true crime podcasts and sourdough starters'. Photos show her in a bakery and hiking.",
-    "direction": "quick_reply",
-    "expected_stage": "new_match",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "must_reference": ["bakery", "corporate", "true crime", "sourdough"],
-      "forbidden_patterns": ["That's amazing", "brave", "I'd love to"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "new_match_photos_only_04",
-    "category": "new_match",
-    "description": "Tinder match with no bio, photos show travel and a cat",
-    "screenshot_description": "Tinder profile. Meera, 25. Empty bio. Photos: 1) In front of Eiffel Tower, 2) Holding a tabby cat, 3) Beach sunset selfie, 4) Group photo at a restaurant.",
-    "direction": "quick_reply",
-    "expected_stage": "new_match",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "must_reference": ["travel", "paris", "cat"],
-      "forbidden_patterns": ["beautiful", "stunning", "gorgeous", "Hey!"],
-      "max_length_chars": 130,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "new_match_witty_bio_05",
-    "category": "new_match",
-    "description": "Bumble profile with witty/sarcastic bio",
-    "screenshot_description": "Bumble profile. Riya, 23. Bio: 'swipe right if you can handle someone who thinks she's funnier than she actually is. also i will judge your spotify wrapped'. Photo shows her doing standup at an open mic.",
+    "description": "New Hinge match — Indian girl with Hinglish bio, chai obsessed, overthinking specialist, photos at a wedding and eating street food",
+    "their_last_message": "",
+    "person_name": "Ananya",
     "direction": "quick_reply",
     "expected_stage": "new_match",
     "expected_tone": "playful",
     "quality_criteria": {
-      "must_reference": ["funny", "spotify", "standup", "comedy"],
-      "forbidden_patterns": ["That's hilarious", "You seem fun", "I love your bio"],
-      "max_length_chars": 140,
+      "must_reference": [
+        "chai",
+        "wedding",
+        "maggi",
+        "overthinking"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "new_match_adventurous_06",
+    "id": "new_match_minimal_concert_02",
     "category": "new_match",
-    "description": "Profile shows skydiving, scuba, rock climbing",
-    "screenshot_description": "Hinge profile. Ananya, 28. Bio: 'adrenaline junkie trying to slow down. mostly failing.' Photos: skydiving, scuba diving with turtles, indoor rock climbing wall. Prompt: 'My simple pleasures: chai and rain'.",
+    "description": "Bumble match — minimal profile, one photo at a music festival, band tee, laughing in a crowd. No bio.",
+    "their_last_message": "",
+    "person_name": "Priya",
     "direction": "quick_reply",
     "expected_stage": "new_match",
     "expected_tone": "neutral",
     "quality_criteria": {
-      "must_reference": ["adventure", "skydiving", "scuba", "chai", "rain"],
-      "forbidden_patterns": ["Wow", "That's incredible", "You're brave"],
-      "max_length_chars": 150,
+      "must_reference": [
+        "festival",
+        "concert",
+        "music"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "new_match_bookworm_07",
+    "id": "new_match_bakery_risk_03",
     "category": "new_match",
-    "description": "Profile centered around reading and coffee",
-    "screenshot_description": "Bumble profile. Kavya, 26. Bio: 'currently reading: project hail mary. previously read: everything brandon sanderson ever wrote. will fight you about fantasy book rankings.' Photo at a bookstore and a coffee shop.",
+    "description": "Hinge profile — Neha quit her corporate job to start a bakery at 25. Prompt: 'I geek out on: true crime podcasts and sourdough starters'. Photos show her in a bakery covered in flour.",
+    "their_last_message": "",
+    "person_name": "Neha",
     "direction": "quick_reply",
     "expected_stage": "new_match",
     "expected_tone": "neutral",
     "quality_criteria": {
-      "must_reference": ["books", "reading", "hail mary", "sanderson", "fantasy"],
-      "forbidden_patterns": ["I love reading too", "What's your favorite book"],
-      "max_length_chars": 140,
+      "must_reference": [
+        "bakery",
+        "corporate",
+        "sourdough",
+        "true crime"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "new_match_fitness_08",
+    "id": "new_match_witty_sarcastic_04",
     "category": "new_match",
-    "description": "Profile shows gym, yoga, healthy lifestyle",
-    "screenshot_description": "Tinder profile. Simran, 25. Bio: 'gym at 6am, yoga at sunset, pizza at midnight. balance is key.' Photos: gym mirror selfie, yoga pose on a beach, eating pizza.",
+    "description": "Bumble profile — Riya, 23. Bio: 'swipe right if you can handle someone who thinks she's funnier than she actually is. also i WILL judge your spotify wrapped'. Photo at an open mic holding a mic mid-punchline.",
+    "their_last_message": "",
+    "person_name": "Riya",
     "direction": "quick_reply",
     "expected_stage": "new_match",
     "expected_tone": "playful",
     "quality_criteria": {
-      "must_reference": ["gym", "yoga", "pizza", "balance"],
-      "forbidden_patterns": ["You're so fit", "Wow you're dedicated", "I work out too"],
-      "max_length_chars": 140,
+      "must_reference": [
+        "spotify",
+        "standup",
+        "funny"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "early_they_asked_question_09",
+    "id": "early_pottery_obsession_05",
     "category": "early_conversation",
-    "description": "She asked 'so what do you do?' — generic question early in convo",
-    "screenshot_description": "Bumble chat. 4 messages exchanged. Her: 'haha nice. so what do you do?'. Previous messages were about weekend plans, light casual tone.",
-    "direction": "quick_reply",
-    "expected_stage": "early_talking",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "forbidden_patterns": ["I work as", "I'm a", "I do"],
-      "max_length_chars": 180,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "early_she_shared_hobby_10",
-    "category": "early_conversation",
-    "description": "She mentioned she just started learning pottery",
-    "screenshot_description": "Hinge chat. She sent: 'just started pottery classes last month and im obsessed lol'. Previous messages were casual getting to know each other.",
+    "description": "She just started pottery classes and is obsessed — early conversation, casual getting to know each other",
+    "their_last_message": "just started pottery classes last month and im literally obsessed... spent 3 hours on saturday just trying to make a bowl that doesnt look like a crime",
+    "person_name": "unknown",
     "direction": "quick_reply",
     "expected_stage": "early_talking",
     "expected_tone": "excited",
     "quality_criteria": {
-      "must_reference": ["pottery"],
-      "forbidden_patterns": ["That's so cool", "I love pottery", "That's awesome"],
-      "max_length_chars": 150,
+      "must_reference": [
+        "pottery",
+        "bowl"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "early_she_sent_meme_ref_11",
+    "id": "early_night_owl_youtube_06",
     "category": "early_conversation",
-    "description": "She referenced a meme about being a night owl",
-    "screenshot_description": "Tinder chat. She sent: 'im such a night owl its actually a problem lol i was up till 4am watching random youtube videos'. Light playful tone throughout.",
+    "description": "She's a self-confessed night owl — was up till 4am going down a YouTube rabbit hole about cults",
+    "their_last_message": "im such a night owl its genuinely a problem... was up till 4am last night going down a youtube rabbit hole about how cults recruit people",
+    "person_name": "unknown",
     "direction": "keep_playful",
     "expected_stage": "early_talking",
     "expected_tone": "playful",
     "quality_criteria": {
-      "must_reference": ["night owl", "youtube", "4am"],
-      "forbidden_patterns": ["You should sleep more", "That's not healthy"],
-      "max_length_chars": 150,
+      "must_reference": [
+        "4am",
+        "youtube",
+        "cults"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "early_one_word_reply_12",
+    "id": "early_one_word_replies_07",
     "category": "early_conversation",
-    "description": "She gave a one-word reply to a question",
-    "screenshot_description": "Bumble chat. Him: 'do you travel much?' Her: 'yeah'. Him: 'anywhere exciting recently?' Her: 'not really lol'. Tone is flat, low effort from her side.",
+    "description": "She's giving flat one-word replies — asked about travel, she said 'goa' and nothing more. No energy coming back but hasn't unmatched.",
+    "their_last_message": "idk everything lol",
+    "person_name": "unknown",
     "direction": "keep_playful",
     "expected_stage": "early_talking",
     "expected_tone": "dry",
     "quality_criteria": {
-      "forbidden_patterns": ["Tell me more", "What do you like", "?"],
-      "max_length_chars": 160,
-      "must_have_fork": true,
-      "must_not_ask_question": true
-    }
-  },
-  {
-    "id": "early_she_shared_food_13",
-    "category": "early_conversation",
-    "description": "She's talking about her love for street food",
-    "screenshot_description": "Hinge chat. She sent: 'honestly the best food ive ever had was from this random street vendor in bangkok... nothing fancy just incredible'. She seems enthusiastic.",
-    "direction": "quick_reply",
-    "expected_stage": "early_talking",
-    "expected_tone": "excited",
-    "quality_criteria": {
-      "must_reference": ["bangkok", "street food", "vendor"],
-      "forbidden_patterns": ["That sounds amazing", "I love Thai food"],
-      "max_length_chars": 150,
+      "must_reference": [
+        "goa"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "early_she_asked_about_weekend_14",
+    "id": "early_cat_chaos_08",
     "category": "early_conversation",
-    "description": "She asked what his plans are for the weekend",
-    "screenshot_description": "Tinder chat. She sent: 'any fun plans for the weekend?' Casual tone, few messages exchanged so far.",
-    "direction": "quick_reply",
-    "expected_stage": "early_talking",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "forbidden_patterns": ["Not much", "Nothing planned", "Just chilling"],
-      "max_length_chars": 160,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "early_she_made_joke_15",
-    "category": "early_conversation",
-    "description": "She made a self-deprecating joke about her cooking",
-    "screenshot_description": "Bumble chat. She sent: 'i tried making pasta from scratch yesterday and somehow ended up with glue... like actually inedible glue'. Playful, self-deprecating tone.",
-    "direction": "keep_playful",
-    "expected_stage": "early_talking",
-    "expected_tone": "playful",
-    "quality_criteria": {
-      "must_reference": ["pasta", "cooking", "glue"],
-      "forbidden_patterns": ["That's hilarious", "Haha that's so funny"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "early_she_mentioned_pet_16",
-    "category": "early_conversation",
-    "description": "She mentioned her cat doing something funny",
-    "screenshot_description": "Hinge chat. She sent: 'my cat just knocked my coffee off the table and then stared at me like it was my fault lol'. Light casual conversation.",
+    "description": "She told a funny story about her cat knocking over her coffee and staring at her like it was her fault",
+    "their_last_message": "my cat just knocked my coffee off the table and then sat there and stared at me like... what? as if i did something wrong",
+    "person_name": "unknown",
     "direction": "quick_reply",
     "expected_stage": "early_talking",
     "expected_tone": "playful",
     "quality_criteria": {
-      "must_reference": ["cat", "coffee"],
-      "forbidden_patterns": ["Cats are the best", "I love cats", "That's adorable"],
-      "max_length_chars": 140,
+      "must_reference": [
+        "cat",
+        "coffee"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "chemistry_light_flirting_17",
+    "id": "chemistry_youre_actually_funny_09",
     "category": "building_chemistry",
-    "description": "She sent a flirty message about wanting to meet",
-    "screenshot_description": "Bumble chat. Good vibes over 10+ messages. She sent: 'okay you're actually funny... most guys on here are so boring'. Clearly interested, light flirting.",
+    "description": "12 messages in, great banter. She said he's actually funny and most guys on here are so boring — clearly interested, light flirting starting",
+    "their_last_message": "okay you're actually funny... most guys on here are so boring it hurts. how are you real",
+    "person_name": "unknown",
     "direction": "quick_reply",
     "expected_stage": "building_chemistry",
     "expected_tone": "flirty",
     "quality_criteria": {
-      "forbidden_patterns": ["Thanks", "I appreciate that", "That means a lot"],
-      "max_length_chars": 130,
+      "must_reference": [],
       "must_have_fork": true
     }
   },
   {
-    "id": "chemistry_heavy_flirting_18",
+    "id": "chemistry_pineapple_pizza_war_10",
     "category": "building_chemistry",
-    "description": "She sent a suggestive message with eyes emoji",
-    "screenshot_description": "Tinder chat. Built great chemistry over days. She sent: 'so what are you doing tonight 👀'. Previous messages show mutual attraction and playful banter.",
-    "direction": "quick_reply",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "flirty",
-    "quality_criteria": {
-      "forbidden_patterns": ["I'd love to", "That sounds great", "Nothing much"],
-      "max_length_chars": 120,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "chemistry_inside_joke_19",
-    "category": "building_chemistry",
-    "description": "She referenced an inside joke from earlier in the conversation",
-    "screenshot_description": "Hinge chat. She sent: 'okay but this time you better not get lost like last time 😂' — referencing a story he told about getting lost on a hike. Great rapport.",
+    "description": "Playful argument about pineapple on pizza — she's dying on the 'war crime' hill and has declared it a dealbreaker",
+    "their_last_message": "absolutely not. pineapple on pizza is a war crime and i will die on this hill. unironically a dealbreaker",
+    "person_name": "unknown",
     "direction": "keep_playful",
     "expected_stage": "building_chemistry",
     "expected_tone": "playful",
     "quality_criteria": {
-      "must_reference": ["lost", "hike"],
-      "forbidden_patterns": ["Haha true", "You're right"],
-      "max_length_chars": 140,
+      "must_reference": [
+        "pineapple",
+        "pizza"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "chemistry_common_interest_20",
+    "id": "chemistry_khruangbin_moment_11",
     "category": "building_chemistry",
-    "description": "They discovered they both love the same obscure band",
-    "screenshot_description": "Bumble chat. She sent: 'WAIT you listen to khruangbin too?? okay we might actually be the same person'. Very excited tone, lots of energy.",
+    "description": "She discovered they both love Khruangbin — very excited, big moment in the chat",
+    "their_last_message": "WAIT you listen to khruangbin too?? okay we might genuinely be the same person. who got you into them",
+    "person_name": "unknown",
     "direction": "quick_reply",
     "expected_stage": "building_chemistry",
     "expected_tone": "excited",
     "quality_criteria": {
-      "must_reference": ["khruangbin", "music"],
-      "forbidden_patterns": ["Same!", "Me too!", "That's amazing"],
-      "max_length_chars": 150,
+      "must_reference": [
+        "khruangbin"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "chemistry_playful_disagree_21",
-    "category": "building_chemistry",
-    "description": "They're playfully arguing about pineapple on pizza",
-    "screenshot_description": "Tinder chat. She sent: 'absolutely not. pineapple on pizza is a war crime and i will die on this hill'. Playful argument energy, both having fun.",
-    "direction": "keep_playful",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "playful",
-    "quality_criteria": {
-      "must_reference": ["pineapple", "pizza"],
-      "forbidden_patterns": ["I respect your opinion", "Fair enough"],
-      "max_length_chars": 140,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "chemistry_she_complimented_22",
-    "category": "building_chemistry",
-    "description": "She gave a genuine compliment about his personality",
-    "screenshot_description": "Hinge chat. She sent: 'ngl youre one of the few people on here who actually makes me laugh... most convos feel like interviews'. Genuine, warm tone.",
-    "direction": "quick_reply",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "flirty",
-    "quality_criteria": {
-      "forbidden_patterns": ["Thanks!", "I appreciate that", "That's sweet", "Aww"],
-      "max_length_chars": 140,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "dying_one_word_streak_23",
+    "id": "dying_ghost_comeback_12",
     "category": "dying_conversation",
-    "description": "She's been giving one-word answers for the last 3 messages",
-    "screenshot_description": "Bumble chat. Last messages: Him: 'do you like traveling?' Her: 'yeah'. Him: 'where's your favorite place?' Her: 'goa'. Him: 'nice! what did you like about it?' Her: 'everything lol'. Pattern of declining effort.",
-    "direction": "keep_playful",
-    "expected_stage": "stalled",
-    "expected_tone": "dry",
-    "quality_criteria": {
-      "forbidden_patterns": ["?", "Tell me", "What about"],
-      "max_length_chars": 160,
-      "must_have_fork": true,
-      "must_not_ask_question": true
-    }
-  },
-  {
-    "id": "dying_late_reply_24",
-    "category": "dying_conversation",
-    "description": "She replied after 2 days with just 'haha sorry was busy'",
-    "screenshot_description": "Tinder chat. His last message was 2 days ago asking about her weekend. She just replied: 'haha sorry was busy'. Short, low effort, delayed response.",
-    "direction": "quick_reply",
-    "expected_stage": "stalled",
-    "expected_tone": "dry",
-    "quality_criteria": {
-      "forbidden_patterns": ["No worries", "No problem", "All good", "It's fine"],
-      "max_length_chars": 140,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "dying_generic_answers_25",
-    "category": "dying_conversation",
-    "description": "She's answering but with zero personality",
-    "screenshot_description": "Hinge chat. Him: 'what kind of music do you like?' Her: 'i listen to everything tbh'. Him: 'any recent favorites?' Her: 'not really just whatever comes on'. Polite but flat.",
-    "direction": "change_topic",
-    "expected_stage": "stalled",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "forbidden_patterns": ["Tell me more", "That's cool", "What about"],
-      "max_length_chars": 160,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "dying_only_lol_26",
-    "category": "dying_conversation",
-    "description": "She replied with just 'lol'",
-    "screenshot_description": "Bumble chat. He told a funny story about his day. She replied with just: 'lol'. Nothing else. Previous messages were somewhat better but trend is downward.",
-    "direction": "keep_playful",
-    "expected_stage": "stalled",
-    "expected_tone": "dry",
-    "quality_criteria": {
-      "forbidden_patterns": ["?", "Haha", "What about you"],
-      "max_length_chars": 140,
-      "must_have_fork": true,
-      "must_not_ask_question": true
-    }
-  },
-  {
-    "id": "dying_she_unmatched_topic_27",
-    "category": "dying_conversation",
-    "description": "She clearly wasn't interested in the topic he chose",
-    "screenshot_description": "Tinder chat. He asked about her job. She said 'its fine i guess, dont really like talking about work'. Conversation stalled after that.",
-    "direction": "change_topic",
-    "expected_stage": "early_talking",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "forbidden_patterns": ["work", "job", "career", "Tell me more"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "dying_no_reply_reopen_28",
-    "category": "dying_conversation",
-    "description": "She hasn't replied to his last message sent yesterday",
-    "screenshot_description": "Hinge chat. His last message yesterday was about a restaurant recommendation. No reply. Previous messages had okay energy but nothing exciting.",
+    "description": "Good conversation 2 weeks ago then she went silent. Now she texted back out of nowhere with no explanation of where she went.",
+    "their_last_message": "hey sorry been completely mia... life got chaotic. how have you been",
+    "person_name": "unknown",
     "direction": "quick_reply",
     "expected_stage": "stalled",
     "expected_tone": "neutral",
     "quality_criteria": {
-      "forbidden_patterns": ["Hey", "Did you see", "?"],
-      "max_length_chars": 140,
-      "must_have_fork": true,
-      "must_not_ask_question": true
+      "must_reference": [],
+      "must_have_fork": true
     }
   },
   {
-    "id": "testing_why_should_i_29",
+    "id": "dying_late_reply_busy_13",
+    "category": "dying_conversation",
+    "description": "He asked about her weekend 2 days ago. She just replied with a short low-effort apology — no substance.",
+    "their_last_message": "haha sorry was busy",
+    "person_name": "unknown",
+    "direction": "quick_reply",
+    "expected_stage": "stalled",
+    "expected_tone": "dry",
+    "quality_criteria": {
+      "must_reference": [],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "dying_lol_only_14",
+    "category": "dying_conversation",
+    "description": "He told a decent story about something funny that happened. She replied with just 'lol' — nothing else. Energy dropping for 4 messages now.",
+    "their_last_message": "lol",
+    "person_name": "unknown",
+    "direction": "keep_playful",
+    "expected_stage": "stalled",
+    "expected_tone": "dry",
+    "quality_criteria": {
+      "must_reference": [],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "testing_why_give_number_15",
     "category": "testing",
-    "description": "She challenged 'why should I give you my number'",
-    "screenshot_description": "Bumble chat. Good conversation so far. He suggested exchanging numbers. She replied: 'hmm why should i give you my number tho'. Playful but testing.",
+    "description": "Good conversation, he suggested moving to WhatsApp. She pushed back playfully — interested but testing his response.",
+    "their_last_message": "hmm why should i give you my number tho 🤔",
+    "person_name": "unknown",
     "direction": "get_number",
     "expected_stage": "building_chemistry",
     "expected_tone": "testing",
     "quality_criteria": {
-      "forbidden_patterns": ["Because", "I think we", "I'd love to", "I promise"],
-      "max_length_chars": 120,
+      "must_reference": [],
       "must_have_fork": true
     }
   },
   {
-    "id": "testing_sarcastic_30",
+    "id": "testing_sarcastic_generic_bio_16",
     "category": "testing",
-    "description": "She made a sarcastic comment about his bio",
-    "screenshot_description": "Tinder chat. She sent: 'oh wow another guy who loves travel, the office, and tacos... how original 😴'. Sarcastic but engaging — she's testing his reaction.",
+    "description": "Her opening message mocked his generic bio (travel, The Office, tacos). Sarcastic but she initiated — testing confidence, not actually uninterested.",
+    "their_last_message": "oh wow another guy who loves travel, the office, and tacos... how original 😴",
+    "person_name": "unknown",
     "direction": "quick_reply",
     "expected_stage": "early_talking",
     "expected_tone": "sarcastic",
     "quality_criteria": {
-      "forbidden_patterns": ["You're right", "I know", "Fair point", "I'm different"],
-      "max_length_chars": 140,
+      "must_reference": [
+        "office",
+        "tacos",
+        "travel"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "testing_prove_yourself_31",
-    "category": "testing",
-    "description": "She said 'convince me you're worth meeting'",
-    "screenshot_description": "Hinge chat. Decent conversation. She sent: 'okay convince me youre actually worth meeting irl'. Confident, challenging, but interested enough to engage.",
-    "direction": "ask_out",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "testing",
-    "quality_criteria": {
-      "forbidden_patterns": ["I'm actually really", "I promise", "I can cook"],
-      "max_length_chars": 140,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "testing_neg_32",
-    "category": "testing",
-    "description": "She negged him playfully about his photo",
-    "screenshot_description": "Bumble chat. She sent: 'cute dog in your pics... too bad it looks like it has more personality than you 😂'. Playful neg, testing his confidence.",
-    "direction": "keep_playful",
-    "expected_stage": "early_talking",
-    "expected_tone": "sarcastic",
-    "quality_criteria": {
-      "must_reference": ["dog"],
-      "forbidden_patterns": ["You're mean", "That's harsh", "Actually"],
-      "max_length_chars": 130,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "testing_comparison_33",
-    "category": "testing",
-    "description": "She compared him to other guys on the app",
-    "screenshot_description": "Tinder chat. She sent: 'okay youre like the 5th guy today to use that exact same opener lol'. She's unimpressed but still engaging.",
-    "direction": "quick_reply",
-    "expected_stage": "opening",
-    "expected_tone": "testing",
-    "quality_criteria": {
-      "forbidden_patterns": ["Sorry", "My bad", "I'll try harder", "I'm different"],
-      "max_length_chars": 130,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "vulnerable_bad_day_34",
+    "id": "vulnerable_boss_humiliated_17",
     "category": "vulnerable",
-    "description": "She had a terrible day at work",
-    "screenshot_description": "Hinge chat. They've been chatting for a few days. She sent: 'honestly today was awful... my boss basically humiliated me in front of the whole team and i just want to disappear'. Vulnerable, seeking support.",
+    "description": "Chatting a few days, good rapport. She had a terrible day — boss called out her report in front of the whole team. Seeking connection, not advice.",
+    "their_last_message": "today was genuinely awful... my boss called out my report in front of the whole team and basically said i was careless. i just want to disappear",
+    "person_name": "unknown",
     "direction": "go_deeper",
     "expected_stage": "building_chemistry",
     "expected_tone": "upset",
     "quality_criteria": {
-      "forbidden_patterns": ["!", "That sucks!", "I'm sorry!", "It'll get better", "Same thing happened to me", "You should"],
-      "max_length_chars": 160,
+      "must_reference": [
+        "boss",
+        "team"
+      ],
       "must_have_fork": true
     }
   },
   {
-    "id": "vulnerable_family_issue_35",
+    "id": "vulnerable_last_relationship_18",
     "category": "vulnerable",
-    "description": "She mentioned family stress",
-    "screenshot_description": "Bumble chat. Good rapport built over a week. She sent: 'sorry if im quiet today... dealing with some family stuff and its kinda draining'. Not specific, but clearly affected.",
-    "direction": "quick_reply",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "vulnerable",
-    "quality_criteria": {
-      "forbidden_patterns": ["!", "What happened", "Tell me about it", "It'll be okay", "Everything happens for a reason"],
-      "max_length_chars": 140,
-      "must_have_fork": false
-    }
-  },
-  {
-    "id": "vulnerable_insecurity_36",
-    "category": "vulnerable",
-    "description": "She expressed insecurity about dating",
-    "screenshot_description": "Hinge chat. She sent: 'honestly online dating makes me feel so insecure sometimes... like am i even interesting enough for someone to want to meet'. Genuine vulnerability.",
+    "description": "Deep conversation about trust. She unplanned-overshared that her last relationship left her messed up and it's hard to be open again.",
+    "their_last_message": "my last relationship kinda left me messed up ngl... its hard to actually be open with someone after that. i dont even know why im telling you this",
+    "person_name": "unknown",
     "direction": "go_deeper",
     "expected_stage": "deep_connection",
     "expected_tone": "vulnerable",
     "quality_criteria": {
-      "forbidden_patterns": ["You're amazing", "Don't say that", "You're beautiful", "Any guy would be lucky"],
-      "max_length_chars": 180,
+      "must_reference": [],
       "must_have_fork": true
     }
   },
   {
-    "id": "vulnerable_mentioned_ex_37",
-    "category": "vulnerable",
-    "description": "She briefly mentioned a past relationship",
-    "screenshot_description": "Tinder chat. During conversation about trust, she said: 'my last relationship kinda messed me up ngl... its hard to be open again after that'. Not asking for advice, just sharing.",
-    "direction": "go_deeper",
-    "expected_stage": "deep_connection",
-    "expected_tone": "vulnerable",
-    "quality_criteria": {
-      "forbidden_patterns": ["His loss", "You deserve better", "I would never", "What happened"],
-      "max_length_chars": 160,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "vulnerable_stressed_exam_38",
-    "category": "vulnerable",
-    "description": "She's stressed about upcoming exams",
-    "screenshot_description": "Bumble chat. She sent: 'ugh i have my finals next week and i havent started studying... im literally gonna fail'. Stressed but not deeply sad.",
-    "direction": "quick_reply",
-    "expected_stage": "early_talking",
-    "expected_tone": "upset",
-    "quality_criteria": {
-      "forbidden_patterns": ["You got this!", "You'll do great!", "I believe in you", "Just study hard"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "goal_get_number_warm_39",
+    "id": "goal_get_number_peak_chemistry_19",
     "category": "goal_oriented",
-    "description": "Great chemistry, ready to exchange numbers",
-    "screenshot_description": "Hinge chat. 15+ messages, great banter, shared interests discovered, both clearly enjoying the conversation. Her last message: 'okay you actually might be the most entertaining person ive matched with'.",
+    "description": "15+ messages, great banter, shared interests discovered. Peak chemistry moment — she called him the most entertaining person she's matched with.",
+    "their_last_message": "okay you might actually be the most entertaining person ive matched with... and ive been on here a while so that's saying something",
+    "person_name": "unknown",
     "direction": "get_number",
     "expected_stage": "building_chemistry",
     "expected_tone": "flirty",
     "quality_criteria": {
-      "forbidden_patterns": ["Can I get your number", "Want to text", "Give me your number"],
-      "max_length_chars": 160,
+      "must_reference": [],
       "must_have_fork": true
     }
   },
   {
-    "id": "goal_ask_out_specific_40",
+    "id": "goal_coffee_ask_out_20",
     "category": "goal_oriented",
-    "description": "She mentioned loving coffee, perfect moment to ask out",
-    "screenshot_description": "Bumble chat. She just said: 'honestly i could live off of good coffee... ive tried every cafe in the city at this point'. Good rapport, warm conversation.",
+    "description": "Warm conversation. She mentioned being obsessed with finding good coffee and having a ranked list of every cafe in the city — natural opening to ask her out.",
+    "their_last_message": "honestly i could live off good coffee... i have like a list of every cafe in the city ranked. its a problem",
+    "person_name": "unknown",
     "direction": "ask_out",
     "expected_stage": "building_chemistry",
     "expected_tone": "excited",
     "quality_criteria": {
-      "must_reference": ["coffee", "cafe"],
-      "forbidden_patterns": ["We should hang out", "Would you like to", "I'd love to take you"],
-      "max_length_chars": 160,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "goal_ask_out_cold_41",
-    "category": "goal_oriented",
-    "description": "Trying to ask out but conversation is lukewarm",
-    "screenshot_description": "Tinder chat. Conversation has been okay but not exciting. She's responding but with medium effort. Her last message: 'yeah that sounds fun'. Direction is ask_out but temperature doesn't support it yet.",
-    "direction": "ask_out",
-    "expected_stage": "early_talking",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "forbidden_patterns": ["Let's meet", "Are you free", "Want to go out"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "goal_move_to_insta_42",
-    "category": "goal_oriented",
-    "description": "She mentioned posting something on Instagram",
-    "screenshot_description": "Hinge chat. She sent: 'omg i just posted the funniest reel on instagram yesterday about exactly this'. Natural opening to move platforms.",
-    "direction": "get_number",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "excited",
-    "quality_criteria": {
-      "must_reference": ["instagram", "reel"],
-      "forbidden_patterns": ["What's your Instagram", "Can I follow you"],
-      "max_length_chars": 140,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "goal_suggest_call_43",
-    "category": "goal_oriented",
-    "description": "Deep conversation, perfect time to suggest a call",
-    "screenshot_description": "Bumble chat. Deep meaningful conversation about life goals. She sent: 'wow this is actually the best conversation ive had on this app... texting doesnt do it justice tho'. She's hinting at more.",
-    "direction": "ask_out",
-    "expected_stage": "deep_connection",
-    "expected_tone": "flirty",
-    "quality_criteria": {
-      "forbidden_patterns": ["Would you like to", "I'd love to", "That would be great"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "goal_get_number_early_44",
-    "category": "goal_oriented",
-    "description": "Too early to ask for number but user wants to try",
-    "screenshot_description": "Tinder chat. Only 3 messages exchanged. She seems interested but it's still very early. Her last message: 'haha yeah thats a good point'. User selected get_number direction.",
-    "direction": "get_number",
-    "expected_stage": "early_talking",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "forbidden_patterns": ["Give me your number", "Let's text", "My number is"],
-      "max_length_chars": 150,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "relationship_good_morning_45",
-    "category": "relationship",
-    "description": "Girlfriend sent a sweet good morning text",
-    "screenshot_description": "WhatsApp chat with girlfriend. She sent: 'good morning babe ☀️ hope you slept well. missing you today'. Sweet, warm tone. Established relationship.",
-    "direction": "quick_reply",
-    "expected_stage": "relationship",
-    "expected_tone": "excited",
-    "quality_criteria": {
-      "forbidden_patterns": ["Good morning to you too", "Thanks babe"],
-      "max_length_chars": 120,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "relationship_planning_date_46",
-    "category": "relationship",
-    "description": "Planning a date night with partner",
-    "screenshot_description": "WhatsApp chat. She sent: 'okay so friday night... what are we doing? i need something fun we havent done before'. Playful, excited, looking for suggestions.",
-    "direction": "ask_out",
-    "expected_stage": "relationship",
-    "expected_tone": "excited",
-    "quality_criteria": {
-      "must_reference": ["friday"],
-      "forbidden_patterns": ["Whatever you want", "I don't mind", "Up to you"],
-      "max_length_chars": 160,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "relationship_after_argument_47",
-    "category": "relationship",
-    "description": "After a small disagreement, she sent a peace offering",
-    "screenshot_description": "WhatsApp chat. Previous messages show a minor disagreement about plans. She sent: 'okay i think we were both being dumb about this... truce? 🏳️'. Ready to move past it.",
-    "direction": "quick_reply",
-    "expected_stage": "relationship",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "forbidden_patterns": ["You're right", "I'm sorry too", "I apologize", "It was my fault"],
-      "max_length_chars": 130,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "relationship_boring_tuesday_48",
-    "category": "relationship",
-    "description": "Nothing interesting happening, just keeping the connection",
-    "screenshot_description": "WhatsApp chat. She sent: 'this day is dragging soo much... entertain me'. Bored, looking for engagement, casual relationship tone.",
-    "direction": "keep_playful",
-    "expected_stage": "relationship",
-    "expected_tone": "playful",
-    "quality_criteria": {
-      "forbidden_patterns": ["How about", "What if we", "Why don't you"],
-      "max_length_chars": 140,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "relationship_she_achieved_something_49",
-    "category": "relationship",
-    "description": "She shared exciting news about a promotion",
-    "screenshot_description": "WhatsApp chat. She sent: 'BABE I GOT THE PROMOTION!!! 🎉🎉🎉 im literally shaking rn i cant believe it'. All caps excitement, huge news.",
-    "direction": "quick_reply",
-    "expected_stage": "relationship",
-    "expected_tone": "excited",
-    "quality_criteria": {
-      "must_reference": ["promotion"],
-      "forbidden_patterns": ["Congratulations!", "That's amazing!", "I'm so proud of you!", "You deserve it!"],
-      "max_length_chars": 140,
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "relationship_long_distance_miss_50",
-    "category": "relationship",
-    "description": "Long distance, she's expressing how much she misses him",
-    "screenshot_description": "WhatsApp chat. She sent: 'okay this long distance thing is getting harder... i just want to be able to come over and steal your hoodies in person'. Sweet, a bit sad, genuine.",
-    "direction": "go_deeper",
-    "expected_stage": "relationship",
-    "expected_tone": "vulnerable",
-    "quality_criteria": {
-      "must_reference": ["hoodies", "distance"],
-      "forbidden_patterns": ["I miss you too!", "Same here!", "It'll be worth it"],
-      "max_length_chars": 150,
+      "must_reference": [
+        "coffee",
+        "cafe"
+      ],
       "must_have_fork": true
     }
   }

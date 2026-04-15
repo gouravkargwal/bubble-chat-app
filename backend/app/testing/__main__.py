@@ -2,7 +2,6 @@
 
 import asyncio
 import argparse
-import sys
 
 from app.config import settings
 from app.infrastructure.logging import setup_logging
@@ -14,30 +13,36 @@ async def main() -> None:
     parser.add_argument("--category", type=str, default=None, help="Filter scenarios by category")
     parser.add_argument("--scenarios", nargs="+", default=None, help="Specific scenario IDs")
     parser.add_argument("--runs", type=int, default=1, help="Runs per scenario×variant combo")
-    parser.add_argument("--judge", action="store_true", help="Enable LLM judge evaluation")
-    parser.add_argument("--api-key", type=str, default=None, help="Gemini API key override")
-    parser.add_argument("--model", type=str, default=None, help="Model override")
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=None,
+        help="Seconds between API calls (default: 4.5 — respects Gemini 15 RPM)",
+    )
+    parser.add_argument("--model", type=str, default=None, help="Generator model override")
     parser.add_argument(
         "--judge-model",
         type=str,
-        default=settings.gemini_model,
-        help=f"Judge model (default: GEMINI_MODEL / {settings.gemini_model})",
+        default=settings.groq_model,
+        help=f"Groq judge model (default: {settings.groq_model})",
     )
     args = parser.parse_args()
 
     setup_logging("INFO", json_logs=False)
 
-    from app.testing.runner import TestRunner
+    from app.testing.runner import TestRunner, _INTER_CALL_DELAY_SECONDS
     from app.testing.reporter import generate_report
 
-    runner = TestRunner(gemini_api_key=args.api_key, model=args.model)
+    delay = args.delay if args.delay is not None else _INTER_CALL_DELAY_SECONDS
+    runner = TestRunner(model=args.model, inter_call_delay=delay)
 
     try:
         print(f"\nRunning evaluation...")
-        print(f"  Variants: {args.variants}")
-        print(f"  Category: {args.category or 'all'}")
-        print(f"  Runs per combo: {args.runs}")
-        print(f"  LLM Judge: {'enabled (' + args.judge_model + ')' if args.judge else 'disabled'}")
+        print(f"  Variants:         {args.variants}")
+        print(f"  Category:         {args.category or 'all'}")
+        print(f"  Runs per combo:   {args.runs}")
+        print(f"  Judge:            Groq / {args.judge_model}")
+        print(f"  Inter-call delay: {delay}s")
         print()
 
         result = await runner.run(
@@ -45,7 +50,6 @@ async def main() -> None:
             scenario_ids=args.scenarios,
             category=args.category,
             runs_per_combo=args.runs,
-            use_judge=args.judge,
             judge_model=args.judge_model,
         )
 
