@@ -99,10 +99,25 @@ PHASE 2: WRITE REPLIES
 * Mirroring: Match her length or be shorter. Max 1 question per reply. If she gives low effort, give low effort back.
 * Tactics:
     * Strategic Diversity (CRITICAL): Do NOT just paraphrase the same semantic idea four times. Every reply must offer a completely different conversational path. For example: Reply 1 can be deep and empathetic. Reply 2 must pivot to a lighter topic. Reply 3 must ask a question about her boundaries. If your 4 replies mean the exact same thing, you fail.
+    * Length Variety (CRITICAL): Do NOT make all 4 replies the same length. At least ONE reply must be deliberately short — 3-7 words max. Short replies signal confidence and are often the best move. Vary rhythm.
     * Tension Suspension: NEVER confirm/deny playful accusations. Suspend tension.
     * Vibe Continuity: Use voice_dna_dict. Do not switch styles.
     * Freshness: Do NOT reproduce or closely paraphrase any reply from conversation_context_dict.last_ai_replies_shown. Treat those as banned strings. Four genuinely different angles from what has already been shown.
     * Direction (Quick Reply): Standard reply, bounce ball back with a hook (tease, assumption, challenge). No dead statements.
+    * Naturalness (CRITICAL): Write like someone texting one-handed while distracted. Sentence fragments are natural ("wait actually", "nah but", "fr tho"). Do NOT write perfectly structured setup + punchline every time. Vary rhythm. Use her exact slang back — if she says "lowkey", you say "lowkey". Never upgrade her vocabulary.
+
+* Callback Hooks (HIGH VALUE): Check `conversation_context_dict.callback_hooks` — this is a list of specific things SHE has said in earlier turns. If ANY callback hook is naturally relevant to this moment, USE ONE in your replies. A callback to something specific she said earlier is the single most humanizing move possible. It shows you were actually listening. Example: if she mentioned her dog is named "Chaos" earlier and it's relevant now, use it.
+
+* Momentum Signal: Check `conversation_context_dict.momentum_score`. This is the count of consecutive successful recent exchanges.
+    * momentum_score >= 3: Conversation is on a hot streak. Maintain confidence, don't over-explain, keep energy up. Push slightly — this is the moment to escalate.
+    * momentum_score == 0 (with interaction_count >= 3): The current approach isn't landing. Try a completely different angle or energy.
+
+* Interest Signal Reading: Before writing replies, mentally assess:
+    * Did she ask questions back in her last message? (0 questions = low investment, 2+ = very high interest)
+    * Did she mention free time, weekend plans, or availability? → High interest signal — at least one reply should move toward something concrete.
+    * Did she use "we" or "us" framing? → She's picturing you two together. Build on this frame.
+    * Is her latest message longer than her previous ones? → Reward this investment with more engagement.
+    * If 2+ of these signals are true: the recommended reply should push the interaction forward (hint at meeting, suggest moving off app, or lock in a plan).
 
 PHASE 3: AUDIT & FILTER (Strict Constraints)
 Before finalizing, ensure all 4 replies pass these checks:
@@ -110,6 +125,11 @@ Before finalizing, ensure all 4 replies pass these checks:
 * Grounded: No corporate/therapy speak. Cannot be a generic line sent to anyone (needs a concrete hook).
 * Reply craft: Diverse shapes across the four replies; each leaves an easy response path (fork test).
 * Forbidden Phrases: No robotic fillers ("id love to", "i appreciate"). No dead openers ("hey", "hi", "so"). No starting with "haha", "hehe", "lol" unless directly reacting to a specific line. No lazy mirrors ("what about you"). No stacking 2+ questions.
+* No compliment traps: BANNED — "youre so [adj]", "aw", "thats sweet", "youre amazing". These hand over power for free and signal low status.
+* No weak/wishy-washy phrasing: BANNED — "maybe we could", "i feel like", "would you ever". Replace with direct, confident language.
+* No test-bait responses: If her message sounds like a flaking test ("maybe/we'll see/idk"), value test ("why should i text you"), availability test ("you probably say this to everyone"), or neediness trap ("you don't seem into this") — ZERO replies may be defensive, over-explaining, or seeking approval. The correct response never justifies, defends, or chases.
+* Length diversity check: Does at least ONE reply have 7 words or fewer? If not, make one. Short = confident.
+* Naturalness check: Are all 4 replies perfectly structured sentences? If so, break at least one into a fragment or trailing thought.
 
 {archetype_rules}
 
@@ -127,21 +147,18 @@ ARCHETYPE STRATEGY — THE BANTER GIRL:
 * Labels: Prioritize PUSH-PULL and PATTERN INTERRUPT.
 * Tone: Cocky, playful, unbothered. Tease, playfully misinterpret, or flip tests.
 * Restrictions: Do NOT be sincere or reassuring. If she accuses you playfully, do NOT confirm/deny. Suspend tension.""",
-
     "THE INTELLECTUAL": """
 ARCHETYPE STRATEGY — THE INTELLECTUAL:
 * Context: Substantive message with a real topic. Engage with it.
 * Labels: Prioritize VALUE ANCHOR and FRAME CONTROL.
 * Tone: Witty, thoughtful, culturally aware. Reference ideas/observations.
 * Restrictions: Match length to show depth. Avoid low-effort one-liners.""",
-
     "THE WARM/STEADY": """
 ARCHETYPE STRATEGY — THE WARM/STEADY:
 * Context: Friendly and engaged. Most common dynamic.
 * Labels: Mix PUSH-PULL (lightly), VALUE ANCHOR, FRAME CONTROL.
 * Tone: Confident, warm, fun. Light teasing is ok.
 * Restrictions: NO heavy sarcasm/cockiness (she isn't testing you). NO overly serious sincerity.""",
-
     "THE GUARDED/TESTER": """
 ARCHETYPE STRATEGY — THE GUARDED/TESTER:
 * Context: She is screening you. Wants a real answer.
@@ -149,7 +166,6 @@ ARCHETYPE STRATEGY — THE GUARDED/TESTER:
 * Tone: High-status sincerity. Clear and direct without oversharing.
 * Restrictions: STRICT NO deflection/jokes. STRICT NO PUSH-PULL/sarcasm (reads as avoidance).
     * Requirement: Among moves to avoid, MUST include "being evasive" and "deflecting with humor".""",
-
     "THE EAGER/DIRECT": """
 ARCHETYPE STRATEGY — THE EAGER/DIRECT:
 * Context: Interested and moving forward.
@@ -157,7 +173,6 @@ ARCHETYPE STRATEGY — THE EAGER/DIRECT:
 * Tone: Confident, warm, decisive. Match energy. Flirt back but lead toward logistics.
 * Restrictions: Do NOT create artificial tension or play games.
 * Requirement: At least one reply MUST include a concrete next step.""",
-
     "THE LOW-INVESTMENT": """
 ARCHETYPE STRATEGY — THE LOW-INVESTMENT:
 * Context: <4 words. Autopilot/filler.
@@ -178,18 +193,15 @@ DIRECTION — OPENER:
 * Goal: Specific "reaction comment" energy — playful assumptions, callbacks, or sincere engagement — never a generic greeting.
 * Restrictions: FORBIDDEN: "hi", "hey", "hello". FORBIDDEN: Generic looks compliments ("cute"). FORBIDDEN: Dead prompts ("hows your day").
 * Requirement: Four genuinely different angles; do not repeat the same hook or paraphrase the same detail twice.""",
-
     "quick_reply": """
 DIRECTION — QUICK REPLY:
 * Goal: Standard conversational reply based on the archetype.
 * Requirement: Always bounce the ball back with a hook (tease, assumption, challenge). No dead statements.""",
-
     "change_topic": """
 DIRECTION — CHANGE TOPIC:
 * Goal: Pivot to a genuinely fresh, specific angle grounded in profile/chemistry.
 * Source: Use ONLY `conversation_context_dict` for new topics. Do not repeat exhausted themes.
 * Restrictions: BANNED topics: pineapple on pizza, zombie apocalypse, teleportation, winning lottery, generic travel.""",
-
     "tease": """
 DIRECTION — TEASE:
 * Goal: Cocky-funny misinterpretation, cocky observation, or light challenge anchored to something she JUST said. Generic teases that could be sent to anyone are banned.
@@ -204,27 +216,23 @@ DIRECTION — TEASE:
 * HARD BANS for tease direction:
     - Do NOT echo her question back at her word-for-word (e.g. she asks "kyu milne aa rhe" → replying "kyu milne aa rhe ho tum" is NOT a tease, it's a mirror).
     - Do NOT use lazy deflections: "tumhe kya lagta hai", "tum hi batao", "tum soch ke batao" — these are conversation killers with no banter value.""",
-
     "revive_chat": """
 DIRECTION — REVIVE CHAT:
 * Goal: High-energy fresh restart.
 * Tactics: Callback with a twist ("wait i just realized...") OR completely fresh. 
 * Restrictions: BANNED lines: "hey stranger", "long time no speak", "sorry ive been mia".
 * Requirement: >=1 bold/unexpected angle. >=1 reference to core_lore/past_memories (if available).""",
-
     "get_number": """
 DIRECTION — GET NUMBER / MOVE OFF APP:
 * Goal: Move off the app.
 * Tactics: Casual style ("drop your number", "whatsapp pe switch karein"). Hot = direct. Warm = natural next step.
 * Restrictions: AVOID stiff asks without context ("can i get your number"). Teasing ONLY allowed if it ends in an off-app move.
 * Requirement: >=1 reply MUST explicitly transition off-app.""",
-
     "ask_out": """
 DIRECTION — ASK OUT:
 * Goal: Concrete plan (place, activity, or time). Not just "we should meet". Match the current vibe.
 * Restrictions: AVOID formal/vague lines ("would you like to go on a date", "hang out sometime").
 * Requirement: >=1 bold, direct ask. >=1 softer suggestion.""",
-
     "de_escalate": """
 DIRECTION — DE-ESCALATE:
 * Goal: Handle tension, tests, or upset feelings calmly. Show emotional maturity.
@@ -353,7 +361,9 @@ def generator_node(state: AgentState) -> dict:
         "user_custom_hint": custom_hint,
     }
     if direction == "opener":
-        payload["opener_hook_priority"] = opener_hook_priority(analysis, transcript_text)
+        payload["opener_hook_priority"] = opener_hook_priority(
+            analysis, transcript_text
+        )
 
     # --- On rewrite: inject the previous drafts + auditor feedback ---
     if is_rewrite:
@@ -393,7 +403,9 @@ def generator_node(state: AgentState) -> dict:
         transcript_chars=len(transcript_text or ""),
         core_lore_chars=len(core_lore),
         past_memories_chars=len(past_memories),
-        context_interaction_count=interaction_count if isinstance(interaction_count, int) else 0,
+        context_interaction_count=(
+            interaction_count if isinstance(interaction_count, int) else 0
+        ),
         has_voice_dna=bool(voice_dna),
     )
     logger.info(
@@ -406,9 +418,11 @@ def generator_node(state: AgentState) -> dict:
         model=GENERATOR_MODEL,
         phase=phase,
         payload_keys=sorted(payload.keys()),
-        payload_replies_count=len((payload.get("previous_replies") or {}).get("replies", []))
-        if isinstance(payload.get("previous_replies"), dict)
-        else 0,
+        payload_replies_count=(
+            len((payload.get("previous_replies") or {}).get("replies", []))
+            if isinstance(payload.get("previous_replies"), dict)
+            else 0
+        ),
     )
     messages = [
         SystemMessage(content=system_prompt),

@@ -18,6 +18,44 @@ from app.testing.scenarios.dataset import Scenario, get_all, get_by_category, ge
 
 logger = structlog.get_logger()
 
+# Enforce exact field names so parse_llm_response never sees invented names like reply_text.
+# Mirrors what invoke_structured_gemini + GeneratorOutput does in production.
+_EVAL_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "visual_transcript": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "sender": {"type": "string"},
+                    "side": {"type": "string"},
+                    "quoted_context": {"type": "string"},
+                    "actual_new_message": {"type": "string"},
+                    "is_reply_to_user": {"type": "boolean"},
+                },
+                "required": ["sender", "actual_new_message", "is_reply_to_user"],
+            },
+        },
+        "analysis": {"type": "object"},
+        "strategy": {"type": "object"},
+        "replies": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "strategy_label": {"type": "string"},
+                    "is_recommended": {"type": "boolean"},
+                    "coach_reasoning": {"type": "string"},
+                },
+                "required": ["text", "strategy_label", "is_recommended"],
+            },
+        },
+    },
+    "required": ["replies"],
+}
+
 
 @dataclass
 class RunResult:
@@ -188,7 +226,7 @@ class TestRunner:
                     if hasattr(payload, "max_output_tokens")
                     else 2000
                 ),
-                response_schema=None,
+                response_schema=_EVAL_RESPONSE_SCHEMA,
             )
             latency_ms = int((time.monotonic() - start) * 1000)
 

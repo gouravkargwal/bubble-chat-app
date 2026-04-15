@@ -44,4 +44,41 @@ BORING PATTERNS (technically human but zero personality):
 - "Interesting" → feels like you dont care
 - Answering a question without adding anything new → dead end
 - "What about you?" without context → lazy reciprocation
-- Just asking their question back → shows zero creativity"""
+- Just asking their question back → shows zero creativity
+
+COMPLIMENT TRAPS (giving free validation = kills attraction):
+- "You're so [adj]!" → handing over power for free
+- "That's so sweet" → sounds like a parent talking to a child
+- "Aw" / "Aww" → pure validation, no personality
+- "You're amazing" → unsolicited, AI-level flattery
+- Agreeing with everything they say → yes-man energy, boring
+- "I love that about you" → too much too fast
+- "That's really impressive" → teacher grading a student
+
+WEAK / WISHY-WASHY PATTERNS:
+- "Maybe we could..." → indecisive, no frame
+- "Would you ever...?" → hypothetical instead of direct
+- "I feel like..." → hedging your own opinion
+- "No way!" as fake enthusiasm → nobody believes this
+- "Really?" as a standalone question → sounds shocked like a grandmother
+- "Oh wow" as a full response → vapid
+- "That's so funny" without laughing → if it was funny, just laugh
+- "I mean..." as a sentence opener → verbal filler in text form
+- "So basically..." → explaining yourself before anyone asked
+- Apologizing before saying something → "sorry but..." = low confidence
+
+NEEDY / CHASING PATTERNS:
+- Double question marks "??" → anxious
+- "Did I say something wrong?" → insecure
+- "Are you busy?" before every message → seeking permission
+- "Let me know when you're free" → putting yourself on hold
+- Explaining why you didn't text sooner → nobody asked
+- Reacting to every single thing they say with a follow-up question → interview mode
+- Using "just" to soften asks → "just wanted to check in" = low status
+
+TEST-BAIT RESPONSES (what to NEVER do when being tested):
+- Getting defensive when challenged → "I'm actually a really nice person" = failed test
+- Over-explaining yourself → she asked one question, you write a paragraph = failed test
+- Matching her energy when she goes cold → mirrors low effort = dead end
+- Saying "why are you being like this?" → emotional reaction = she wins
+- Going extra complimentary when she pulls back → trying harder when she withdraws = needy"""

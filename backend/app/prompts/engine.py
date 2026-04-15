@@ -34,6 +34,7 @@ class PromptEngine:
         voice_dna: VoiceDNA | None = None,
         conversation_context: ConversationContext | None = None,
         variant_id: str = "default",
+        their_last_message: str = "",
     ) -> PromptPayload:
         variant = registry.get(variant_id)
         parts: list[str] = []
@@ -100,6 +101,7 @@ TERMINAL DIRECTION: GET NUMBER / MOVE OFF APP (CRITICAL)
                 temperature="warm",  # will be overridden by actual analysis
                 tone="neutral",
                 effort="medium",
+                their_last_message=their_last_message,
             )
             if playbook:
                 parts.append(playbook)
@@ -256,6 +258,31 @@ Their voice > your defaults."""
             for reply in ctx.recent_user_replies[-3:]:
                 preview = reply if len(reply) <= 80 else reply[:77] + "..."
                 parts.append(f"- {preview}")
+
+        # Callback hooks: specific phrases/details from her messages for natural callbacks
+        if ctx.callback_hooks:
+            parts.append("")
+            parts.append("CALLBACK HOOKS (specific things SHE said — use these for natural callbacks):")
+            for hook in ctx.callback_hooks[:5]:
+                parts.append(f"- {hook}")
+            parts.append(
+                "If any of these are naturally relevant to the current moment, USE ONE as a callback. "
+                "This is the highest-quality humanizing move — referencing something specific she said earlier."
+            )
+
+        # Momentum signal: how hot is the streak right now
+        if ctx.momentum_score >= 3:
+            parts.append("")
+            parts.append(
+                f"MOMENTUM: User has successfully used {ctx.momentum_score} replies in a row. "
+                "Conversation is on a hot streak. Maintain confidence, don't over-explain, keep energy up."
+            )
+        elif ctx.momentum_score == 0 and ctx.interaction_count >= 3:
+            parts.append("")
+            parts.append(
+                "MOMENTUM: User hasn't been using the suggested replies recently. "
+                "Try a different angle — the current approach may not be landing."
+            )
 
         parts.append("")
         parts.append(

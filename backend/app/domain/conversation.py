@@ -200,6 +200,38 @@ async def build_conversation_context(
         if len(last_ai_replies_shown) >= 3:
             break
 
+    # Build callback hooks: unique, hookable phrases from her recent messages.
+    # Pull from their_last_message and key_detail of the last 5 interactions.
+    callback_hooks: list[str] = []
+    seen_hooks: set[str] = set()
+    for interaction in recent_interactions:
+        for raw in [interaction.their_last_message, interaction.key_detail]:
+            if not raw:
+                continue
+            cleaned = raw.strip()
+            # Skip generic/empty values
+            if len(cleaned) < 5 or cleaned.lower() in ("unknown", "none", ""):
+                continue
+            # Deduplicate
+            key = cleaned[:60].lower()
+            if key not in seen_hooks:
+                seen_hooks.add(key)
+                callback_hooks.append(cleaned[:120])
+            if len(callback_hooks) >= 5:
+                break
+        if len(callback_hooks) >= 5:
+            break
+
+    # Momentum score: count of the most recent consecutive interactions where
+    # the user actually copied/used a reply (copied_index is not None).
+    # Resets as soon as we hit an interaction where nothing was copied.
+    momentum_score = 0
+    for interaction in recent_interactions:  # already newest-first
+        if interaction.copied_index is not None:
+            momentum_score += 1
+        else:
+            break  # streak broken
+
     return ConversationContext(
         person_name=conversation.person_name,
         stage=conversation.stage,
@@ -213,4 +245,6 @@ async def build_conversation_context(
         first_their_last_message=first_their_last_message,
         last_user_organic_texts=last_user_organic_texts[:3],
         last_ai_replies_shown=last_ai_replies_shown[:3],
+        callback_hooks=callback_hooks,
+        momentum_score=momentum_score,
     )

@@ -32,4 +32,10 @@ db-shell:
 	docker compose exec postgres psql -U cookd
 
 eval:
-	python -m app.testing.runner
+	python -m app.testing
+
+eval-judge:
+	python -m app.testing --variants default --runs 3 --judge
+
+eval-compare:
+	python -m app.testing --variants default minimal no_critique no_examples --runs 2

@@ -119,6 +119,12 @@ class ConversationContext:
     # Topic exhaustion guardrail inputs (most recent first).
     last_user_organic_texts: list[str] = field(default_factory=list)
     last_ai_replies_shown: list[str] = field(default_factory=list)
+    # Callback hooks: specific phrases/details from her messages that can be referenced
+    # for natural callbacks. Derived from recent interaction their_last_message + key_detail.
+    callback_hooks: list[str] = field(default_factory=list)
+    # Momentum score: count of recent consecutive positive interactions (copied_index set).
+    # Higher = conversation is hot, lower = stalling.
+    momentum_score: int = 0
 
 
 @dataclass
