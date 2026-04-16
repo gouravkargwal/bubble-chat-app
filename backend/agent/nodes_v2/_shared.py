@@ -226,6 +226,7 @@ def build_llm(
         temperature=temperature,
         timeout=LLM_TIMEOUT_SECONDS,
         max_retries=LLM_MAX_RETRIES,
+        google_api_key=settings.gemini_api_key,
     )
     if structured_output:
         return llm.with_structured_output(structured_output)

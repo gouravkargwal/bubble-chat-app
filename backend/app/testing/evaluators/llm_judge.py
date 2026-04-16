@@ -1,11 +1,17 @@
-"""LLM-as-judge evaluator — uses a separate LLM call to score reply quality."""
+"""LLM-as-judge evaluator — uses Groq (Llama 3.3 70B) to score reply quality.
+
+Groq is used instead of Gemini to avoid same-model bias: the generator runs on
+Gemini, so the judge must be a different model family for independent scoring.
+"""
 
 import json
-
-from app.llm.base import LlmClient
-from app.testing.scenarios.dataset import Scenario
-
+import re
 from dataclasses import dataclass
+
+import httpx
+
+from app.config import settings
+from app.testing.scenarios.dataset import Scenario
 
 
 @dataclass
@@ -19,7 +25,13 @@ class ReplyScore:
 
     @property
     def average(self) -> float:
-        return (self.specificity + self.human_voice + self.fork_quality + self.contextual_fit + self.usability) / 5
+        return (
+            self.specificity
+            + self.human_voice
+            + self.fork_quality
+            + self.contextual_fit
+            + self.usability
+        ) / 5
 
 
 @dataclass
@@ -31,6 +43,8 @@ class JudgeReport:
     improvement_notes: str = ""
 
 
+_SYSTEM_PROMPT = "You are a strict dating text quality evaluator. Output valid JSON only. No markdown, no explanation — pure JSON."
+
 _JUDGE_PROMPT = """You are a dating text quality evaluator. You score AI-generated reply suggestions for dating app conversations.
 
 You are STRICT. A score of 7+ means the reply is genuinely good enough to copy-paste and send. Most AI replies are 4-6 range. Only exceptional replies get 8+.
@@ -38,7 +52,7 @@ You are STRICT. A score of 7+ means the reply is genuinely good enough to copy-p
 ## SCENARIO
 {scenario_description}
 
-Their message context: {screenshot_description}
+Their last message: {their_last_message}
 Direction chosen: {direction}
 
 ## GENERATED REPLIES
@@ -89,19 +103,31 @@ USABILITY: Would a real person actually copy this and send it?
   "improvement_notes": "..."
 }}"""
 
+_GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
+# Groq free tier: 30 RPM for llama-3.3-70b-versatile → 2s min between calls
+_GROQ_RATE_LIMIT_BACKOFFS = [5, 15, 30]
+
 
 async def evaluate(
     scenario: Scenario,
     replies: list[str],
-    judge_client: LlmClient,
-    judge_model: str,
+    judge_client: object = None,  # kept for API compat, unused
+    judge_model: str | None = None,
+    _retry: int = 0,
 ) -> JudgeReport:
-    """Score replies using an LLM judge."""
+    """Score replies using Groq Llama 3.3 70B as judge."""
+    api_key = settings.groq_api_key
+    if not api_key:
+        raise ValueError(
+            "GROQ_API_KEY not set. Get a free key at https://console.groq.com"
+        )
+
+    model = judge_model or settings.groq_model
     padded = replies + ["(no reply)"] * (4 - len(replies))
 
     prompt = _JUDGE_PROMPT.format(
         scenario_description=scenario.description,
-        screenshot_description=scenario.screenshot_description,
+        their_last_message=scenario.their_last_message or scenario.description,
         direction=scenario.direction,
         reply_0=padded[0],
         reply_1=padded[1],
@@ -109,49 +135,75 @@ async def evaluate(
         reply_3=padded[3],
     )
 
-    # Use httpx directly for judge calls — needs higher token limit than generation
-    import httpx
-    api_key = judge_client.api_key  # type: ignore[attr-defined]
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{judge_model}"
-        f":generateContent?key={api_key}"
-    )
-    judge_payload = {
-        "systemInstruction": {"parts": [{"text": "You are a strict dating text quality evaluator. Output valid JSON only."}]},
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 4000,
-            "responseMimeType": "application/json",
-        },
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 2000,
+        "response_format": {"type": "json_object"},
     }
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=60.0)) as client:
-        resp = await client.post(url, json=judge_payload)
-        resp.raise_for_status()
-        resp_data = resp.json()
-        raw = resp_data["candidates"][0]["content"]["parts"][0]["text"]
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=60.0)) as client:
+            resp = await client.post(
+                _GROQ_BASE_URL,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            if resp.status_code == 429:
+                if _retry < len(_GROQ_RATE_LIMIT_BACKOFFS):
+                    import asyncio
+
+                    wait = _GROQ_RATE_LIMIT_BACKOFFS[_retry]
+                    await asyncio.sleep(wait)
+                    return await evaluate(
+                        scenario=scenario,
+                        replies=replies,
+                        judge_model=judge_model,
+                        _retry=_retry + 1,
+                    )
+                raise ValueError("Groq rate limit exceeded after retries")
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"] or ""
+    except httpx.HTTPStatusError as e:
+        raise ValueError(
+            f"Groq HTTP error {e.response.status_code}: {e.response.text[:200]}"
+        ) from e
+
+    raw = raw.strip()
+    # Groq occasionally returns content without outer {} — wrap it
+    if raw and not raw.startswith("{"):
+        raw = "{" + raw
+    if raw and not raw.endswith("}"):
+        raw = raw + "}"
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        # Try extracting JSON from code block
-        import re
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
             data = json.loads(match.group(0))
         else:
-            raise ValueError(f"Judge returned invalid JSON: {raw[:200]}")
+            raise ValueError(f"Judge returned invalid JSON: {raw[:300]}")
 
     reply_scores = []
     for score_data in data.get("reply_scores", [])[:4]:
-        reply_scores.append(ReplyScore(
-            specificity=float(score_data.get("specificity", 5)),
-            human_voice=float(score_data.get("human_voice", 5)),
-            fork_quality=float(score_data.get("fork_quality", 5)),
-            contextual_fit=float(score_data.get("contextual_fit", 5)),
-            usability=float(score_data.get("usability", 5)),
-            feedback=score_data.get("feedback", ""),
-        ))
+        reply_scores.append(
+            ReplyScore(
+                specificity=float(score_data.get("specificity", 5)),
+                human_voice=float(score_data.get("human_voice", 5)),
+                fork_quality=float(score_data.get("fork_quality", 5)),
+                contextual_fit=float(score_data.get("contextual_fit", 5)),
+                usability=float(score_data.get("usability", 5)),
+                feedback=score_data.get("feedback", ""),
+            )
+        )
 
     return JudgeReport(
         reply_scores=reply_scores,

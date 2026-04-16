@@ -1,60 +1,35 @@
-"""Test runner — runs prompt variants × scenarios × N runs and generates reports."""
+"""Test runner — calls generator_node + auditor_node directly, skipping vision/OCR."""
 
 import asyncio
+import json
 import time
 from dataclasses import dataclass, field
 
 import structlog
 
 from app.config import settings
-from app.llm.gemini_client import GeminiClient
-from app.llm.response_parser import parse_llm_response
-from app.prompts.engine import prompt_engine
-from app.prompts.variants import registry
-from app.testing.evaluators import rule_based
-from app.testing.evaluators.llm_judge import JudgeReport
+from app.testing.cache import clear as cache_clear
+from app.testing.cache import get as cache_get
+from app.testing.cache import put as cache_put
+from app.testing.cache import scenario_hash
+from app.testing.evaluators.llm_judge import JudgeReport, ReplyScore
 from app.testing.evaluators.llm_judge import evaluate as judge_evaluate
-from app.testing.scenarios.dataset import Scenario, get_all, get_by_category, get_by_id
+from app.testing.scenarios.dataset import (
+    Scenario,
+    build_analyst_output,
+    get_all,
+    get_by_category,
+    get_by_id,
+)
 
 logger = structlog.get_logger()
 
-# Enforce exact field names so parse_llm_response never sees invented names like reply_text.
-# Mirrors what invoke_structured_gemini + GeneratorOutput does in production.
-_EVAL_RESPONSE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "visual_transcript": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "sender": {"type": "string"},
-                    "side": {"type": "string"},
-                    "quoted_context": {"type": "string"},
-                    "actual_new_message": {"type": "string"},
-                    "is_reply_to_user": {"type": "boolean"},
-                },
-                "required": ["sender", "actual_new_message", "is_reply_to_user"],
-            },
-        },
-        "analysis": {"type": "object"},
-        "strategy": {"type": "object"},
-        "replies": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "text": {"type": "string"},
-                    "strategy_label": {"type": "string"},
-                    "is_recommended": {"type": "boolean"},
-                    "coach_reasoning": {"type": "string"},
-                },
-                "required": ["text", "strategy_label", "is_recommended"],
-            },
-        },
-    },
-    "required": ["replies"],
-}
+# Rate limits:
+#   Gemini (generator + auditor): 15 RPM → 4s min → use 4.5s
+#   Groq (judge): 30 RPM → 2s min → Gemini is the bottleneck, 4.5s covers both
+#   Gemini RPD: 500 → 50 scenarios × 2 calls = 100 (safe)
+#   Groq RPD: 14,400 → 50 × 1 = 50 (safe)
+_INTER_CALL_DELAY_SECONDS = 4.5  # Gemini-bound: 60 / 15 RPM + 0.5s buffer
 
 
 @dataclass
@@ -63,8 +38,9 @@ class RunResult:
     variant_id: str
     run_index: int
     replies: list[str]
-    rule_report: rule_based.RuleReport
     judge_report: JudgeReport | None = None
+    auditor_passes: bool | None = None  # None = auditor skipped
+    auditor_feedback: str = ""
     latency_ms: int = 0
     error: str | None = None
 
@@ -77,11 +53,6 @@ class ScenarioResult:
     runs: list[RunResult] = field(default_factory=list)
 
     @property
-    def avg_rule_score(self) -> float:
-        scores = [r.rule_report.overall_score for r in self.runs if not r.error]
-        return sum(scores) / len(scores) if scores else 0.0
-
-    @property
     def avg_judge_score(self) -> float:
         scores = [
             r.judge_report.overall_score
@@ -91,14 +62,39 @@ class ScenarioResult:
         return sum(scores) / len(scores) if scores else 0.0
 
     @property
-    def avg_ai_isms(self) -> float:
-        counts = [r.rule_report.ai_ism_count for r in self.runs if not r.error]
-        return sum(counts) / len(counts) if counts else 0.0
+    def avg_specificity(self) -> float:
+        scores = [
+            sum(s.specificity for s in r.judge_report.reply_scores)
+            / len(r.judge_report.reply_scores)
+            for r in self.runs
+            if r.judge_report and r.judge_report.reply_scores and not r.error
+        ]
+        return sum(scores) / len(scores) if scores else 0.0
 
     @property
-    def avg_fork_rate(self) -> float:
-        rates = [r.rule_report.fork_rate for r in self.runs if not r.error]
-        return sum(rates) / len(rates) if rates else 0.0
+    def avg_human_voice(self) -> float:
+        scores = [
+            sum(s.human_voice for s in r.judge_report.reply_scores)
+            / len(r.judge_report.reply_scores)
+            for r in self.runs
+            if r.judge_report and r.judge_report.reply_scores and not r.error
+        ]
+        return sum(scores) / len(scores) if scores else 0.0
+
+    @property
+    def avg_usability(self) -> float:
+        scores = [
+            sum(s.usability for s in r.judge_report.reply_scores)
+            / len(r.judge_report.reply_scores)
+            for r in self.runs
+            if r.judge_report and r.judge_report.reply_scores and not r.error
+        ]
+        return sum(scores) / len(scores) if scores else 0.0
+
+    @property
+    def auditor_pass_rate(self) -> float:
+        results = [r.auditor_passes for r in self.runs if r.auditor_passes is not None]
+        return sum(results) / len(results) if results else 0.0
 
 
 @dataclass
@@ -109,37 +105,49 @@ class TestSuiteResult:
         results = self.variant_results.get(variant_id, [])
         if not results:
             return {}
+        scored = [r for r in results if r.avg_judge_score > 0]
         return {
             "variant": variant_id,
             "scenarios_tested": len(results),
-            "avg_rule_score": sum(r.avg_rule_score for r in results) / len(results),
             "avg_judge_score": sum(r.avg_judge_score for r in results) / len(results),
-            "avg_ai_isms": sum(r.avg_ai_isms for r in results) / len(results),
-            "avg_fork_rate": sum(r.avg_fork_rate for r in results) / len(results),
-            "worst_scenario": min(results, key=lambda r: r.avg_rule_score).scenario_id,
-            "best_scenario": max(results, key=lambda r: r.avg_rule_score).scenario_id,
+            "avg_specificity": sum(r.avg_specificity for r in results) / len(results),
+            "avg_human_voice": sum(r.avg_human_voice for r in results) / len(results),
+            "avg_usability": sum(r.avg_usability for r in results) / len(results),
+            "auditor_pass_rate": sum(r.auditor_pass_rate for r in results)
+            / len(results),
+            "worst_scenario": (
+                min(results, key=lambda r: r.avg_judge_score).scenario_id
+                if scored
+                else "N/A"
+            ),
+            "best_scenario": (
+                max(results, key=lambda r: r.avg_judge_score).scenario_id
+                if scored
+                else "N/A"
+            ),
         }
 
 
 class TestRunner:
     def __init__(
-        self, gemini_api_key: str | None = None, model: str | None = None
+        self,
+        model: str | None = None,
+        inter_call_delay: float = _INTER_CALL_DELAY_SECONDS,
+        use_cache: bool = True,
     ) -> None:
-        api_key = gemini_api_key or settings.gemini_api_key
         self.model = model or settings.gemini_model
-        self.client = GeminiClient(api_key=api_key, default_model=self.model)
+        self.inter_call_delay = inter_call_delay
+        self.use_cache = use_cache
 
     async def run(
         self,
         variant_ids: list[str] | None = None,
         scenario_ids: list[str] | None = None,
         category: str | None = None,
-        runs_per_combo: int = 3,
-        use_judge: bool = False,
+        runs_per_combo: int = 1,
         judge_model: str | None = None,
     ) -> TestSuiteResult:
         """Run evaluation across variants × scenarios × N runs."""
-        # Resolve scenarios
         if scenario_ids:
             scenarios = [s for s in get_all() if s.id in scenario_ids]
         elif category:
@@ -147,7 +155,6 @@ class TestRunner:
         else:
             scenarios = get_all()
 
-        # Resolve variants
         if variant_ids is None:
             variant_ids = ["default"]
 
@@ -169,21 +176,32 @@ class TestRunner:
                         scenario=scenario,
                         variant_id=variant_id,
                         run_index=run_idx,
-                        use_judge=use_judge,
                         judge_model=judge_model,
                     )
+                    if run_result is None:
+                        logger.warning("scenario_skipped", scenario=scenario.id)
+                        continue
                     scenario_result.runs.append(run_result)
 
-                    # Rate limit: small delay between API calls
-                    await asyncio.sleep(0.5)
+                    # gen + audit + judge = 3 calls per run
+                    await asyncio.sleep(self.inter_call_delay * 3)
+
+                if not scenario_result.runs:
+                    logger.warning(
+                        "scenario_dropped",
+                        scenario=scenario.id,
+                        reason="all runs failed",
+                    )
+                    continue
 
                 scenario_results.append(scenario_result)
                 logger.info(
                     "scenario_complete",
                     scenario=scenario.id,
                     variant=variant_id,
-                    avg_rule=f"{scenario_result.avg_rule_score:.2f}",
-                    avg_judge=f"{scenario_result.avg_judge_score:.2f}",
+                    avg_judge=f"{scenario_result.avg_judge_score:.1f}",
+                    avg_usability=f"{scenario_result.avg_usability:.1f}",
+                    auditor_pass_rate=f"{scenario_result.auditor_pass_rate:.0%}",
                 )
 
             suite_result.variant_results[variant_id] = scenario_results
@@ -195,83 +213,168 @@ class TestRunner:
         scenario: Scenario,
         variant_id: str,
         run_index: int,
-        use_judge: bool,
         judge_model: str | None,
-    ) -> RunResult:
-        """Run a single scenario with a single variant."""
-        try:
-            # Build prompt
-            payload = prompt_engine.build(
-                direction=scenario.direction,
-                variant_id=variant_id,
-            )
+        _retry: int = 0,
+    ) -> RunResult | None:
+        """Call generator_node + auditor_node directly with a mock AnalystOutput.
 
-            # For text-only testing (no real screenshot), use the description as user prompt
-            user_prompt = (
-                f"{payload.user_prompt}\n\n"
-                f"[TESTING MODE - No screenshot available. Use this description instead:]\n"
-                f"{scenario.screenshot_description}"
-            )
+        Skips vision/OCR entirely — tests the prompt quality of the generator
+        and auditor, which is what determines reply quality in production.
 
-            # Call LLM
-            start = time.monotonic()
-            raw = await self.client.vision_generate(
-                system_prompt=payload.system_prompt,
-                user_prompt=user_prompt,
-                base64_images=[],  # No real image in test mode
-                temperature=payload.temperature,
-                model=self.model,
-                max_output_tokens=(
-                    payload.max_output_tokens
-                    if hasattr(payload, "max_output_tokens")
-                    else 2000
-                ),
-                response_schema=_EVAL_RESPONSE_SCHEMA,
-            )
-            latency_ms = int((time.monotonic() - start) * 1000)
+        Returns None if the run should be skipped (capacity error after retries).
+        """
+        s_hash = scenario_hash(scenario.model_dump())
 
-            # Parse response
-            parsed = parse_llm_response(raw)
-
-            # Convert ReplyOption objects to strings for testing evaluators
-            reply_strings = [r.text for r in parsed.replies]
-
-            # Rule-based evaluation
-            rule_report = rule_based.evaluate(reply_strings, scenario.quality_criteria)
-
-            # LLM judge evaluation (optional)
-            judge_report = None
-            if use_judge:
-                try:
-                    judge_report = await judge_evaluate(
-                        scenario=scenario,
-                        replies=reply_strings,
-                        judge_client=self.client,
-                        judge_model=judge_model or self.model,
+        # --- Cache read ---
+        if self.use_cache:
+            cached = cache_get(scenario.id, variant_id, run_index, s_hash)
+            if cached:
+                logger.info(
+                    "cache_hit",
+                    scenario=scenario.id,
+                    variant=variant_id,
+                )
+                judge_report = None
+                if cached["judge_report"]:
+                    jr_data = json.loads(cached["judge_report"])
+                    reply_scores = [
+                        ReplyScore(**s) for s in jr_data.get("reply_scores", [])
+                    ]
+                    judge_report = JudgeReport(
+                        reply_scores=reply_scores,
+                        overall_score=jr_data["overall_score"],
+                        best_reply_index=jr_data["best_reply_index"],
+                        worst_reply_index=jr_data["worst_reply_index"],
+                        improvement_notes=jr_data.get("improvement_notes", ""),
                     )
-                except Exception as je:
-                    logger.warning("judge_failed", scenario=scenario.id, error=str(je))
+                return RunResult(
+                    scenario_id=scenario.id,
+                    variant_id=variant_id,
+                    run_index=run_index,
+                    replies=json.loads(cached["replies"]),
+                    judge_report=judge_report,
+                    auditor_passes=(
+                        bool(cached["auditor_passes"])
+                        if cached["auditor_passes"] is not None
+                        else None
+                    ),
+                    auditor_feedback=cached["auditor_feedback"] or "",
+                    latency_ms=cached["latency_ms"] or 0,
+                )
+
+        _RATE_LIMIT_BACKOFFS = [15, 30, 60]
+        try:
+            from agent.nodes_v2._generator import generator_node
+            from agent.nodes_v2._auditor import auditor_node
+            from agent.state import AnalystOutput
+
+            # Build mock analyst output from scenario metadata
+            analyst_dict = build_analyst_output(scenario)
+            analysis = AnalystOutput(**analyst_dict)
+
+            # Minimal AgentState for generator
+            state: dict = {
+                "trace_id": f"eval_{scenario.id}_{run_index}",
+                "user_id": "eval",
+                "conversation_id": None,
+                "direction": scenario.direction,
+                "custom_hint": "",
+                "voice_dna_dict": {},
+                "conversation_context_dict": {},
+                "core_lore": "",
+                "past_memories": "",
+                "analysis": analysis,
+                "revision_count": 0,
+                "auditor_feedback": "",
+                "is_cringe": False,
+                "drafts": None,
+                "gemini_usage_log": [],
+            }
+
+            # --- Generator call ---
+            start = time.monotonic()
+            gen_out = await asyncio.to_thread(generator_node, state)
+            latency_ms = int((time.monotonic() - start) * 1000)
+            state.update(gen_out)
+
+            # --- Auditor call ---
+            await asyncio.sleep(self.inter_call_delay)
+            audit_out = await asyncio.to_thread(auditor_node, state)
+
+            # Extract replies
+            drafts = state.get("drafts")
+            if drafts is None:
+                raise ValueError("generator_node returned no drafts")
+
+            reply_strings = [r.text for r in drafts.replies[:4]]
+            auditor_passes = not audit_out.get("is_cringe", False)
+            auditor_feedback = audit_out.get("auditor_feedback", "")
+
+            # --- LLM judge (always runs) ---
+            judge_report = None
+            await asyncio.sleep(self.inter_call_delay)
+            try:
+                judge_report = await judge_evaluate(
+                    scenario=scenario,
+                    replies=reply_strings,
+                    judge_model=judge_model,
+                )
+            except Exception as je:
+                logger.warning("judge_failed", scenario=scenario.id, error=str(je))
+
+            # --- Cache write ---
+            if self.use_cache:
+                jr_dict = None
+                if judge_report:
+                    from dataclasses import asdict
+
+                    jr_dict = asdict(judge_report)
+                cache_put(
+                    scenario_id=scenario.id,
+                    variant_id=variant_id,
+                    run_index=run_index,
+                    s_hash=s_hash,
+                    replies=reply_strings,
+                    judge_report_dict=jr_dict,
+                    auditor_passes=auditor_passes,
+                    auditor_feedback=auditor_feedback,
+                    latency_ms=latency_ms,
+                )
 
             return RunResult(
                 scenario_id=scenario.id,
                 variant_id=variant_id,
                 run_index=run_index,
                 replies=reply_strings,
-                rule_report=rule_report,
                 judge_report=judge_report,
+                auditor_passes=auditor_passes,
+                auditor_feedback=auditor_feedback,
                 latency_ms=latency_ms,
             )
 
         except Exception as e:
-            logger.error("run_failed", scenario=scenario.id, error=str(e))
-            return RunResult(
-                scenario_id=scenario.id,
-                variant_id=variant_id,
-                run_index=run_index,
-                replies=[],
-                rule_report=rule_based.RuleReport(overall_score=0.0),
-                error=str(e),
+            err = str(e)
+            is_capacity = (
+                "capacity error" in err.lower() or "429" in err or "503" in err
             )
+            if is_capacity and _retry < len(_RATE_LIMIT_BACKOFFS):
+                wait = _RATE_LIMIT_BACKOFFS[_retry]
+                logger.warning(
+                    "rate_limit_backoff",
+                    scenario=scenario.id,
+                    retry=_retry + 1,
+                    wait_seconds=wait,
+                )
+                await asyncio.sleep(wait)
+                return await self._run_single(
+                    scenario=scenario,
+                    variant_id=variant_id,
+                    run_index=run_index,
+                    judge_model=judge_model,
+                    _retry=_retry + 1,
+                )
+            logger.error("run_failed_skip", scenario=scenario.id, error=err)
+            return None
 
     async def close(self) -> None:
-        await self.client.close()
+        pass  # no persistent client to close
