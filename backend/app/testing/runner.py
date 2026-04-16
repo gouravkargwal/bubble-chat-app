@@ -322,13 +322,10 @@ class TestRunner:
             except Exception as je:
                 logger.warning("judge_failed", scenario=scenario.id, error=str(je))
 
-            # --- Cache write ---
-            if self.use_cache:
-                jr_dict = None
-                if judge_report:
-                    from dataclasses import asdict
-
-                    jr_dict = asdict(judge_report)
+            # --- Cache write (only when judge succeeded) ---
+            if self.use_cache and judge_report is not None:
+                from dataclasses import asdict
+                jr_dict = asdict(judge_report)
                 cache_put(
                     scenario_id=scenario.id,
                     variant_id=variant_id,
