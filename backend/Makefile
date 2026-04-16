@@ -1,4 +1,4 @@
-.PHONY: dev test lint install migrate docker-dev docker-prod docker-down docker-down-prod db-shell eval eval-compare eval-category
+.PHONY: dev test lint install migrate docker-dev docker-prod docker-down docker-down-prod db-shell eval eval-compare eval-category eval-before eval-after eval-diff
 
 install:
 	pip install -e ".[dev]"
@@ -34,8 +34,22 @@ db-shell:
 eval:
 	python -m app.testing
 
-eval-compare:
-	python -m app.testing --variants default minimal no_critique no_examples --runs 2
-
 eval-category:
 	python -m app.testing --category $(CATEGORY)
+
+# Before/after prompt comparison workflow:
+#   1. make eval-before          (run baseline, cached as variant "before")
+#   2. edit your prompts
+#   3. make eval-after           (run new prompts, cached as variant "after")
+#   4. make eval-diff            (show both variants side by side)
+eval-before:
+	python -m app.testing --variants before | tee before.txt
+
+eval-after:
+	python -m app.testing --variants after | tee after.txt
+
+eval-diff:
+	python -m app.testing --variants before after
+
+eval-compare:
+	python -m app.testing --variants default minimal no_critique no_examples --runs 2

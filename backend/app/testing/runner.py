@@ -1,13 +1,18 @@
 """Test runner — calls generator_node + auditor_node directly, skipping vision/OCR."""
 
 import asyncio
+import json
 import time
 from dataclasses import dataclass, field
 
 import structlog
 
 from app.config import settings
-from app.testing.evaluators.llm_judge import JudgeReport
+from app.testing.cache import clear as cache_clear
+from app.testing.cache import get as cache_get
+from app.testing.cache import put as cache_put
+from app.testing.cache import scenario_hash
+from app.testing.evaluators.llm_judge import JudgeReport, ReplyScore
 from app.testing.evaluators.llm_judge import evaluate as judge_evaluate
 from app.testing.scenarios.dataset import (
     Scenario,
@@ -128,9 +133,11 @@ class TestRunner:
         self,
         model: str | None = None,
         inter_call_delay: float = _INTER_CALL_DELAY_SECONDS,
+        use_cache: bool = True,
     ) -> None:
         self.model = model or settings.gemini_model
         self.inter_call_delay = inter_call_delay
+        self.use_cache = use_cache
 
     async def run(
         self,
@@ -216,6 +223,45 @@ class TestRunner:
 
         Returns None if the run should be skipped (capacity error after retries).
         """
+        s_hash = scenario_hash(scenario.model_dump())
+
+        # --- Cache read ---
+        if self.use_cache:
+            cached = cache_get(scenario.id, variant_id, run_index, s_hash)
+            if cached:
+                logger.info(
+                    "cache_hit",
+                    scenario=scenario.id,
+                    variant=variant_id,
+                )
+                judge_report = None
+                if cached["judge_report"]:
+                    jr_data = json.loads(cached["judge_report"])
+                    reply_scores = [
+                        ReplyScore(**s) for s in jr_data.get("reply_scores", [])
+                    ]
+                    judge_report = JudgeReport(
+                        reply_scores=reply_scores,
+                        overall_score=jr_data["overall_score"],
+                        best_reply_index=jr_data["best_reply_index"],
+                        worst_reply_index=jr_data["worst_reply_index"],
+                        improvement_notes=jr_data.get("improvement_notes", ""),
+                    )
+                return RunResult(
+                    scenario_id=scenario.id,
+                    variant_id=variant_id,
+                    run_index=run_index,
+                    replies=json.loads(cached["replies"]),
+                    judge_report=judge_report,
+                    auditor_passes=(
+                        bool(cached["auditor_passes"])
+                        if cached["auditor_passes"] is not None
+                        else None
+                    ),
+                    auditor_feedback=cached["auditor_feedback"] or "",
+                    latency_ms=cached["latency_ms"] or 0,
+                )
+
         _RATE_LIMIT_BACKOFFS = [15, 30, 60]
         try:
             from agent.nodes_v2._generator import generator_node
@@ -261,6 +307,8 @@ class TestRunner:
                 raise ValueError("generator_node returned no drafts")
 
             reply_strings = [r.text for r in drafts.replies[:4]]
+            auditor_passes = not audit_out.get("is_cringe", False)
+            auditor_feedback = audit_out.get("auditor_feedback", "")
 
             # --- LLM judge (always runs) ---
             judge_report = None
@@ -274,14 +322,33 @@ class TestRunner:
             except Exception as je:
                 logger.warning("judge_failed", scenario=scenario.id, error=str(je))
 
+            # --- Cache write ---
+            if self.use_cache:
+                jr_dict = None
+                if judge_report:
+                    from dataclasses import asdict
+
+                    jr_dict = asdict(judge_report)
+                cache_put(
+                    scenario_id=scenario.id,
+                    variant_id=variant_id,
+                    run_index=run_index,
+                    s_hash=s_hash,
+                    replies=reply_strings,
+                    judge_report_dict=jr_dict,
+                    auditor_passes=auditor_passes,
+                    auditor_feedback=auditor_feedback,
+                    latency_ms=latency_ms,
+                )
+
             return RunResult(
                 scenario_id=scenario.id,
                 variant_id=variant_id,
                 run_index=run_index,
                 replies=reply_strings,
                 judge_report=judge_report,
-                auditor_passes=not audit_out.get("is_cringe", False),
-                auditor_feedback=audit_out.get("auditor_feedback", ""),
+                auditor_passes=auditor_passes,
+                auditor_feedback=auditor_feedback,
                 latency_ms=latency_ms,
             )
 

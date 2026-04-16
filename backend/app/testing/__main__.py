@@ -26,15 +26,34 @@ async def main() -> None:
         default=settings.groq_model,
         help=f"Groq judge model (default: {settings.groq_model})",
     )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        default=False,
+        help="Ignore cache and re-run all scenarios",
+    )
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        default=False,
+        help="Clear all cached results and exit",
+    )
     args = parser.parse_args()
 
     setup_logging("INFO", json_logs=False)
 
+    from app.testing.cache import clear as cache_clear
     from app.testing.runner import TestRunner, _INTER_CALL_DELAY_SECONDS
     from app.testing.reporter import generate_report
 
+    if args.clear_cache:
+        count = cache_clear()
+        print(f"Cache cleared ({count} rows deleted).")
+        return
+
     delay = args.delay if args.delay is not None else _INTER_CALL_DELAY_SECONDS
-    runner = TestRunner(model=args.model, inter_call_delay=delay)
+    use_cache = not args.fresh
+    runner = TestRunner(model=args.model, inter_call_delay=delay, use_cache=use_cache)
 
     try:
         print(f"\nRunning evaluation...")
@@ -43,6 +62,7 @@ async def main() -> None:
         print(f"  Runs per combo:   {args.runs}")
         print(f"  Judge:            Groq / {args.judge_model}")
         print(f"  Inter-call delay: {delay}s")
+        print(f"  Cache:            {'disabled (--fresh)' if args.fresh else 'enabled'}")
         print()
 
         result = await runner.run(
