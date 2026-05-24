@@ -8,84 +8,13 @@
     "direction": "quick_reply",
     "expected_stage": "new_match",
     "expected_tone": "playful",
+    "top_hooks": ["chai obsessed", "overthinking specialist", "wedding photos", "street food", "maggi"],
     "quality_criteria": {
       "must_reference": [
         "chai",
         "wedding",
         "maggi",
         "overthinking"
-      ],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "new_match_minimal_concert_02",
-    "category": "new_match",
-    "description": "Bumble match — minimal profile, one photo at a music festival, band tee, laughing in a crowd. No bio.",
-    "their_last_message": "",
-    "person_name": "Priya",
-    "direction": "quick_reply",
-    "expected_stage": "new_match",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "must_reference": [
-        "festival",
-        "concert",
-        "music"
-      ],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "new_match_bakery_risk_03",
-    "category": "new_match",
-    "description": "Hinge profile — Neha quit her corporate job to start a bakery at 25. Prompt: 'I geek out on: true crime podcasts and sourdough starters'. Photos show her in a bakery covered in flour.",
-    "their_last_message": "",
-    "person_name": "Neha",
-    "direction": "quick_reply",
-    "expected_stage": "new_match",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "must_reference": [
-        "bakery",
-        "corporate",
-        "sourdough",
-        "true crime"
-      ],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "new_match_witty_sarcastic_04",
-    "category": "new_match",
-    "description": "Bumble profile — Riya, 23. Bio: 'swipe right if you can handle someone who thinks she's funnier than she actually is. also i WILL judge your spotify wrapped'. Photo at an open mic holding a mic mid-punchline.",
-    "their_last_message": "",
-    "person_name": "Riya",
-    "direction": "quick_reply",
-    "expected_stage": "new_match",
-    "expected_tone": "playful",
-    "quality_criteria": {
-      "must_reference": [
-        "spotify",
-        "standup",
-        "funny"
-      ],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "early_pottery_obsession_05",
-    "category": "early_conversation",
-    "description": "She just started pottery classes and is obsessed — early conversation, casual getting to know each other",
-    "their_last_message": "just started pottery classes last month and im literally obsessed... spent 3 hours on saturday just trying to make a bowl that doesnt look like a crime",
-    "person_name": "unknown",
-    "direction": "quick_reply",
-    "expected_stage": "early_talking",
-    "expected_tone": "excited",
-    "quality_criteria": {
-      "must_reference": [
-        "pottery",
-        "bowl"
       ],
       "must_have_fork": true
     }
@@ -99,6 +28,7 @@
     "direction": "keep_playful",
     "expected_stage": "early_talking",
     "expected_tone": "playful",
+    "top_hooks": ["4am", "youtube rabbit hole", "cults recruit people", "night owl", "genuinely a problem"],
     "quality_criteria": {
       "must_reference": [
         "4am",
@@ -117,26 +47,10 @@
     "direction": "keep_playful",
     "expected_stage": "early_talking",
     "expected_tone": "dry",
+    "top_hooks": ["goa", "idk everything", "one-word replies", "low effort"],
     "quality_criteria": {
       "must_reference": [
         "goa"
-      ],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "early_cat_chaos_08",
-    "category": "early_conversation",
-    "description": "She told a funny story about her cat knocking over her coffee and staring at her like it was her fault",
-    "their_last_message": "my cat just knocked my coffee off the table and then sat there and stared at me like... what? as if i did something wrong",
-    "person_name": "unknown",
-    "direction": "quick_reply",
-    "expected_stage": "early_talking",
-    "expected_tone": "playful",
-    "quality_criteria": {
-      "must_reference": [
-        "cat",
-        "coffee"
       ],
       "must_have_fork": true
     }
@@ -150,6 +64,7 @@
     "direction": "quick_reply",
     "expected_stage": "building_chemistry",
     "expected_tone": "flirty",
+    "top_hooks": ["actually funny", "most guys are boring", "how are you real", "it hurts"],
     "quality_criteria": {
       "must_reference": [],
       "must_have_fork": true
@@ -164,6 +79,7 @@
     "direction": "keep_playful",
     "expected_stage": "building_chemistry",
     "expected_tone": "playful",
+    "top_hooks": ["war crime", "die on this hill", "dealbreaker", "pineapple on pizza"],
     "quality_criteria": {
       "must_reference": [
         "pineapple",
@@ -173,58 +89,16 @@
     }
   },
   {
-    "id": "chemistry_khruangbin_moment_11",
-    "category": "building_chemistry",
-    "description": "She discovered they both love Khruangbin — very excited, big moment in the chat",
-    "their_last_message": "WAIT you listen to khruangbin too?? okay we might genuinely be the same person. who got you into them",
-    "person_name": "unknown",
-    "direction": "quick_reply",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "excited",
-    "quality_criteria": {
-      "must_reference": [
-        "khruangbin"
-      ],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "dying_ghost_comeback_12",
-    "category": "dying_conversation",
-    "description": "Good conversation 2 weeks ago then she went silent. Now she texted back out of nowhere with no explanation of where she went.",
-    "their_last_message": "hey sorry been completely mia... life got chaotic. how have you been",
-    "person_name": "unknown",
-    "direction": "quick_reply",
-    "expected_stage": "stalled",
-    "expected_tone": "neutral",
-    "quality_criteria": {
-      "must_reference": [],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "dying_late_reply_busy_13",
-    "category": "dying_conversation",
-    "description": "He asked about her weekend 2 days ago. She just replied with a short low-effort apology — no substance.",
-    "their_last_message": "haha sorry was busy",
-    "person_name": "unknown",
-    "direction": "quick_reply",
-    "expected_stage": "stalled",
-    "expected_tone": "dry",
-    "quality_criteria": {
-      "must_reference": [],
-      "must_have_fork": true
-    }
-  },
-  {
     "id": "dying_lol_only_14",
     "category": "dying_conversation",
-    "description": "He told a decent story about something funny that happened. She replied with just 'lol' — nothing else. Energy dropping for 4 messages now.",
+    "description": "He told a funny story about accidentally walking into the wrong meeting room at work and presenting to strangers. She replied with just 'lol' — nothing else.",
     "their_last_message": "lol",
     "person_name": "unknown",
     "direction": "keep_playful",
     "expected_stage": "stalled",
     "expected_tone": "dry",
+    "top_hooks": ["wrong meeting room", "presenting to strangers", "work story", "lol reply"],
+    "core_lore": "He told a funny story about accidentally walking into the wrong meeting room and starting to present his slides to a group of strangers before realising. She replied with just 'lol'.",
     "quality_criteria": {
       "must_reference": [],
       "must_have_fork": true
@@ -239,26 +113,9 @@
     "direction": "get_number",
     "expected_stage": "building_chemistry",
     "expected_tone": "testing",
+    "top_hooks": ["why should i give you my number", "testing response", "playful pushback"],
     "quality_criteria": {
       "must_reference": [],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "testing_sarcastic_generic_bio_16",
-    "category": "testing",
-    "description": "Her opening message mocked his generic bio (travel, The Office, tacos). Sarcastic but she initiated — testing confidence, not actually uninterested.",
-    "their_last_message": "oh wow another guy who loves travel, the office, and tacos... how original 😴",
-    "person_name": "unknown",
-    "direction": "quick_reply",
-    "expected_stage": "early_talking",
-    "expected_tone": "sarcastic",
-    "quality_criteria": {
-      "must_reference": [
-        "office",
-        "tacos",
-        "travel"
-      ],
       "must_have_fork": true
     }
   },
@@ -271,6 +128,7 @@
     "direction": "go_deeper",
     "expected_stage": "building_chemistry",
     "expected_tone": "upset",
+    "top_hooks": ["boss called out my report", "in front of the whole team", "said i was careless", "want to disappear"],
     "quality_criteria": {
       "must_reference": [
         "boss",
@@ -288,6 +146,7 @@
     "direction": "go_deeper",
     "expected_stage": "deep_connection",
     "expected_tone": "vulnerable",
+    "top_hooks": ["left me messed up", "hard to be open", "i dont know why im telling you this", "trust"],
     "quality_criteria": {
       "must_reference": [],
       "must_have_fork": true
@@ -302,6 +161,7 @@
     "direction": "get_number",
     "expected_stage": "building_chemistry",
     "expected_tone": "flirty",
+    "top_hooks": ["most entertaining person ive matched with", "been on here a while", "that's saying something", "peak chemistry"],
     "quality_criteria": {
       "must_reference": [],
       "must_have_fork": true
@@ -316,10 +176,208 @@
     "direction": "ask_out",
     "expected_stage": "building_chemistry",
     "expected_tone": "excited",
+    "top_hooks": ["ranked list of every cafe", "could live off coffee", "its a problem", "city cafes"],
     "quality_criteria": {
       "must_reference": [
         "coffee",
         "cafe"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "opener_fitness_foodie_21",
+    "category": "new_match",
+    "description": "Hinge match — her bio says 'training for a half marathon but also deeply committed to biryani'. Photos: running gear, rooftop dinner with friends, a dog.",
+    "their_last_message": "",
+    "person_name": "unknown",
+    "direction": "opener",
+    "expected_stage": "new_match",
+    "expected_tone": "playful",
+    "top_hooks": ["training for a half marathon", "deeply committed to biryani", "dog in photos", "rooftop dinner", "running gear"],
+    "quality_criteria": {
+      "must_reference": [
+        "marathon",
+        "biryani",
+        "dog"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "opener_solo_traveller_22",
+    "category": "new_match",
+    "description": "Bumble match — profile full of solo travel photos across Southeast Asia. Bio: 'chronic solo traveller, terrible at small talk, great at airports'.",
+    "their_last_message": "",
+    "person_name": "unknown",
+    "direction": "opener",
+    "expected_stage": "new_match",
+    "expected_tone": "neutral",
+    "top_hooks": ["chronic solo traveller", "terrible at small talk", "great at airports", "Southeast Asia photos"],
+    "quality_criteria": {
+      "must_reference": [
+        "solo",
+        "travel",
+        "airport"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "change_topic_weather_loop_24",
+    "category": "early_conversation",
+    "description": "Conversation stuck in a weather/weekend loop for 5 exchanges. She keeps giving polite but flat replies. Need to pivot to something real.",
+    "their_last_message": "haha yeah the weather has been so unpredictable lately",
+    "person_name": "unknown",
+    "direction": "change_topic",
+    "expected_stage": "early_talking",
+    "expected_tone": "neutral",
+    "top_hooks": ["weather loop", "unpredictable lately", "5 flat exchanges", "stuck conversation"],
+    "quality_criteria": {
+      "must_reference": [],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "change_topic_work_talk_25",
+    "category": "early_conversation",
+    "description": "Conversation drifted into boring work talk — she mentioned her job is 'fine' and asked about his. Need a sharp pivot to something interesting.",
+    "their_last_message": "its okay lol just a regular 9 to 5. what do you do",
+    "person_name": "unknown",
+    "direction": "change_topic",
+    "expected_stage": "early_talking",
+    "expected_tone": "dry",
+    "top_hooks": ["regular 9 to 5", "job is fine", "boring work topic", "needs pivot"],
+    "quality_criteria": {
+      "must_reference": [],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "tease_humble_brag_27",
+    "category": "building_chemistry",
+    "description": "She casually mentioned she just got back from her third international trip this year and 'never really plans, just books'.",
+    "their_last_message": "just got back from lisbon lol i dont really plan i just book and figure it out",
+    "person_name": "unknown",
+    "direction": "tease",
+    "expected_stage": "building_chemistry",
+    "expected_tone": "playful",
+    "top_hooks": ["lisbon", "third international trip this year", "dont really plan", "just book and figure it out", "casual about travel"],
+    "quality_criteria": {
+      "must_reference": [
+        "lisbon",
+        "book",
+        "plan"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "tease_competitive_foodie_28",
+    "category": "building_chemistry",
+    "description": "She claimed she makes the best pasta 'literally better than any restaurant' and has strong opinions about everyone else's cooking.",
+    "their_last_message": "i make the best pasta honestly its not even close to restaurant level its better",
+    "person_name": "unknown",
+    "direction": "tease",
+    "expected_stage": "building_chemistry",
+    "expected_tone": "playful",
+    "top_hooks": ["best pasta", "better than any restaurant", "not even close", "strong food opinions"],
+    "quality_criteria": {
+      "must_reference": [
+        "pasta",
+        "restaurant"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "revive_chat_two_weeks_30",
+    "category": "dying_conversation",
+    "description": "Great first two days of chatting, then she went quiet for 2 weeks with no explanation. She was enthusiastic about hiking before she went silent.",
+    "their_last_message": "",
+    "person_name": "unknown",
+    "direction": "revive_chat",
+    "expected_stage": "stalled",
+    "expected_tone": "neutral",
+    "top_hooks": ["two weeks of silence", "was enthusiastic about hiking", "great first two days"],
+    "core_lore": "She mentioned being obsessed with hiking and had a favourite trail she kept recommending. Conversation was great for 2 days then she went silent.",
+    "quality_criteria": {
+      "must_reference": [
+        "hiking"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "revive_chat_left_on_read_31",
+    "category": "dying_conversation",
+    "description": "She left his message on read 5 days ago. His last message was a tease: 'bet you're the type who watches reality TV alone and pretends to hate it'. She had been very engaged — talked about travel, food, guilty pleasures.",
+    "their_last_message": "",
+    "person_name": "unknown",
+    "direction": "revive_chat",
+    "expected_stage": "stalled",
+    "expected_tone": "neutral",
+    "top_hooks": ["left on read 5 days", "reality TV tease", "previously engaged", "travel food guilty pleasures"],
+    "core_lore": "Previous conversation covered travel, favourite street food, and guilty pleasure TV shows. She was very engaged. He sent a tease about her watching reality TV alone — that's the message she left on read.",
+    "quality_criteria": {
+      "must_reference": [
+        "reality TV"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "de_escalate_misread_tease_33",
+    "category": "vulnerable",
+    "description": "He teased her about being indecisive and she took it personally — she said it's something she's been working on in therapy and feels self-conscious about.",
+    "their_last_message": "i actually struggle a lot with decisions its not something i find funny tbh ive been working on it",
+    "person_name": "unknown",
+    "direction": "de_escalate",
+    "expected_stage": "building_chemistry",
+    "expected_tone": "upset",
+    "top_hooks": ["struggle with decisions", "not something i find funny", "been working on it", "therapy"],
+    "quality_criteria": {
+      "must_reference": [
+        "decisions",
+        "working on"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "de_escalate_cancelled_plans_34",
+    "category": "vulnerable",
+    "description": "He cancelled plans last minute for a legitimate reason. She's clearly annoyed — says it's 'fine' but her tone says otherwise.",
+    "their_last_message": "its fine dont worry about it. i just dont like when people do that but its whatever",
+    "person_name": "unknown",
+    "direction": "de_escalate",
+    "expected_stage": "building_chemistry",
+    "expected_tone": "upset",
+    "top_hooks": ["its fine", "dont like when people do that", "its whatever", "passive annoyance"],
+    "quality_criteria": {
+      "must_reference": [
+        "fine",
+        "dont like"
+      ],
+      "must_have_fork": true
+    }
+  },
+  {
+    "id": "opener_traditional_divorced_hindi_35",
+    "category": "new_match",
+    "description": "Hinge opener — Laxmi, 24, divorced, traditional Hindu profile. Explicit philosophies: 'emotional than logical' and 'conceive than adopt'. Interests: singing and cooking. Trait: mature. Goal: settle down. Mother tongue Hindi.",
+    "their_last_message": "",
+    "person_name": "Laxmi",
+    "direction": "opener",
+    "expected_stage": "new_match",
+    "expected_tone": "neutral",
+    "detected_dialect": "HINGLISH",
+    "top_hooks": ["emotional than logical", "settle down", "singing", "mature", "conceive than adopt"],
+    "quality_criteria": {
+      "must_reference": [
+        "emotional",
+        "singing",
+        "settle down"
       ],
       "must_have_fork": true
     }

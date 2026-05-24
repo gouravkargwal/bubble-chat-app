@@ -14,3 +14,4 @@ class ConversationDirection(str, Enum):
     GET_NUMBER = "get_number"
     ASK_OUT = "ask_out"
     DE_ESCALATE = "de_escalate"
+    KEEP_PLAYFUL = "keep_playful"

@@ -40,7 +40,12 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    setup_logging("INFO", json_logs=False)
+    setup_logging("WARNING", json_logs=False)
+
+    # Silence noisy LLM/agent lifecycle logs during eval — only show warnings+
+    import logging
+    for noisy in ("agent", "google_genai", "httpx", "httpcore", "app.prompts"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
     from app.testing.cache import clear as cache_clear
     from app.testing.runner import TestRunner, _INTER_CALL_DELAY_SECONDS

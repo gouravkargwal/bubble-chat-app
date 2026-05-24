@@ -20,6 +20,7 @@ class Scenario(BaseModel):
     direction: str
     expected_stage: str
     expected_tone: str
+    detected_dialect: str = "ENGLISH"  # ENGLISH | HINDI | HINGLISH
     quality_criteria: QualityCriteria
 
 
@@ -113,7 +114,7 @@ def build_analyst_output(scenario: Scenario) -> dict:
     return {
         "visual_transcript": visual_transcript,
         "visual_hooks": [],
-        "detected_dialect": "ENGLISH",
+        "detected_dialect": scenario.detected_dialect,
         "their_tone": scenario.expected_tone,
         "their_effort": effort,
         "conversation_temperature": temperature,

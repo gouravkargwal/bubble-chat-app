@@ -184,7 +184,7 @@ Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_
 
 Fields for BOTH modes:
 * visual_hooks: List 3-4 physical/environmental details from visible photos (empty list if no photos). On profiles, mine every photo across all screenshots (outfit, setting, props, vibe).
-* detected_dialect: ENGLISH, HINDI, or HINGLISH — match her dominant language/mix across the visible text.
+* detected_dialect: ENGLISH, HINDI, or HINGLISH — match her dominant language/mix across the visible text. If a "MOTHER TONGUE: Hindi" field is visible, default to HINGLISH unless her written messages are clearly formal English.
 * person_name: Match's first name from UI header/profile (else "unknown").
 * stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument (profiles without a thread are usually new_match or opening).
 
@@ -218,7 +218,7 @@ Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using send
 
 * top_hooks: Use an empty list [] (opener/profile mode does not use chat turn hooks).
 * visual_hooks: Scan ALL screenshots. List 3-4 specific physical/environmental details (e.g., "red dress with balloons", "holding a matcha latte", "wearing large round glasses").
-* detected_dialect: ENGLISH, HINDI, or HINGLISH. Base this on the dominant mix across all visible profile text.
+* detected_dialect: ENGLISH, HINDI, or HINGLISH. Base this on the dominant mix across all visible profile text. EXCEPTION: if a "MOTHER TONGUE" field is visible and its value is Hindi, set detected_dialect to HINGLISH unless the person's own written responses (prompts, bio) are clearly formal English with zero Hindi influence — in that case use ENGLISH.
 * their_tone: The overall vibe of their profile prompts/bio.
 * their_effort: high / medium / low based on how much they wrote.
 * conversation_temperature: warm (default for profiles).

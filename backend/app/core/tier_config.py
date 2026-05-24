@@ -33,6 +33,7 @@ TIER_CONFIG = {
             "allowed_ui_directions": [
                 ConversationDirection.OPENER.value,
                 ConversationDirection.QUICK_REPLY.value,
+                ConversationDirection.KEEP_PLAYFUL.value,
                 ConversationDirection.CHANGE_TOPIC.value,
             ],
         },
@@ -56,6 +57,7 @@ TIER_CONFIG = {
             "allowed_ui_directions": [
                 ConversationDirection.OPENER.value,
                 ConversationDirection.QUICK_REPLY.value,
+                ConversationDirection.KEEP_PLAYFUL.value,
                 ConversationDirection.CHANGE_TOPIC.value,
                 ConversationDirection.TEASE.value,
                 ConversationDirection.REVIVE_CHAT.value,
@@ -82,6 +84,7 @@ TIER_CONFIG = {
             "allowed_ui_directions": [
                 ConversationDirection.OPENER.value,
                 ConversationDirection.QUICK_REPLY.value,
+                ConversationDirection.KEEP_PLAYFUL.value,
                 ConversationDirection.CHANGE_TOPIC.value,
                 ConversationDirection.TEASE.value,
                 ConversationDirection.REVIVE_CHAT.value,

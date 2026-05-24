@@ -2,6 +2,8 @@
 
 Groq is used instead of Gemini to avoid same-model bias: the generator runs on
 Gemini, so the judge must be a different model family for independent scoring.
+
+Scores are on a 1-5 scale.
 """
 
 import json
@@ -16,11 +18,11 @@ from app.testing.scenarios.dataset import Scenario
 
 @dataclass
 class ReplyScore:
-    specificity: float  # 1-10
-    human_voice: float  # 1-10
-    fork_quality: float  # 1-10
-    contextual_fit: float  # 1-10
-    usability: float  # 1-10
+    specificity: float  # 1-5
+    human_voice: float  # 1-5
+    fork_quality: float  # 1-5
+    contextual_fit: float  # 1-5
+    usability: float  # 1-5
     feedback: str = ""
 
     @property
@@ -47,7 +49,24 @@ _SYSTEM_PROMPT = "You are a strict dating text quality evaluator. Output valid J
 
 _JUDGE_PROMPT = """You are a dating text quality evaluator. You score AI-generated reply suggestions for dating app conversations.
 
-You are STRICT. A score of 7+ means the reply is genuinely good enough to copy-paste and send. Most AI replies are 4-6 range. Only exceptional replies get 8+.
+You are STRICT. Most AI replies fall in the 2-3 range. Only truly exceptional, copy-paste-ready replies get a 5. A reply that is merely good scores 3-4. A reply that is perfect on one dimension is rarely perfect on all five — be skeptical of giving 5 across the board.
+
+## CALIBRATION EXAMPLES
+
+TERRIBLE reply (all dimensions = 1):
+"Greetings! Your profile indicates you enjoy tacos. I, too, find them to be a delightful culinary experience. Shall we partake?"
+→ Stiff, obviously AI, zero personality, no fork, creepy presumption.
+
+PASSABLE reply (most dimensions = 3):
+"haha yeah cults are wild, i've seen a few of those documentaries"
+→ Acknowledges the topic but adds nothing; generic; she could only reply "yeah" and the thread dies.
+
+PERFECT reply (most dimensions = 5):
+"okay but only if you promise not to steal the good salsa this time"
+→ Specific callback, sounds like a real person, funny implicit assumption, she has to respond.
+
+## BOUNDARY RULE
+If any reply is sexually explicit, pressuring, or socially oblivious/creepy in a way a real person would screenshot and report — set that reply's USABILITY = 1 regardless of other dimensions.
 
 ## SCENARIO
 {scenario_description}
@@ -61,52 +80,56 @@ Direction chosen: {direction}
 3. {reply_2}
 4. {reply_3}
 
-## SCORING CRITERIA (1-10 each)
+## SCORING CRITERIA (1-5 each)
 
-SPECIFICITY: Does it reference something specific from the conversation?
+SPECIFICITY — Does it hook into a specific detail from the conversation?
   1 = completely generic (could send to anyone)
-  5 = mentions the topic but generically
-  10 = hooks into a very specific detail from the conversation
+  3 = mentions the topic but stays surface-level
+  5 = anchors on a very specific word, name, place, or detail
 
-HUMAN_VOICE: Does it sound like a real person texting on their phone?
+HUMAN_VOICE — Sounds like a real person texting on their phone?
   1 = obviously AI (formal, em dashes, "That sounds amazing!")
-  5 = okay but slightly polished
-  10 = indistinguishable from a real person's text
+  3 = okay but slightly polished or safe
+  5 = indistinguishable from a real person's casual text
 
-FORK_QUALITY: Does it create something easy and fun for them to respond to?
-  1 = dead end (they'd have nothing to say back)
-  5 = has a question but it's generic
-  10 = creates a fun choice/challenge/assumption they'd want to respond to
+FORK_QUALITY — Creates something easy and fun for them to respond to?
+  1 = dead end (nothing to say back, or just "haha")
+  3 = has an opening but it's a flat question
+  5 = implicit challenge, playful accusation, or bet they'd want to react to
 
-CONTEXTUAL_FIT: Is the tone and energy right for THIS specific moment?
-  1 = completely wrong energy (flirty reply to someone who's upset)
-  5 = acceptable but not perfectly calibrated
-  10 = reads the room perfectly
+CONTEXTUAL_FIT — Right tone and energy for THIS specific moment?
+  1 = completely wrong (flirty when she's venting, cold when she's warm)
+  3 = acceptable but not calibrated to this exact situation
+  5 = reads the room and the moment perfectly
 
-USABILITY: Would a real person actually copy this and send it?
-  1 = never, it's cringe or inappropriate
-  5 = maybe, with some editing
-  10 = they'd copy it immediately without changing a word
+USABILITY — Would a real person actually copy and send this?
+  1 = never (cringe, inappropriate, or socially tone-deaf)
+  3 = maybe, after editing a word or two
+  5 = copy it immediately without changing a word
 
 ## OUTPUT (strict JSON, no other text)
 
+For each reply: write "reasoning" first (1-2 sentences evaluating the reply), then the five numeric scores.
+This order is required — you must reason before scoring.
+
 {{
   "reply_scores": [
-    {{"specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N, "feedback": "..."}},
-    {{"specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N, "feedback": "..."}},
-    {{"specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N, "feedback": "..."}},
-    {{"specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N, "feedback": "..."}}
+    {{"reasoning": "...", "specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N}},
+    {{"reasoning": "...", "specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N}},
+    {{"reasoning": "...", "specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N}},
+    {{"reasoning": "...", "specificity": N, "human_voice": N, "fork_quality": N, "contextual_fit": N, "usability": N}}
   ],
   "overall_score": N,
   "best_reply_index": N,
   "worst_reply_index": N,
   "improvement_notes": "..."
-}}"""
+}}
+
+overall_score is on the same 1-5 scale. It is the average quality across ALL 4 replies — not just the best one. A set with one great reply and three mediocre ones should score around 3, not 5."""
 
 _GROQ_BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
 # Groq free tier: 30 RPM for llama-3.3-70b-versatile → 2s min between calls
-_GROQ_RATE_LIMIT_BACKOFFS = [5, 15, 30]
-
+_GROQ_RATE_LIMIT_BACKOFFS = [15, 30, 60, 120]
 
 async def evaluate(
     scenario: Scenario,
@@ -194,20 +217,23 @@ async def evaluate(
 
     reply_scores = []
     for score_data in data.get("reply_scores", [])[:4]:
+        def clamp(val: float) -> float:
+            return min(5.0, max(1.0, val))
+
         reply_scores.append(
             ReplyScore(
-                specificity=float(score_data.get("specificity", 5)),
-                human_voice=float(score_data.get("human_voice", 5)),
-                fork_quality=float(score_data.get("fork_quality", 5)),
-                contextual_fit=float(score_data.get("contextual_fit", 5)),
-                usability=float(score_data.get("usability", 5)),
-                feedback=score_data.get("feedback", ""),
+                specificity=clamp(float(score_data.get("specificity", 3))),
+                human_voice=clamp(float(score_data.get("human_voice", 3))),
+                fork_quality=clamp(float(score_data.get("fork_quality", 3))),
+                contextual_fit=clamp(float(score_data.get("contextual_fit", 3))),
+                usability=clamp(float(score_data.get("usability", 3))),
+                feedback=score_data.get("reasoning") or score_data.get("feedback", ""),
             )
         )
 
     return JudgeReport(
         reply_scores=reply_scores,
-        overall_score=float(data.get("overall_score", 5)),
+        overall_score=clamp(float(data.get("overall_score", 3))),
         best_reply_index=int(data.get("best_reply_index", 0)),
         worst_reply_index=int(data.get("worst_reply_index", 0)),
         improvement_notes=data.get("improvement_notes", ""),

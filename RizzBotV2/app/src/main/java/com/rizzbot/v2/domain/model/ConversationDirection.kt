@@ -44,6 +44,11 @@ enum class ConversationDirection(
         displayName = "Cool things down",
         emoji = "🕊️",
         promptInstruction = "She seems upset or things got tense. Respond with calm, grounded emotional maturity."
+    ),
+    KEEP_PLAYFUL(
+        displayName = "Keep it playful",
+        emoji = "😄",
+        promptInstruction = "Keep the fun energy going. React to what she actually said — mine her specific words and details, not the vibe."
     );
 }
 

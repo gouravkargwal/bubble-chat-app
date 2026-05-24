@@ -5,8 +5,6 @@ import json
 import time
 from dataclasses import dataclass, field
 
-import structlog
-
 from app.config import settings
 from app.testing.cache import clear as cache_clear
 from app.testing.cache import get as cache_get
@@ -22,7 +20,6 @@ from app.testing.scenarios.dataset import (
     get_by_id,
 )
 
-logger = structlog.get_logger()
 
 # Rate limits:
 #   Gemini (generator + auditor): 15 RPM → 4s min → use 4.5s
@@ -159,10 +156,12 @@ class TestRunner:
             variant_ids = ["default"]
 
         suite_result = TestSuiteResult()
+        total = len(scenarios)
 
         for variant_id in variant_ids:
-            logger.info("testing_variant", variant=variant_id, scenarios=len(scenarios))
+            print(f"\n[{variant_id}] Running {total} scenarios...\n", flush=True)
             scenario_results: list[ScenarioResult] = []
+            completed = 0
 
             for scenario in scenarios:
                 scenario_result = ScenarioResult(
@@ -179,30 +178,24 @@ class TestRunner:
                         judge_model=judge_model,
                     )
                     if run_result is None:
-                        logger.warning("scenario_skipped", scenario=scenario.id)
+                        print(f"  [{completed}/{total}] SKIPPED  {scenario.id}  (run failed)", flush=True)
                         continue
                     scenario_result.runs.append(run_result)
 
-                    # gen + audit + judge = 3 calls per run
-                    await asyncio.sleep(self.inter_call_delay * 3)
+                    # gen + audit + judge = 3 calls per run (skip delay for cached results)
+                    if not getattr(run_result, "_from_cache", False):
+                        await asyncio.sleep(self.inter_call_delay * 3)
 
                 if not scenario_result.runs:
-                    logger.warning(
-                        "scenario_dropped",
-                        scenario=scenario.id,
-                        reason="all runs failed",
-                    )
+                    print(f"  [{completed}/{total}] DROPPED  {scenario.id}  (all runs failed)", flush=True)
                     continue
 
+                completed += 1
                 scenario_results.append(scenario_result)
-                logger.info(
-                    "scenario_complete",
-                    scenario=scenario.id,
-                    variant=variant_id,
-                    avg_judge=f"{scenario_result.avg_judge_score:.1f}",
-                    avg_usability=f"{scenario_result.avg_usability:.1f}",
-                    auditor_pass_rate=f"{scenario_result.auditor_pass_rate:.0%}",
-                )
+                score = scenario_result.avg_judge_score
+                audit = "✓" if scenario_result.auditor_pass_rate == 1.0 else "✗"
+                source = "[cached]" if getattr(scenario_result.runs[-1], "_from_cache", False) else ""
+                print(f"  [{completed}/{total}] {audit} {scenario.id:<45}  judge={score:.1f}/5  {source}", flush=True)
 
             suite_result.variant_results[variant_id] = scenario_results
 
@@ -229,11 +222,6 @@ class TestRunner:
         if self.use_cache:
             cached = cache_get(scenario.id, variant_id, run_index, s_hash)
             if cached:
-                logger.info(
-                    "cache_hit",
-                    scenario=scenario.id,
-                    variant=variant_id,
-                )
                 judge_report = None
                 if cached["judge_report"]:
                     jr_data = json.loads(cached["judge_report"])
@@ -247,7 +235,7 @@ class TestRunner:
                         worst_reply_index=jr_data["worst_reply_index"],
                         improvement_notes=jr_data.get("improvement_notes", ""),
                     )
-                return RunResult(
+                result = RunResult(
                     scenario_id=scenario.id,
                     variant_id=variant_id,
                     run_index=run_index,
@@ -261,6 +249,8 @@ class TestRunner:
                     auditor_feedback=cached["auditor_feedback"] or "",
                     latency_ms=cached["latency_ms"] or 0,
                 )
+                result._from_cache = True  # type: ignore[attr-defined]
+                return result
 
         _RATE_LIMIT_BACKOFFS = [15, 30, 60]
         try:
@@ -320,7 +310,7 @@ class TestRunner:
                     judge_model=judge_model,
                 )
             except Exception as je:
-                logger.warning("judge_failed", scenario=scenario.id, error=str(je))
+                print(f"  WARNING: judge failed for {scenario.id}: {je}", flush=True)
 
             # --- Cache write (only when judge succeeded) ---
             if self.use_cache and judge_report is not None:
@@ -356,12 +346,7 @@ class TestRunner:
             )
             if is_capacity and _retry < len(_RATE_LIMIT_BACKOFFS):
                 wait = _RATE_LIMIT_BACKOFFS[_retry]
-                logger.warning(
-                    "rate_limit_backoff",
-                    scenario=scenario.id,
-                    retry=_retry + 1,
-                    wait_seconds=wait,
-                )
+                print(f"  WARNING: rate limit hit for {scenario.id}, retrying in {wait}s (attempt {_retry + 1})", flush=True)
                 await asyncio.sleep(wait)
                 return await self._run_single(
                     scenario=scenario,
@@ -370,7 +355,7 @@ class TestRunner:
                     judge_model=judge_model,
                     _retry=_retry + 1,
                 )
-            logger.error("run_failed_skip", scenario=scenario.id, error=err)
+            print(f"  ERROR: {scenario.id} failed — {err[:120]}", flush=True)
             return None
 
     async def close(self) -> None:
