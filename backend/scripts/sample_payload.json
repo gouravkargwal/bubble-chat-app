@@ -1,0 +1,60 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {
+        "sender": "them",
+        "quoted_context": "",
+        "actual_new_message": "S 25\nLanguages\nHindi\nEnglish\nBasics\nSingle\nCapricorn\n5'3\"\nHindu\nLucknow, Uttar Pradesh, IN\nNever\nSometimes\nNon-Vegetarian\nSometimes\nActive today\nRelationship goals\nLong-term relationship"
+      }
+    ],
+    "visual_hooks": [
+      "pink ruched mini dress",
+      "dark red satin slip dress",
+      "traditional Indian attire with heavy bangles and maang tikka",
+      "black sleeveless top with gold chain necklace"
+    ],
+    "photo_persona": "girl-next-door",
+    "detected_dialect": "HINGLISH",
+    "their_tone": "Reserved and traditional",
+    "their_effort": "low",
+    "conversation_temperature": "warm",
+    "archetype_reasoning": "The profile is very sparse, relying entirely on basic structured data rather than personal prompts or a bio. Her photos show a mix of modern casual and traditional styles, suggesting a balanced approach to her cultural identity.",
+    "warmth": "neutral",
+    "playfulness": "earnest",
+    "engagement": "low",
+    "traditionalism": "traditional",
+    "intent": "long_term",
+    "detected_archetype": "THE TRADITIONAL ROMANTIC",
+    "top_hooks": [],
+    "key_detail": "She is looking for a long-term relationship and identifies as Hindu, living in Lucknow.",
+    "person_name": "S",
+    "stage": "opening",
+    "their_last_message": "She presents a traditional and reserved persona, focusing on long-term relationship goals and her cultural background in Lucknow.",
+    "user_last_move": "",
+    "inbound_image": "none",
+    "inbound_image_detail": ""
+  },
+  "direction": "opener",
+  "person_name": "S",
+  "core_lore": "",
+  "past_memories": "",
+  "transcript_text": "S 25\nLanguages\nHindi\nEnglish\nBasics\nSingle\nCapricorn\n5'3\"\nHindu\nLucknow, Uttar Pradesh, IN\nNever\nSometimes\nNon-Vegetarian\nSometimes\nActive today\nRelationship goals\nLong-term relationship",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "S",
+    "stage": "new_match",
+    "tone_trend": "stable",
+    "topics_worked": [],
+    "topics_failed": [],
+    "interaction_count": 0,
+    "recent_summaries": [],
+    "recent_user_replies": [],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "",
+    "preferred_strategies": []
+  },
+  "user_custom_hint": "",
+  "opener_hook_priority": "text_first"
+}

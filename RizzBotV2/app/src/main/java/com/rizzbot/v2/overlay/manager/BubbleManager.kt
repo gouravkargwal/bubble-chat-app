@@ -668,11 +668,12 @@ class BubbleManager @Inject constructor(
     }
 
     /**
-     * Entry point for the transparent gallery activity to report back a selected image.
+     * Entry point for the transparent gallery activity to report back selected images.
      *
-     * @param imageBase64 Base64-encoded JPEG of the selected image, or null if the user cancelled.
+     * @param imagesBase64 Base64-encoded JPEGs of the selected images, or null/empty if the user
+     * cancelled. Supports multiple images (gallery multi-select), mirroring multi-screenshot capture.
      */
-    fun handleGalleryResult(imageBase64: String?) {
+    fun handleGalleryResult(imagesBase64: List<String>?) {
         val direction = pendingGalleryDirection
         pendingGalleryDirection = null
 
@@ -682,7 +683,7 @@ class BubbleManager @Inject constructor(
 
         ensureComposeOverlayAttached()
 
-        if (imageBase64 == null) {
+        if (imagesBase64.isNullOrEmpty()) {
             if (direction != null) {
                 _state.value = BubbleState.DirectionPicker
             }
@@ -698,7 +699,7 @@ class BubbleManager @Inject constructor(
             orchestrator.resetResult()
             orchestrator.clearScreenshot()
 
-            orchestrator.generateFromExternalImages(listOf(imageBase64), direction)
+            orchestrator.generateFromExternalImages(imagesBase64, direction)
             val result = orchestrator.result.value
             _state.value = when (result) {
                 is SuggestionResult.Success -> BubbleState.Expanded(result)
@@ -712,6 +713,9 @@ class BubbleManager @Inject constructor(
 
     private fun launchTransparentGalleryActivity() {
         try {
+            // Allow selecting as many images as the user's tier permits per request (same cap as
+            // multi-screenshot capture). Read synchronously from the cached usage state.
+            val maxItems = hostedRepository.usageState.value.maxScreenshots.coerceAtLeast(1)
             suspendOverlayForGalleryPicker()
             val intent = android.content.Intent(
                 context,
@@ -720,6 +724,10 @@ class BubbleManager @Inject constructor(
                 addFlags(
                     android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
                         android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                )
+                putExtra(
+                    com.rizzbot.v2.overlay.gallery.TransparentGalleryActivity.EXTRA_MAX_ITEMS,
+                    maxItems
                 )
             }
             context.startActivity(intent)

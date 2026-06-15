@@ -100,6 +100,60 @@ def _is_capacity_error(exc: BaseException) -> bool:
     return False
 
 
+def invoke_structured_groq(
+    *,
+    model: str,
+    temperature: float,
+    schema: type[BaseModel],
+    messages: list,
+    phase: str,
+) -> tuple[Any, dict]:
+    """
+    Structured-output call against Groq via its OpenAI-compatible endpoint
+    (langchain_openai.ChatOpenAI). Used to A/B a stronger writer on the generator
+    node ONLY. Returns (parsed_pydantic, usage_row) in the same shape as the Gemini
+    invoker. cost_usd is logged 0.0 — Gemini pricing does not apply to Groq.
+    """
+    from langchain_openai import ChatOpenAI
+
+    from agent.nodes_v2._shared import LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
+
+    cb = GeminiLangChainUsageCallback(phase=phase, model=model)
+    llm = ChatOpenAI(
+        model=model,
+        temperature=temperature,
+        api_key=settings.groq_api_key,
+        base_url="https://api.groq.com/openai/v1",
+        timeout=LLM_TIMEOUT_SECONDS,
+        max_retries=LLM_MAX_RETRIES,
+    ).with_structured_output(schema, method="function_calling")  # Groq llama-3.3 has tool-calling, NOT json_schema response_format
+
+    t0 = time.monotonic()
+    result = llm.invoke(messages, config={"callbacks": [cb]})
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    pt, ct = cb.prompt_tokens, cb.candidates_tokens
+    row = {
+        "phase": phase,
+        "model": model,
+        "prompt_tokens": pt,
+        "candidates_tokens": ct,
+        "total_tokens": pt + ct,
+        "cost_usd": 0.0,  # Groq is not Gemini-priced; not tracked here
+    }
+    logger.info(
+        "llm_lifecycle",
+        stage="structured_groq_complete",
+        phase=phase,
+        model=model,
+        temperature=temperature,
+        elapsed_ms=elapsed_ms,
+        prompt_tokens=pt,
+        candidates_tokens=ct,
+        total_tokens=pt + ct,
+    )
+    return result, row
+
+
 def invoke_structured_gemini(
     *,
     model: str,

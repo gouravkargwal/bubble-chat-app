@@ -17,7 +17,7 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from agent.nodes_v2._lc_usage import invoke_structured_gemini
+from agent.nodes_v2._lc_usage import invoke_structured_gemini, invoke_structured_groq
 from agent.nodes_v2._personality import build_tone_prior
 from agent.nodes_v2._post_processor import validate_and_fix_replies
 from agent.nodes_v2._shared import (
@@ -36,6 +36,7 @@ from agent.state import (
     StrategyOutput,
     WriterOutput,
 )
+from app.config import settings
 from app.prompts.temperature import calculate_temperature
 from app.prompts.templates.playbooks import select_playbook
 
@@ -89,13 +90,23 @@ You are a dating text coach. Three phases: strategy → write 4 replies → self
 {learned_strategy_section}
 {strategy_glossary}
 
+RIZZ BAR — READ FIRST (applies to EVERY direction EXCEPT de_escalate and go_deeper, and is SUSPENDED whenever her tone is upset/vulnerable — there, warmth and acknowledgment win, never force a spike):
+"Safe" kills attraction. A grounded, polite, correct reply that any nice guy could send = FAIL, even if it breaks zero rules. EVERY reply must carry a SPIKE — at least one of:
+* a BOLD PLAYFUL ASSUMPTION she'll want to correct ("you're the type who rates every cafe out of 10 and has notes")
+* a light DISQUALIFICATION / challenge ("not convinced you'd survive a weekend off your phone")
+* a COCKY, UNBOTHERED frame that makes HER qualify ("ill allow the bike pic but you'll have to prove you actually ride")
+* a real STANCE / hot take — pick a side, don't ask a neutral question
+BANNED as a whole reply (this is "good boy" filler): pure observation ("the cafe looks nice"), neutral interview questions ("whats your favorite X", a flat "a or b" with no assumption baked in), validation ("makes sense you want long-term"), small talk.
+Keep it SHORT and punchy — a spike loses power when explained. Confidence beats correctness. SINCERE / TRADITIONAL ≠ SAFE: an earnest or traditional archetype still needs a REAL cocky tease, a playful challenge, or a bold assumption (tease how seriously/methodically she takes things, set a "you have to earn it" frame, make HER qualify) — going soft and sincere back at her is the #1 cause of bland "good boy" replies. The only difference vs other archetypes: don't be crude and don't mock her actual values/religion/background. A confident smirk and a "prove it" are exactly right.
+DEFAULT BOLDER: when torn between a polite version and a cockier version, pick the cockier one. At least 2 of the 4 replies must land as a genuine tease / challenge / bold claim a confident guy would send — NOT a polite question.
+
 PHASE 1: STRATEGY
 * Source of truth: visual_transcript > core_lore.
 * Read user_last_move FIRST. If the user's own last reply was low-effort (generic compliment, one-word, "haha", "nice") and her latest message cooled or shortened in response, the weak link was the USER — NOT her. Do NOT mock her, accuse her of being fake/dismissive, or treat her as low-investment for a drop the user caused. RECOVER: re-engage her last substantive point with genuine interest. This holds even when direction=tease — tease the awkward beat or the situation (even self-aware about the weak reply), NEVER her sincerity.
 * Inbound image: read inbound_image. If "selfie_of_her" — she sent a photo of HERSELF (interest/escalation signal): react warmly and you MAY escalate; never ignore the image, and never describe her in a clinical/creepy way ("nice symmetrical face"). If "object_or_scene" — she shared a thing/moment (coffee, pet, food, view, meme): react to the THING and fold it into the banter; NEVER compliment her looks (there is no "her" in the image to compliment). If "none" — normal text chat.
 * Double-text: If last bubble is from "user", do NOT re-answer her — build on user's last text.
 * Upset/vulnerable tone: No heavy teasing. Mix: acknowledge (HONEST FRAME), pivot (FRAME CONTROL), question (PUSH-PULL). No 4 identical therapeutic replies.
-* Dating goals/marriage topic: HONEST FRAME only. No banter.
+* Dating goals/marriage topic: you MAY tease it with a cocky/playful frame — mock-panic at the seriousness, set a "you'll have to earn it" frame, make her qualify. What you must NOT do is neg the goal itself (calling long-term desperate/overrated/too-much) or get crude. Go full HONEST FRAME ONLY if SHE raises it vulnerably or heavily.
 
 PHASE 2: WRITE
 * Format: no punctuation, lowercase ("dont", "im"). Match her length or shorter. For emotional contexts (go_deeper, de_escalate): keep sentences SHORT — real texting empathy is brief and raw. "that sounds brutal" > "being called careless in front of everyone must have been incredibly difficult". Long polished empathy sentences = sounds AI = fail.
@@ -109,7 +120,7 @@ PHASE 3: SELF-CHECK (all 4 replies must pass)
 * Grounded: Each reply needs verbatim anchor — quote her exact word or phrase with a twist. "you seem adventurous" = FAIL. "someone who gives 'goa' as their answer to everything" = PASS. "the 'not even close' is doing a lot of heavy lifting" = PASS. No invented assumptions about character without a quoted hook.
 * Fork: Leave a SPECIFIC GAP she fills. Best formats: (a) expose a contradiction she'd deny ("claiming you dont plan when you probably spent weeks on tripadvisor"), (b) A/B hypothetical she picks ("would you have owned the wrong room or sprinted out"), (c) a claim about her specific action she corrects ("bet the ranked cafe list has footnotes"). NOT a punchline she laughs at — a GAP she fills with something specific.
 * Quality bar: Replies 3+4 same quality as 1+2. Vague filler ("the chaos must have been productive") = FAIL.
-* Claim attack ≠ character attack: Attack what she SAID, not who she IS. "claiming you dont plan while clearly having a plan" = PASS (attacks her CLAIM). "you sound like the type who..." / "you are the kind of person who..." = FAIL (character attack = nothing specific to push back against = fq=1-2 every time).
+* Bold assumptions are GOOD rizz when SPECIFIC + correctable: "youre the type who hits snooze 6 times and still shows up late with an iced coffee" = PASS (specific → she can deny it → a fork). Only fail a "type who" line when it's VAGUE with nothing to push back on ("you sound like the type who is just really adventurous") or genuinely mean/cruel. Specific + playful = keep it; vague or cruel = cut it. Attacking a CLAIM she made ("claiming you dont plan while clearly having a plan") is always fine.
 * Label accuracy: each reply's strategy_label MUST match its text per the STRATEGY LABEL DEFINITIONS above. A "would you rather / A or B" question = FRAME CONTROL (not HONEST FRAME). A line that only validates/agrees = HONEST FRAME (not a tactic). If the label doesn't fit the litmus, change the label — never force the wrong one.
 * Persona use: photo_persona is a READ of the aesthetic she CURATED — use it to shape TONE and to spot outfit/setting/styling hooks. NEVER turn it into a looks/identity label: "you look like a rebel kid", "you've got influencer energy", "you seem like the artsy type" = FAIL (presumptuous verdict on who she is + a looks comment). You MAY reference a CHOICE she made (a specific outfit, setting, or a styling contrast), never her appearance or a character verdict.
 * Forbidden — therapy/corporate (SCAN EVERY REPLY — zero tolerance): "i appreciate", "i admire", "i hear you", "i hear that", "i respect that", "i really value", "i love that", "that sounds hard", "i understand where youre coming from", "thank you for sharing", "the fact that X says [anything] about Y", "the fact that you [did X] shows/says/means". These phrases = automatic rewrite regardless of direction. PATTERN: any opener of the form "i [appreciate/admire/respect/love/value/honor] [the/your] ___" is first-person validation of her trait/choice — banned, even if the exact verb isn't listed.
@@ -467,6 +478,19 @@ def generator_node(state: AgentState) -> dict:
         ),
         has_voice_dna=bool(voice_dna),
     )
+
+    # Provider routing — the generator (writer) can A/B on Groq while vision/auditor
+    # stay on Gemini. GENERATOR_PROVIDER:
+    #   "gemini" (default) → Gemini drives the pipeline
+    #   "groq"             → Groq drives the pipeline
+    #   "both"             → Gemini drives the pipeline AND Groq runs in shadow on the
+    #                        SAME prompt (first pass only), both logged in v2_generator_ab
+    #                        for side-by-side comparison. Shadow never affects the response.
+    _provider = settings.generator_provider.strip().lower()
+    _use_groq = _provider == "groq"
+    _run_shadow = _provider == "both"
+    gen_model = settings.groq_model if _use_groq else GENERATOR_MODEL
+
     logger.info(
         "llm_lifecycle",
         stage="generator_node_pre_llm",
@@ -474,7 +498,8 @@ def generator_node(state: AgentState) -> dict:
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
-        model=GENERATOR_MODEL,
+        model=gen_model,
+        provider=settings.generator_provider,
         phase=phase,
         payload_keys=sorted(payload.keys()),
         payload_replies_count=(
@@ -495,19 +520,57 @@ def generator_node(state: AgentState) -> dict:
         conversation_id=conversation_id,
         direction=direction,
         phase=phase,
-        model=GENERATOR_MODEL,
+        model=gen_model,
+        provider=settings.generator_provider,
         messages=sanitize_llm_messages_for_logging(messages),
     )
 
     try:
-        result, usage_row = invoke_structured_gemini(
-            model=GENERATOR_MODEL,
+        _invoke = invoke_structured_groq if _use_groq else invoke_structured_gemini
+        result, usage_row = _invoke(
+            model=gen_model,
             temperature=llm_temperature,
             schema=GeneratorOutput,
             messages=messages,
             phase=phase,
         )
         gen_out = cast(GeneratorOutput, result)
+
+        # A/B shadow: when GENERATOR_PROVIDER=both, also run Groq on the SAME prompt
+        # (first pass only) and log both reply sets side by side. Best-effort — a
+        # shadow failure must never affect the real (Gemini) response.
+        if _run_shadow and not is_rewrite:
+            try:
+                shadow_result, _ = invoke_structured_groq(
+                    model=settings.groq_model,
+                    temperature=llm_temperature,
+                    schema=GeneratorOutput,
+                    messages=messages,
+                    phase="v2_generator_shadow_groq",
+                )
+                shadow_out = cast(GeneratorOutput, shadow_result)
+                logger.info(
+                    "v2_generator_ab",
+                    trace_id=trace_id,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    direction=direction,
+                    primary_provider="gemini",
+                    primary_model=gen_model,
+                    primary_replies=[
+                        {"text": r.text, "strategy_label": r.strategy_label, "is_recommended": r.is_recommended}
+                        for r in gen_out.replies
+                    ],
+                    shadow_provider="groq",
+                    shadow_model=settings.groq_model,
+                    shadow_replies=[
+                        {"text": r.text, "strategy_label": r.strategy_label, "is_recommended": r.is_recommended}
+                        for r in shadow_out.replies
+                    ],
+                )
+            except Exception:
+                logger.warning("v2_generator_ab_shadow_failed", trace_id=trace_id, exc_info=True)
+
         logger.info(
             "generator_node_llm_result",
             trace_id=trace_id,

@@ -21,6 +21,7 @@ dependencies = [
     "pyinstrument>=4.6",
     "langgraph>=0.2",
     "langchain-google-genai>=2.0",
+    "langchain-openai>=0.2",  # generator A/B via Groq's OpenAI-compatible endpoint
     "pgvector>=0.2",
     "oci>=2.0",
     "sentence-transformers>=3.0",

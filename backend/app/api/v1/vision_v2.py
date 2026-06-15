@@ -234,7 +234,7 @@ Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using send
 * top_hooks: Use an empty list [] (opener/profile mode does not use chat turn hooks).
 * visual_hooks: Scan ALL screenshots. List 3-4 specific physical/environmental details (e.g., "red dress with balloons", "holding a matcha latte", "wearing large round glasses").
 * photo_persona: 1-3 words for the curated PERSONA/aesthetic her photos project (e.g. "rebel/edgy", "soft romantic", "influencer-polished", "girl-next-door", "old-money", "outdoorsy adventurer"). Read the vibe she CHOSE to present, NOT a judgment of her face or body. Empty if no photos.
-* detected_dialect: ENGLISH, HINDI, or HINGLISH. Base this on the dominant mix across all visible profile text. EXCEPTION: if a "MOTHER TONGUE" field is visible and its value is Hindi, set detected_dialect to HINGLISH unless the person's own written responses (prompts, bio) are clearly formal English with zero Hindi influence — in that case use ENGLISH.
+* detected_dialect: ENGLISH, HINDI, or HINGLISH. DEFAULT RULE: if a "MOTHER TONGUE" field shows Hindi (or any Indian language), set HINGLISH. Only override to ENGLISH when she has written SUBSTANTIAL free-text (filled prompts or a real bio) AND that text is clearly formal English with zero Hindi influence. If there is little or no self-written text to judge (the profile is just structured basics like zodiac/height/religion/diet), KEEP HINGLISH — do NOT infer ENGLISH merely from the absence of Hindi words in a basics card.
 * their_tone: The overall vibe of their profile prompts/bio.
 * their_effort: high / medium / low based on how much they wrote.
 * conversation_temperature: warm (default for profiles).
@@ -1105,6 +1105,12 @@ async def _run_generate_v2(
                 else ""
             ),
             revision_count=int(final_state.get("revision_count", 0) or 0),
+            generator_provider=settings.generator_provider,
+            generator_model=(
+                settings.groq_model
+                if settings.generator_provider.strip().lower() == "groq"
+                else settings.gemini_model
+            ),
             gemini_call_count=gemini_call_count,
             latency_ms=latency_ms,
             total_tokens=sum(

@@ -67,18 +67,18 @@ _TONE_HINTS: dict[str, dict[str, str]] = {
     },
     "playfulness": {
         "playful": "teasing and banter land — lighter, cockier phrasing is welcome",
-        "earnest": "she's sincere — match with genuine curiosity; go easy on sarcasm",
+        "earnest": "she's sincere — stay confident and playfully cocky, NOT a validating nice-guy; tease her vibe and the situation, just don't mock the thing she's genuinely sincere about",
     },
     "engagement": {
         "high": "she's investing real effort — you can match her energy",
         "low": "low investment — stay concise and high-value, do NOT chase or over-explain",
     },
     "traditionalism": {
-        "traditional": "grounded/respectful presentation — avoid crude or edgy phrasing; don't make her background the joke",
+        "traditional": "keep it classy but you can absolutely be cocky and tease — the ONLY limits are no crude/vulgar lines and never make her religion, caste, region or background the punchline",
         "modern": "casual/modern vibe — relaxed phrasing is fine",
     },
     "intent": {
-        "long_term": "serious about relationship goals — do not joke about or tease her commitment intent",
+        "long_term": "she wants something real — DON'T neg the goal (never imply wanting long-term is desperate/overrated/too-much), but you CAN playfully tease the seriousness with a cocky frame that makes HER qualify (mock-panic that she's moving fast, or a 'you still have to earn it / make the shortlist' frame — build it from HER details, never send a canned line)",
         "exploring": "still figuring out what she wants — don't project seriousness onto her",
     },
 }
