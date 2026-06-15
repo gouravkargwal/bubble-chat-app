@@ -57,11 +57,35 @@ async def update_conversation_from_analysis(
     analysis: AnalysisResult,
     copied_index: int | None,
     db: AsyncSession,
+    copied_strategy_label: str | None = None,
 ) -> None:
-    """Update conversation context after an interaction."""
+    """Update conversation context after an interaction.
+
+    Called from the /track/copy handler, so `copied_index` reflects the reply
+    the user actually sent. `copied_strategy_label` is that reply's strategy, used
+    to learn the user's selection preference (Phase 5 copy-rate signal).
+    """
     # Update stage (clamp to DB column limit String(30))
     if analysis.stage and analysis.stage != "unknown":
         conversation.stage = analysis.stage[:30]
+
+    # Phase 5: record the copied reply's strategy as a selection win.
+    if copied_strategy_label:
+        try:
+            stats = json.loads(conversation.strategy_stats or "{}")
+            if not isinstance(stats, dict):
+                stats = {}
+            entry = stats.get(copied_strategy_label) or {}
+            entry = {
+                "shown": int(entry.get("shown", 0)),
+                "copied": int(entry.get("copied", 0)) + 1,
+                "landed": int(entry.get("landed", 0)),
+                "flopped": int(entry.get("flopped", 0)),
+            }
+            stats[copied_strategy_label] = entry
+            conversation.strategy_stats = json.dumps(stats)
+        except Exception:
+            pass
 
     # Update person name if better detected
     if analysis.person_name and analysis.person_name != "unknown":
@@ -112,6 +136,64 @@ async def update_conversation_from_analysis(
     await db.commit()
 
 
+def _derive_stable_archetype(raw_counts: str | None) -> tuple[str | None, float]:
+    """Phase 4: mode archetype + confidence from accumulated observations.
+
+    Returns (None, 0.0) until at least 3 observations exist, so a single noisy
+    early scan never locks in an archetype.
+    """
+    try:
+        counts = json.loads(raw_counts or "{}")
+        if not isinstance(counts, dict) or not counts:
+            return None, 0.0
+        total = sum(int(v) for v in counts.values())
+        if total < 3:
+            return None, 0.0
+        winner, top = max(counts.items(), key=lambda kv: int(kv[1]))
+        return str(winner), round(int(top) / total, 3)
+    except Exception:
+        return None, 0.0
+
+
+def _derive_preferred_strategies(raw_stats: str | None) -> list[str]:
+    """Phase 5: rank strategies by a blend of copy-rate and conversion-rate.
+
+    score = 0.5 * copy_rate + 0.5 * conversion_rate
+      copy_rate       = copied / shown
+      conversion_rate = landed / (landed + flopped)   [falls back to copy_rate
+                        until at least 2 conversion observations exist]
+    Only strategies shown >= 2 times qualify; only those with score > 0 are
+    returned (a strategy that's never copied and never landed is not "preferred").
+    """
+    try:
+        stats = json.loads(raw_stats or "{}")
+        if not isinstance(stats, dict) or not stats:
+            return []
+        ranked: list[tuple[float, str]] = []
+        for label, e in stats.items():
+            if not isinstance(e, dict):
+                continue
+            shown = int(e.get("shown", 0))
+            if shown < 2:
+                continue
+            copied = int(e.get("copied", 0))
+            landed = int(e.get("landed", 0))
+            flopped = int(e.get("flopped", 0))
+            copy_rate = copied / shown if shown else 0.0
+            conv_obs = landed + flopped
+            if conv_obs >= 2:
+                conversion_rate = landed / conv_obs
+                score = 0.5 * copy_rate + 0.5 * conversion_rate
+            else:
+                score = copy_rate
+            if score > 0:
+                ranked.append((score, str(label)))
+        ranked.sort(key=lambda t: t[0], reverse=True)
+        return [label for _, label in ranked[:3]]
+    except Exception:
+        return []
+
+
 async def build_conversation_context(
     conversation: Conversation,
     db: AsyncSession,
@@ -119,6 +201,14 @@ async def build_conversation_context(
     """Build a ConversationContext domain object for prompt injection."""
     topics_worked = json.loads(conversation.topics_worked or "[]")
     topics_failed = json.loads(conversation.topics_failed or "[]")
+
+    # Phase 4 + 5: derive learned signals from accumulated stats.
+    stable_archetype, archetype_confidence = _derive_stable_archetype(
+        getattr(conversation, "archetype_counts", None)
+    )
+    preferred_strategies = _derive_preferred_strategies(
+        getattr(conversation, "strategy_stats", None)
+    )
 
     # Long-term memory: anchor to the very first interaction of this conversation.
     first_key_detail: str | None = None
@@ -213,4 +303,7 @@ async def build_conversation_context(
         first_their_last_message=first_their_last_message,
         last_user_organic_texts=last_user_organic_texts[:3],
         last_ai_replies_shown=last_ai_replies_shown[:3],
+        stable_archetype=stable_archetype,
+        archetype_confidence=archetype_confidence,
+        preferred_strategies=preferred_strategies,
     )

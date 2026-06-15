@@ -83,6 +83,7 @@ You are a dating text coach. Three phases: strategy → write 4 replies → self
 {custom_hint_section}
 {dialect_enforcement}
 {playbook_section}
+{learned_strategy_section}
 PHASE 1: STRATEGY
 * Source of truth: visual_transcript > core_lore.
 * Double-text: If last bubble is from "user", do NOT re-answer her — build on user's last text.
@@ -160,6 +161,20 @@ ARCHETYPE STRATEGY — THE LOW-INVESTMENT:
 * Tone: Unbothered, high-standard. You're interesting — make her prove she can keep up.
 * Restrictions: Do NOT over-explain or chase. Do NOT offer an exit ramp ("no stress if youre busy") — that kills any remaining chance. Match/undercut her length.
 * Requirement: >=2 replies are bold, unexpected pattern interrupts — a statement, observation, or playful assumption she'd feel compelled to respond to. Make her lean in, not check out.""",
+    "THE TRADITIONAL ROMANTIC": """
+ARCHETYPE STRATEGY — THE TRADITIONAL ROMANTIC:
+* Context: She is explicitly marriage/long-term focused and has signaled it clearly on her profile or in conversation.
+* Labels: Prioritize HONEST FRAME and VALUE ANCHOR.
+* Tone: Sincere, confident, warm. Show depth of character over charm.
+* Restrictions: ZERO banter or teasing about marriage/settling down — she will read it as dismissiveness. NO PUSH-PULL on relationship intent (do not create artificial tension around what she wants). NO SOFT CLOSE unless logistics are already established.
+* Requirement: At least one reply shows genuine personality or curiosity about her as a person, not just wit.""",
+    "THE TRADITIONALIST": """
+ARCHETYPE STRATEGY — THE TRADITIONALIST:
+* Context: Culturally rooted profile — traditional dress, regional identity, minimal/factual about herself. Relationship goals are open or unstated. She is NOT signaling marriage intent explicitly.
+* Labels: Prioritize VALUE ANCHOR and PUSH-PULL (light).
+* Tone: Warm, genuinely curious, grounded. Playful but never loud or edgy.
+* Restrictions: NO heavy teasing or sarcasm — reads as disrespect. Do NOT make her cultural background the punchline. Do NOT project seriousness or marriage onto her just because she presents traditionally.
+* Requirement: >=1 reply anchors on a specific regional or lifestyle detail she mentioned (city, language, food, activity) to show genuine interest rather than generic charm.""",
 }
 
 # ---------------------------------------------------------------------------
@@ -257,12 +272,19 @@ def _build_generator_prompt(
     conversation_temperature: str = "warm",
     their_tone: str = "neutral",
     their_effort: str = "medium",
+    preferred_strategies: list[str] | None = None,
 ) -> str:
     """Build the generator system prompt with only the relevant archetype, direction, and playbook."""
-    archetype_rules = _ARCHETYPE_PROMPTS.get(
-        detected_archetype,
-        _ARCHETYPE_PROMPTS["THE WARM/STEADY"],
-    )
+    normalized_archetype = (detected_archetype or "").strip().upper()
+    archetype_rules = _ARCHETYPE_PROMPTS.get(normalized_archetype)
+    if archetype_rules is None:
+        logger.warning(
+            "archetype_not_found_fallback",
+            detected_archetype=detected_archetype,
+            normalized=normalized_archetype,
+            fallback="THE WARM/STEADY",
+        )
+        archetype_rules = _ARCHETYPE_PROMPTS["THE WARM/STEADY"]
     direction_rules = _DIRECTION_PROMPTS.get(direction, "")
     hint = (custom_hint or "").strip()
     if hint:
@@ -286,12 +308,28 @@ def _build_generator_prompt(
     )
     playbook_section = playbook + "\n" if playbook else ""
 
+    # Phase 5: bias toward strategies that have landed with HER specifically,
+    # learned from copy-rate + her engagement response. Advisory, not a mandate —
+    # the archetype/direction rules still govern correctness.
+    clean_strategies = [s for s in (preferred_strategies or []) if s and s.strip()]
+    if clean_strategies:
+        learned_strategy_section = (
+            "WHAT'S WORKED WITH HER (learned): "
+            + ", ".join(clean_strategies)
+            + ". Lean toward these strategy types when they fit the moment — "
+            "they've earned replies from her before. Do not force one if it "
+            "clashes with the current context.\n"
+        )
+    else:
+        learned_strategy_section = ""
+
     return _GENERATOR_CORE_PROMPT.format(
         archetype_rules=archetype_rules,
         direction_rules=direction_rules,
         custom_hint_section=custom_hint_section,
         dialect_enforcement=_dialect_enforcement_block(detected_dialect),
         playbook_section=playbook_section,
+        learned_strategy_section=learned_strategy_section,
     )
 
 
@@ -362,6 +400,31 @@ def generator_node(state: AgentState) -> dict:
         or "THE LOW-INVESTMENT"
     )
 
+    # Phase 4: once enough scans agree, trust the stable archetype over a single
+    # noisy per-scan classification. The volatile scan can flip on a short reply;
+    # the accumulated mode is far steadier. Only override at >=0.6 confidence.
+    stable_archetype = (conversation_context or {}).get("stable_archetype")
+    archetype_confidence = (conversation_context or {}).get("archetype_confidence", 0.0)
+    try:
+        archetype_confidence = float(archetype_confidence)
+    except (TypeError, ValueError):
+        archetype_confidence = 0.0
+    if (
+        stable_archetype
+        and archetype_confidence >= 0.6
+        and str(stable_archetype).strip().upper() != str(detected_archetype).strip().upper()
+    ):
+        logger.info(
+            "archetype_stabilized_override",
+            scan_archetype=detected_archetype,
+            stable_archetype=stable_archetype,
+            confidence=archetype_confidence,
+        )
+        detected_archetype = str(stable_archetype)
+
+    # Phase 5: strategies that have landed with her before (copy + conversion).
+    preferred_strategies = (conversation_context or {}).get("preferred_strategies") or []
+
     payload: dict[str, Any] = {
         "analysis": analysis.model_dump(),
         "direction": direction,
@@ -406,6 +469,7 @@ def generator_node(state: AgentState) -> dict:
         conversation_temperature=conversation_temperature,
         their_tone=str(their_tone),
         their_effort=str(their_effort),
+        preferred_strategies=preferred_strategies if isinstance(preferred_strategies, list) else [],
     )
 
     t_call = time.monotonic()

@@ -215,10 +215,17 @@ class HomeViewModel @Inject constructor(
     fun toggleService(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setServiceEnabled(enabled)
-            if (enabled) {
-                context.startForegroundService(Intent(context, OverlayService::class.java))
-            } else {
-                context.stopService(Intent(context, OverlayService::class.java))
+            try {
+                if (enabled) {
+                    context.startForegroundService(Intent(context, OverlayService::class.java))
+                } else {
+                    context.stopService(Intent(context, OverlayService::class.java))
+                }
+            } catch (e: Exception) {
+                // startForegroundService can throw ForegroundServiceStartNotAllowedException if the
+                // app isn't allowed to start an FGS at this moment. Revert the pref so the UI stays
+                // consistent instead of crashing.
+                if (enabled) settingsRepository.setServiceEnabled(false)
             }
             hapticHelper.mediumTap()
         }

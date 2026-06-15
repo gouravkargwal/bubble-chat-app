@@ -277,10 +277,12 @@ class BubbleManager @Inject constructor(
                         if (appendDirection != null) {
                             pendingAppendDirection = null
                             ensureScope().launch {
-                                hideForCapture()
-                                kotlinx.coroutines.delay(300)
                                 try {
-                                    orchestrator.captureScreenshot()
+                                    orchestrator.captureScreenshot(onConsentGranted = {
+                                        // Hide overlay only AFTER consent; before triggers BAL_BLOCK.
+                                        hideForCapture()
+                                        kotlinx.coroutines.delay(300)
+                                    })
                                 } finally {
                                     if (composeView == null) {
                                         composeView = createAndAttachView()
@@ -356,8 +358,9 @@ class BubbleManager @Inject constructor(
         val params = createParams(expanded)
         try {
             windowManager.updateViewLayout(view, params)
-        } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "View not attached when updating layout", e)
+        } catch (e: Exception) {
+            // IllegalArgumentException (view detached) or BadTokenException (permission revoked).
+            Log.w(TAG, "Failed to update overlay layout", e)
         }
     }
 
@@ -388,7 +391,15 @@ class BubbleManager @Inject constructor(
         }
     }
 
-    private fun createAndAttachView(): ComposeView {
+    /**
+     * Builds the overlay [ComposeView] and attaches it to the [WindowManager].
+     *
+     * Returns null (never throws) if attach fails — e.g. the user revoked the overlay permission
+     * mid-session, in which case [WindowManager.addView] throws BadTokenException. All callers must
+     * treat a null result as "overlay unavailable" rather than assuming success, so a revoked
+     * permission degrades gracefully instead of crashing the process.
+     */
+    private fun createAndAttachView(): ComposeView? {
         val params = createParams(isFullScreenState(_state.value))
         val view = ComposeView(context).apply {
             setContent {
@@ -406,8 +417,13 @@ class BubbleManager @Inject constructor(
 
         view.setViewTreeLifecycleOwner(lifecycleOwner)
         view.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-        windowManager.addView(view, params)
-        return view
+        return try {
+            windowManager.addView(view, params)
+            view
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to add overlay view (overlay permission revoked?)", e)
+            null
+        }
     }
 
     fun show() {
@@ -420,6 +436,13 @@ class BubbleManager @Inject constructor(
         lifecycleOwner.onCreate()
         lifecycleOwner.onResume()
         composeView = createAndAttachView()
+
+        if (composeView == null) {
+            // Attach failed (e.g. overlay permission revoked). Stay hidden rather than crash;
+            // isActuallyShown stays false so the home toggle reflects the real state.
+            _state.value = BubbleState.Hidden
+            return
+        }
 
         if (_state.value is BubbleState.Hidden) {
             _state.value = BubbleState.RizzButton
@@ -464,10 +487,16 @@ class BubbleManager @Inject constructor(
         hideCloseTarget()
 
         resetBubblePositionForNextShow()
-
-        // Clear service enabled pref so HomeScreen doesn't show stale "active" state
-        ensureScope().launch {
+        // Clear service enabled pref so HomeScreen doesn't show stale "active" state.
+        // Use bubbleFlowScope because `scope` is already cancelled above.
+        bubbleFlowScope.launch {
             settingsRepository.setServiceEnabled(false)
+        }
+    }
+
+    fun collapseIfExpanded() {
+        if (_state.value.isExpandedState()) {
+            _state.value = BubbleState.RizzButton
         }
     }
 
@@ -576,7 +605,13 @@ class BubbleManager @Inject constructor(
                 com.rizzbot.v2.overlay.ui.components.shared.CloseTargetUI(isHovering = hovering)
             }
         }
-        windowManager.addView(closeTargetView, params)
+        try {
+            windowManager.addView(closeTargetView, params)
+        } catch (e: Exception) {
+            // Never crash mid-drag if the overlay permission was revoked.
+            Log.w(TAG, "Failed to add close target view", e)
+            closeTargetView = null
+        }
     }
 
     private fun checkCloseTargetHover(rawX: Float, rawY: Float) {
@@ -721,11 +756,12 @@ class BubbleManager @Inject constructor(
                     // without clearing previous ones, after the user tapped the bubble again.
                     pendingAppendDirection = null
                     activeScope.launch {
-                        hideForCapture()
-                        kotlinx.coroutines.delay(300)
-
                         try {
-                            orchestrator.captureScreenshot()
+                            orchestrator.captureScreenshot(onConsentGranted = {
+                                // Hide overlay only AFTER consent; hiding before triggers BAL_BLOCK.
+                                hideForCapture()
+                                kotlinx.coroutines.delay(300)
+                            })
                         } finally {
                             if (composeView == null) {
                                 composeView = createAndAttachView()
@@ -775,12 +811,15 @@ class BubbleManager @Inject constructor(
                         // Clear previous screenshots on fresh capture/retake
                         orchestrator.clearScreenshot()
                         currentDirection = event.direction
-                        // Hide overlay before capture so it's not in the screenshot
-                        hideForCapture()
-                        kotlinx.coroutines.delay(300)
 
                         try {
-                            orchestrator.captureScreenshot()
+                            // Hide the overlay only AFTER consent (inside onConsentGranted) so it's
+                            // not in the screenshot. Hiding before consent removes our only visible
+                            // window and triggers a silent BAL_BLOCK when the bubble is over another app.
+                            orchestrator.captureScreenshot(onConsentGranted = {
+                                hideForCapture()
+                                kotlinx.coroutines.delay(300)
+                            })
                         } finally {
                             // Restore overlay to show screenshot preview
                             if (composeView == null) {
@@ -845,11 +884,13 @@ class BubbleManager @Inject constructor(
                 activeScope.launch {
                     // Remove the last screenshot, then capture a new one to replace it
                     orchestrator.removeLastScreenshot()
-                    hideForCapture()
-                    kotlinx.coroutines.delay(300)
 
                     try {
-                        orchestrator.captureScreenshot()
+                        orchestrator.captureScreenshot(onConsentGranted = {
+                            // Hide overlay only AFTER consent; hiding before triggers BAL_BLOCK.
+                            hideForCapture()
+                            kotlinx.coroutines.delay(300)
+                        })
                     } finally {
                         if (composeView == null) {
                             composeView = createAndAttachView()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Any
 
 import structlog
@@ -8,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embeddings import embed_text
+from app.core.nli import is_contradiction
 from app.infrastructure.database.models import Interaction
 
 logger = structlog.get_logger(__name__)
@@ -24,7 +26,8 @@ async def get_match_context(
 
     Returns:
       - person_name
-      - core_lore (from conversations.lore if present; otherwise empty)
+      - core_lore: query-aware top-K relevant facts from conversation_memories
+        (falls back to a flat chronological load when no query is available)
       - past_memories (formatted string of top-3 similarity snippets)
     """
 
@@ -32,16 +35,13 @@ async def get_match_context(
     if not conversation_id:
         return empty
 
-    # 1) Load core lore for the conversation.
+    # 1) Load person_name.
     person_name: str = ""
-    core_lore: str = ""
     try:
-        # Lore column may or may not exist in the deployed schema;
-        # the similarity pipeline must never crash.
-        lore_row = await db.execute(
+        name_row = await db.execute(
             text(
                 """
-                SELECT person_name, lore
+                SELECT person_name
                 FROM conversations
                 WHERE id = :conversation_id
                   AND user_id = :user_id
@@ -50,55 +50,117 @@ async def get_match_context(
             ),
             {"conversation_id": conversation_id, "user_id": user_id},
         )
-        row_map: dict[str, Any] | None = lore_row.mappings().first()
+        row_map: dict[str, Any] | None = name_row.mappings().first()
         if row_map:
             person_name = str(row_map.get("person_name") or "")
-            core_lore = str(row_map.get("lore") or "")
     except Exception:
-        # Fallback: at minimum return person_name (even if lore isn't present).
+        pass
+
+    # 2) Compute the query embedding ONCE — reused for both query-aware lore
+    #    ranking and past-memory snippet retrieval. Dimensionality is matched to
+    #    the pgvector column configured on `Interaction.embedding`.
+    query_embedding: list[float] | None = None
+    emb_str: str | None = None
+    if current_text and current_text.strip():
         try:
-            person_row = await db.execute(
+            expected_dim_raw = getattr(Interaction.embedding.type, "dim", None)
+            expected_dim: int | None = None
+            if expected_dim_raw is not None:
+                try:
+                    expected_dim = int(expected_dim_raw)
+                except (TypeError, ValueError):
+                    expected_dim = None
+            query_embedding = await embed_text(
+                current_text,
+                dimensions=expected_dim if expected_dim and expected_dim > 0 else None,
+            )
+            if query_embedding:
+                emb_str = f"[{','.join(str(x) for x in query_embedding)}]"
+        except Exception:
+            query_embedding = None
+            emb_str = None
+
+    # 3) core_lore — query-aware retrieval from conversation_memories.
+    #    With a query embedding, fetch only the top-K most relevant facts
+    #    (ordered by cosine distance) rather than dumping every fact, so the
+    #    prompt stays focused as a conversation accumulates dozens of facts.
+    #    Facts that never embedded (a write-time embed failure) can't be ranked,
+    #    so they are appended unconditionally and never silently dropped.
+    #    Without a query embedding we fall back to a flat chronological load.
+    core_lore: str = ""
+    _LORE_TOP_K = 8
+    try:
+        if emb_str:
+            relevant_rows = await db.execute(
                 text(
                     """
-                    SELECT person_name
-                    FROM conversations
-                    WHERE id = :conversation_id
-                      AND user_id = :user_id
-                      AND is_active = true
+                    SELECT fact_text, (embedding <=> :emb) AS distance
+                    FROM conversation_memories
+                    WHERE user_id = :user_id
+                      AND conversation_id = :conversation_id
+                      AND superseded_at IS NULL
+                      AND embedding IS NOT NULL
+                    ORDER BY distance ASC
+                    LIMIT :k
                     """
                 ),
-                {"conversation_id": conversation_id, "user_id": user_id},
+                {
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "emb": emb_str,
+                    "k": _LORE_TOP_K,
+                },
             )
-            row_map = person_row.mappings().first()
-            if row_map:
-                person_name = str(row_map.get("person_name") or "")
-        except Exception:
-            # Keep empty values.
-            pass
+            unranked_rows = await db.execute(
+                text(
+                    """
+                    SELECT fact_text
+                    FROM conversation_memories
+                    WHERE user_id = :user_id
+                      AND conversation_id = :conversation_id
+                      AND superseded_at IS NULL
+                      AND embedding IS NULL
+                    ORDER BY created_at ASC
+                    """
+                ),
+                {"user_id": user_id, "conversation_id": conversation_id},
+            )
+            seen: set[str] = set()
+            lore_facts: list[str] = []
+            for r in relevant_rows.mappings().all():
+                ft = str(r["fact_text"]) if r["fact_text"] else ""
+                if ft and ft not in seen:
+                    seen.add(ft)
+                    lore_facts.append(ft)
+            for r in unranked_rows.mappings().all():
+                ft = str(r["fact_text"]) if r["fact_text"] else ""
+                if ft and ft not in seen:
+                    seen.add(ft)
+                    lore_facts.append(ft)
+            core_lore = "\n".join(lore_facts)
+        else:
+            facts_row = await db.execute(
+                text(
+                    """
+                    SELECT fact_text
+                    FROM conversation_memories
+                    WHERE user_id = :user_id
+                      AND conversation_id = :conversation_id
+                      AND superseded_at IS NULL
+                    ORDER BY created_at ASC
+                    """
+                ),
+                {"user_id": user_id, "conversation_id": conversation_id},
+            )
+            core_lore = "\n".join(
+                str(r["fact_text"]) for r in facts_row.mappings().all() if r["fact_text"]
+            )
+    except Exception:
+        pass
 
-    # 2) Semantic snippet retrieval using embeddings + pgvector (<=>).
+    # 4) past_memories — query-aware snippet retrieval from interactions.
     try:
-        if not current_text or not current_text.strip():
-            return {
-                "person_name": person_name,
-                "core_lore": core_lore,
-                "past_memories": "",
-            }
-
-        # Ensure query embeddings match the pgvector dimensionality configured
-        # on `Interaction.embedding`.
-        expected_dim_raw = getattr(Interaction.embedding.type, "dim", None)
-        expected_dim: int | None = None
-        if expected_dim_raw is not None:
-            try:
-                expected_dim = int(expected_dim_raw)
-            except (TypeError, ValueError):
-                expected_dim = None
-        query_embedding = await embed_text(
-            current_text,
-            dimensions=expected_dim if expected_dim and expected_dim > 0 else None,
-        )
-        if not query_embedding:
+        if not emb_str:
             return {
                 "person_name": person_name,
                 "core_lore": core_lore,
@@ -132,7 +194,7 @@ async def get_match_context(
             {
                 "user_id": user_id,
                 "conversation_id": conversation_id,
-                "query_embedding": query_embedding,
+                "query_embedding": emb_str,
             },
         )
 
@@ -174,6 +236,111 @@ async def get_match_context(
             "core_lore": core_lore,
             "past_memories": "",
         }
+
+
+async def upsert_conversation_memory(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    conversation_id: str,
+    fact_text: str,
+) -> None:
+    """Persist a single fact into conversation_memories.
+
+    1. Embed the new fact.
+    2. Find semantically similar existing facts (cosine distance < 0.30).
+    3. For each similar fact, run NLI — supersede if contradiction detected,
+       skip insert if entailment (same fact restated).
+    4. Insert new fact with its embedding.
+
+    Never raises — memory ingestion must not block the response.
+    """
+    fact_text = (fact_text or "").strip()
+    if not fact_text:
+        return
+
+    try:
+        new_embedding = await embed_text(fact_text)
+        if not new_embedding:
+            return
+
+        embedding_str = f"[{','.join(str(x) for x in new_embedding)}]"
+
+        # Find existing active facts within semantic neighbourhood.
+        similar_rows = await db.execute(
+            text(
+                """
+                SELECT id, fact_text,
+                       (embedding <=> :emb) AS distance
+                FROM conversation_memories
+                WHERE user_id = :user_id
+                  AND conversation_id = :conversation_id
+                  AND superseded_at IS NULL
+                  AND embedding IS NOT NULL
+                  AND (embedding <=> :emb) < 0.30
+                ORDER BY distance ASC
+                LIMIT 5
+                """
+            ),
+            {"user_id": user_id, "conversation_id": conversation_id, "emb": embedding_str},
+        )
+        similar = similar_rows.mappings().all()
+
+        skip_insert = False
+        for row in similar:
+            existing_fact = str(row["fact_text"])
+            distance = float(row["distance"])
+
+            # Very high similarity — likely a restatement, not a new fact.
+            if distance < 0.10:
+                skip_insert = True
+                continue
+
+            contradicts = await is_contradiction(existing_fact, fact_text)
+            if contradicts:
+                await db.execute(
+                    text(
+                        "UPDATE conversation_memories SET superseded_at = now() WHERE id = :id"
+                    ),
+                    {"id": row["id"]},
+                )
+                logger.info(
+                    "memory_contradiction_superseded",
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    old_fact=existing_fact,
+                    new_fact=fact_text,
+                )
+
+        if not skip_insert:
+            await db.execute(
+                text(
+                    """
+                    INSERT INTO conversation_memories
+                        (id, user_id, conversation_id, fact_text, embedding, created_at)
+                    VALUES
+                        (:id, :user_id, :conversation_id, :fact_text, :embedding, now())
+                    """
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "fact_text": fact_text,
+                    "embedding": embedding_str,
+                },
+            )
+
+        await db.commit()
+
+    except Exception as e:
+        logger.warning(
+            "upsert_conversation_memory_failed",
+            user_id=user_id,
+            conversation_id=conversation_id,
+            fact_text=fact_text[:120],
+            error=str(e),
+        )
 
 
 def _line_should_be_scrubbed(line: str, contradictions: list[str]) -> bool:

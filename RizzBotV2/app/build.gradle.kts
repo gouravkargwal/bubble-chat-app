@@ -52,7 +52,7 @@ android {
                 "app_public_link",
                 "https://play.google.com/store/apps/details?id=com.cookd.mobile"
             )
-            buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
+            buildConfigField("String", "BACKEND_URL", "\"${project.findProperty("BACKEND_URL") ?: "https://8f0c-223-184-135-83.ngrok-free.app/"}\"")
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"226210127602-dc2jh362c0a2bcc2trdbd1da6qqnogvc.apps.googleusercontent.com\"")
             buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_qbaXLjSzKcIbBbYlEjNfLQzSoWn\"")
         }

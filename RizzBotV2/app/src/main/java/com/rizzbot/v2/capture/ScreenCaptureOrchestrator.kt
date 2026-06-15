@@ -1,5 +1,6 @@
 package com.rizzbot.v2.capture
 
+import android.app.Activity
 import android.graphics.Bitmap
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.SuggestionResult
@@ -42,7 +43,19 @@ class ScreenCaptureOrchestrator @Inject constructor(
 
     fun canAddMore(maxScreenshots: Int): Boolean = previewBitmaps.size < maxScreenshots
 
-    suspend fun captureScreenshot() {
+    /**
+     * Capture a screenshot.
+     *
+     * @param onConsentGranted invoked AFTER screen-capture consent is granted but BEFORE the frame
+     * is grabbed. Callers use this to hide the bubble overlay so it isn't in the screenshot.
+     *
+     * IMPORTANT: the overlay window must stay visible while [ScreenCaptureManager.requestConsent]
+     * launches the consent activity — Android's background-activity-launch allowlist only permits
+     * the launch when the app has a visible window. Hiding the overlay before consent (the old
+     * behavior) caused a silent BAL_BLOCK on Android 14+ whenever the bubble was over another app,
+     * so the consent dialog never appeared. Hence the hide happens in [onConsentGranted], not before.
+     */
+    suspend fun captureScreenshot(onConsentGranted: suspend () -> Unit = {}) {
         if (isOnCooldown) return
 
         val maxScreenshots = getMaxScreenshots()
@@ -67,6 +80,10 @@ class ScreenCaptureOrchestrator @Inject constructor(
 
         try {
             val (resultCode, data) = screenCaptureManager.requestConsent()
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                // Consent granted: now safe to hide the overlay for the frame grab.
+                onConsentGranted()
+            }
             hapticHelper.mediumTap()
             val bitmap = screenCaptureManager.captureScreenshot(resultCode, data)
             analyticsHelper.screenshotCaptured()

@@ -119,6 +119,12 @@ class ConversationContext:
     # Topic exhaustion guardrail inputs (most recent first).
     last_user_organic_texts: list[str] = field(default_factory=list)
     last_ai_replies_shown: list[str] = field(default_factory=list)
+    # Phase 4: stable archetype derived from accumulated observations.
+    # None until enough scans (>=3) exist to be meaningful.
+    stable_archetype: str | None = None
+    archetype_confidence: float = 0.0
+    # Phase 5: strategy_labels that have landed with her (copy-rate ranked).
+    preferred_strategies: list[str] = field(default_factory=list)
 
 
 @dataclass

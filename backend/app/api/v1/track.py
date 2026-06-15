@@ -1,5 +1,7 @@
 """Tracking endpoints — copy and rating events."""
 
+import json
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -83,8 +85,24 @@ async def track_copy(
                 key_detail=interaction.key_detail or "",
                 conversation_temperature=interaction.conversation_temperature or "warm",
             )
+            # Phase 5: recover the strategy_label of the copied reply so the
+            # conversation can learn the user's selection preference (copy-rate).
+            copied_strategy_label: str | None = None
+            if reply_text:
+                try:
+                    loaded = json.loads(reply_text)
+                    if isinstance(loaded, dict):
+                        copied_strategy_label = (
+                            loaded.get("strategy_label") or ""
+                        ).strip().upper() or None
+                except (json.JSONDecodeError, TypeError):
+                    copied_strategy_label = None
             await update_conversation_from_analysis(
-                convo, analysis, request.reply_index, db
+                convo,
+                analysis,
+                request.reply_index,
+                db,
+                copied_strategy_label=copied_strategy_label,
             )
 
     return {"status": "ok"}

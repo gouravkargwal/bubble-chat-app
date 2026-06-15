@@ -139,6 +139,14 @@ class Conversation(Base):
     tone_trend: Mapped[str] = mapped_column(String(20), default="stable")
     topics_worked: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
     topics_failed: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
+    # Phase 4: running tally of archetypes observed across scans, e.g.
+    # {"THE BANTER GIRL": 3, "THE TRADITIONALIST": 1}. The stable archetype +
+    # confidence are derived from this in build_conversation_context.
+    archetype_counts: Mapped[str] = mapped_column(Text, default="{}")  # JSON object
+    # Phase 5: per-strategy outcome stats, e.g.
+    # {"PUSH-PULL": {"shown": 5, "copied": 3}}. "shown" increments at generate
+    # time, "copied" when the user copies a reply with that strategy_label.
+    strategy_stats: Mapped[str] = mapped_column(Text, default="{}")  # JSON object
     interaction_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_interaction_at: Mapped[datetime] = mapped_column(
@@ -251,6 +259,8 @@ class PendingResolution(Base):
     extracted_person_name: Mapped[str] = mapped_column(String(100))
     conflict_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     conflict_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Cached VisionNodeOutput JSON — avoids re-running the vision LLM on resolve.
+    vision_output_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -263,6 +273,35 @@ class PendingResolution(Base):
 
     __table_args__ = (
         Index("ix_pending_res_user_conv", "user_id", "suggested_conversation_id"),
+    )
+
+
+class ConversationMemory(Base):
+    """Atomic facts extracted per conversation for RAG memory retrieval.
+
+    One row per fact. Superseded rows are soft-deleted (superseded_at set)
+    when an NLI contradiction is detected against a newer fact.
+    """
+
+    __tablename__ = "conversation_memories"
+    __table_args__ = (
+        Index("ix_conv_mem_user_conv", "user_id", "conversation_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversations.id"), index=True
+    )
+    fact_text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 

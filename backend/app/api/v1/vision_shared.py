@@ -45,7 +45,7 @@ logger = structlog.get_logger(__name__)
 
 # Composite score thresholds (0-1 scale)
 _AUTO_STITCH_THRESHOLD = 0.75       # High confidence → auto-link
-_CONFIRMATION_THRESHOLD = 0.40      # Medium confidence → ask user
+_CONFIRMATION_THRESHOLD = 0.60      # Medium confidence → ask user (raised from 0.40 — 0.51 coin-flip match Jhanvi/Manvi was causing false 409s)
 # Below _CONFIRMATION_THRESHOLD → new_match
 
 # Composite score weights (must sum to 1.0)
@@ -543,6 +543,89 @@ async def persist_interaction(
         )
 
     reply_options = list(parsed.replies[:4]) + [None] * (4 - len(parsed.replies[:4]))
+
+    # Phase 4 + 5: update conversation-level learning stats at generate time.
+    # Archetype is observed on every scan (copy-independent); strategy "shown"
+    # counts every option we surface. The matching "copied" increment happens in
+    # the /track/copy handler. Never let a stats failure block persistence.
+    try:
+        arche = (getattr(parsed.analysis, "detected_archetype", "") or "").strip().upper()
+        if arche:
+            counts = json.loads(convo.archetype_counts or "{}")
+            if not isinstance(counts, dict):
+                counts = {}
+            counts[arche] = int(counts.get(arche, 0)) + 1
+            convo.archetype_counts = json.dumps(counts)
+
+        stats = json.loads(convo.strategy_stats or "{}")
+        if not isinstance(stats, dict):
+            stats = {}
+
+        def _entry(label: str) -> dict:
+            e = stats.get(label) or {}
+            return {
+                "shown": int(e.get("shown", 0)),
+                "copied": int(e.get("copied", 0)),
+                "landed": int(e.get("landed", 0)),
+                "flopped": int(e.get("flopped", 0)),
+            }
+
+        # (a) "shown" — every option surfaced this turn.
+        for opt in reply_options:
+            if opt is None:
+                continue
+            label = (getattr(opt, "strategy_label", "") or "").strip().upper()
+            if not label:
+                continue
+            entry = _entry(label)
+            entry["shown"] += 1
+            stats[label] = entry
+
+        # (b) Conversion delta — attribute her engagement change to the strategy
+        #     the user actually SENT last turn. We compare her engagement in the
+        #     previous scan (before she received that reply) to this scan (her
+        #     response to it). Up = the strategy landed, down = it flopped.
+        def _engagement(temp: str | None, effort: str | None) -> int:
+            t = {"hot": 4, "warm": 3, "lukewarm": 2, "cold": 1}.get(
+                (temp or "").strip().lower(), 2
+            )
+            ef = {"high": 3, "medium": 2, "low": 1}.get(
+                (effort or "").strip().lower(), 2
+            )
+            return t + ef
+
+        prior_result = await db.execute(
+            select(Interaction)
+            .where(Interaction.conversation_id == convo.id)
+            .order_by(Interaction.created_at.desc())
+            .limit(1)
+        )
+        prior = prior_result.scalar_one_or_none()
+        if prior is not None and prior.copied_index is not None:
+            sent_raw = getattr(prior, f"reply_{prior.copied_index}", None)
+            sent_label = ""
+            if sent_raw:
+                try:
+                    loaded = json.loads(sent_raw)
+                    if isinstance(loaded, dict):
+                        sent_label = (loaded.get("strategy_label") or "").strip().upper()
+                except (json.JSONDecodeError, TypeError):
+                    sent_label = ""
+            if sent_label:
+                delta = _engagement(
+                    parsed.analysis.conversation_temperature,
+                    parsed.analysis.their_effort,
+                ) - _engagement(prior.conversation_temperature, prior.their_effort)
+                entry = _entry(sent_label)
+                if delta > 0:
+                    entry["landed"] += 1
+                elif delta < 0:
+                    entry["flopped"] += 1
+                stats[sent_label] = entry
+
+        convo.strategy_stats = json.dumps(stats)
+    except Exception:
+        pass
 
     interaction = Interaction(
         conversation_id=convo.id,

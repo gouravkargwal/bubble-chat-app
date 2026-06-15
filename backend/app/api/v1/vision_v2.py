@@ -40,7 +40,7 @@ from app.services.hybrid_stitch_pending import (
     has_pending_hybrid_resolution,
     store_pending_hybrid_resolution,
 )
-from app.services.memory_service import scrub_lore_from_contradictions
+from app.services.memory_service import scrub_lore_from_contradictions, upsert_conversation_memory
 from app.services.quota_manager import QuotaExceededException, QuotaManager
 from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
@@ -223,7 +223,7 @@ Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using send
 * their_effort: high / medium / low based on how much they wrote.
 * conversation_temperature: warm (default for profiles).
 * archetype_reasoning: 2-3 sentences analyzing multiple prompts, bio elements, and photo vibes to assign an archetype.
-* detected_archetype: Base this on the holistic tone of the profile.
+* detected_archetype (Pick EXACTLY ONE from this list — do NOT invent new names): THE BANTER GIRL, THE INTELLECTUAL, THE WARM/STEADY, THE GUARDED/TESTER, THE EAGER/DIRECT, THE TRADITIONALIST, THE TRADITIONAL ROMANTIC. Choose based on the holistic tone of the profile. Output the label verbatim, in caps.
 * key_detail: Scan ALL extracted text prompts and bios. Pick the single most interesting, controversial, or vulnerable hook found ANYWHERE in the profile. Do NOT default to the bottom-most text. Pick the one that makes for the best banter.
 * person_name: Match's first name from UI header/profile (else "unknown").
 * stage: "new_match" or "opening".
@@ -280,6 +280,7 @@ async def perform_full_vision_analysis(
     *,
     direction: str,
     screenshots_in_request: int | None = None,
+    user_id: str = "",
 ) -> VisionNodeOutput:
     """Run the full (main) Vision Node Gemini call once, returning parsed output.
 
@@ -327,7 +328,7 @@ async def perform_full_vision_analysis(
         "llm_lifecycle",
         stage="vision_node_pre_llm",
         trace_id="",
-        user_id="",
+        user_id=user_id,
         conversation_id="",
         direction=vision_direction,
         vision_step3_mode="opener_profile_buffet" if is_opener else "chat",
@@ -342,7 +343,7 @@ async def perform_full_vision_analysis(
     logger.info(
         "vision_node_llm_messages",
         trace_id="",
-        user_id="",
+        user_id=user_id,
         conversation_id="",
         direction=vision_direction,
         phase="v2_vision",
@@ -363,7 +364,7 @@ async def perform_full_vision_analysis(
         logger.info(
             "vision_node_llm_result",
             trace_id="",
-            user_id="",
+            user_id=user_id,
             conversation_id="",
             direction=vision_direction,
             out=out.model_dump(),
@@ -378,7 +379,7 @@ async def perform_full_vision_analysis(
         logger.error(
             "vision_node_llm_error",
             trace_id="",
-            user_id="",
+            user_id=user_id,
             conversation_id="",
             direction=vision_direction,
             error=str(e),
@@ -410,17 +411,16 @@ async def _run_v2_agent(initial_state: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.post(
-    "/vision/generate_v2", response_model=VisionResponse | RequiresUserConfirmation
-)
-async def generate_replies_v2(
+async def _run_generate_v2(
     request: VisionRequest,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> VisionResponse | RequiresUserConfirmation:
-    """
-    Analyze a chat screenshot and generate 4 reply suggestions using the 2-node agent.
-    Analyze a chat screenshot and generate 4 reply suggestions (v2 pipeline).
+    user: User,
+    db: AsyncSession,
+    *,
+    cached_vision_out: "VisionNodeOutput | None" = None,
+) -> "VisionResponse | RequiresUserConfirmation":
+    """Core implementation — shared by generate_replies_v2 and resolve_conversation.
+
+    Pass ``cached_vision_out`` from a PendingResolution to skip the vision LLM call.
     """
 
     # ------------------------------------------------------------------ #
@@ -477,24 +477,34 @@ async def generate_replies_v2(
     # ------------------------------------------------------------------ #
     # 5. Hybrid Stitch: resolve conversation_id before agent runs
     # ------------------------------------------------------------------ #
-    try:
-        vision_out = await perform_full_vision_analysis(
-            images,
+    if cached_vision_out is not None:
+        vision_out = cached_vision_out
+        logger.info(
+            "llm_lifecycle",
+            stage="vision_node_cache_hit",
+            user_id=user.id,
             direction=request.direction.value,
-            screenshots_in_request=len(images),
         )
-    except Exception as e:
-        if _is_provider_timeout(e):
-            raise HTTPException(
-                status_code=504,
-                detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
-            ) from e
-        if _is_transient_provider_overload(e):
-            raise HTTPException(
-                status_code=503,
-                detail="Vision model is temporarily overloaded. Please retry in a few seconds.",
-            ) from e
-        raise
+    else:
+        try:
+            vision_out = await perform_full_vision_analysis(
+                images,
+                direction=request.direction.value,
+                screenshots_in_request=len(images),
+                user_id=user.id,
+            )
+        except Exception as e:
+            if _is_provider_timeout(e):
+                raise HTTPException(
+                    status_code=504,
+                    detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
+                ) from e
+            if _is_transient_provider_overload(e):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Vision model is temporarily overloaded. Please retry in a few seconds.",
+                ) from e
+            raise
 
     if not vision_out.is_valid_chat:
         raise HTTPException(400, vision_out.bouncer_reason)
@@ -557,6 +567,7 @@ async def generate_replies_v2(
                 extracted_person_name=ocr_person_name,
                 conflict_reason=conflict_reason,
                 conflict_detail=payload.get("detail"),
+                vision_out_json=vision_out.model_dump_json(),
             )
             logger.info(
                 "llm_lifecycle",
@@ -821,6 +832,46 @@ async def generate_replies_v2(
             scrub_updated=bool(scrub_result.get("updated", False)),
             scrub_removed_lines=int(scrub_result.get("removed_lines", 0)),
         )
+
+    # Persist atomic facts extracted by vision_node into conversation_memories.
+    analysis = final_state.get("analysis")
+    if effective_conversation_id and analysis is not None:
+        from agent.state import AnalystOutput
+        if isinstance(analysis, dict):
+            analysis = AnalystOutput(**analysis)
+        facts: list[str] = []
+        if getattr(analysis, "key_detail", None):
+            facts.append(str(analysis.key_detail))
+        for hook in getattr(analysis, "visual_hooks", None) or []:
+            if hook and str(hook).strip():
+                facts.append(str(hook))
+
+        # Phase 2: on a real chat turn, also ingest the vision node's
+        # `their_last_message` paraphrase as a durable fact about her. A profile
+        # has only "them" entries (its facts are already covered by key_detail +
+        # visual_hooks), so we gate on the presence of a "user" bubble to avoid
+        # storing the holistic profile-vibe summary as noise. No extra LLM call:
+        # the paraphrase is already produced by vision_node every turn.
+        transcript = getattr(analysis, "visual_transcript", None) or []
+
+        def _bubble_sender(item: object) -> str:
+            if isinstance(item, dict):
+                return str(item.get("sender", ""))
+            return str(getattr(item, "sender", ""))
+
+        is_chat_turn = any(_bubble_sender(b) == "user" for b in transcript)
+        if is_chat_turn:
+            tlm = getattr(analysis, "their_last_message", None)
+            if tlm and str(tlm).strip():
+                facts.append(str(tlm))
+
+        for fact in facts:
+            await upsert_conversation_memory(
+                db,
+                user_id=user.id,
+                conversation_id=effective_conversation_id,
+                fact_text=fact,
+            )
     logger.info(
         "llm_lifecycle",
         stage="v2_agent_run_complete",
@@ -948,3 +999,15 @@ async def generate_replies_v2(
         usage_remaining=response.usage_remaining,
     )
     return response
+
+
+@router.post(
+    "/vision/generate_v2", response_model=VisionResponse | RequiresUserConfirmation
+)
+async def generate_replies_v2(
+    request: VisionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> VisionResponse | RequiresUserConfirmation:
+    """Analyze a chat screenshot and generate 4 reply suggestions (v2 pipeline)."""
+    return await _run_generate_v2(request, user, db)

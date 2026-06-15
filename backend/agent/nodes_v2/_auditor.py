@@ -83,7 +83,8 @@ FAIL a reply for ANY of:
   - revive_chat: Stale openers ("hey stranger", "long time").
   - de_escalate: Sarcastic/defensive, OR no acknowledgment before question. NOTE: One warm curious question after acknowledgment is ALLOWED. Only fail if: jumps straight to question with zero acknowledgment, OR question is dismissive/challenging.
 * Tone Safety: Teases/escalates when their_tone=upset/vulnerable. Includes: positivity redirect before holding space, implying overreaction, focusing on what she SHOULD do vs what she FEELS. go_deeper: feelings first. de_escalate: acknowledge before redirecting.
-* Cringe/Generic: Therapy-speak, motivational quotes, overly eager, copy-paste line.
+* Cringe/Generic: Therapy-speak, motivational quotes, overly eager, copy-paste line. Fate/destiny openers ("do you think us matching was fate/meant to be/part of the plan/the universe's doing") = automatic fail — it's the single most overused opener on every dating app.
+* Therapy/validation phrases (zero tolerance — scan EVERY reply, fail on a literal match): "i appreciate", "i appreciate the honesty", "i hear you", "i hear that", "i respect that", "i really value", "that sounds hard", "i understand where youre coming from", "thank you for sharing". These read as AI-validation and must fail regardless of direction (the de_escalate/go_deeper acknowledgment uses raw short empathy like "that sounds brutal", NOT these phrases).
 * Freshness: Identical or close paraphrase of last_ai_replies_shown.
 * Forbidden: Dead openers ("hey/hi/so/well"). Empty laugh starts ("haha/lol") unless reacting to specific text. Lazy deflection ("what about you", "tumhe kya lagta hai"). tease direction: echoing her question back verbatim.
 * Structure: 2+ questions. Dead-end (no fork/hook). strategy_label mismatch.
