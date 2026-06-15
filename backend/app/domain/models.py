@@ -119,10 +119,15 @@ class ConversationContext:
     # Topic exhaustion guardrail inputs (most recent first).
     last_user_organic_texts: list[str] = field(default_factory=list)
     last_ai_replies_shown: list[str] = field(default_factory=list)
-    # Phase 4: stable archetype derived from accumulated observations.
-    # None until enough scans (>=3) exist to be meaningful.
+    # Phase 4: stable, mode-smoothed personality read derived from accumulated
+    # scans. None until enough scans (>=3) exist to be meaningful. The generator
+    # builds its tone prior from stable_dimensions when present (else live).
     stable_archetype: str | None = None
     archetype_confidence: float = 0.0
+    stable_dimensions: dict | None = None
+    # Sticky curated-persona read from her photos, carried forward from the opener
+    # so tone stays matched even on chat turns where photos aren't visible.
+    photo_persona: str = ""
     # Phase 5: strategy_labels that have landed with her (copy-rate ranked).
     preferred_strategies: list[str] = field(default_factory=list)
 

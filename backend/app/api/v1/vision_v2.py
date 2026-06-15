@@ -50,6 +50,7 @@ from agent.nodes_v2._shared import (
     fetch_librarian_context_async,
 )
 from agent.nodes_v2._vision import VisionNodeOutput
+from agent.nodes_v2._personality import derive_archetype
 from agent.state import AgentState
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -184,6 +185,7 @@ Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_
 
 Fields for BOTH modes:
 * visual_hooks: List 3-4 physical/environmental details from visible photos (empty list if no photos). On profiles, mine every photo across all screenshots (outfit, setting, props, vibe).
+* photo_persona: 1-3 words for the curated PERSONA/aesthetic her photos project (e.g. "rebel/edgy", "soft romantic", "influencer-polished", "girl-next-door", "old-money", "outdoorsy adventurer"). Read the vibe she CHOSE to present, NOT a judgment of her face or body. Empty if no photos.
 * detected_dialect: ENGLISH, HINDI, or HINGLISH — match her dominant language/mix across the visible text. If a "MOTHER TONGUE: Hindi" field is visible, default to HINGLISH unless her written messages are clearly formal English.
 * person_name: Match's first name from UI header/profile (else "unknown").
 * stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument (profiles without a thread are usually new_match or opening).
@@ -191,11 +193,19 @@ Fields for BOTH modes:
 IF CHAT CONVERSATION (real chat bubbles with user/them alignment):
 * Base key_detail, their_last_message, and their_tone STRICTLY on her absolute newest message at the bottom of the thread.
 * their_effort, conversation_temperature: From that latest message and immediate context.
-* archetype_reasoning: 2-3 sentences analyzing her latest message structure (word count, questions, emojis) to justify the archetype.
-* detected_archetype (Pick EXACTLY ONE): THE BANTER GIRL, THE INTELLECTUAL, THE WARM/STEADY, THE GUARDED/TESTER, THE EAGER/DIRECT, THE LOW-INVESTMENT.
+* archetype_reasoning: 2-3 sentences analyzing her latest message structure (word count, questions, emojis, effort) to justify the dimension scores below.
+* Score these 5 personality dimensions from her latest message + visible context. Do NOT output an archetype name — the archetype is derived from these scores in code:
+  - warmth: guarded | neutral | warm — walled-up/testing/cold vs open and receptive.
+  - playfulness: earnest | balanced | playful — sincere/serious vs banter-y, teasing, sarcastic.
+  - engagement: low | medium | high — short/flat/low-effort vs invests real effort, long/curious.
+  - traditionalism: modern | mixed | traditional — casual/contemporary vs culturally rooted, values-forward.
+  - intent: exploring | open | long_term — figuring it out vs explicitly seeking a serious relationship.
 * top_hooks: Exactly THREE distinct hooks from this chat turn — different angles, not the same idea reworded.
 * key_detail: MUST equal top_hooks[0].
 * their_last_message: A short paraphrase of her latest message that preserves relational context. If her message is a direct reaction to something the user said or hinted at (a question, a word, a plan), explain WHAT she caught on to and HOW she is reacting — not just what she literally said. Example: instead of "She is asking why he wants to meet", write "She caught on that he was hinting at meeting in Gurgaon and is playfully calling him out on it." Only paraphrase in isolation if her message has no clear reaction target.
+* user_last_move: Find the USER's own most recent message in the thread and judge it in ONE sentence: was it high-effort or low-effort (a generic compliment like "wow so touching", a one-word reply, "haha", "nice"), and is her current tone likely a REACTION to it? Example: "User replied with a low-effort generic compliment; her flat 'may be' reads as mild disappointment at his weak reply, not loss of interest." If the user's last message was substantive, say that instead. Leave empty ONLY if there is no user message in the thread.
+* inbound_image: Did SHE send an IMAGE as a chat message (one of HER bubbles is a photo — NOT a profile photo, NOT the app avatar)? Classify: "selfie_of_her" (a photo of herself — an interest/escalation signal), "object_or_scene" (a thing or moment she shared — coffee, food, pet, view, meme, screenshot — NOT her), or "none" (no image she sent / normal text chat). Only classify an image that is clearly one of her chat messages.
+* inbound_image_detail: If inbound_image is not "none", a SHORT noun phrase naming the durable, memory-worthy subject of that image (e.g. "her golden retriever", "a latte at a cafe", "hiking at a mountain viewpoint"). This becomes a long-term fact about her. Empty if "none" or nothing notable.
 
 IF DATING PROFILE (no chat thread — prompts, bio fragments, photo captions, Bumble/Hinge-style cards only):
 * top_hooks: Use an empty list [] (profile mode does not use chat turn hooks).
@@ -205,8 +215,13 @@ IF DATING PROFILE (no chat thread — prompts, bio fragments, photo captions, Bu
 * their_tone: Infer from the dominant emotional signal across the whole profile (not from one trailing fragment).
 * their_effort: high if many prompts are filled with substance; medium/low if sparse or generic.
 * conversation_temperature: hot / warm / lukewarm / cold from overall flirtiness and openness across the profile.
-* archetype_reasoning: 2-3 sentences citing multiple profile elements (which prompts, what patterns). Do not reduce to "word count on last line."
-* detected_archetype: Same enum as chat; choose based on how she presents across prompts and bio as a whole (e.g. vulnerable bio + playful prompts → weigh the mix honestly).
+* archetype_reasoning: 2-3 sentences citing multiple profile elements (which prompts, what patterns) to justify the dimension scores below. Do not reduce to "word count on last line."
+* Score these 5 personality dimensions across the WHOLE profile (prompts, bio, photos). Do NOT output an archetype name — it is derived from these scores in code:
+  - warmth: guarded | neutral | warm — reserved/walled-up vs open and receptive.
+  - playfulness: earnest | balanced | playful — sincere/serious vs banter-y, teasing, sarcastic.
+  - engagement: low | medium | high — sparse/low-effort profile vs richly filled, expressive.
+  - traditionalism: modern | mixed | traditional — casual/contemporary vs culturally rooted, values-forward.
+  - intent: exploring | open | long_term — figuring it out vs explicitly seeking a serious relationship.
 """
 
 # STEP 3 when direction == "opener": profile-first; no chronological chat tail bias.
@@ -218,12 +233,18 @@ Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using send
 
 * top_hooks: Use an empty list [] (opener/profile mode does not use chat turn hooks).
 * visual_hooks: Scan ALL screenshots. List 3-4 specific physical/environmental details (e.g., "red dress with balloons", "holding a matcha latte", "wearing large round glasses").
+* photo_persona: 1-3 words for the curated PERSONA/aesthetic her photos project (e.g. "rebel/edgy", "soft romantic", "influencer-polished", "girl-next-door", "old-money", "outdoorsy adventurer"). Read the vibe she CHOSE to present, NOT a judgment of her face or body. Empty if no photos.
 * detected_dialect: ENGLISH, HINDI, or HINGLISH. Base this on the dominant mix across all visible profile text. EXCEPTION: if a "MOTHER TONGUE" field is visible and its value is Hindi, set detected_dialect to HINGLISH unless the person's own written responses (prompts, bio) are clearly formal English with zero Hindi influence — in that case use ENGLISH.
 * their_tone: The overall vibe of their profile prompts/bio.
 * their_effort: high / medium / low based on how much they wrote.
 * conversation_temperature: warm (default for profiles).
-* archetype_reasoning: 2-3 sentences analyzing multiple prompts, bio elements, and photo vibes to assign an archetype.
-* detected_archetype (Pick EXACTLY ONE from this list — do NOT invent new names): THE BANTER GIRL, THE INTELLECTUAL, THE WARM/STEADY, THE GUARDED/TESTER, THE EAGER/DIRECT, THE TRADITIONALIST, THE TRADITIONAL ROMANTIC. Choose based on the holistic tone of the profile. Output the label verbatim, in caps.
+* archetype_reasoning: 2-3 sentences analyzing multiple prompts, bio elements, and photo vibes to justify the dimension scores below.
+* Score these 5 personality dimensions across the WHOLE profile (prompts, bio, photos). Do NOT output an archetype name — it is derived from these scores in code:
+  - warmth: guarded | neutral | warm — reserved/walled-up vs open and receptive.
+  - playfulness: earnest | balanced | playful — sincere/serious vs banter-y, teasing, sarcastic.
+  - engagement: low | medium | high — sparse/low-effort profile vs richly filled, expressive.
+  - traditionalism: modern | mixed | traditional — casual/contemporary vs culturally rooted, values-forward.
+  - intent: exploring | open | long_term — figuring it out vs explicitly seeking a serious relationship.
 * key_detail: Scan ALL extracted text prompts and bios. Pick the single most interesting, controversial, or vulnerable hook found ANYWHERE in the profile. Do NOT default to the bottom-most text. Pick the one that makes for the best banter.
 * person_name: Match's first name from UI header/profile (else "unknown").
 * stage: "new_match" or "opening".
@@ -360,6 +381,12 @@ async def perform_full_vision_analysis(
             phase="v2_vision",
         )
         out = cast(VisionNodeOutput, result)
+        # Archetype is DERIVED from the constrained dimensions, never chosen by the
+        # LLM — this makes an invalid/hallucinated label structurally impossible and
+        # removes the taxonomy-maintenance problem. Kept for logging + Phase 4/5.
+        out.detected_archetype = derive_archetype(
+            out.warmth, out.playfulness, out.engagement, out.traditionalism, out.intent
+        )
         _vision_usage_row_var.set(usage_row)
         logger.info(
             "vision_node_llm_result",
@@ -865,6 +892,14 @@ async def _run_generate_v2(
             if tlm and str(tlm).strip():
                 facts.append(str(tlm))
 
+        # Durable fact from an image she sent in chat (her pet, hobby, etc.) — the
+        # transient "she sent a selfie" signal stays per-turn, but the SUBJECT of an
+        # object/scene image is lasting context worth remembering.
+        if getattr(analysis, "inbound_image", "none") != "none":
+            img_detail = (getattr(analysis, "inbound_image_detail", "") or "").strip()
+            if img_detail:
+                facts.append(f"Shared a photo of {img_detail}")
+
         for fact in facts:
             await upsert_conversation_memory(
                 db,
@@ -998,6 +1033,95 @@ async def _run_generate_v2(
         interaction_id=interaction.id,
         usage_remaining=response.usage_remaining,
     )
+
+    # ------------------------------------------------------------------ #
+    # Compact analysis row: one flat, structured event with everything
+    # needed to evaluate a request offline — no prompt-scrolling, no DB
+    # lookups. (Industry "one trace row per request" pattern.)
+    # ------------------------------------------------------------------ #
+    try:
+        # Read from the AGENT analysis (AnalystOutput) — it carries the full set
+        # of fields (dimensions, photo_persona, user_last_move, inbound_image...).
+        # The domain `parsed.analysis` (AnalysisResult) drops them, so don't use it here.
+        _a = final_state.get("analysis")
+        if isinstance(_a, dict):
+            try:
+                from agent.state import AnalystOutput as _AO
+                _a = _AO(**_a)
+            except Exception:
+                _a = None
+        if _a is None:
+            _a = parsed.analysis if parsed else None
+        _ctx = conversation_context
+        _usage = usage_log if isinstance(usage_log, list) else []
+        _replies_brief = [
+            {
+                "text": r.text,
+                "strategy_label": r.strategy_label,
+                "is_recommended": r.is_recommended,
+            }
+            for r in (response.replies or [])
+        ]
+        logger.info(
+            "v2_analysis",
+            trace_id=trace_id,
+            user_id=user.id,
+            interaction_id=interaction.id,
+            conversation_id=response.conversation_id,
+            direction=request.direction.value,
+            person_name=response.person_name,
+            stage=getattr(_a, "stage", "") if _a else "",
+            detected_archetype=getattr(_a, "detected_archetype", "") if _a else "",
+            detected_dialect=getattr(_a, "detected_dialect", "") if _a else "",
+            dimensions={
+                "warmth": getattr(_a, "warmth", ""),
+                "playfulness": getattr(_a, "playfulness", ""),
+                "engagement": getattr(_a, "engagement", ""),
+                "traditionalism": getattr(_a, "traditionalism", ""),
+                "intent": getattr(_a, "intent", ""),
+            } if _a else {},
+            stable_dimensions=getattr(_ctx, "stable_dimensions", None),
+            stable_archetype=getattr(_ctx, "stable_archetype", None),
+            archetype_confidence=getattr(_ctx, "archetype_confidence", 0.0),
+            preferred_strategies=getattr(_ctx, "preferred_strategies", []) or [],
+            photo_persona=getattr(_a, "photo_persona", "") if _a else "",
+            user_last_move=getattr(_a, "user_last_move", "") if _a else "",
+            inbound_image=getattr(_a, "inbound_image", "none") if _a else "none",
+            inbound_image_detail=getattr(_a, "inbound_image_detail", "") if _a else "",
+            key_detail=getattr(_a, "key_detail", "") if _a else "",
+            recommended_strategy=next(
+                (r["strategy_label"] for r in _replies_brief if r["is_recommended"]), ""
+            ),
+            replies=_replies_brief,
+            auditor_passed=not bool(final_state.get("is_cringe", False)),
+            audit_status=(
+                "shipped_with_unresolved_issues"
+                if final_state.get("is_cringe", False)
+                else "passed"
+            ),
+            audit_issues=(
+                str(final_state.get("auditor_feedback") or "")
+                if final_state.get("is_cringe", False)
+                else ""
+            ),
+            revision_count=int(final_state.get("revision_count", 0) or 0),
+            gemini_call_count=gemini_call_count,
+            latency_ms=latency_ms,
+            total_tokens=sum(
+                int(u.get("total_tokens", 0) or 0) for u in _usage if isinstance(u, dict)
+            ),
+            cost_usd=round(
+                sum(float(u.get("cost_usd", 0) or 0) for u in _usage if isinstance(u, dict)), 6
+            ),
+            contradiction_count=(
+                len(detected_contradictions)
+                if isinstance(detected_contradictions, list)
+                else 0
+            ),
+        )
+    except Exception:
+        logger.warning("v2_analysis_log_failed", trace_id=trace_id, exc_info=True)
+
     return response
 
 

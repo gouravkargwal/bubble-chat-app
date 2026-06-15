@@ -35,24 +35,34 @@ class AnalystOutput(BaseModel):
         default_factory=list,
         description="List 3-4 specific physical or environmental details from the photos."
     )
+    photo_persona: str = Field(
+        default="",
+        description=(
+            "1-3 words for the curated persona/aesthetic her photos project "
+            "(e.g. 'rebel/edgy', 'soft romantic', 'influencer-polished'). The vibe she "
+            "CHOSE, not a judgment of her looks. Empty if no photos."
+        ),
+    )
     detected_dialect: Literal["ENGLISH", "HINDI", "HINGLISH"]
     their_tone: str
     their_effort: str
     conversation_temperature: str
     archetype_reasoning: str = Field(
+        default="",
         description=(
-            "FIRST count her words, check her message structure (question? statement? emoji-only?), "
-            "and note her effort level. THEN reason about which archetype fits based on the "
-            "MESSAGE STRUCTURE RULES, not tone labels."
-        )
+            "2-3 sentences justifying the dimension scores below, citing her message structure "
+            "(word count, question vs statement, emoji use, effort) and/or profile content."
+        ),
     )
-    detected_archetype: str = Field(
-        description=(
-            "Based strictly on the reasoning above, select EXACTLY ONE: "
-            "'THE BANTER GIRL', 'THE INTELLECTUAL', 'THE WARM/STEADY', "
-            "'THE GUARDED/TESTER', 'THE EAGER/DIRECT', or 'THE LOW-INVESTMENT'."
-        )
-    )
+    # Constrained personality dimensions (see agent/nodes_v2/_personality.py).
+    warmth: Literal["guarded", "neutral", "warm"] = "neutral"
+    playfulness: Literal["earnest", "balanced", "playful"] = "balanced"
+    engagement: Literal["low", "medium", "high"] = "medium"
+    traditionalism: Literal["modern", "mixed", "traditional"] = "mixed"
+    intent: Literal["exploring", "open", "long_term"] = "open"
+    # Derived in code from the dimensions above; not chosen by the LLM. Retained
+    # for logging + Phase 4/5 learning continuity.
+    detected_archetype: str = Field(default="THE WARM/STEADY")
     top_hooks: List[str] = Field(
         default_factory=list,
         description="Chat: three distinct hooks; first must match key_detail. Profile: empty.",
@@ -61,6 +71,23 @@ class AnalystOutput(BaseModel):
     person_name: str = Field(default="unknown", description="First name if visible, else 'unknown'.")
     stage: str = Field(default="early_talking", description="Conversation stage.")
     their_last_message: str = Field(default="", description="Paraphrase of the other person's last message.")
+    user_last_move: str = Field(
+        default="",
+        description=(
+            "Chat only: 1-sentence read of the USER's own most recent message — was it high/low effort "
+            "and is her current tone a reaction to it. Empty if no user message in the thread."
+        ),
+    )
+    inbound_image: Literal["none", "selfie_of_her", "object_or_scene"] = Field(
+        default="none",
+        description=(
+            "Did SHE send an image as a chat message: 'selfie_of_her', 'object_or_scene', or 'none'."
+        ),
+    )
+    inbound_image_detail: str = Field(
+        default="",
+        description="Short noun phrase naming the memory-worthy subject of an image she sent.",
+    )
 
 
 class StrategyOutput(BaseModel):

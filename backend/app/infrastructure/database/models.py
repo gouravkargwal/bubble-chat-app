@@ -139,14 +139,21 @@ class Conversation(Base):
     tone_trend: Mapped[str] = mapped_column(String(20), default="stable")
     topics_worked: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
     topics_failed: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
-    # Phase 4: running tally of archetypes observed across scans, e.g.
-    # {"THE BANTER GIRL": 3, "THE TRADITIONALIST": 1}. The stable archetype +
-    # confidence are derived from this in build_conversation_context.
-    archetype_counts: Mapped[str] = mapped_column(Text, default="{}")  # JSON object
+    # Phase 4: per-dimension tally observed across scans, e.g.
+    # {"warmth": {"warm": 3, "neutral": 1}, "playfulness": {...}, ...}. The stable
+    # (mode-smoothed) dimensions, the derived archetype, and confidence are all
+    # computed from this in build_conversation_context. Dimensions are the
+    # primitive; the archetype is always derived.
+    dimension_counts: Mapped[str] = mapped_column(Text, default="{}")  # JSON object
     # Phase 5: per-strategy outcome stats, e.g.
     # {"PUSH-PULL": {"shown": 5, "copied": 3}}. "shown" increments at generate
     # time, "copied" when the user copies a reply with that strategy_label.
     strategy_stats: Mapped[str] = mapped_column(Text, default="{}")  # JSON object
+    # Sticky curated-persona read from her photos (e.g. "rebel/edgy"). Captured
+    # at the opener (rich photos) and carried forward into later chat turns where
+    # photos aren't visible, so the coach's tone stays matched to her vibe.
+    # Written only when a scan returns a non-empty read (never degraded to empty).
+    photo_persona: Mapped[str] = mapped_column(String(64), default="")
     interaction_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_interaction_at: Mapped[datetime] = mapped_column(

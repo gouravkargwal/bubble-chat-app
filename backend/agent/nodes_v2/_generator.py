@@ -18,9 +18,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from agent.nodes_v2._lc_usage import invoke_structured_gemini
+from agent.nodes_v2._personality import build_tone_prior
 from agent.nodes_v2._post_processor import validate_and_fix_replies
 from agent.nodes_v2._shared import (
+    BANNED_EXAMPLE_PHRASES,
     GENERATOR_MODEL,
+    STRATEGY_LABEL_GLOSSARY,
     opener_hook_priority,
     transcript_text_from_analysis,
     sanitize_llm_messages_for_logging,
@@ -84,25 +87,32 @@ You are a dating text coach. Three phases: strategy → write 4 replies → self
 {dialect_enforcement}
 {playbook_section}
 {learned_strategy_section}
+{strategy_glossary}
+
 PHASE 1: STRATEGY
 * Source of truth: visual_transcript > core_lore.
+* Read user_last_move FIRST. If the user's own last reply was low-effort (generic compliment, one-word, "haha", "nice") and her latest message cooled or shortened in response, the weak link was the USER — NOT her. Do NOT mock her, accuse her of being fake/dismissive, or treat her as low-investment for a drop the user caused. RECOVER: re-engage her last substantive point with genuine interest. This holds even when direction=tease — tease the awkward beat or the situation (even self-aware about the weak reply), NEVER her sincerity.
+* Inbound image: read inbound_image. If "selfie_of_her" — she sent a photo of HERSELF (interest/escalation signal): react warmly and you MAY escalate; never ignore the image, and never describe her in a clinical/creepy way ("nice symmetrical face"). If "object_or_scene" — she shared a thing/moment (coffee, pet, food, view, meme): react to the THING and fold it into the banter; NEVER compliment her looks (there is no "her" in the image to compliment). If "none" — normal text chat.
 * Double-text: If last bubble is from "user", do NOT re-answer her — build on user's last text.
 * Upset/vulnerable tone: No heavy teasing. Mix: acknowledge (HONEST FRAME), pivot (FRAME CONTROL), question (PUSH-PULL). No 4 identical therapeutic replies.
 * Dating goals/marriage topic: HONEST FRAME only. No banter.
 
 PHASE 2: WRITE
 * Format: no punctuation, lowercase ("dont", "im"). Match her length or shorter. For emotional contexts (go_deeper, de_escalate): keep sentences SHORT — real texting empathy is brief and raw. "that sounds brutal" > "being called careless in front of everyone must have been incredibly difficult". Long polished empathy sentences = sounds AI = fail.
-* Diversity (CRITICAL): 4 replies = 4 different conversational paths. If they all mean the same thing, rewrite.
+* Diversity (CRITICAL): 4 replies = 4 different conversational paths, each on a DIFFERENT specific detail. The cap is on the SAME SPECIFIC hook: do NOT give 4 rewordings of one topic (e.g. all four about her "long-term" goal, or all four about the same single photo). Four DIFFERENT specific details — even if several are visual (her jewelry vs her setting vs a specific dress vs her overall style range) — IS good diversity, NOT a violation. On sparse, photo-heavy profiles the right move is exactly this: spread across distinct visual details rather than re-hitting the lone text hook. Referencing a specific style/outfit CHOICE is allowed; only generic body/face compliments ("you're gorgeous") are banned.
 * Specificity: >=2 replies MUST embed exact words from top_hooks or her message in a SHORT punchy line. "the half marathon is just a biryani excuse isn't it" = PASS (brief, embeds both hooks). "training for a half marathon while being deeply committed to biryani sounds like a logistical nightmare" = FAIL (too long, polished, constructed-sounding). Echo must be brief, not a full sentence analysis.
 * Freshness: Do NOT paraphrase last_ai_replies_shown. Treat as banned strings.
 * No self-pivot: Never make it about yourself. Focus stays on her or the dynamic.
+{banned_examples}
 
 PHASE 3: SELF-CHECK (all 4 replies must pass)
 * Grounded: Each reply needs verbatim anchor — quote her exact word or phrase with a twist. "you seem adventurous" = FAIL. "someone who gives 'goa' as their answer to everything" = PASS. "the 'not even close' is doing a lot of heavy lifting" = PASS. No invented assumptions about character without a quoted hook.
 * Fork: Leave a SPECIFIC GAP she fills. Best formats: (a) expose a contradiction she'd deny ("claiming you dont plan when you probably spent weeks on tripadvisor"), (b) A/B hypothetical she picks ("would you have owned the wrong room or sprinted out"), (c) a claim about her specific action she corrects ("bet the ranked cafe list has footnotes"). NOT a punchline she laughs at — a GAP she fills with something specific.
 * Quality bar: Replies 3+4 same quality as 1+2. Vague filler ("the chaos must have been productive") = FAIL.
 * Claim attack ≠ character attack: Attack what she SAID, not who she IS. "claiming you dont plan while clearly having a plan" = PASS (attacks her CLAIM). "you sound like the type who..." / "you are the kind of person who..." = FAIL (character attack = nothing specific to push back against = fq=1-2 every time).
-* Forbidden — therapy/corporate (SCAN EVERY REPLY — zero tolerance): "i appreciate", "i hear you", "i hear that", "i respect that", "i really value", "that sounds hard", "i understand where youre coming from", "thank you for sharing", "the fact that X says [anything] about Y", "the fact that you [did X] shows/says/means". These phrases = automatic rewrite regardless of direction.
+* Label accuracy: each reply's strategy_label MUST match its text per the STRATEGY LABEL DEFINITIONS above. A "would you rather / A or B" question = FRAME CONTROL (not HONEST FRAME). A line that only validates/agrees = HONEST FRAME (not a tactic). If the label doesn't fit the litmus, change the label — never force the wrong one.
+* Persona use: photo_persona is a READ of the aesthetic she CURATED — use it to shape TONE and to spot outfit/setting/styling hooks. NEVER turn it into a looks/identity label: "you look like a rebel kid", "you've got influencer energy", "you seem like the artsy type" = FAIL (presumptuous verdict on who she is + a looks comment). You MAY reference a CHOICE she made (a specific outfit, setting, or a styling contrast), never her appearance or a character verdict.
+* Forbidden — therapy/corporate (SCAN EVERY REPLY — zero tolerance): "i appreciate", "i admire", "i hear you", "i hear that", "i respect that", "i really value", "i love that", "that sounds hard", "i understand where youre coming from", "thank you for sharing", "the fact that X says [anything] about Y", "the fact that you [did X] shows/says/means". These phrases = automatic rewrite regardless of direction. PATTERN: any opener of the form "i [appreciate/admire/respect/love/value/honor] [the/your] ___" is first-person validation of her trait/choice — banned, even if the exact verb isn't listed.
 * Forbidden — condescending: "adorable that you think", "commitment to being wrong", "anyone with a brain".
 * Forbidden — openers: NEVER start with "hey/hi/so/well". No "haha/lol" opener unless reacting to a specific line.
 * Forbidden — lazy: "what about you". No 2+ questions per reply.
@@ -111,71 +121,9 @@ PHASE 3: SELF-CHECK (all 4 replies must pass)
 * Get-number check: If direction=get_number — NEVER put a phone number, fake number, username, or contact detail inside reply text. The reply asks her to move off-app; it does NOT contain an actual number.
 * Direction ban: No date/drink/number suggestions unless direction is ask_out or get_number.
 
-{archetype_rules}
-
+{personality_prior}
 {direction_rules}
 """
-
-# ---------------------------------------------------------------------------
-# Archetype-specific prompt segments (only the relevant one is injected)
-# ---------------------------------------------------------------------------
-
-_ARCHETYPE_PROMPTS: dict[str, str] = {
-    "THE BANTER GIRL": """
-ARCHETYPE STRATEGY — THE BANTER GIRL:
-* Context: Active sparring, sarcasm, tests. Match her energy.
-* Labels: Prioritize PUSH-PULL and PATTERN INTERRUPT.
-* Tone: Cocky, playful, unbothered. Tease, playfully misinterpret, or flip tests.
-* Restrictions: Do NOT be sincere or reassuring. If she accuses you playfully, do NOT confirm/deny. Suspend tension.
-* Fork requirement: Every reply MUST leave an implicit or explicit response path — a claim she'd want to dispute, a challenge she'd want to accept, or a question mark hanging in the air. A pure brag ("i definitely have better X than you") with nothing to push back against = dead-end FAIL.""",
-    "THE INTELLECTUAL": """
-ARCHETYPE STRATEGY — THE INTELLECTUAL:
-* Context: Substantive message with a real topic. Engage with it.
-* Labels: Prioritize VALUE ANCHOR and FRAME CONTROL.
-* Tone: Witty, thoughtful, culturally aware. Reference ideas/observations.
-* Restrictions: Match length to show depth. Avoid low-effort one-liners.""",
-    "THE WARM/STEADY": """
-ARCHETYPE STRATEGY — THE WARM/STEADY:
-* Context: Friendly and engaged. Most common dynamic.
-* Labels: Mix PUSH-PULL (lightly), VALUE ANCHOR, FRAME CONTROL.
-* Tone: Confident, warm, fun. Light teasing is ok.
-* Restrictions: NO heavy sarcasm/cockiness (she isn't testing you). NO overly serious sincerity.""",
-    "THE GUARDED/TESTER": """
-ARCHETYPE STRATEGY — THE GUARDED/TESTER:
-* Context: She is screening you. Wants a real answer.
-* Labels: Prioritize HONEST FRAME and VALUE ANCHOR.
-* Tone: High-status sincerity. Clear and direct without oversharing.
-* Restrictions: STRICT NO deflection/jokes. STRICT NO PUSH-PULL/sarcasm (reads as avoidance).
-    * Requirement: Among moves to avoid, MUST include "being evasive" and "deflecting with humor".""",
-    "THE EAGER/DIRECT": """
-ARCHETYPE STRATEGY — THE EAGER/DIRECT:
-* Context: Interested and moving forward.
-* Labels: Prioritize SOFT CLOSE and FRAME CONTROL.
-* Tone: Confident, warm, decisive. Match energy. Flirt back but lead toward logistics.
-* Restrictions: Do NOT create artificial tension or play games.
-* Requirement: At least one reply MUST include a concrete next step.""",
-    "THE LOW-INVESTMENT": """
-ARCHETYPE STRATEGY — THE LOW-INVESTMENT:
-* Context: Short/flat reply — she's on autopilot or barely paying attention.
-* Labels: Prioritize PATTERN INTERRUPT.
-* Tone: Unbothered, high-standard. You're interesting — make her prove she can keep up.
-* Restrictions: Do NOT over-explain or chase. Do NOT offer an exit ramp ("no stress if youre busy") — that kills any remaining chance. Match/undercut her length.
-* Requirement: >=2 replies are bold, unexpected pattern interrupts — a statement, observation, or playful assumption she'd feel compelled to respond to. Make her lean in, not check out.""",
-    "THE TRADITIONAL ROMANTIC": """
-ARCHETYPE STRATEGY — THE TRADITIONAL ROMANTIC:
-* Context: She is explicitly marriage/long-term focused and has signaled it clearly on her profile or in conversation.
-* Labels: Prioritize HONEST FRAME and VALUE ANCHOR.
-* Tone: Sincere, confident, warm. Show depth of character over charm.
-* Restrictions: ZERO banter or teasing about marriage/settling down — she will read it as dismissiveness. NO PUSH-PULL on relationship intent (do not create artificial tension around what she wants). NO SOFT CLOSE unless logistics are already established.
-* Requirement: At least one reply shows genuine personality or curiosity about her as a person, not just wit.""",
-    "THE TRADITIONALIST": """
-ARCHETYPE STRATEGY — THE TRADITIONALIST:
-* Context: Culturally rooted profile — traditional dress, regional identity, minimal/factual about herself. Relationship goals are open or unstated. She is NOT signaling marriage intent explicitly.
-* Labels: Prioritize VALUE ANCHOR and PUSH-PULL (light).
-* Tone: Warm, genuinely curious, grounded. Playful but never loud or edgy.
-* Restrictions: NO heavy teasing or sarcasm — reads as disrespect. Do NOT make her cultural background the punchline. Do NOT project seriousness or marriage onto her just because she presents traditionally.
-* Requirement: >=1 reply anchors on a specific regional or lifestyle detail she mentioned (city, language, food, activity) to show genuine interest rather than generic charm.""",
-}
 
 # ---------------------------------------------------------------------------
 # Direction-specific prompt segments (only the relevant one is injected)
@@ -187,7 +135,7 @@ DIRECTION — OPENER:
 * Hook priority: text_first = anchor on bio/story text. visual_first = spread distinct visual hooks. either = use strongest available.
 * Goal: Playful assumption, callback, or sincere reaction — never a generic greeting.
 * Banned: "hi/hey/hello", generic looks compliments, "hows your day".
-* DIVERSITY: Each reply anchors on a DIFFERENT profile detail. 3-4 replies on the same detail = automatic fail.""",
+* DIVERSITY: Each reply anchors on a DIFFERENT profile detail where possible. 2+ replies on the SAME detail with the SAME move = automatic fail; if a detail must be reused, the move must clearly differ (tease vs ask vs claim).""",
     "quick_reply": """
 DIRECTION — QUICK REPLY:
 * Goal: Bounce ball back with a hook (tease, assumption, challenge). No dead statements.
@@ -264,7 +212,6 @@ def _dialect_enforcement_block(detected_dialect: str) -> str:
 
 
 def _build_generator_prompt(
-    detected_archetype: str,
     direction: str,
     custom_hint: str,
     detected_dialect: str,
@@ -273,18 +220,14 @@ def _build_generator_prompt(
     their_tone: str = "neutral",
     their_effort: str = "medium",
     preferred_strategies: list[str] | None = None,
+    personality_prior: str = "",
 ) -> str:
-    """Build the generator system prompt with only the relevant archetype, direction, and playbook."""
-    normalized_archetype = (detected_archetype or "").strip().upper()
-    archetype_rules = _ARCHETYPE_PROMPTS.get(normalized_archetype)
-    if archetype_rules is None:
-        logger.warning(
-            "archetype_not_found_fallback",
-            detected_archetype=detected_archetype,
-            normalized=normalized_archetype,
-            fallback="THE WARM/STEADY",
-        )
-        archetype_rules = _ARCHETYPE_PROMPTS["THE WARM/STEADY"]
+    """Build the generator system prompt.
+
+    The DRIVER is the situational policy (direction × stage × her tone, via the
+    playbook + direction rules). The personality read is injected only as a light
+    tone prior that is explicitly subordinate to the situational rules.
+    """
     direction_rules = _DIRECTION_PROMPTS.get(direction, "")
     hint = (custom_hint or "").strip()
     if hint:
@@ -295,7 +238,7 @@ def _build_generator_prompt(
             f"The user asked for this angle (verbatim intent): {hint!r}\n"
             "- Strategy and all four replies MUST reflect this.\n"
             "- Do not treat it as optional flavor; it is the main creative brief.\n"
-            "- Still ground replies in transcript_text and archetype rules.\n"
+            "- Still ground replies in transcript_text and the situational rules.\n"
         )
     else:
         custom_hint_section = ""
@@ -324,12 +267,14 @@ def _build_generator_prompt(
         learned_strategy_section = ""
 
     return _GENERATOR_CORE_PROMPT.format(
-        archetype_rules=archetype_rules,
+        personality_prior=personality_prior,
         direction_rules=direction_rules,
         custom_hint_section=custom_hint_section,
         dialect_enforcement=_dialect_enforcement_block(detected_dialect),
         playbook_section=playbook_section,
         learned_strategy_section=learned_strategy_section,
+        strategy_glossary=STRATEGY_LABEL_GLOSSARY,
+        banned_examples=BANNED_EXAMPLE_PHRASES,
     )
 
 
@@ -425,6 +370,28 @@ def generator_node(state: AgentState) -> dict:
     # Phase 5: strategies that have landed with her before (copy + conversion).
     preferred_strategies = (conversation_context or {}).get("preferred_strategies") or []
 
+    # Personality read → light tone prior, built from the constrained dimensions
+    # (NOT a hard archetype block). It only tints HOW replies are phrased; the
+    # direction/stage/tone rules drive WHAT the move is.
+    # Phase 4: prefer the mode-smoothed dimensions (stable across scans) once
+    # enough history exists; fall back per-dimension to the live scan otherwise.
+    _stable_dims = (conversation_context or {}).get("stable_dimensions") or {}
+
+    def _dim(name: str, default: str) -> str:
+        return (
+            _stable_dims.get(name)
+            or getattr(analysis, name, default)
+            or default
+        )
+
+    personality_prior = build_tone_prior(
+        _dim("warmth", "neutral"),
+        _dim("playfulness", "balanced"),
+        _dim("engagement", "medium"),
+        _dim("traditionalism", "mixed"),
+        _dim("intent", "open"),
+    )
+
     payload: dict[str, Any] = {
         "analysis": analysis.model_dump(),
         "direction": direction,
@@ -436,6 +403,12 @@ def generator_node(state: AgentState) -> dict:
         "conversation_context_dict": conversation_context,
         "user_custom_hint": custom_hint,
     }
+    # Carry-forward: if THIS scan has no photo read (chat turn, no photos), use the
+    # sticky persona captured at the opener so tone stays matched to her vibe.
+    if not (payload["analysis"].get("photo_persona") or "").strip():
+        carried = (conversation_context or {}).get("photo_persona") or ""
+        if carried:
+            payload["analysis"]["photo_persona"] = carried
     if direction == "opener":
         payload["opener_hook_priority"] = opener_hook_priority(
             analysis, transcript_text
@@ -456,12 +429,11 @@ def generator_node(state: AgentState) -> dict:
             f"{auditor_feedback}"
         )
 
-    # --- Build conditional prompt (archetype + direction + playbook injected) ---
+    # --- Build conditional prompt (situational policy drives; personality tints) ---
     detected_dialect = getattr(analysis, "detected_dialect", "ENGLISH") or "ENGLISH"
     their_tone = getattr(analysis, "their_tone", "neutral") or "neutral"
     their_effort = getattr(analysis, "their_effort", "medium") or "medium"
     system_prompt = _build_generator_prompt(
-        detected_archetype=detected_archetype,
         direction=direction,
         custom_hint=custom_hint,
         detected_dialect=str(detected_dialect),
@@ -470,6 +442,7 @@ def generator_node(state: AgentState) -> dict:
         their_tone=str(their_tone),
         their_effort=str(their_effort),
         preferred_strategies=preferred_strategies if isinstance(preferred_strategies, list) else [],
+        personality_prior=personality_prior,
     )
 
     t_call = time.monotonic()

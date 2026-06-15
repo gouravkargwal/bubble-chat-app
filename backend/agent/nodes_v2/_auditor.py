@@ -20,7 +20,8 @@ from pydantic import BaseModel, Field
 from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
     AUDITOR_MODEL,
-    MAX_REWRITES,
+    BANNED_EXAMPLE_PHRASES,
+    STRATEGY_LABEL_GLOSSARY,
     opener_hook_priority,
     transcript_text_from_analysis,
     sanitize_llm_messages_for_logging,
@@ -75,7 +76,7 @@ Strict quality auditor for AI dating replies. Evaluate 4 replies on substance on
 
 FAIL a reply for ANY of:
 * Context/Dialect: Ignores verbatim_last_message. Misses user_custom_hint. Hindi in ENGLISH dialect (or missing Hinglish).
-* Archetype: Tone clashes (sincere for BANTER GIRL, shallow for INTELLECTUAL, sarcastic for GUARDED/TESTER, over-eager for LOW-INVESTMENT).
+* Tone fit (state-based, NOT a fixed label): the reply's tone must fit her CURRENT state and the direction — not a personality stereotype. Fail only on real clashes: heavy teasing/sarcasm toward someone guarded, vulnerable, or upset; over-eager chasing toward a low-effort/cold person; crude or edgy phrasing toward a clearly traditional/reserved person. Do NOT fail a reply merely because its tone differs from an archetype label.
 * Direction:
   - get_number: No off-app move, or stiff phrasing ("can i get your number"). NOTE: Direct, confident asks ARE correct for non-GUARDED archetypes — do NOT fail a reply for being "too direct" unless it's actually stiff or pressuring.
   - ask_out: BATCH needs >=2 replies with concrete plan (specific activity + day/time). "take me to your top spot saturday" = PASS. "we should hang sometime" = FAIL. Other 2 may banter. Only fail BATCH if <2 have plans.
@@ -83,16 +84,21 @@ FAIL a reply for ANY of:
   - revive_chat: Stale openers ("hey stranger", "long time").
   - de_escalate: Sarcastic/defensive, OR no acknowledgment before question. NOTE: One warm curious question after acknowledgment is ALLOWED. Only fail if: jumps straight to question with zero acknowledgment, OR question is dismissive/challenging.
 * Tone Safety: Teases/escalates when their_tone=upset/vulnerable. Includes: positivity redirect before holding space, implying overreaction, focusing on what she SHOULD do vs what she FEELS. go_deeper: feelings first. de_escalate: acknowledge before redirecting.
+* Misattributed blame: If user_last_move says the USER's own last reply was the weak link (low-effort) and her tone cooled in response, FAIL any reply that mocks/accuses HER (calls her share fake, a "showpiece", dismissive, boring, etc.) — it blames her for the user's weak move. Keep the chosen direction, but the tease/move must target the situation or the awkward beat, not her sincerity.
+* Persona labeling (NARROW — only fail a clear identity/character VERDICT): fail "you look like a rebel kid", "you've got influencer energy", "you seem like the artsy/soft type" — i.e. telling her who she IS as a person. DO NOT fail playful observations about her CHOICES or versatility: "talent for switching looks", "knack for keeping it traditional", "you dont look like you stay there for long" are about her style/choices and are FINE. When unsure, it PASSES.
+* Inbound image: if inbound_image="object_or_scene", FAIL any reply that compliments her looks/appearance (she shared an object/moment, NOT herself). If inbound_image="selfie_of_her", FAIL replies that ignore the image entirely (act as if it's plain text) OR describe her clinically/creepily.
 * Cringe/Generic: Therapy-speak, motivational quotes, overly eager, copy-paste line. Fate/destiny openers ("do you think us matching was fate/meant to be/part of the plan/the universe's doing") = automatic fail — it's the single most overused opener on every dating app.
-* Therapy/validation phrases (zero tolerance — scan EVERY reply, fail on a literal match): "i appreciate", "i appreciate the honesty", "i hear you", "i hear that", "i respect that", "i really value", "that sounds hard", "i understand where youre coming from", "thank you for sharing". These read as AI-validation and must fail regardless of direction (the de_escalate/go_deeper acknowledgment uses raw short empathy like "that sounds brutal", NOT these phrases).
+* Therapy/validation phrases (zero tolerance — scan EVERY reply): "i appreciate", "i appreciate the honesty", "i admire", "i hear you", "i hear that", "i respect that", "i really value", "i love that", "that sounds hard", "i understand where youre coming from", "thank you for sharing". PATTERN: any "i [appreciate/admire/respect/love/value/honor] [the/your] ___" first-person validation of her trait/choice fails too, even if the exact verb isn't listed. These read as AI-validation and must fail regardless of direction (the de_escalate/go_deeper acknowledgment uses raw short empathy like "that sounds brutal", NOT these phrases).
 * Freshness: Identical or close paraphrase of last_ai_replies_shown.
+* Recycled examples: FAIL any reply that reuses a BANNED EXAMPLE LINE from the list below (e.g. "snooze 6 times", "rot on the couch", "taste in music", "biryani excuse", "goa as their answer") — these are prompt illustrations, not content to send. Exception: a detail that is genuinely on her profile.
 * Forbidden: Dead openers ("hey/hi/so/well"). Empty laugh starts ("haha/lol") unless reacting to specific text. Lazy deflection ("what about you", "tumhe kya lagta hai"). tease direction: echoing her question back verbatim.
-* Structure: 2+ questions. Dead-end (no fork/hook). strategy_label mismatch.
+* Structure: 2+ questions. Dead-end (no fork/hook).
+* Label accuracy: each reply's strategy_label MUST match its text per the STRATEGY LABEL DEFINITIONS below. FAIL a reply whose label is wrong — e.g. a "would you rather / A or B" question labeled HONEST FRAME (it's FRAME CONTROL); a line that only validates labeled as a tactic (it's HONEST FRAME). In the issue, name the correct label so the generator can fix it.
 
 GLOBAL BATCH:
-* Diversity: 3+ replies same angle → fail weakest.
+* Diversity: each reply must anchor a DIFFERENT specific detail. FAIL the weaker of ANY PAIR that hits the SAME SPECIFIC hook with the SAME move (two "tell me more about X" on one detail), and FAIL the batch if 3+ replies re-hit ONE specific hook (e.g. all four about her "long-term" goal). BUT four DIFFERENT specific details count as diverse even if several are visual — her jewelry vs her setting vs a specific dress vs her style range is GOOD spread, NOT a violation (do not fail it for being "all about her style"). On sparse photo-only profiles, distinct visual details ARE the correct diversity. Referencing a specific style/outfit CHOICE is allowed; only generic body/face compliments are banned.
 * Shape: Exactly ONE is_recommended=true. 0 or 2+ → fail weakest.
-* Threshold: Good enough to send, not perfect. Don't fail on subjective taste. If 2+ replies fail rules above → fail batch with rewrite instructions.
+* Threshold: Good enough to SEND, not perfect. A fail needs a CLEAR, nameable rule violation. If your reason contains "borders on", "feels slightly", "a bit too", "could be read as", or "too X for the archetype" — that is subjective taste: PASS it, do not fail. Archetype is a soft prior, NOT grounds to fail a contextually-appropriate reply. Only fail the batch when 2+ replies have UNAMBIGUOUS violations (banned phrase, clear identity label, generic greeting, 3+ on one hook). Default to PASS when in doubt — an unnecessary rewrite ships worse, slower replies.
 
 Return structured JSON.
 """
@@ -158,19 +164,11 @@ def auditor_node(state: AgentState) -> dict:
     elif isinstance(drafts, str):
         drafts = WriterOutput(**json.loads(drafts))
 
-    # Safety valve: if we've already rewritten max times, approve regardless
-    if revision_count > MAX_REWRITES:
-        logger.info(
-            "llm_lifecycle",
-            stage="auditor_node_complete",
-            trace_id=trace_id,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            skipped=True,
-            reason="max_rewrites_skip_audit",
-            elapsed_ms=int((time.monotonic() - t_start) * 1000),
-        )
-        return {"is_cringe": False, "auditor_feedback": ""}
+    # NOTE: we used to skip the audit entirely after the max rewrite and force a
+    # pass — that shipped the rewrite UN-audited and made telemetry lie. Now we
+    # always audit (the graph caps rewrites at revision_count >= 2, so this just
+    # produces an HONEST final verdict; if it still fails we ship anyway, but the
+    # real is_cringe + feedback are recorded for analysis).
 
     direction = state.get("direction", "quick_reply")
     custom_hint = (state.get("custom_hint") or "").strip()
@@ -188,6 +186,8 @@ def auditor_node(state: AgentState) -> dict:
         "stage": getattr(analysis, "stage", ""),
         "verbatim_last_message": verbatim_last_message,
         "their_last_message_paraphrase": their_last_message_paraphrase,
+        "user_last_move": getattr(analysis, "user_last_move", ""),
+        "inbound_image": getattr(analysis, "inbound_image", "none"),
         "key_detail": getattr(analysis, "key_detail", ""),
         "direction": direction,
         "user_custom_hint": custom_hint,
@@ -227,7 +227,13 @@ def auditor_node(state: AgentState) -> dict:
     )
 
     messages = [
-        SystemMessage(content=_AUDITOR_SYSTEM_PROMPT),
+        SystemMessage(
+            content=_AUDITOR_SYSTEM_PROMPT
+            + "\n\n"
+            + STRATEGY_LABEL_GLOSSARY
+            + "\n\n"
+            + BANNED_EXAMPLE_PHRASES
+        ),
         HumanMessage(content=json.dumps(eval_payload)),
     ]
 

@@ -136,23 +136,64 @@ async def update_conversation_from_analysis(
     await db.commit()
 
 
-def _derive_stable_archetype(raw_counts: str | None) -> tuple[str | None, float]:
-    """Phase 4: mode archetype + confidence from accumulated observations.
+_DIMENSION_KEYS = ("warmth", "playfulness", "engagement", "traditionalism", "intent")
+_DIMENSION_DEFAULTS = {
+    "warmth": "neutral",
+    "playfulness": "balanced",
+    "engagement": "medium",
+    "traditionalism": "mixed",
+    "intent": "open",
+}
 
-    Returns (None, 0.0) until at least 3 observations exist, so a single noisy
-    early scan never locks in an archetype.
+
+def _derive_stable_dimensions(
+    raw_counts: str | None,
+) -> tuple[dict[str, str] | None, str | None, float]:
+    """Phase 4: mode-smooth each personality dimension across scans.
+
+    Dimensions are the primitive; the archetype is derived from the smoothed
+    dimensions (never tallied directly). Returns (stable_dims, archetype,
+    confidence). All None/0.0 until at least 3 scans exist, so a single noisy
+    early scan never locks in a read. Confidence = mean per-dimension agreement.
     """
     try:
         counts = json.loads(raw_counts or "{}")
         if not isinstance(counts, dict) or not counts:
-            return None, 0.0
-        total = sum(int(v) for v in counts.values())
+            return None, None, 0.0
+        # total scans = the largest per-dimension count sum (dims tallied together)
+        total = max(
+            (sum(int(v) for v in (counts.get(k) or {}).values()) for k in _DIMENSION_KEYS),
+            default=0,
+        )
         if total < 3:
-            return None, 0.0
-        winner, top = max(counts.items(), key=lambda kv: int(kv[1]))
-        return str(winner), round(int(top) / total, 3)
+            return None, None, 0.0
+
+        stable: dict[str, str] = {}
+        fractions: list[float] = []
+        for k in _DIMENSION_KEYS:
+            bucket = counts.get(k) or {}
+            if not isinstance(bucket, dict) or not bucket:
+                continue
+            value, top = max(bucket.items(), key=lambda kv: int(kv[1]))
+            stable[k] = str(value)
+            dim_total = sum(int(v) for v in bucket.values())
+            if dim_total:
+                fractions.append(int(top) / dim_total)
+        if not stable:
+            return None, None, 0.0
+
+        confidence = round(sum(fractions) / len(fractions), 3) if fractions else 0.0
+        from agent.nodes_v2._personality import derive_archetype
+        archetype = derive_archetype(
+            stable.get("warmth", _DIMENSION_DEFAULTS["warmth"]),
+            stable.get("playfulness", _DIMENSION_DEFAULTS["playfulness"]),
+            stable.get("engagement", _DIMENSION_DEFAULTS["engagement"]),
+            stable.get("traditionalism", _DIMENSION_DEFAULTS["traditionalism"]),
+            stable.get("intent", _DIMENSION_DEFAULTS["intent"]),
+        )
+        return stable, archetype, confidence
     except Exception:
-        return None, 0.0
+        return None, None, 0.0
 
 
 def _derive_preferred_strategies(raw_stats: str | None) -> list[str]:
@@ -203,8 +244,8 @@ async def build_conversation_context(
     topics_failed = json.loads(conversation.topics_failed or "[]")
 
     # Phase 4 + 5: derive learned signals from accumulated stats.
-    stable_archetype, archetype_confidence = _derive_stable_archetype(
-        getattr(conversation, "archetype_counts", None)
+    stable_dimensions, stable_archetype, archetype_confidence = _derive_stable_dimensions(
+        getattr(conversation, "dimension_counts", None)
     )
     preferred_strategies = _derive_preferred_strategies(
         getattr(conversation, "strategy_stats", None)
@@ -305,5 +346,7 @@ async def build_conversation_context(
         last_ai_replies_shown=last_ai_replies_shown[:3],
         stable_archetype=stable_archetype,
         archetype_confidence=archetype_confidence,
+        stable_dimensions=stable_dimensions,
+        photo_persona=getattr(conversation, "photo_persona", "") or "",
         preferred_strategies=preferred_strategies,
     )

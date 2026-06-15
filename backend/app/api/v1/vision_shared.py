@@ -549,13 +549,33 @@ async def persist_interaction(
     # counts every option we surface. The matching "copied" increment happens in
     # the /track/copy handler. Never let a stats failure block persistence.
     try:
-        arche = (getattr(parsed.analysis, "detected_archetype", "") or "").strip().upper()
-        if arche:
-            counts = json.loads(convo.archetype_counts or "{}")
-            if not isinstance(counts, dict):
-                counts = {}
-            counts[arche] = int(counts.get(arche, 0)) + 1
-            convo.archetype_counts = json.dumps(counts)
+        # Tally each personality DIMENSION observed this scan (copy-independent).
+        # The archetype is derived from the smoothed dimensions later — we never
+        # tally the derived label, so a single noisy scan can't flip the tone.
+        dims = {
+            "warmth": getattr(parsed.analysis, "warmth", ""),
+            "playfulness": getattr(parsed.analysis, "playfulness", ""),
+            "engagement": getattr(parsed.analysis, "engagement", ""),
+            "traditionalism": getattr(parsed.analysis, "traditionalism", ""),
+            "intent": getattr(parsed.analysis, "intent", ""),
+        }
+        dim_counts = json.loads(convo.dimension_counts or "{}")
+        if not isinstance(dim_counts, dict):
+            dim_counts = {}
+        for dim_name, value in dims.items():
+            value = (value or "").strip().lower()
+            if not value:
+                continue
+            bucket = dim_counts.get(dim_name) or {}
+            bucket[value] = int(bucket.get(value, 0)) + 1
+            dim_counts[dim_name] = bucket
+        convo.dimension_counts = json.dumps(dim_counts)
+
+        # Sticky photo_persona: capture from rich (opener/profile) scans, never
+        # degrade. Chat turns return empty → the good opener read survives.
+        scan_persona = (getattr(parsed.analysis, "photo_persona", "") or "").strip()
+        if scan_persona:
+            convo.photo_persona = scan_persona[:64]
 
         stats = json.loads(convo.strategy_stats or "{}")
         if not isinstance(stats, dict):
