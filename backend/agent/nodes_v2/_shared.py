@@ -177,6 +177,41 @@ def encode_image_from_state(state: AgentState) -> str:
     return _detect_mime_type(img)
 
 
+def downscale_image_b64(b64: str, max_edge: int = 768, jpeg_quality: int = 82) -> str:
+    """Resize a base64 image so its longest edge is <= max_edge, re-encoded as JPEG.
+
+    Gemini bills images by 768px tiles, so a tall phone screenshot (e.g. 1080x2400)
+    costs several tiles. Capping the long edge at ~768 collapses it to ~one tile —
+    cutting vision token cost sharply with no OCR-legibility loss. Best-effort:
+    returns the input UNCHANGED on any failure (incl. Pillow not installed), so the
+    vision call is never blocked. Accepts a raw base64 string or a data: URL; returns
+    raw base64 (the caller's encoder re-adds the MIME prefix).
+    """
+    try:
+        if not b64 or not isinstance(b64, str):
+            return b64
+        payload = b64.split(",", 1)[1] if b64.startswith("data:") else b64
+
+        import io
+
+        from PIL import Image
+
+        raw = base64.b64decode(payload)
+        img = Image.open(io.BytesIO(raw))
+        if max(img.size) <= max_edge:
+            return b64  # already small — leave untouched (preserve original)
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        w, h = img.size
+        scale = max_edge / float(max(w, h))
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=jpeg_quality, optimize=True)
+        return base64.b64encode(out.getvalue()).decode("utf-8")
+    except Exception:
+        return b64
+
+
 def normalize_raw_ocr_text(raw_ocr_text: Any) -> list[dict[str, Any]]:
     """Convert raw_ocr_text into plain JSON-serializable dicts."""
     if raw_ocr_text is None:

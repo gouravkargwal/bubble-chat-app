@@ -45,6 +45,7 @@ from app.services.quota_manager import QuotaExceededException, QuotaManager
 from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
     VISION_MODEL,
+    downscale_image_b64,
     encode_image_from_state,
     sanitize_llm_messages_for_logging,
     fetch_librarian_context_async,
@@ -323,6 +324,7 @@ async def perform_full_vision_analysis(
 
     content: list = []
     for b64 in images_base64:
+        b64 = downscale_image_b64(b64)  # cap long edge ~768px → fewer Gemini image tiles
         image_url = encode_image_from_state(cast(AgentState, {"image_bytes": b64}))
         content.append({"type": "image_url", "image_url": {"url": image_url}})
 

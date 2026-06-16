@@ -28,13 +28,15 @@ class GeminiLangChainUsageCallback(BaseCallbackHandler):
         self.model = model
         self.prompt_tokens: int = 0
         self.candidates_tokens: int = 0
+        self.cached_tokens: int = 0
         self._seen: bool = False
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:  # noqa: ANN401
-        pt, ct = _extract_tokens_from_llm_result(response)
+        pt, ct, cached = _extract_tokens_from_llm_result(response)
         if pt or ct:
             self.prompt_tokens = pt
             self.candidates_tokens = ct
+            self.cached_tokens = cached
             self._seen = True
 
     def to_usage_row(self) -> dict:
@@ -52,9 +54,9 @@ class GeminiLangChainUsageCallback(BaseCallbackHandler):
         )
 
 
-def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int]:
-    """Normalize LangChain / Google GenAI token fields."""
-    pt, ct = 0, 0
+def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int, int]:
+    """Normalize LangChain / Google GenAI token fields. Returns (prompt, output, cached)."""
+    pt, ct, cached = 0, 0, 0
 
     for gen_list in response.generations:
         for gen in gen_list:
@@ -75,8 +77,17 @@ def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int]:
                     or um.get("candidates_token_count")
                     or 0
                 )
+                # Cached-prefix tokens (billed ~25%). Gemini surfaces these under
+                # input_token_details.cache_read (LangChain) or cached_content_token_count.
+                details = um.get("input_token_details")
+                cached = int(
+                    (details.get("cache_read") if isinstance(details, dict) else 0)
+                    or um.get("cached_content_token_count")
+                    or um.get("cache_read_input_tokens")
+                    or 0
+                )
                 if pt or ct:
-                    return pt, ct
+                    return pt, ct, cached
 
     if response.llm_output and isinstance(response.llm_output, dict):
         tu = response.llm_output.get("token_usage")
@@ -84,7 +95,7 @@ def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int]:
             pt = int(tu.get("prompt_tokens") or tu.get("input_tokens") or 0)
             ct = int(tu.get("completion_tokens") or tu.get("output_tokens") or 0)
 
-    return pt, ct
+    return pt, ct, cached
 
 
 def _is_capacity_error(exc: BaseException) -> bool:
@@ -207,6 +218,7 @@ def invoke_structured_gemini(
             candidates_tokens=row.get("candidates_tokens"),
             total_tokens=row.get("total_tokens"),
             cost_usd=row.get("cost_usd"),
+            cached_tokens=cb.cached_tokens,
         )
         return result, row
 

@@ -24,6 +24,7 @@ dependencies = [
     "langchain-openai>=0.2",  # generator A/B via Groq's OpenAI-compatible endpoint
     "pgvector>=0.2",
     "oci>=2.0",
+    "pillow>=10.0",  # backend image downscaling before vision (cut Gemini image tokens)
 ]
 
 [project.optional-dependencies]
