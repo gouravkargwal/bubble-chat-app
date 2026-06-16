@@ -190,6 +190,11 @@ class Interaction(Base):
     person_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     key_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_organic_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Verbatim turn transcript (compact JSON: [{"s":"them"|"user","t":"..."}]).
+    # Lets build_conversation_context replay the REAL back-and-forth instead of
+    # lossy 60-char summaries. Nullable: rows saved before this column existed
+    # fall back to the their_last_message paraphrase.
+    transcript_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Generated replies
     reply_0: Mapped[str] = mapped_column(Text)
     reply_1: Mapped[str] = mapped_column(Text)

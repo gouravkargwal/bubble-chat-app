@@ -647,6 +647,25 @@ async def persist_interaction(
     except Exception:
         pass
 
+    # Persist the verbatim turn transcript (her words + the user's sent bubbles) so
+    # build_conversation_context can replay the REAL thread instead of lossy summaries.
+    transcript_json_value: str | None = None
+    try:
+        pairs: list[dict] = []
+        for msg in (parsed.visual_transcript or []):
+            text = (getattr(msg, "actual_new_message", "") or "").strip()
+            if not text:
+                continue
+            is_user = (
+                getattr(msg, "side", "").lower() == "right"
+                or getattr(msg, "sender", "").lower() == "user"
+            )
+            pairs.append({"s": "user" if is_user else "them", "t": text})
+        if pairs:
+            transcript_json_value = json.dumps(pairs, ensure_ascii=False)
+    except Exception:
+        transcript_json_value = None
+
     interaction = Interaction(
         conversation_id=convo.id,
         user_id=user.id,
@@ -660,6 +679,7 @@ async def persist_interaction(
         person_name=parsed.analysis.person_name,
         key_detail=parsed.analysis.key_detail,
         user_organic_text=user_organic_text,
+        transcript_json=transcript_json_value,
         reply_0=dump_reply_option(reply_options[0]),
         reply_1=dump_reply_option(reply_options[1]),
         reply_2=dump_reply_option(reply_options[2]),

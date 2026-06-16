@@ -35,6 +35,16 @@ PROFILE = (
     "Active today\nRelationship goals\nLong-term relationship"
 )
 
+# P3 dossier: durable facts the coach already "knows" about her from past chats.
+# Injected on returning turns (interaction_count > 0) so the run exercises whether
+# the generator USES known facts and avoids re-asking what it already knows.
+CORE_LORE = (
+    "lives in Lucknow, Uttar Pradesh\n"
+    "Capricorn\n"
+    "Hindu\n"
+    "looking for a long-term relationship"
+)
+
 # A coherent arc. `sent` = the reply we assume was chosen last turn (for narration
 # + transcript continuity); `her_reply` = how she responds, advancing the chat.
 TURNS = [
@@ -181,7 +191,7 @@ def build_payload(turn: dict) -> dict:
         "analysis": analysis,
         "direction": turn["direction"],
         "person_name": "S",
-        "core_lore": "",
+        "core_lore": (CORE_LORE if turn["interaction_count"] > 0 else ""),
         "past_memories": "",
         "transcript_text": _transcript_text(turn["transcript"]),
         "voice_dna_dict": {},

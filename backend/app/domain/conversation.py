@@ -235,6 +235,42 @@ def _derive_preferred_strategies(raw_stats: str | None) -> list[str]:
         return []
 
 
+def _reply_option_text(raw: str | None) -> str:
+    """Unwrap a stored reply (JSON {"text": ...} or a plain string) to its text."""
+    if not raw:
+        return ""
+    try:
+        loaded = json.loads(raw)
+        if isinstance(loaded, dict) and "text" in loaded:
+            return str(loaded["text"])
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return str(raw)
+
+
+def _her_last_verbatim(interaction: Interaction) -> str:
+    """Her newest verbatim message that turn, from the persisted turn transcript.
+
+    Falls back to the stored paraphrase for rows saved before transcript_json existed.
+    """
+    raw = getattr(interaction, "transcript_json", None)
+    if raw:
+        try:
+            pairs = json.loads(raw)
+            them = [
+                str(p.get("t", "")).strip()
+                for p in pairs
+                if isinstance(p, dict)
+                and p.get("s") == "them"
+                and str(p.get("t", "")).strip()
+            ]
+            if them:
+                return them[-1]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return (getattr(interaction, "their_last_message", "") or "").strip()
+
+
 async def build_conversation_context(
     conversation: Conversation,
     db: AsyncSession,
@@ -282,9 +318,17 @@ async def build_conversation_context(
     last_user_organic_texts: list[str] = []
     last_ai_replies_shown: list[str] = []
 
-    # Build summaries from oldest → newest so the history reads chronologically.
+    # Build a VERBATIM recent thread (oldest → newest) so the generator reads the
+    # real back-and-forth — her actual words + exactly what the user sent — instead
+    # of lossy 60-char snippets. Her words come from the persisted turn transcript
+    # (transcript_json); rows saved before it fall back to the paraphrase.
+    prev_her = ""
     for interaction in reversed(recent_interactions):
-        summary = f"[{interaction.direction}] "
+        parts: list[str] = []
+        her = _her_last_verbatim(interaction)
+        if her and her != prev_her:
+            parts.append(f'her: "{her}"')
+            prev_her = her
         if interaction.copied_index is not None:
             copied_reply = getattr(
                 interaction, f"reply_{interaction.copied_index}", None
@@ -292,16 +336,13 @@ async def build_conversation_context(
             if copied_reply:
                 # Track the exact replies the user actually sent for freshness routing.
                 recent_user_replies.append(copied_reply)
-                summary += (
-                    f'Sent: "{copied_reply[:60]}..."'
-                    if len(copied_reply) > 60
-                    else f'Sent: "{copied_reply}"'
-                )
-            else:
-                summary += "Copied a reply"
-        else:
-            summary += "Didn't use any suggestion"
-        summaries.append(summary)
+                sent_text = _reply_option_text(copied_reply)
+                if sent_text:
+                    parts.append(f'you sent: "{sent_text}"')
+        if parts:
+            summaries.append(f"[{interaction.direction}] " + " | ".join(parts))
+        elif interaction.copied_index is None:
+            summaries.append(f"[{interaction.direction}] you didn't send any suggestion")
 
     # Topic exhaustion inputs: last 3 organic texts and last 3 reply options shown.
     # We walk the most recent interactions (limited to 5) from newest to oldest.

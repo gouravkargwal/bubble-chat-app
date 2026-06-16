@@ -95,12 +95,13 @@ FAIL a reply for ANY of:
 * Structure: 2+ questions. Dead-end (no fork/hook).
 * Label accuracy: each reply's strategy_label MUST match its text per the STRATEGY LABEL DEFINITIONS below. FAIL a reply whose label is wrong — e.g. a "would you rather / A or B" question labeled HONEST FRAME (it's FRAME CONTROL); a line that only validates labeled as a tactic (it's HONEST FRAME). In the issue, name the correct label so the generator can fix it.
 * Flatness / no-spike (THE RIZZ BAR — applies to EVERY direction EXCEPT de_escalate/go_deeper, and is SUSPENDED when her tone is upset/vulnerable): FAIL a reply that is "safe but boring" — a pure observation ("the cafe looks nice"), a neutral interview question ("whats your favorite X", a flat "a or b" with no assumption/edge baked in), validation ("makes sense you want long-term"), or small talk. A sendable reply needs a SPIKE: a bold playful assumption, a light challenge/disqualification, a cocky-confident frame, or a real stance. "Breaks no rules but any nice guy could send it" = FAIL. (Do NOT demand a spike for de_escalate/go_deeper or an upset/vulnerable tone — warmth wins there.)
-* TOO LONG / AI-SMELL (applies to EVERY direction including emotional ones): FAIL a reply that reads as a WRITTEN sentence rather than a fired-off text. Concretely fail if ANY: (a) longer than ~15 words; (b) it only holds together via a "that/who/which" subordinate clause or a balanced "either you X or you Y"; (c) it opens with an AI scaffold — "you strike me as", "you seem like someone who", "i get the sense", "i suspect", "i need to know if", "there's something about you that"; (d) it lands a spike then trails an explaining clause instead of stopping. Real texting is short and punchy; a 20+ word multi-clause line is an essay, not a text, EVEN IF it carries a spike. This is a STRUCTURAL fail — name it precisely ("Reply N is 24 words / reads as written, not texted; cut to ~10").
+* NON-ANCHORED / GENERIC CRUTCH (any direction): FAIL a reply built on an imported generic trope instead of HER words — a hypothetical like "zombie apocalypse / desert island / if you won the lottery / teleportation / stranded on an island / two truths and a lie", or a lazy zodiac-personality read. LITMUS: strip her specifics — if the line still works on ANY match, it's generic → fail. This is a STRUCTURAL anchoring fail, not phrasing taste: a sendable reply hooks her verbatim words/photos, not a clever trope that ignores the conversation. (Exception: de_escalate/go_deeper warmth lines need no hook.)
+* AI-SMELL — SCAFFOLD OPENERS ONLY (qualitative; do NOT judge length here — an exact word counter enforces the length cap separately, so NEVER fail a reply for being "too long" and NEVER estimate a word count): FAIL a reply ONLY if (a) it OPENS with one of these exact observational AI-scaffolds — "you strike me as", "you seem like someone who", "i get the sense", "i suspect", "i need to know if", "there's something about you that", "i feel like you're the kind of person who" (treat ONLY these EXACT phrases as scaffolds — do NOT generalize the concept to other openers like "you clearly", "i can tell", "sounds like you", "it says you're"; if the opener is not one of these exact phrases, it is NOT a scaffold fail); or (b) it lands its spike then trails a SEPARATE explaining clause instead of stopping. ALLOWED — do NOT fail (these are the intended rizz move, NOT scaffolds): a short "type who / the type to / are you the one who / bet you" + a CONCRETE behavior ("are you the one quality-checking everyone's grammar", "bet you colour-code every spreadsheet") — these show allowed STRUCTURE; the reply must STILL anchor to her specifics per the non-anchored rule above; a 'who'/'that' clause inside a short line; a plain conditional ("if you're a X…"). When unsure whether something is a scaffold vs an allowed behavior jab, PASS it.
 
 GLOBAL BATCH:
 * Diversity: each reply must anchor a DIFFERENT specific detail. FAIL the weaker of ANY PAIR that hits the SAME SPECIFIC hook with the SAME move (two "tell me more about X" on one detail), and FAIL the batch if 3+ replies re-hit ONE specific hook (e.g. all four about her "long-term" goal). BUT four DIFFERENT specific details count as diverse even if several are visual — her jewelry vs her setting vs a specific dress vs her style range is GOOD spread, NOT a violation (do not fail it for being "all about her style"). On sparse photo-only profiles, distinct visual details ARE the correct diversity. Referencing a specific style/outfit CHOICE is allowed; only generic body/face compliments are banned.
 * Shape: Exactly ONE is_recommended=true. 0 or 2+ → fail weakest.
-* Threshold: "Good enough to send" means it has a SPIKE (rizz bar) AND no clear violation. Two distinct ways to fail: (a) an UNAMBIGUOUS rule violation (banned phrase, clear identity label, generic greeting, 3+ on one hook), or (b) FLATNESS — safe but boring with no spike (see above). Do NOT nitpick HOW a spike is phrased: if your reason is "borders on", "feels slightly", "a bit too", "could be read as", or "too X for the archetype", that is subjective taste → PASS. But a reply with NO spike at all is a real, nameable fail, not taste. In short: don't fail bold-but-imperfect; DO fail safe-but-boring. EXCEPTION — length and AI-scaffold openers are NOT taste: a 20+ word, multi-clause, or "you strike me as / i suspect / i need to know if"-style line is the STRUCTURAL "TOO LONG / AI-SMELL" fail above and must fail even if it is bold and witty.
+* Threshold: "Good enough to send" means it has a SPIKE (rizz bar) AND no clear violation. Two distinct ways to fail: (a) an UNAMBIGUOUS rule violation (banned phrase, clear identity label, generic greeting, 3+ on one hook), or (b) FLATNESS — safe but boring with no spike (see above). Do NOT nitpick HOW a spike is phrased: if your reason is "borders on", "feels slightly", "a bit too", "could be read as", or "too X for the archetype", that is subjective taste → PASS. But a reply with NO spike at all is a real, nameable fail, not taste. In short: don't fail bold-but-imperfect; DO fail safe-but-boring. EXCEPTION — opening with an observational scaffold ("you strike me as / i suspect / i need to know if / there's something about you that") is NOT taste; it's the structural AI-SMELL fail above. (Length is enforced by an exact word counter, NOT your judgment — never fail a reply for word count or estimate one.) A short "type who / bet you [concrete behavior]" jab is NOT a scaffold — do NOT fail it.
 
 Return structured JSON.
 """
@@ -294,6 +295,32 @@ def auditor_node(state: AgentState) -> dict:
             elapsed_ms=int((time.monotonic() - t_start) * 1000),
         )
         return {"is_cringe": False, "auditor_feedback": ""}
+
+    # Deterministic length backstop. LLMs can't reliably count words, so the
+    # prompt-level "TOO LONG / AI-SMELL" rule under-fires (a 21-word reply slipped
+    # past it in prod, and its rewrite stayed 21 words because length never reached
+    # the feedback). Enforce a hard ceiling here so essay-length replies always get
+    # flagged and fed back on rewrite. Set above the soft ~12 target and Hinglish-
+    # aware (particles like yaar/matlab/toh inflate the count) so punchy lines pass.
+    _LENGTH_HARD_CAP = 18
+    by_index = {v.reply_index: v for v in audit.verdicts}
+    for i, r in enumerate(drafts.replies[:4]):
+        wc = len((getattr(r, "text", "") or "").split())
+        if wc <= _LENGTH_HARD_CAP:
+            continue
+        issue = (
+            f"Reply {i} is {wc} words — too long, reads as written not texted. "
+            "Cut to <=12: fire the spike and stop, drop the explaining clause."
+        )
+        existing = by_index.get(i)
+        if existing is None:
+            audit.verdicts.append(ReplyVerdict(reply_index=i, passes=False, issue=issue))
+        elif existing.passes:
+            # Only override a PASS; keep an existing fail's (often more specific) issue.
+            existing.passes = False
+            existing.issue = issue
+    if any(not v.passes for v in audit.verdicts):
+        audit.overall_passes = False
 
     failed_verdicts = [v for v in audit.verdicts if not v.passes]
 

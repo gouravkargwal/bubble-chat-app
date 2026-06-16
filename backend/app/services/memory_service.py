@@ -97,8 +97,32 @@ async def get_match_context(
     # one.) Score = cosine_distance − λ·exp(−age/halflife): lower is better.
     _LORE_RECENCY_LAMBDA = 0.03
     _LORE_RECENCY_HALFLIFE_S = 14 * 86400  # 14 days
+    # P3 dossier: when the match has only a handful of durable facts, surface ALL
+    # of them (the complete "what we know about her") instead of a query-filtered
+    # top-K. The hybrid top-K only earns its keep once facts grow numerous enough
+    # to bloat the prompt.
+    _DOSSIER_FULL_THRESHOLD = 15
+    fact_count = 0
     try:
-        if emb_str:
+        cnt_row = await db.execute(
+            text(
+                """
+                SELECT count(*) AS n
+                FROM conversation_memories
+                WHERE user_id = :user_id
+                  AND conversation_id = :conversation_id
+                  AND superseded_at IS NULL
+                """
+            ),
+            {"user_id": user_id, "conversation_id": conversation_id},
+        )
+        _m = cnt_row.mappings().first()
+        fact_count = int(_m["n"]) if _m else 0
+    except Exception:
+        fact_count = 0
+    use_hybrid = bool(emb_str) and fact_count > _DOSSIER_FULL_THRESHOLD
+    try:
+        if use_hybrid:
             # Retriever 1 — SEMANTIC (recency-blended) ranking.
             vec_rows = await db.execute(
                 text(
