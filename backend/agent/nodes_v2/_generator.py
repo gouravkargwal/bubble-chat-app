@@ -194,8 +194,21 @@ DIRECTION — GET NUMBER:
 * GUARDED/TESTER exception: No pressure or confrontation. Warm, low-pressure HONEST FRAME. Still needs personality and a specific hook — "no pressure / feel free to" = momentum killer.""",
     "ask_out": """
 DIRECTION — ASK OUT:
-* AT LEAST 2 of 4 replies must include a concrete plan (specific activity + day/time). Other 2 can banter.
-* Use her last message as the premise. "take me to your top spot this saturday" = PASS. "we should hang out sometime" = FAIL.""",
+* Goal: move from app to real life. AT LEAST 2 of 4 replies must include an explicit off-app ask with a specific activity. Other 2 can banter or set a frame.
+* Anchor the ask to THIS conversation: the activity or premise MUST reference something she said, did, or the running joke — NOT a generic "coffee?" with no connection. "chalo let me test your heat tolerance this saturday for coffee" (anchored to her heat story) = PASS. "we should hang out sometime" = FAIL (generic, zero connection).
+
+* DAY SPECIFICITY — read conversation_temperature:
+  - conversation_temperature = warm or hot → include a specific day (saturday, this weekend, friday evening). Confidence lands well when she's already engaged.
+  - conversation_temperature = lukewarm or cold → use "this week" or "you pick the day" instead of a hard day. Forcing a specific day on a lukewarm match feels presumptuous — give her room to respond without committing to a calendar slot first.
+
+* LOGISTICS — read core_lore for city:
+  - Same city → propose a specific spot type or area (coffee in [her city], brunch somewhere she'd know). She can visualize it.
+  - Different city or city unknown → skip the specific day entirely. Ask "next time you're in [city]" or float the logistics first ("are you based in delhi or elsewhere?") — one logistics reply in the batch is fine.
+
+* TONE: confident but not heavy. The ask should feel like the natural next move, not a formal request. Ride the live joke or banter thread into the ask — the activity should feel like an extension of what you were already talking about.
+* BANNED: "would you like to", "if you're free", "no pressure", "maybe sometime" — hedging kills momentum. Ask like you expect yes.
+* BANNED ego openers: "reigning champion of your matches", "best you've seen".
+* Compliment redirect: if she complimented you, acknowledge once then pivot to the ask with a different hook.""",
     "go_deeper": """
 DIRECTION — GO DEEPER:
 * Connection moment — she shared something real. Not banter. Show you actually heard her.

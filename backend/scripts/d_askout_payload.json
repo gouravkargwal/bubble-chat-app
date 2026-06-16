@@ -1,0 +1,109 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {
+        "sender": "user",
+        "quoted_context": "",
+        "actual_new_message": "statue of unity as a top travel highlight matlab serious tourism ya bas achi photo ke liye gaye the"
+      },
+      {
+        "sender": "them",
+        "quoted_context": "",
+        "actual_new_message": "It was family trip"
+      },
+      {
+        "sender": "user",
+        "quoted_context": "",
+        "actual_new_message": "family trips are the ultimate test yaar bet you survived by hiding in the gift shop"
+      },
+      {
+        "sender": "them",
+        "quoted_context": "",
+        "actual_new_message": "Yeahh it was good"
+      },
+      {
+        "sender": "user",
+        "quoted_context": "",
+        "actual_new_message": "it was good matlab you are definitely hiding the real trauma of it"
+      },
+      {
+        "sender": "them",
+        "quoted_context": "",
+        "actual_new_message": "We went last may...I guess...it was extremely hot"
+      },
+      {
+        "sender": "user",
+        "quoted_context": "",
+        "actual_new_message": "may mein statue of unity matlab you clearly enjoy suffering for the aesthetic"
+      },
+      {
+        "sender": "them",
+        "quoted_context": "",
+        "actual_new_message": "Totally"
+      }
+    ],
+    "visual_hooks": [],
+    "photo_persona": "casual, girl-next-door",
+    "detected_dialect": "HINGLISH",
+    "their_tone": "playful",
+    "their_effort": "low",
+    "conversation_temperature": "warm",
+    "archetype_reasoning": "She agreed with the teasing about suffering for the aesthetic — engaged, playful, warm. Low effort but clearly in the conversation.",
+    "warmth": "warm",
+    "playfulness": "playful",
+    "engagement": "low",
+    "traditionalism": "mixed",
+    "intent": "exploring",
+    "detected_archetype": "THE WARM/STEADY",
+    "top_hooks": [
+      "visited Statue of Unity in May heat",
+      "enjoyed suffering for the aesthetic",
+      "family trip"
+    ],
+    "key_detail": "She just agreed she enjoys suffering for the aesthetic — the heat banter has legs.",
+    "person_name": "D",
+    "stage": "early_talking",
+    "their_last_message": "She playfully agreed she enjoys suffering for the aesthetic — warm signal, 7 turns of banter established.",
+    "user_last_move": "Teased her about visiting a metal statue in May heat — she agreed with it.",
+    "inbound_image": "none",
+    "inbound_image_detail": "",
+    "durable_facts": [
+      "From Delhi",
+      "Vegetarian",
+      "Hindu",
+      "Visited Statue of Unity in May",
+      "Family trip last May"
+    ]
+  },
+  "direction": "ask_out",
+  "person_name": "D",
+  "core_lore": "From Delhi\nVegetarian\nHindu\n5'2\"\nVisited the Statue of Unity\nWent on a family trip last May",
+  "past_memories": "",
+  "transcript_text": "user: statue of unity as a top travel highlight matlab serious tourism ya bas achi photo ke liye gaye the\nthem: It was family trip\nuser: family trips are the ultimate test yaar bet you survived by hiding in the gift shop\nthem: Yeahh it was good\nuser: it was good matlab you are definitely hiding the real trauma of it\nthem: We went last may...I guess...it was extremely hot\nuser: may mein statue of unity matlab you clearly enjoy suffering for the aesthetic\nthem: Totally",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "D",
+    "stage": "early_talking",
+    "tone_trend": "warming",
+    "topics_worked": ["family trip", "Statue of Unity", "extreme heat"],
+    "topics_failed": [],
+    "interaction_count": 3,
+    "recent_summaries": [
+      "[keep_playful] her: \"It was family trip\" | you sent: \"family trips are the ultimate test yaar bet you survived by hiding in the gift shop\"",
+      "[keep_playful] her: \"Yeahh it was good\" | you sent: \"it was good matlab you are definitely hiding the real trauma of it\"",
+      "[tease] her: \"We went last may...I guess...it was extremely hot\" | you sent: \"may mein statue of unity matlab you clearly enjoy suffering for the aesthetic\""
+    ],
+    "recent_user_replies": [],
+    "last_ai_replies_shown": [
+      "may mein statue of unity matlab you clearly enjoy suffering for the aesthetic",
+      "only a true tourist visits metal statues in may so congrats on your medal for suffering",
+      "extremely hot is code for you spent the whole day looking for an ac vent"
+    ],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "casual, girl-next-door",
+    "preferred_strategies": ["PUSH-PULL"]
+  },
+  "user_custom_hint": ""
+}

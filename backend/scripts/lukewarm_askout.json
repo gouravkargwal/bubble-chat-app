@@ -1,0 +1,86 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {
+        "sender": "user",
+        "quoted_context": "",
+        "actual_new_message": "bet you claim to be clumsy just to see if i notice when you drop the cake"
+      },
+      {
+        "sender": "them",
+        "quoted_context": "",
+        "actual_new_message": "Nice one"
+      },
+      {
+        "sender": "user",
+        "quoted_context": "",
+        "actual_new_message": "par seriously whose birthday was it drop kiya tha kya"
+      },
+      { "sender": "them", "quoted_context": "", "actual_new_message": "na lol" }
+    ],
+    "visual_hooks": [
+      "wearing a pink saree in a grassy outdoor setting",
+      "holding a birthday cake with gold lettering",
+      "wearing a gold watch and bracelet"
+    ],
+    "photo_persona": "traditional, warm",
+    "detected_dialect": "ENGLISH",
+    "their_tone": "playful, light",
+    "their_effort": "low",
+    "conversation_temperature": "lukewarm",
+    "archetype_reasoning": "She denied dropping the cake with a casual na lol. Still engaged but low effort. Traditional archetype warming up slowly.",
+    "warmth": "warm",
+    "playfulness": "earnest",
+    "engagement": "low",
+    "traditionalism": "traditional",
+    "intent": "long_term",
+    "detected_archetype": "THE TRADITIONAL ROMANTIC",
+    "top_hooks": [
+      "clumsy self-label",
+      "birthday cake photo",
+      "denied dropping cake",
+      "na lol"
+    ],
+    "key_detail": "She denied dropping the cake but is still in the conversation.",
+    "person_name": "Mangal",
+    "stage": "opening",
+    "their_last_message": "She denied dropping the cake with na lol \u2014 still engaged but giving nothing substantial.",
+    "user_last_move": "Asked whose birthday it was and whether she dropped the cake.",
+    "inbound_image": "none",
+    "inbound_image_detail": "",
+    "durable_facts": [
+      "Values honesty and humility",
+      "More introverted than extroverted",
+      "Explicitly seeking marriage",
+      "Self-labelled as clumsy"
+    ]
+  },
+  "direction": "ask_out",
+  "person_name": "Mangal",
+  "core_lore": "",
+  "past_memories": "",
+  "transcript_text": "user: bet you claim to be clumsy just to see if i notice when you drop the cake\nthem: Nice one\nuser: par seriously whose birthday was it drop kiya tha kya\nthem: na lol",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "Mangal",
+    "stage": "opening",
+    "tone_trend": "stable",
+    "topics_worked": [],
+    "topics_failed": [],
+    "interaction_count": 1,
+    "recent_summaries": [
+      "[opener] you sent: \"bet you claim to be clumsy just to see if i notice when you drop the cake\" | her: \"Nice one\"",
+      "[keep_playful] you sent: \"par seriously whose birthday was it drop kiya tha kya\" | her: \"na lol\""
+    ],
+    "recent_user_replies": [],
+    "last_ai_replies_shown": [
+      "par seriously whose birthday was it drop kiya tha kya"
+    ],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "traditional, warm",
+    "preferred_strategies": []
+  },
+  "user_custom_hint": ""
+}
