@@ -55,6 +55,13 @@ BANNED_EXAMPLE_PHRASES = """BANNED EXAMPLE LINES (these phrases appear in your i
 These are full canned SENTENCES. A single common word from one of them (biryani, goa, coffee, hiking, marathon, chai) is NOT banned on its own — only the specific sentence/construction is. e.g. "har weekend biryani khaogi?" is FINE; "the half marathon is just a biryani excuse" is NOT.
 EXCEPTION: if HER profile genuinely contains the topic (she really mentions a half marathon, goa, etc.), you may reference the real detail — but never paste the canned phrasing."""
 
+# Single source of truth for the AI-SMELL scaffold rule, shared by the generator
+# (don't WRITE these) and the auditor (don't FAIL the allowed forms). Keeping it in
+# one place stops the two from drifting — that drift is what made the auditor reject
+# the generator's own allowed "are you the type who" jab. KEY: a scaffold is a SOFT
+# OBSERVATIONAL OPENER; judge the OPENING WORDS, never the mere presence of "type who".
+SCAFFOLD_RULE = """A SCAFFOLD is a SOFT OBSERVATIONAL OPENER — judge ONLY the reply's opening words. Banned openers: "you strike me as", any "you seem ..." ("you seem like the type", "you seem the type to", "you seem efficient"), "you look like ...", "i get the sense", "i suspect", "i need to know if", "there's something about you that", "i feel like you're the kind of person who", and balanced "either you X or you Y". The mere presence of "the type who/to" is NEVER itself a scaffold — the DIRECT forms are GOOD and wanted: "are you the type who [behavior]", "bet you [behavior]", a short "type who [behavior]" jab. Flip a soft opener to a direct jab ("you seem the type to over-plan" -> "bet you over-plan everything"). Do NOT generalize the ban beyond the openers listed (e.g. "you clearly", "i can tell", "sounds like you" are NOT scaffolds)."""
+
 # Same model id as `settings.gemini_model` / `GEMINI_MODEL` in `.env` — one knob for
 # vision + generator + auditor (LangChain). Hybrid OCR and GeminiClient paths also use
 # settings.gemini_model via callers.
