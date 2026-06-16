@@ -196,6 +196,18 @@ class VisionNodeOutput(BaseModel):
             "long-term fact about her. Empty if inbound_image is 'none' or there's nothing notable."
         ),
     )
+    durable_facts: list[str] = Field(
+        default_factory=list,
+        description=(
+            "0-5 ATOMIC, durable, third-person facts about HER worth remembering long-term, each a "
+            "SHORT self-contained statement (e.g. 'Works in her family design business', 'Has a golden "
+            "retriever', 'Divorced', 'From Ghaziabad', 'Training for a half-marathon', 'Into stand-up "
+            "comedy', 'Vegetarian'). Extract from her messages AND profile. RULES: one fact per item, "
+            "no 'she said...'; DURABLE only — skip ephemeral/throwaway turns, her current mood, and "
+            "online-status; skip facts about the USER; skip obvious app metadata. Empty list if "
+            "nothing durable this turn."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +295,7 @@ def vision_node(state: AgentState) -> dict:
         user_last_move=out.user_last_move,
         inbound_image=out.inbound_image,
         inbound_image_detail=out.inbound_image_detail,
+        durable_facts=out.durable_facts,
     )
 
     raw_ocr_text = normalize_raw_ocr_text(out.raw_ocr_text)

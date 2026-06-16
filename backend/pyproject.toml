@@ -24,7 +24,6 @@ dependencies = [
     "langchain-openai>=0.2",  # generator A/B via Groq's OpenAI-compatible endpoint
     "pgvector>=0.2",
     "oci>=2.0",
-    "sentence-transformers>=3.0",
 ]
 
 [project.optional-dependencies]

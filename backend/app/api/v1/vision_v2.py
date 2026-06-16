@@ -189,6 +189,7 @@ Fields for BOTH modes:
 * detected_dialect: ENGLISH, HINDI, or HINGLISH — match her dominant language/mix across the visible text. If a "MOTHER TONGUE: Hindi" field is visible, default to HINGLISH unless her written messages are clearly formal English.
 * person_name: Match's first name from UI header/profile (else "unknown").
 * stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument (profiles without a thread are usually new_match or opening).
+* durable_facts: 0-5 ATOMIC, durable, third-person facts about HER worth remembering long-term (e.g. "works in family design business", "has a golden retriever", "divorced", "training for a half-marathon", "from Ghaziabad"). One self-contained fact per item. SALIENCE GATE — keep a fact ONLY if you'd actually mention it when describing her to a friend. SKIP: ephemeral/throwaway turns ("said haha", "is online", "in a good mood today"), transient feelings, compliments, the USER's facts, and obvious app metadata. Empty list if nothing durable.
 
 IF CHAT CONVERSATION (real chat bubbles with user/them alignment):
 * Base key_detail, their_last_message, and their_tone STRICTLY on her absolute newest message at the bottom of the thread.
@@ -246,6 +247,7 @@ Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using send
   - traditionalism: modern | mixed | traditional — casual/contemporary vs culturally rooted, values-forward.
   - intent: exploring | open | long_term — figuring it out vs explicitly seeking a serious relationship.
 * key_detail: Scan ALL extracted text prompts and bios. Pick the single most interesting, controversial, or vulnerable hook found ANYWHERE in the profile. Do NOT default to the bottom-most text. Pick the one that makes for the best banter.
+* durable_facts: 0-5 ATOMIC, durable, third-person facts about HER from the profile (job, hometown, relationship status, interests, traits, lifestyle — e.g. "into stand-up comedy", "vegetarian", "from Mumbai", "divorced"). One self-contained fact per item. SALIENCE GATE — keep a fact ONLY if you'd mention it when describing her to a friend; skip generic vibe adjectives ("seems nice", "aesthetic-focused"), looks, and the USER's facts. Empty if none.
 * person_name: Match's first name from UI header/profile (else "unknown").
 * stage: "new_match" or "opening".
 * their_last_message: Do NOT paraphrase a single line. Instead, write a 1-2 sentence "Holistic Vibe Summary" of her entire profile (e.g., "She is a foodie who loves travel and is being very vulnerable about her trust issues.").
@@ -867,34 +869,18 @@ async def _run_generate_v2(
         if isinstance(analysis, dict):
             analysis = AnalystOutput(**analysis)
         facts: list[str] = []
-        if getattr(analysis, "key_detail", None):
-            facts.append(str(analysis.key_detail))
-        for hook in getattr(analysis, "visual_hooks", None) or []:
-            if hook and str(hook).strip():
-                facts.append(str(hook))
 
-        # Phase 2: on a real chat turn, also ingest the vision node's
-        # `their_last_message` paraphrase as a durable fact about her. A profile
-        # has only "them" entries (its facts are already covered by key_detail +
-        # visual_hooks), so we gate on the presence of a "user" bubble to avoid
-        # storing the holistic profile-vibe summary as noise. No extra LLM call:
-        # the paraphrase is already produced by vision_node every turn.
-        transcript = getattr(analysis, "visual_transcript", None) or []
+        # Long-term memory = ATOMIC DURABLE facts about her, extracted by the same
+        # vision call (no extra LLM call). These replace the old noisy mix of
+        # key_detail / visual_hooks / last-message paraphrase — those one-time hooks
+        # and photo descriptions still flow LIVE in the analysis every turn, and
+        # raw-message recall still lives in past_memories (the interactions table).
+        for df in getattr(analysis, "durable_facts", None) or []:
+            if df and str(df).strip():
+                facts.append(str(df).strip())
 
-        def _bubble_sender(item: object) -> str:
-            if isinstance(item, dict):
-                return str(item.get("sender", ""))
-            return str(getattr(item, "sender", ""))
-
-        is_chat_turn = any(_bubble_sender(b) == "user" for b in transcript)
-        if is_chat_turn:
-            tlm = getattr(analysis, "their_last_message", None)
-            if tlm and str(tlm).strip():
-                facts.append(str(tlm))
-
-        # Durable fact from an image she sent in chat (her pet, hobby, etc.) — the
-        # transient "she sent a selfie" signal stays per-turn, but the SUBJECT of an
-        # object/scene image is lasting context worth remembering.
+        # The SUBJECT of an image she sent (her pet, a place) is lasting context;
+        # the transient "she sent a selfie" signal stays per-turn only.
         if getattr(analysis, "inbound_image", "none") != "none":
             img_detail = (getattr(analysis, "inbound_image_detail", "") or "").strip()
             if img_detail:

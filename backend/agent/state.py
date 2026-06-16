@@ -88,6 +88,10 @@ class AnalystOutput(BaseModel):
         default="",
         description="Short noun phrase naming the memory-worthy subject of an image she sent.",
     )
+    durable_facts: List[str] = Field(
+        default_factory=list,
+        description="Atomic, durable, third-person facts about her, extracted for long-term memory.",
+    )
 
 
 class StrategyOutput(BaseModel):

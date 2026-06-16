@@ -9,7 +9,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embeddings import embed_text
-from app.core.nli import is_contradiction
 from app.infrastructure.database.models import Interaction
 
 logger = structlog.get_logger(__name__)
@@ -89,28 +88,92 @@ async def get_match_context(
     #    Without a query embedding we fall back to a flat chronological load.
     core_lore: str = ""
     _LORE_TOP_K = 8
+    _LORE_FUSION_POOL = 12  # candidates pulled from EACH retriever before fusion
+    _RRF_K = 60             # reciprocal-rank-fusion damping constant (standard ~60)
+    # Durable facts are relevance-DOMINATED; recency is only a LIGHT tiebreak so a
+    # fresh fact can edge out a stale near-duplicate that NLI supersession missed.
+    # (Staleness is handled mainly by NLI on insert, not by time-decay here — we do
+    # NOT want to bury a still-true old fact like "divorced" under a recent trivial
+    # one.) Score = cosine_distance − λ·exp(−age/halflife): lower is better.
+    _LORE_RECENCY_LAMBDA = 0.03
+    _LORE_RECENCY_HALFLIFE_S = 14 * 86400  # 14 days
     try:
         if emb_str:
-            relevant_rows = await db.execute(
+            # Retriever 1 — SEMANTIC (recency-blended) ranking.
+            vec_rows = await db.execute(
                 text(
                     """
-                    SELECT fact_text, (embedding <=> :emb) AS distance
+                    SELECT fact_text
                     FROM conversation_memories
                     WHERE user_id = :user_id
                       AND conversation_id = :conversation_id
                       AND superseded_at IS NULL
                       AND embedding IS NOT NULL
-                    ORDER BY distance ASC
-                    LIMIT :k
+                    ORDER BY (
+                        (embedding <=> :emb)
+                        - :lam * EXP(- EXTRACT(EPOCH FROM (now() - created_at)) / :hl)
+                    ) ASC
+                    LIMIT :pool
                     """
                 ),
                 {
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "emb": emb_str,
-                    "k": _LORE_TOP_K,
+                    "pool": _LORE_FUSION_POOL,
+                    "lam": _LORE_RECENCY_LAMBDA,
+                    "hl": _LORE_RECENCY_HALFLIFE_S,
                 },
             )
+            # Retriever 2 — LEXICAL full-text ranking. Catches exact-term recall the
+            # embedding can miss: she names a place/person/topic now ("Goa", "Pixel")
+            # and we surface the stored fact mentioning it even if it sat just
+            # outside the vector pool. Postgres built-in FTS, no extension needed.
+            lex_rows = await db.execute(
+                text(
+                    """
+                    SELECT fact_text
+                    FROM conversation_memories
+                    WHERE user_id = :user_id
+                      AND conversation_id = :conversation_id
+                      AND superseded_at IS NULL
+                      AND embedding IS NOT NULL
+                      AND to_tsvector('simple', fact_text)
+                          @@ plainto_tsquery('simple', :q)
+                    ORDER BY ts_rank(
+                        to_tsvector('simple', fact_text),
+                        plainto_tsquery('simple', :q)
+                    ) DESC
+                    LIMIT :pool
+                    """
+                ),
+                {
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "q": current_text,
+                    "pool": _LORE_FUSION_POOL,
+                },
+            )
+            # Reciprocal Rank Fusion — merge the two rankings. A fact ranked well by
+            # EITHER retriever surfaces; facts ranked well by BOTH win. Python sort is
+            # stable, so ties keep insertion order (vector first → vector tiebreak).
+            rrf_scores: dict[str, float] = {}
+            rrf_order: list[str] = []
+            for result in (vec_rows, lex_rows):
+                for rank, row in enumerate(result.mappings().all(), start=1):
+                    ft = str(row["fact_text"]).strip() if row["fact_text"] else ""
+                    if not ft:
+                        continue
+                    if ft not in rrf_scores:
+                        rrf_scores[ft] = 0.0
+                        rrf_order.append(ft)
+                    rrf_scores[ft] += 1.0 / (_RRF_K + rank)
+            fused = sorted(rrf_order, key=lambda f: rrf_scores[f], reverse=True)[:_LORE_TOP_K]
+
+            seen: set[str] = set(fused)
+            lore_facts: list[str] = list(fused)
+            # Facts that never embedded (write-time embed failure) can't be ranked by
+            # either retriever — append unconditionally so they're never dropped.
             unranked_rows = await db.execute(
                 text(
                     """
@@ -125,15 +188,8 @@ async def get_match_context(
                 ),
                 {"user_id": user_id, "conversation_id": conversation_id},
             )
-            seen: set[str] = set()
-            lore_facts: list[str] = []
-            for r in relevant_rows.mappings().all():
-                ft = str(r["fact_text"]) if r["fact_text"] else ""
-                if ft and ft not in seen:
-                    seen.add(ft)
-                    lore_facts.append(ft)
-            for r in unranked_rows.mappings().all():
-                ft = str(r["fact_text"]) if r["fact_text"] else ""
+            for row in unranked_rows.mappings().all():
+                ft = str(row["fact_text"]).strip() if row["fact_text"] else ""
                 if ft and ft not in seen:
                     seen.add(ft)
                     lore_facts.append(ft)
@@ -167,10 +223,14 @@ async def get_match_context(
                 "past_memories": "",
             }
 
-        # Similarity bouncer: only return rows with cosine distance < 0.25.
-        #
-        # Note: pgvector's `<=>` operator returns the distance for the chosen metric.
-        # In this codebase, we use cosine-distance style filtering as required.
+        # Similarity bouncer: only return rows with cosine distance < 0.25 (RAW
+        # distance — recency must never admit the irrelevant-but-recent).
+        # Conversational snippets ARE time-sensitive, so within that relevant set we
+        # rerank by a recency-blended score (stronger λ + shorter half-life than
+        # core_lore): a recent turn beats an equally-relevant older one.
+        # Score = cosine_distance − λ·exp(−age/halflife): lower is better.
+        _PM_RECENCY_LAMBDA = 0.1
+        _PM_RECENCY_HALFLIFE_S = 3 * 86400  # 3 days
         vector_sql = text(
             """
             SELECT
@@ -184,7 +244,10 @@ async def get_match_context(
               AND i.conversation_id = :conversation_id
               AND i.embedding IS NOT NULL
               AND (i.embedding <=> :query_embedding) < 0.25
-            ORDER BY (i.embedding <=> :query_embedding) ASC
+            ORDER BY (
+                (i.embedding <=> :query_embedding)
+                - :lam * EXP(- EXTRACT(EPOCH FROM (now() - i.created_at)) / :hl)
+            ) ASC
             LIMIT 3
             """
         )
@@ -195,6 +258,8 @@ async def get_match_context(
                 "user_id": user_id,
                 "conversation_id": conversation_id,
                 "query_embedding": emb_str,
+                "lam": _PM_RECENCY_LAMBDA,
+                "hl": _PM_RECENCY_HALFLIFE_S,
             },
         )
 
@@ -288,29 +353,22 @@ async def upsert_conversation_memory(
 
         skip_insert = False
         for row in similar:
-            existing_fact = str(row["fact_text"])
             distance = float(row["distance"])
-
-            # Very high similarity — likely a restatement, not a new fact.
+            # Very high similarity — likely a restatement of an existing fact; skip.
             if distance < 0.10:
                 skip_insert = True
-                continue
 
-            contradicts = await is_contradiction(existing_fact, fact_text)
-            if contradicts:
-                await db.execute(
-                    text(
-                        "UPDATE conversation_memories SET superseded_at = now() WHERE id = :id"
-                    ),
-                    {"id": row["id"]},
-                )
-                logger.info(
-                    "memory_contradiction_superseded",
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    old_fact=existing_fact,
-                    new_fact=fact_text,
-                )
+        # NLI-based contradiction supersession is DISABLED on purpose. The model
+        # (cross-encoder/nli-deberta-v3-small) confidently mislabels COMPATIBLE facts
+        # as contradictions — measured ~0.99-1.00 "contradiction" on "From Surat" vs
+        # "Lives in Sachin" and "has a dog" vs "has a cat" — so it deleted TRUE facts
+        # on essentially every multi-fact profile. NLI "contradiction" (premise
+        # doesn't entail hypothesis) != our "this fact REPLACES that one". Correct
+        # supersession needs attribute-scoping (only single-valued slots like
+        # relationship-status / current-city). The NLI model was removed entirely;
+        # this is now ADD-only memory + hybrid (lexical+vector) retrieval + recency
+        # ranking — the newest fact floats to the top, stale facts simply linger
+        # (rare, low-harm) rather than risk destroying true facts.
 
         if not skip_insert:
             await db.execute(

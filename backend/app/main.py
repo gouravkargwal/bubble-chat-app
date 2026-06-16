@@ -49,13 +49,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     await init_db()
 
-    # Load NLI model into memory at startup so the first request doesn't pay
-    # the 1-2s cold-start cost and the model is shared across all coroutines
-    # in this worker process.
-    import asyncio
-    from app.core.nli import warmup as nli_warmup
-    await asyncio.to_thread(nli_warmup)
-
     yield
 
 
