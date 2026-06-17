@@ -84,7 +84,7 @@ class AnalystOutput(BaseModel):
             "Did SHE send an image as a chat message: 'selfie_of_her', 'object_or_scene', or 'none'."
         ),
     )
-    inbound_image_detail: str = Field(
+    inbound_image_detail: Optional[str] = Field(
         default="",
         description="Short noun phrase naming the memory-worthy subject of an image she sent.",
     )

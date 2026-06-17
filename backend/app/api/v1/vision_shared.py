@@ -339,7 +339,10 @@ async def resolve_hybrid_stitch_conversation_id(
     # ---------------------------------------------------------------
     # Step 1: Alias lookup (instant match from prior confirmations)
     # ---------------------------------------------------------------
-    alias_convo_id = await lookup_alias(db=db, user_id=user_id, ocr_name=ocr_person_name)
+    # Single-char / two-char names (e.g. "P", "D") are too ambiguous to alias —
+    # multiple matches can share the same initial. Skip alias for these.
+    _name_too_short = len((ocr_person_name or "").strip()) <= 2
+    alias_convo_id = None if _name_too_short else await lookup_alias(db=db, user_id=user_id, ocr_name=ocr_person_name)
     if alias_convo_id:
         # Verify the conversation still exists
         convo_result = await db.execute(
@@ -401,6 +404,14 @@ async def resolve_hybrid_stitch_conversation_id(
         return "new_match", None, None
 
     if best_composite >= _AUTO_STITCH_THRESHOLD:
+        # Short/ambiguous names (≤2 chars like "P", "D") are too common to
+        # auto-stitch safely — a new match with the same initial would merge
+        # into the wrong conversation. Always ask the user to confirm.
+        if len((ocr_person_name or "").strip()) <= 2:
+            return "requires_user_confirmation", best_convo.id, {
+                "reason": "hybrid_stitch_ambiguity",
+                "detail": f"Name '{ocr_person_name}' is too short to auto-stitch safely — could be a different person.",
+            }
         # Save the alias for future instant lookups
         await save_alias(
             db=db,

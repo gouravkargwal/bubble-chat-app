@@ -155,19 +155,30 @@ DIRECTION — OPENER:
     "quick_reply": """
 DIRECTION — QUICK REPLY:
 * Goal: Bounce ball back with a hook (tease, assumption, challenge). No dead statements.
+* LIVE MOMENT FIRST: ride her last actual words before mining profile facts. The fastest hook is a tease or flip of what she JUST said. Only fall back to profile-fact assumptions when she gave nothing to grab.
+* LOW-EFFORT / ONE-WORD rule: If her last message is "haha/lol/ok/nice/wow" or a single emoji — do NOT reply to that token. Ignore it entirely. Make a FRESH BOLD STATEMENT or assumption from earlier thread content. FAIL: "haha glad you liked it". PASS: pick up an earlier thread and fire a tease from it.
+* Frame-flips are allowed: a playful "you judge me" built from her own joke (e.g. she teases you → you let her rate/judge you) is banter, not self-pivot. The line: tongue-in-cheek "you judge me" = good; earnest self-disclosure about your own life = banned.
+* READ HER MODE — BANTER vs CONNECTION: not every message is an invitation to tease. If detected_archetype is EAGER/DIRECT OR their_effort is high AND she is building genuine common ground (sharing real life details, matching your experience, asking sincere questions) — she is in CONNECTION mode, not banter mode. In this case: lean toward WARM CURIOSITY over a banter frame-flip. A sincere question about her specific detail ("you lived in Gurgaon too — which area / what brought you there?") or a shared-experience observation lands better than a tease. FAIL: firing a banter accusation at someone who was being genuinely warm and building rapport. PASS: meeting her sincerity with curiosity + a light hook. The spike can still be there — just warmer and more curious, less cocky.
 * Ban: No date/drink/number suggestions — those belong in ask_out or get_number only.""",
     "keep_playful": """
 DIRECTION — KEEP PLAYFUL:
 * React to CONTENT not tone. Mine specific words, places, details — not her vibe.
-* LOL/one-word rule: If last message is "lol/haha/ok" — ignore it. Make a FRESH BOLD STATEMENT from earlier thread content. FAIL: "that lol said everything". PASS: fresh observation from what she said earlier.
+* LOL/one-word rule: If last message is "lol/haha/ok/totally/nice" — ignore it. Make a FRESH BOLD STATEMENT from earlier thread content. FAIL: "that lol said everything". PASS: fresh observation from what she said earlier.
 * Story rule: If mid-story, continue the story or self-deprecate — do NOT flip assumptions onto her ("you definitely have that look..."). Stays confrontational when she's low-effort.
-* Each reply needs a specific pushback hook — bold assumption, light accusation, or unresolved claim.""",
+* Frame-flips are allowed: if she just laughed at your joke or validated something you said, riding that back ("so do i pass your inspection or not") IS allowed banter — not self-pivot. Use it when she's given you a warm signal and you want to escalate the dynamic slightly.
+* Each reply needs a specific pushback hook — bold assumption, light accusation, unresolved claim, or frame-flip.""",
     "change_topic": """
 DIRECTION — CHANGE TOPIC:
 * Pivot to a COMPLETELY NEW angle. Do NOT meta-comment on the dead topic ("weather is boring, let's change it" = still talking about weather = FAIL).
 * If profile details exist: anchor the new topic to a specific profile/bio detail. If no profile info: introduce a completely fresh topic via a bold playful assumption about her personality, or a direct challenge/question that opens a new thread.
 * DIVERSITY: All 4 replies open DIFFERENT doors. Not 3 replies all pivoting to the same new theme.
-* Banned topics for pivot: pineapple pizza, zombie apocalypse, teleportation, lottery, generic travel.""",
+* Banned pivot topics — overused app clichés that any match could receive:
+  - Food debates with no profile anchor: pineapple pizza, "chai vs coffee person"
+  - Generic hypotheticals: zombie apocalypse, desert island, teleportation, lottery win
+  - Personality test clichés: "what's your love language", "what's your enneagram", "if you were an animal/fruit/season"
+  - Generic travel: "where do you want to travel" with no profile anchor (travel anchored to HER specific city/trip/plans is fine)
+  - App meta-commentary: "this app is weird", "matching is random"
+  A good pivot is specific to HER profile or the running conversation — not a topic you'd send to any match.""",
     "tease": """
 DIRECTION — TEASE:
 * Goal: Cocky misinterpretation, observation, or challenge anchored to something she JUST said. Generic teases = banned.
@@ -179,19 +190,24 @@ DIRECTION — TEASE:
     "revive_chat": """
 DIRECTION — REVIVE CHAT:
 * One per reply, all four tactics: (1) CALLBACK WITH TWIST — reference past chat with new angle. (2) FRESH OBSERVATION — bold claim from profile, act like no time passed. (3) CHALLENGE/BET — playful accusation she'd react to. (4) PATTERN INTERRUPT — unexpected opener, new thread.
+* WHY DID IT DIE — check user_last_move first: if the chat went cold because the user's OWN last reply was weak/low-effort (not her going cold on a good reply), lean toward CALLBACK WITH TWIST or a self-aware PATTERN INTERRUPT. A light self-aware beat ("that last reply was rough, let me try again") is allowed — it shows awareness without being needy. Do NOT blame her for the drop or mock her for going quiet.
 * Variety: No 3+ replies using "you're the type to...". Vary structure.
-* Banned: "hey stranger", "long time no speak", "sorry ive been mia".
+* Banned: "hey stranger", "long time no speak", "sorry ive been mia", "been busy lately".
 * >=1 reference to core_lore/past_memories if available.
-* Banned: "found/saw X and it reminded me of you", "this gave me deja vu of our conversation" — try-hard. Act like no time passed, not like you've been pining.""",
+* Banned: "found/saw X and it reminded me of you", "this gave me deja vu" — try-hard. Act like no time passed.""",
     "get_number": """
 DIRECTION — GET NUMBER:
-* Goal: Move off app. AT LEAST 3 of 4 replies must include an explicit off-app ask.
-* Each ask must reference something specific from THIS conversation (joke, place, topic). Generic "this app is clunky" = low spec score.
-* NEVER put a real or fake phone number / contact detail inside the reply text. You ask her to move; you don't provide a number.
-* Banned app-fatigue lines (zero specificity, any match could receive these): "this app is where conversations go to die", "better conversations off this app", "apps kill good conversations". Off-app hook MUST reference something specific from THIS conversation.
-* Banned ego openers: "reigning champion of your matches", "best youve seen", "i am the highlight of your inbox".
-* Compliment redirect: If she complimented you, acknowledge it ONCE then pivot to off-app with a different hook. 2+ replies riffing on the same compliment = fail.
-* GUARDED/TESTER exception: No pressure or confrontation. Warm, low-pressure HONEST FRAME. Still needs personality and a specific hook — "no pressure / feel free to" = momentum killer.""",
+* Goal: Move off app. AT LEAST 3 of 4 replies must include an explicit off-app ask anchored to something specific from THIS conversation.
+* Each ask must reference something from the conversation (joke, place, topic). Generic "this app is clunky" = FAIL.
+* NEVER put a real or fake phone number / contact detail inside the reply text.
+* PLATFORM — match friction to her warmth:
+  - Warm/hot: WhatsApp or number is fine — confident direct ask.
+  - Lukewarm/guarded: Instagram is lower-friction (she doesn't give you her number, just a handle) — prefer IG for reserved archetypes. "drop your insta" lands softer than "give me your number".
+* CITY LOGISTICS — if city unknown or she's not in the same city: asking for a number with no plan to meet is premature. In that case, the ask should be for social (IG/WhatsApp) for continued conversation, not a "let's meet" number ask.
+* Banned app-fatigue lines: "this app is where conversations go to die", "better conversations off app", "apps kill conversations" — zero specificity, any match could receive these.
+* Banned ego openers: "reigning champion of your matches", "best youve seen", "highlight of your inbox".
+* Compliment redirect: acknowledge once, pivot off-app with a different hook. Don't riff on the compliment 2+ replies.
+* GUARDED/TESTER exception: Warm, low-pressure — prefer IG over number. No "no pressure / feel free to" — momentum killer.""",
     "ask_out": """
 DIRECTION — ASK OUT:
 * Goal: move from app to real life. AT LEAST 2 of 4 replies must include an explicit off-app ask with a specific activity. Other 2 can banter or set a frame.

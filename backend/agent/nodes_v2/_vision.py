@@ -10,7 +10,7 @@ LangGraph state into:
 No LLM calls happen in this file anymore.
 """
 
-from typing import Any, Literal, cast
+from typing import Any, Literal, Optional, cast
 
 import structlog
 from pydantic import BaseModel, Field
@@ -187,7 +187,7 @@ class VisionNodeOutput(BaseModel):
             "Only classify an image that appears as one of HER chat bubbles."
         ),
     )
-    inbound_image_detail: str = Field(
+    inbound_image_detail: Optional[str] = Field(
         default="",
         description=(
             "If inbound_image is not 'none', a SHORT noun phrase naming the durable, memory-worthy "
