@@ -166,7 +166,13 @@ DIRECTION — KEEP PLAYFUL:
 * LOL/one-word rule: If last message is "lol/haha/ok/totally/nice" — ignore it. Make a FRESH BOLD STATEMENT from earlier thread content. FAIL: "that lol said everything". PASS: fresh observation from what she said earlier.
 * Story rule: If mid-story, continue the story or self-deprecate — do NOT flip assumptions onto her ("you definitely have that look..."). Stays confrontational when she's low-effort.
 * Frame-flips are allowed: if she just laughed at your joke or validated something you said, riding that back ("so do i pass your inspection or not") IS allowed banter — not self-pivot. Use it when she's given you a warm signal and you want to escalate the dynamic slightly.
-* Each reply needs a specific pushback hook — bold assumption, light accusation, unresolved claim, or frame-flip.""",
+* Each reply needs a specific pushback hook — bold assumption, light accusation, unresolved claim, or frame-flip.
+* ATTACK ANGLE DIVERSITY — the 4 replies must use different angles, not all personality commentary. Rotate across:
+  1. QUESTION HER LOGIC — poke a hole in what she said ("thanda paani se kya fark padta hai yaar"). No drama, just deadpan.
+  2. SARCASTIC AGREE + FLIP — agree with her premise, then turn it back ("haan makes sense, matlab tum khud apni dushmaan ho").
+  3. MAKE IT ABOUT YOU — insert yourself into her situation ("toh main safe hu kya tumhare aas paas").
+  4. MOCK THE DETAIL — zoom into one specific word/detail she used and make it absurd ("thanda paani — full scientific approach hai tera").
+* Banned intensifiers as lazy defaults: "dangerous", "chaos", "intense" — these are vague dramatic labels. Only use them if her EXACT words contain that energy. Instead reach for specific, mundane observations about what she actually said.""",
     "change_topic": """
 DIRECTION — CHANGE TOPIC:
 * Pivot to a COMPLETELY NEW angle. Do NOT meta-comment on the dead topic ("weather is boring, let's change it" = still talking about weather = FAIL).

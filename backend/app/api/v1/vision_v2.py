@@ -234,7 +234,7 @@ You are analyzing a dating profile to find the best possible conversation starte
 Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_new_message) as in Step 2.
 
 * top_hooks: Use an empty list [] (opener/profile mode does not use chat turn hooks).
-* visual_hooks: Scan ALL screenshots. List 3-4 specific physical/environmental details (e.g., "red dress with balloons", "holding a matcha latte", "wearing large round glasses").
+* visual_hooks: Scan ALL screenshots. List 3-4 OPINIONATED OBSERVATIONS about her photos — not just what you see, but what a friend would NOTICE AND TEASE about. Each hook must be specific enough to open a conversation. Ask yourself: "what would make someone laugh or react?" NOT neutral descriptions like "wearing a red dress" — instead: "wearing a bow tie blouse in what looks like a hotel lobby mirror selfie", "posing with a dog that is clearly more photogenic than anyone else in the shot", "the one photo where she looks 100% done with whoever is taking the picture". Think: outfit choice that's doing a lot, background that tells a story, prop or detail that raises a question, candid moment vs clearly-posed contrast. Funny > aesthetic. Specific > generic.
 * photo_persona: 1-3 words for the curated PERSONA/aesthetic her photos project (e.g. "rebel/edgy", "soft romantic", "influencer-polished", "girl-next-door", "old-money", "outdoorsy adventurer"). Read the vibe she CHOSE to present, NOT a judgment of her face or body. Empty if no photos.
 * detected_dialect: ENGLISH, HINDI, or HINGLISH. DEFAULT RULE: if a "MOTHER TONGUE" field shows Hindi (or any Indian language), set HINGLISH. Only override to ENGLISH when she has written SUBSTANTIAL free-text (filled prompts or a real bio) AND that text is clearly formal English with zero Hindi influence. If there is little or no self-written text to judge (the profile is just structured basics like zodiac/height/religion/diet), KEEP HINGLISH — do NOT infer ENGLISH merely from the absence of Hindi words in a basics card.
 * their_tone: The overall vibe of their profile prompts/bio.
@@ -564,7 +564,10 @@ async def _run_generate_v2(
         if outcome == "requires_user_confirmation" and payload:
             matched_id = matched_conversation_id or ""
 
-            # Concurrency lock check (DB-backed)
+            # Concurrency lock check (DB-backed) — if a pending row already exists
+            # for this (user, conversation), a previous 409 was never resolved.
+            # Auto-proceed as new_match to break the dismiss-retry loop instead of
+            # returning another 409 that the user will just dismiss again.
             if matched_id and await has_pending_hybrid_resolution(
                 db=db, user_id=user.id, suggested_conversation_id=matched_id
             ):
@@ -573,45 +576,51 @@ async def _run_generate_v2(
                     user_id=user.id,
                     locked_conversation_id=matched_id,
                 )
+                # A pending row already exists — user previously dismissed without
+                # resolving. Break the loop by auto-stitching to the matched convo
+                # rather than returning another 409 they'll dismiss again.
+                effective_conversation_id = matched_id
+                # Skip the 409 block entirely — fall through to normal generation
+                outcome = "auto_stitch"
+            else:
+                conflict_reason = "hybrid_stitch_ambiguity"
+                payload["detail"] = (
+                    f"409 requires user confirmation. reason={conflict_reason}"
+                )
 
-            conflict_reason = "hybrid_stitch_ambiguity"
-            payload["detail"] = (
-                f"409 requires user confirmation. reason={conflict_reason}"
-            )
+                suggested = payload.get("suggested_match", {})
+                logger.warning(
+                    "v2_hybrid_stitch_409",
+                    user_id=user.id,
+                    suggested_person_name=suggested.get("person_name"),
+                    suggested_conversation_id=suggested.get("conversation_id"),
+                    match_confidence=payload.get("match_confidence"),
+                )
 
-            suggested = payload.get("suggested_match", {})
-            logger.warning(
-                "v2_hybrid_stitch_409",
-                user_id=user.id,
-                suggested_person_name=suggested.get("person_name"),
-                suggested_conversation_id=suggested.get("conversation_id"),
-                match_confidence=payload.get("match_confidence"),
-            )
+                await store_pending_hybrid_resolution(
+                    db=db,
+                    user_id=user.id,
+                    suggested_conversation_id=matched_id,
+                    images=images,
+                    direction=request.direction.value,
+                    custom_hint=custom_hint,
+                    extracted_person_name=ocr_person_name,
+                    conflict_reason=conflict_reason,
+                    conflict_detail=payload.get("detail"),
+                    vision_out_json=vision_out.model_dump_json(),
+                )
+                logger.info(
+                    "llm_lifecycle",
+                    stage="v2_hybrid_stitch_requires_confirmation",
+                    user_id=user.id,
+                    outcome="requires_user_confirmation",
+                    ocr_person_name=ocr_person_name,
+                    suggested_conversation_id=matched_id,
+                )
+                return JSONResponse(status_code=409, content=payload)
 
-            await store_pending_hybrid_resolution(
-                db=db,
-                user_id=user.id,
-                suggested_conversation_id=matched_id,
-                images=images,
-                direction=request.direction.value,
-                custom_hint=custom_hint,
-                extracted_person_name=ocr_person_name,
-                conflict_reason=conflict_reason,
-                conflict_detail=payload.get("detail"),
-                vision_out_json=vision_out.model_dump_json(),
-            )
-            logger.info(
-                "llm_lifecycle",
-                stage="v2_hybrid_stitch_requires_confirmation",
-                user_id=user.id,
-                outcome="requires_user_confirmation",
-                ocr_person_name=ocr_person_name,
-                suggested_conversation_id=matched_id,
-            )
-            return JSONResponse(status_code=409, content=payload)
-
-        if outcome == "auto_stitch" and matched_conversation_id:
-            effective_conversation_id = matched_conversation_id
+        if outcome == "auto_stitch" and (matched_conversation_id or effective_conversation_id):
+            effective_conversation_id = effective_conversation_id or matched_conversation_id
         elif outcome == "new_match":
             new_conversation_person_name = ocr_person_name
 
