@@ -39,6 +39,7 @@ logger = structlog.get_logger(__name__)
 
 class ReplyVerdict(BaseModel):
     """Per-reply evaluation verdict."""
+
     reply_index: int = Field(description="0-based index of the reply being evaluated.")
     passes: bool = Field(description="true if this reply is good enough to ship.")
     issue: str = Field(
@@ -53,6 +54,7 @@ class ReplyVerdict(BaseModel):
 
 class AuditorNodeOutput(BaseModel):
     """Structured auditor evaluation of all 4 replies."""
+
     overall_passes: bool = Field(
         description="true if ALL replies are good enough to ship without rewrite."
     )
@@ -212,7 +214,7 @@ def auditor_node(state: AgentState) -> dict:
 
     # Pass previously shown replies so the auditor can enforce freshness
     conversation_context = state.get("conversation_context_dict") or {}
-    last_ai_replies_shown = (conversation_context.get("last_ai_replies_shown") or [])
+    last_ai_replies_shown = conversation_context.get("last_ai_replies_shown") or []
     if last_ai_replies_shown:
         eval_payload["last_ai_replies_shown"] = last_ai_replies_shown
     logger.info(
@@ -313,7 +315,9 @@ def auditor_node(state: AgentState) -> dict:
         )
         existing = by_index.get(i)
         if existing is None:
-            audit.verdicts.append(ReplyVerdict(reply_index=i, passes=False, issue=issue))
+            audit.verdicts.append(
+                ReplyVerdict(reply_index=i, passes=False, issue=issue)
+            )
         elif existing.passes:
             # Only override a PASS; keep an existing fail's (often more specific) issue.
             existing.passes = False
@@ -360,8 +364,16 @@ def auditor_node(state: AgentState) -> dict:
             "gemini_usage_log": [usage_row],
         }
 
-    # Build structured feedback for the generator
+    # Build structured feedback for the generator.
+    # Explicitly mark passing replies so the generator preserves their exact
+    # hooks/tone instead of regenerating from scratch and losing diversity.
+    passing_verdicts = [v for v in audit.verdicts if v.passes]
     feedback_lines = [audit.summary, ""]
+    for v in passing_verdicts:
+        feedback_lines.append(
+            f"- Reply {v.reply_index}: PASS — keep this structure and hook exactly, only improve the failing replies."
+        )
+    feedback_lines.append("")
     for v in failed_verdicts:
         feedback_lines.append(f"- Reply {v.reply_index}: {v.issue}")
 

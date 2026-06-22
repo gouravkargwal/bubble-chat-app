@@ -148,17 +148,21 @@ CURRENT CONVERSATION — everything above is the fixed playbook; apply it to THI
 _DIRECTION_PROMPTS: dict[str, str] = {
     "opener": """
 DIRECTION — OPENER:
-* Hook priority: text_first = anchor on bio/story text. visual_first = spread distinct visual hooks. either = use strongest available.
-* Goal: Playful assumption, callback, or sincere reaction — never a generic greeting.
-* Banned: "hi/hey/hello", generic looks compliments, "hows your day".
-* DIVERSITY: Each reply anchors on a DIFFERENT profile detail where possible. 2+ replies on the SAME detail with the SAME move = automatic fail; if a detail must be reused, the move must clearly differ (tease vs ask vs claim).""",
+* Hook priority: text_first = bio/story text. visual_first = photo hooks. either = strongest. Weak profile (only trait tags, no real prompt answers) → treat photo hooks as primary anchor.
+* Banned: "hi/hey/hello", looks compliments, "hows your day", generic compliment + question combos.
+* ATTACK ANGLE DIVERSITY — 4 replies must cover different angles:
+  1. BOLD ASSUMPTION — claim how she behaves based on one specific detail (tease what she DOES)
+  2. FLIP HER WORDS — take her exact prompt answer and challenge or question it directly
+  3. PHOTO CALLBACK — tease a specific visual observation (outfit choice, setting, expression, background detail)
+  4. SINCERE REACTION — genuine non-sycophantic response to something specific she wrote (not a compliment, a real reaction)
+* TONE SPREAD: ≥1 reply warm/curious, ≥1 reply playful/cocky. Not all 4 at the same register.""",
     "quick_reply": """
 DIRECTION — QUICK REPLY:
 * Goal: Bounce ball back with a hook (tease, assumption, challenge). No dead statements.
-* LIVE MOMENT FIRST: ride her last actual words before mining profile facts. The fastest hook is a tease or flip of what she JUST said. Only fall back to profile-fact assumptions when she gave nothing to grab.
-* LOW-EFFORT / ONE-WORD rule: If her last message is "haha/lol/ok/nice/wow" or a single emoji — do NOT reply to that token. Ignore it entirely. Make a FRESH BOLD STATEMENT or assumption from earlier thread content. FAIL: "haha glad you liked it". PASS: pick up an earlier thread and fire a tease from it.
-* Frame-flips are allowed: a playful "you judge me" built from her own joke (e.g. she teases you → you let her rate/judge you) is banter, not self-pivot. The line: tongue-in-cheek "you judge me" = good; earnest self-disclosure about your own life = banned.
-* READ HER MODE — BANTER vs CONNECTION: not every message is an invitation to tease. If detected_archetype is EAGER/DIRECT OR their_effort is high AND she is building genuine common ground (sharing real life details, matching your experience, asking sincere questions) — she is in CONNECTION mode, not banter mode. In this case: lean toward WARM CURIOSITY over a banter frame-flip. A sincere question about her specific detail ("you lived in Gurgaon too — which area / what brought you there?") or a shared-experience observation lands better than a tease. FAIL: firing a banter accusation at someone who was being genuinely warm and building rapport. PASS: meeting her sincerity with curiosity + a light hook. The spike can still be there — just warmer and more curious, less cocky.
+* LIVE MOMENT FIRST: ride her last actual words before mining profile facts. Only fall back to profile-fact assumptions when she gave nothing to grab.
+* LOW-EFFORT / ONE-WORD rule: "haha/lol/ok/nice/wow" or single emoji — ignore that token. Make a FRESH BOLD STATEMENT from earlier thread content. FAIL: "haha glad you liked it".
+* Frame-flips allowed: riding her own joke back ("so do i pass your inspection") is banter, not self-pivot. Earnest self-disclosure = banned.
+* BANTER vs CONNECTION: EAGER/DIRECT + high effort + sharing real details = CONNECTION mode. Meet sincerity with warm curiosity + a light hook, not a cocky tease.
 * Ban: No date/drink/number suggestions — those belong in ask_out or get_number only.""",
     "keep_playful": """
 DIRECTION — KEEP PLAYFUL:
@@ -167,6 +171,7 @@ DIRECTION — KEEP PLAYFUL:
 * Story rule: If mid-story, continue the story or self-deprecate — do NOT flip assumptions onto her ("you definitely have that look..."). Stays confrontational when she's low-effort.
 * Frame-flips are allowed: if she just laughed at your joke or validated something you said, riding that back ("so do i pass your inspection or not") IS allowed banter — not self-pivot. Use it when she's given you a warm signal and you want to escalate the dynamic slightly.
 * Each reply needs a specific pushback hook — bold assumption, light accusation, unresolved claim, or frame-flip.
+* Banned strategy labels in this direction: SOFT CLOSE — keep_playful is banter only, no closing/date/number moves.
 * ATTACK ANGLE DIVERSITY — the 4 replies must use different angles, not all personality commentary. Rotate across:
   1. QUESTION HER LOGIC — poke a hole in what she said ("thanda paani se kya fark padta hai yaar"). No drama, just deadpan.
   2. SARCASTIC AGREE + FLIP — agree with her premise, then turn it back ("haan makes sense, matlab tum khud apni dushmaan ho").
@@ -189,10 +194,10 @@ DIRECTION — CHANGE TOPIC:
 DIRECTION — TEASE:
 * Goal: Cocky misinterpretation, observation, or challenge anchored to something she JUST said. Generic teases = banned.
 * >=2 replies use PUSH-PULL or PATTERN INTERRUPT. No sensitive topics (looks, intelligence, family).
-* Cover one per reply: MISINTERPRET (read a word the wrong way) / FLIP THE FRAME (accusation about her claim, not her character) / MOCK OUTRAGE (fake betrayal/disappointment). FLIP THE FRAME mocks what she SAID, not who she IS — "bold claim from someone who probably uses jarred sauce" = PASS. "you're clearly the type who..." = mocking character = FAIL.
-* Fork test: Can she respond with more than "haha"? She must want to deny/defend/dispute with SPECIFICS. FAIL: "that explains so much honestly" (what does she say back?). PASS: "the 'not even close to restaurant level' — which restaurant, because if it's olive garden that bar is underground" (she has to defend her claim with a specific). Leave a gap she fills, not a punchline she just laughs at.
+* Cover one per reply: MISINTERPRET (read a word the wrong way) / FLIP THE FRAME (accusation about her claim, not her character) / MOCK OUTRAGE (fake betrayal/disappointment) / CALLOUT (directly dispute or challenge a claim she made). FLIP THE FRAME mocks what she SAID, not who she IS — "bold claim from someone who probably uses jarred sauce" = PASS. "you're clearly the type who..." = mocking character = FAIL.
+* Fork test: Can she respond with more than "haha"? She must want to deny/defend/dispute with SPECIFICS. Leave a gap she fills, not a punchline she just laughs at.
 * DIVERSITY: All 4 teases attack DIFFERENT angles. One detail per reply.
-* Banned: echoing her question back word-for-word; "tumhe kya lagta hai / tum hi batao".""",
+* Banned: echoing her question back word-for-word; "tumhe kya lagta hai / tum hi batao"; generic food/culture debates not anchored to HER words (pineapple pizza, chai vs coffee, "hot or cold water person").""",
     "revive_chat": """
 DIRECTION — REVIVE CHAT:
 * One per reply, all four tactics: (1) CALLBACK WITH TWIST — reference past chat with new angle. (2) FRESH OBSERVATION — bold claim from profile, act like no time passed. (3) CHALLENGE/BET — playful accusation she'd react to. (4) PATTERN INTERRUPT — unexpected opener, new thread.
@@ -234,7 +239,11 @@ DIRECTION — ASK OUT:
     "go_deeper": """
 DIRECTION — GO DEEPER:
 * Connection moment — she shared something real. Not banter. Show you actually heard her.
-* Mix across 4 replies: (1) NAME THE SPECIFIC THING she said verbatim. (2) HONEST RAW REACTION — not advice or pep talk. (3) ONE CURIOUS QUESTION she'd actually want to answer — but acknowledgment MUST come first, question last. (4) GENTLE REFRAME — observation that shifts perspective without dismissing.
+* Each reply uses a DIFFERENT move — one per reply, no repeats:
+  1. NAME THE THING — echo her exact words back, nothing else ("lamba din" / "bohot thak gayi")
+  2. RAW REACTION — your honest gut response, no advice, no solution ("uff that sounds brutal")
+  3. CURIOUS QUESTION — acknowledgment first, then one inner-experience question (what was the worst part / was anyone in your corner)
+  4. GENTLE REFRAME — observation that shifts perspective without dismissing what she felt
 * Tone: Write like you're actually surprised and moved — raw over polished. Short over long. "that's heavy" > "i can see that this situation must have been very difficult for you." Constructed-sounding lines = FAIL.
 * Fork requirement: EVERY reply still needs a response path — pure acknowledgment statements with no hook are dead-ends. Use: a feelings-focused question, a grounded observation she'd want to dispute/confirm, or a statement that implicitly invites her to say more.
 * Question rule: Questions MUST (a) open with acknowledgment first, (b) ask about HER inner experience — NOT next steps, plans, or the other person. BAD: "what are you doing to clear your head tonight" (redirects), "does he usually act like that" (analyzes boss). GOOD: "what was the worst part of sitting through that", "was there anyone in the room who had your back". One question max per reply.
