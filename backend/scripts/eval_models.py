@@ -77,7 +77,9 @@ def build_system_prompt(payload: dict) -> str:
     )
 
 
-def run_models(system_prompt: str, human: str, models: list[str], temperature: float) -> None:
+def run_models(
+    system_prompt: str, human: str, models: list[str], temperature: float
+) -> None:
     from openai import OpenAI
 
     client = OpenAI(
@@ -106,10 +108,14 @@ def _openrouter_client():
 
     if not settings.openrouter_api_key:
         raise SystemExit("OPENROUTER_API_KEY not set in .env.dev")
-    return OpenAI(api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1")
+    return OpenAI(
+        api_key=settings.openrouter_api_key, base_url="https://openrouter.ai/api/v1"
+    )
 
 
-def run_openrouter(system_prompt: str, human: str, models: list[str], temperature: float) -> None:
+def run_openrouter(
+    system_prompt: str, human: str, models: list[str], temperature: float
+) -> None:
     """Plain-chat writing eval via OpenRouter (no schema → reads any model's writing)."""
     client = _openrouter_client()
     for model in models:
@@ -130,10 +136,13 @@ def run_openrouter(system_prompt: str, human: str, models: list[str], temperatur
             print(f"[ERROR] {type(exc).__name__}: {exc}")
 
 
-def run_reliability(system_prompt: str, human: str, models: list[str], trials: int) -> None:
+def run_reliability(
+    system_prompt: str, human: str, models: list[str], trials: int
+) -> None:
     """The decisive test: does the model hold the REAL GeneratorOutput Pydantic schema
     (valid strategy_label enum + all required fields) under tool-calling, N times?
-    This is what the playground can't show — it 400s on a schema miss, just like prod."""
+    This is what the playground can't show — it 400s on a schema miss, just like prod.
+    """
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
 
@@ -157,7 +166,9 @@ def run_reliability(system_prompt: str, human: str, models: list[str], trials: i
             try:
                 out = llm.invoke(msgs)
                 labels = [r.strategy_label for r in out.replies]
-                print(f"  trial {i + 1}: ✅ PASS  ({len(out.replies)} replies, labels={labels})")
+                print(
+                    f"  trial {i + 1}: ✅ PASS  ({len(out.replies)} replies, labels={labels})"
+                )
                 ok += 1
             except Exception as exc:  # noqa: BLE001
                 short = str(exc)[:260].replace("\n", " ")
@@ -192,13 +203,31 @@ def run_gemini(system_prompt: str, human: str, temperature: float) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--payload", default=_DEFAULT_PAYLOAD, help="captured HumanMessage JSON")
+    ap.add_argument(
+        "--payload", default=_DEFAULT_PAYLOAD, help="captured HumanMessage JSON"
+    )
     ap.add_argument("--dump", action="store_true", help="write generator_prompt.txt")
-    ap.add_argument("--models", default="", help="comma-separated Groq model ids (plain-chat)")
-    ap.add_argument("--openrouter", default="", help="comma-separated OpenRouter model ids (plain-chat)")
-    ap.add_argument("--reliability", default="", help="comma-separated OpenRouter model ids (structured schema test)")
-    ap.add_argument("--trials", type=int, default=3, help="reliability trials per model")
-    ap.add_argument("--gemini", action="store_true", help="run the production Gemini path + real schema")
+    ap.add_argument(
+        "--models", default="", help="comma-separated Groq model ids (plain-chat)"
+    )
+    ap.add_argument(
+        "--openrouter",
+        default="",
+        help="comma-separated OpenRouter model ids (plain-chat)",
+    )
+    ap.add_argument(
+        "--reliability",
+        default="",
+        help="comma-separated OpenRouter model ids (structured schema test)",
+    )
+    ap.add_argument(
+        "--trials", type=int, default=3, help="reliability trials per model"
+    )
+    ap.add_argument(
+        "--gemini",
+        action="store_true",
+        help="run the production Gemini path + real schema",
+    )
     ap.add_argument("--temperature", type=float, default=0.85)
     args = ap.parse_args()
 
@@ -220,11 +249,26 @@ def main() -> None:
         )
 
     if args.models:
-        run_models(system_prompt, human, [m.strip() for m in args.models.split(",") if m.strip()], args.temperature)
+        run_models(
+            system_prompt,
+            human,
+            [m.strip() for m in args.models.split(",") if m.strip()],
+            args.temperature,
+        )
     if args.openrouter:
-        run_openrouter(system_prompt, human, [m.strip() for m in args.openrouter.split(",") if m.strip()], args.temperature)
+        run_openrouter(
+            system_prompt,
+            human,
+            [m.strip() for m in args.openrouter.split(",") if m.strip()],
+            args.temperature,
+        )
     if args.reliability:
-        run_reliability(system_prompt, human, [m.strip() for m in args.reliability.split(",") if m.strip()], args.trials)
+        run_reliability(
+            system_prompt,
+            human,
+            [m.strip() for m in args.reliability.split(",") if m.strip()],
+            args.trials,
+        )
     if args.gemini:
         run_gemini(system_prompt, human, args.temperature)
 
