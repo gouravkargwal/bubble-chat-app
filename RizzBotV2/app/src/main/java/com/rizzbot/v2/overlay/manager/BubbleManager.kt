@@ -731,11 +731,11 @@ class BubbleManager @Inject constructor(
                     // without clearing previous ones, after the user tapped the bubble again.
                     pendingAppendDirection = null
                     activeScope.launch {
-                        hideForCapture()
-                        kotlinx.coroutines.delay(300)
-
                         try {
-                            orchestrator.captureScreenshot()
+                            orchestrator.captureScreenshot(onConsentGranted = {
+                                hideForCapture()
+                                kotlinx.coroutines.delay(300)
+                            })
                         } finally {
                             if (composeView == null) {
                                 composeView = createAndAttachView()

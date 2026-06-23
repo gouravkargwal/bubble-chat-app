@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # writer model on the same profile without touching vision/auditor cost.
     generator_provider: str = "gemini"
 
+    # Which system prompt logic to use for generating replies.
+    # "screenplay" (default, Netflix India Screenwriter roleplay) or "coach" (legacy Dating Coach rules).
+    prompt_mode: str = "screenplay"
+
     # Google Play Billing
     google_play_service_account: str = ""
     google_play_package_name: str = "com.cookd.app"
