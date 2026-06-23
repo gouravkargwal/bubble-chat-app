@@ -9,7 +9,7 @@ from app.api.v1.schemas.schemas import UsageResponse
 from app.core.tier_config import TIER_CONFIG, BILLING_CREDITS
 from app.domain.tiers import get_effective_tier
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import Purchase, User
+from app.infrastructure.database.models import Purchase, User, UserQuota
 from app.services.quota_manager import QuotaManager
 
 router = APIRouter()
@@ -25,16 +25,25 @@ async def get_usage(
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
 
     credits_remaining = 0
+    credits_period_limit = 0
     if user.google_provider_id:
+        quota_result = await db.execute(
+            select(UserQuota).where(UserQuota.google_provider_id == user.google_provider_id)
+        )
+        quota = quota_result.scalar_one_or_none()
+
         qm = QuotaManager(db)
         credits_remaining = await qm.get_credits_remaining(
             user.google_provider_id, effective_tier
         )
 
-    # Period limit — free tier uses daily credits, paid tiers use period pool.
-    credits_period_limit = BILLING_CREDITS.get(effective_tier, 0)
-    if effective_tier == "free":
-        credits_period_limit = tier_config["limits"].get("daily_credits", 2)
+        # Period limit — read from quota table (source of truth), not BILLING_CREDITS.
+        if effective_tier == "free":
+            credits_period_limit = tier_config["limits"].get("daily_credits", 2)
+        elif quota is not None:
+            credits_period_limit = quota.credits_period_limit
+        else:
+            credits_period_limit = BILLING_CREDITS.get(effective_tier, 0)
 
     # Billing period from active purchase.
     billing_period = "daily"

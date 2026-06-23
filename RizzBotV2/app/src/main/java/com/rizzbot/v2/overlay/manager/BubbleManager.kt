@@ -277,10 +277,11 @@ class BubbleManager @Inject constructor(
                         if (appendDirection != null) {
                             pendingAppendDirection = null
                             ensureScope().launch {
-                                hideForCapture()
-                                kotlinx.coroutines.delay(300)
                                 try {
-                                    orchestrator.captureScreenshot()
+                                    orchestrator.captureScreenshot(onConsentGranted = {
+                                        hideForCapture()
+                                        kotlinx.coroutines.delay(300)
+                                    })
                                 } finally {
                                     if (composeView == null) {
                                         composeView = createAndAttachView()
@@ -784,12 +785,14 @@ class BubbleManager @Inject constructor(
                         // Clear previous screenshots on fresh capture/retake
                         orchestrator.clearScreenshot()
                         currentDirection = event.direction
-                        // Hide overlay before capture so it's not in the screenshot
-                        hideForCapture()
-                        kotlinx.coroutines.delay(300)
 
                         try {
-                            orchestrator.captureScreenshot()
+                            // Hide overlay only after consent granted — overlay must stay visible
+                            // during requestConsent() or Android 14+ BAL blocks the launch.
+                            orchestrator.captureScreenshot(onConsentGranted = {
+                                hideForCapture()
+                                kotlinx.coroutines.delay(300)
+                            })
                         } finally {
                             // Restore overlay to show screenshot preview
                             if (composeView == null) {
@@ -851,11 +854,12 @@ class BubbleManager @Inject constructor(
                 activeScope.launch {
                     // Remove the last screenshot, then capture a new one to replace it
                     orchestrator.removeLastScreenshot()
-                    hideForCapture()
-                    kotlinx.coroutines.delay(300)
 
                     try {
-                        orchestrator.captureScreenshot()
+                        orchestrator.captureScreenshot(onConsentGranted = {
+                            hideForCapture()
+                            kotlinx.coroutines.delay(300)
+                        })
                     } finally {
                         if (composeView == null) {
                             composeView = createAndAttachView()
