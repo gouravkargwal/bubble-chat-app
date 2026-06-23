@@ -19,18 +19,11 @@ import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 data class SettingsState(
-    val isPremium: Boolean = false,
-    val tier: String = "free",
-    val dailyLimit: Int = 5,
-    val dailyUsed: Int = 0,
-    val weeklyUsed: Int = 0,
-    val monthlyUsed: Int = 0,
-    val billingPeriod: String = "daily",
-    val profileAuditsPerWeek: Int = 1,
-    val weeklyAuditsUsed: Int = 0,
-    val profileBlueprintsPerWeek: Int = TierQuota.NOT_ON_PLAN,
-    val weeklyBlueprintsUsed: Int = 0,
-    val godModeExpiresAt: java.time.Instant? = null,
+    val tier: String = TierQuota.PLAN_FREE,
+    val creditsRemaining: Int = 0,
+    val creditsPeriodLimit: Int = 0,
+    val billingPeriod: String = "monthly",
+    val tierExpiresAt: Long? = null,
     val userName: String? = null,
     val userEmail: String? = null,
     val signedOut: Boolean = false,
@@ -39,7 +32,11 @@ data class SettingsState(
     val referralApplyResult: String? = null,
     val isApplyingReferral: Boolean = false,
     val roastLanguage: String = "English"
-)
+) {
+    val isPaidPlan: Boolean get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH || tier == TierQuota.PLAN_RIZZ
+    val canGenerate: Boolean get() = creditsRemaining > 0
+    val creditsUsed: Int get() = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -54,18 +51,11 @@ class SettingsViewModel @Inject constructor(
     private fun applyUsageSnapshot(usage: UsageState) {
         _state.update {
             it.copy(
-                isPremium = usage.isPremium,
                 tier = usage.tier,
-                dailyLimit = usage.dailyLimit,
-                dailyUsed = usage.dailyUsed,
-                weeklyUsed = usage.weeklyUsed,
-                monthlyUsed = usage.monthlyUsed,
+                creditsRemaining = usage.creditsRemaining,
+                creditsPeriodLimit = usage.creditsPeriodLimit,
                 billingPeriod = usage.billingPeriod,
-                profileAuditsPerWeek = usage.profileAuditsPerWeek,
-                weeklyAuditsUsed = usage.weeklyAuditsUsed,
-                profileBlueprintsPerWeek = usage.profileBlueprintsPerWeek,
-                weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
-                godModeExpiresAt = usage.godModeExpiresAt
+                tierExpiresAt = usage.tierExpiresAt,
             )
         }
     }
@@ -79,7 +69,7 @@ class SettingsViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            hostedRepository.refreshUsage(force = true) // Always fetch fresh data when opening settings
+            hostedRepository.refreshUsage(force = true)
             hostedRepository.usageState.collect { usage -> applyUsageSnapshot(usage) }
         }
 
@@ -95,11 +85,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Awaitable refresh: after [HostedRepository.refreshUsage] returns, copies [HostedRepository.usageState]
-     * into settings state immediately so tier/limits are not briefly wrong if [referral] is updated before
-     * the [hostedRepository.usageState] collector runs.
-     */
     suspend fun refreshComplete() {
         withContext(Dispatchers.IO) {
             hostedRepository.refreshUsage(force = true)
@@ -125,12 +110,12 @@ class SettingsViewModel @Inject constructor(
             _state.update { it.copy(isApplyingReferral = true, referralApplyResult = null) }
             val result = hostedRepository.applyReferralCode(code)
             result.fold(
-                onSuccess = { response ->
+                onSuccess = { _ ->
                     val info = hostedRepository.getReferralInfo()
                     _state.update {
                         it.copy(
                             isApplyingReferral = false,
-                            referralApplyResult = "+${response.durationHours} hours of God Mode unlocked!",
+                            referralApplyResult = "Referral applied! ${TierQuota.REFEREE_CREDITS} bonus credits added.",
                             referralCodeInput = "",
                             referral = info
                         )
@@ -163,12 +148,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = hostedRepository.deleteAllUserData()
             result.fold(
-                onSuccess = {
-                    onSuccess()
-                },
-                onFailure = { e ->
-                    onError(e.message ?: "Failed to delete data. Please try again.")
-                }
+                onSuccess = { onSuccess() },
+                onFailure = { e -> onError(e.message ?: "Failed to delete data. Please try again.") }
             )
         }
     }

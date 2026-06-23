@@ -78,7 +78,7 @@ fun StatsScreen(
     val DarkBg = Color(0xFF0F0F1A)
     val CardBg = Color(0xFF1A1A2E)
     val brandAccent = MaterialTheme.colorScheme.primary
-    val isPremiumTier = state.tier == "premium" || state.tier == "god_mode"
+    val isPremiumTier = state.tier == "crush" || state.tier == "match" || state.tier == "rizz"
     
     // Auto-refresh when screen becomes visible
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {

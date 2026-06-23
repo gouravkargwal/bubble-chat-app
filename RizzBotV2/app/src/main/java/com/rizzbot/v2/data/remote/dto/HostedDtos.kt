@@ -92,25 +92,16 @@ data class TrackRatingRequest(
 
 @Serializable
 data class UsageResponse(
-    @SerialName("daily_limit") val dailyLimit: Int,
-    @SerialName("daily_used") val dailyUsed: Int,
-    @SerialName("weekly_used") val weeklyUsed: Int = 0,
-    @SerialName("monthly_used") val monthlyUsed: Int = 0,
-    @SerialName("weekly_audits_used") val weeklyAuditsUsed: Int = 0,
-    @SerialName("weekly_blueprints_used") val weeklyBlueprintsUsed: Int = 0,
-    @SerialName("is_premium") val isPremium: Boolean,
+    @SerialName("credits_remaining") val creditsRemaining: Int = 0,
+    @SerialName("credits_period_limit") val creditsPeriodLimit: Int = 0,
+    @SerialName("billing_period") val billingPeriod: String = "monthly",
     val tier: String = "free",
-    @SerialName("allowed_directions") val allowedDirections: List<String> = emptyList(),
-    @SerialName("max_screenshots") val maxScreenshots: Int = 1,
-    @SerialName("custom_hints") val customHints: Boolean = false,
     @SerialName("tier_expires_at") val tierExpiresAt: Long? = null,
-    @SerialName("god_mode_expires_at") val godModeExpiresAt: Long? = null,
-    @SerialName("bonus_replies") val bonusReplies: Int = 0,
-    @SerialName("total_replies_generated") val totalRepliesGenerated: Int = 0,
-    @SerialName("total_replies_copied") val totalRepliesCopied: Int = 0,
+    @SerialName("allowed_directions") val allowedDirections: List<String> = emptyList(),
+    @SerialName("max_screenshots") val maxScreenshots: Int = 2,
+    @SerialName("custom_hints") val customHints: Boolean = false,
     val limits: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
     val features: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
-    @SerialName("billing_period") val billingPeriod: String = "daily"
 )
 
 // ── Conversations ──

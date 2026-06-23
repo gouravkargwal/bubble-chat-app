@@ -43,17 +43,15 @@ class User(Base):
     )
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    tier: Mapped[str] = mapped_column(String(20), default="free")  # free, premium, pro
+    tier: Mapped[str] = mapped_column(
+        String(20), default="free"
+    )  # free, crush, match, rizz
     tier_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     tier_source: Mapped[str] = mapped_column(
         String(20), default="signup"
     )  # signup, trial, purchase, admin
-    # God Mode (24-hour referral reward) - stacks time, uses UTC
-    god_mode_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     # Referral
     referral_code: Mapped[str | None] = mapped_column(
         String(8), unique=True, nullable=True, index=True
@@ -98,33 +96,35 @@ class UserQuota(Base):
 
     CRITICAL: This table must NOT be wiped on account deletion so we can
     preserve historical usage limits even if the user nukes their profile.
+
+    Credits system:
+    - credits_remaining: current spendable credits in the active period.
+    - credits_period_limit: total credits granted for this period (set by billing).
+    - credits_reset_at: when the period resets (weekly or monthly).
+    - signup_bonus_granted: whether the one-time 15-credit free bonus was given.
+    - daily_free_credits_used: how many free daily credits used today (free tier only).
+    - daily_free_reset_at: when the daily free credit window resets.
     """
 
     __tablename__ = "user_quotas"
 
     # Primary key is the stable Google provider ID, NOT the temporary firebase_uid.
     google_provider_id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    # Simple integer counters — we do NOT derive limits from history tables.
-    # Chat (vision reply generations)
-    daily_usage_count: Mapped[int] = mapped_column(Integer, default=0)
-    weekly_usage_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Profile audits (per week)
-    weekly_audits_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Profile blueprints (per week)
-    weekly_blueprints_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Reset timestamps (UTC). When "now" passes these we reset and roll them forward.
-    daily_reset_at: Mapped[datetime | None] = mapped_column(
+
+    # --- Credits system (new) ---
+    credits_remaining: Mapped[int] = mapped_column(Integer, default=0)
+    credits_period_limit: Mapped[int] = mapped_column(Integer, default=0)
+    credits_reset_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    weekly_reset_at: Mapped[datetime | None] = mapped_column(
+    signup_bonus_granted: Mapped[bool] = mapped_column(Integer, default=False)
+    # Free tier daily credits tracking
+    daily_free_credits_used: Mapped[int] = mapped_column(Integer, default=0)
+    daily_free_reset_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    weekly_audits_reset_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    weekly_blueprints_reset_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    # Idempotency: last 5 correlation_ids that were charged — prevents double-charge on retry.
+    last_charged_keys: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Conversation(Base):
@@ -296,9 +296,7 @@ class ConversationMemory(Base):
     """
 
     __tablename__ = "conversation_memories"
-    __table_args__ = (
-        Index("ix_conv_mem_user_conv", "user_id", "conversation_id"),
-    )
+    __table_args__ = (Index("ix_conv_mem_user_conv", "user_id", "conversation_id"),)
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -385,7 +383,7 @@ class Purchase(Base):
     expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    auto_renewing: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_renewing: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -426,7 +424,9 @@ class AuditJob(Base):
     # JSON-serialised AuditResponse on completion
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -454,7 +454,9 @@ class AuditedPhoto(Base):
     # Optional per-audit one-liner roast (not stored per-photo in JSON).
     roast_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Idempotency key: allows safe retries without double-charging Gemini API credits.
-    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -531,4 +533,6 @@ class BlueprintUniversalPrompt(Base):
     category: Mapped[str] = mapped_column(String(200))
     suggested_text: Mapped[str] = mapped_column(Text)
 
-    blueprint: Mapped[ProfileBlueprint] = relationship(back_populates="universal_prompts")
+    blueprint: Mapped[ProfileBlueprint] = relationship(
+        back_populates="universal_prompts"
+    )

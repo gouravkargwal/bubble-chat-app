@@ -25,8 +25,6 @@ import javax.inject.Inject
 data class HomeState(
     val isServiceEnabled: Boolean = false,
     val hasOverlayPermission: Boolean = false,
-    val totalRepliesGenerated: Int = 0,
-    val totalRepliesCopied: Int = 0,
     val showHowItWorks: Boolean = true,
     val rizzProfile: UserPreferences? = null,
     val usage: UsageState = UsageState(),
@@ -88,13 +86,11 @@ class HomeViewModel @Inject constructor(
         // Collect usage state from backend
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
-                _state.update { 
+                _state.update {
                     it.copy(
                         usage = usage,
-                        totalRepliesGenerated = usage.totalRepliesGenerated,
-                        totalRepliesCopied = usage.totalRepliesCopied,
                         isLoadingUsage = false
-                    ) 
+                    )
                 }
             }
         }
@@ -215,17 +211,10 @@ class HomeViewModel @Inject constructor(
     fun toggleService(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setServiceEnabled(enabled)
-            try {
-                if (enabled) {
-                    context.startForegroundService(Intent(context, OverlayService::class.java))
-                } else {
-                    context.stopService(Intent(context, OverlayService::class.java))
-                }
-            } catch (e: Exception) {
-                // startForegroundService can throw ForegroundServiceStartNotAllowedException if the
-                // app isn't allowed to start an FGS at this moment. Revert the pref so the UI stays
-                // consistent instead of crashing.
-                if (enabled) settingsRepository.setServiceEnabled(false)
+            if (enabled) {
+                context.startForegroundService(Intent(context, OverlayService::class.java))
+            } else {
+                context.stopService(Intent(context, OverlayService::class.java))
             }
             hapticHelper.mediumTap()
         }

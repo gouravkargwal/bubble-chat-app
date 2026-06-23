@@ -1,103 +1,18 @@
 """Tier configuration — single source of truth for feature gating."""
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
-
-@dataclass(frozen=True)
-class TierConfig:
-    name: str
-    daily_limit: int  # 0 = unlimited
-    allowed_directions: list[str] = field(default_factory=list)
-    custom_hints: bool = False
-    voice_dna: bool = False
-    conversation_memory: bool = False
-    max_conversations: int = 0  # 0 = unlimited
-    max_screenshots: int = 1  # max images per single request
-    prompt_variant: str = "minimal"
-
-
-# Direction definitions
-ALL_DIRECTIONS = [
-    "opener",
-    "quick_reply",
-    "change_topic",
-    "tease",
-    "get_number",
-    "ask_out",
-    "revive_chat",
-]
-
-FREE_DIRECTIONS = ["quick_reply", "change_topic", "tease"]
-
-TIERS: dict[str, TierConfig] = {
-    "free": TierConfig(
-        name="Free",
-        daily_limit=5,
-        allowed_directions=FREE_DIRECTIONS,
-        custom_hints=False,
-        voice_dna=False,
-        conversation_memory=False,
-        max_conversations=3,
-        max_screenshots=1,
-        prompt_variant="minimal",
-    ),
-    "premium": TierConfig(
-        name="Premium",
-        daily_limit=0,  # unlimited
-        allowed_directions=ALL_DIRECTIONS,
-        custom_hints=True,
-        voice_dna=False,
-        conversation_memory=True,
-        max_conversations=10,
-        max_screenshots=3,
-        prompt_variant="default",
-    ),
-    "pro": TierConfig(
-        name="Pro",
-        daily_limit=0,  # unlimited
-        allowed_directions=ALL_DIRECTIONS,
-        custom_hints=True,
-        voice_dna=False,
-        conversation_memory=True,
-        max_conversations=0,  # unlimited
-        max_screenshots=5,
-        prompt_variant="default",
-    ),
-}
-
-TIER_HIERARCHY = {"free": 0, "premium": 1, "pro": 2}
-
-
-def get_tier_config(tier: str) -> TierConfig:
-    return TIERS.get(tier, TIERS["free"])
-
-
-def _utc_now_naive() -> datetime:
-    """Return current UTC time as a naive datetime (consistent with DB storage)."""
-    from datetime import datetime, timezone
-
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+TIER_HIERARCHY = {"free": 0, "crush": 1, "match": 2, "rizz": 3}
 
 
 def get_effective_tier(user) -> str:
-    """Get user's effective tier, considering expiration and God Mode."""
-    from datetime import datetime, timezone
-
-    # Check God Mode first (24-hour referral reward) - uses timezone-aware UTC
     now_aware = datetime.now(timezone.utc)
-    if user.god_mode_expires_at and user.god_mode_expires_at > now_aware:
-        return "premium"
-
-    # Otherwise, check underlying tier
     tier = user.tier or "free"
     if tier == "free":
         return tier
 
-    # Check tier expiry (subscription)
     if user.tier_expires_at:
         expires_at = user.tier_expires_at
-        # Normalize any legacy naive timestamps to UTC-aware to avoid comparison errors.
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         if expires_at < now_aware:
@@ -107,14 +22,15 @@ def get_effective_tier(user) -> str:
 
 
 def has_tier_access(user_tier: str, required_tier: str) -> bool:
-    """Check if user_tier meets the required_tier level."""
     return TIER_HIERARCHY.get(user_tier, 0) >= TIER_HIERARCHY.get(required_tier, 0)
 
 
-# Product ID → tier mapping
+# Product ID → tier mapping (cookd_premium subscription, 3 prepaid base plans)
+# Play sends both "subscription_id:base_plan_id" and bare "subscription_id" formats.
 PRODUCT_TIER_MAP = {
-    "cookd_premium_weekly": "premium",
-    "cookd_premium_monthly": "premium",
-    "cookd_pro_weekly": "pro",
-    "cookd_pro_monthly": "pro",
+    "cookd_premium:crush-weekly":  "crush",
+    "cookd_premium:match-monthly": "match",
+    "cookd_premium:rizz-monthly":  "rizz",
+    # bare subscription ID fallback (some webhook events omit base plan)
+    "cookd_premium": "crush",
 }

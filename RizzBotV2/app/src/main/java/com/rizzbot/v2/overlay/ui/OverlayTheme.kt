@@ -4,9 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import com.rizzbot.v2.ui.theme.GodModePrimary
-import com.rizzbot.v2.ui.theme.GodModePrimaryDark
-import com.rizzbot.v2.ui.theme.GodModeSecondary
+import com.rizzbot.v2.ui.theme.PaidPlanPrimary
+import com.rizzbot.v2.ui.theme.PaidPlanPrimaryDark
+import com.rizzbot.v2.ui.theme.PaidPlanSecondary
 import com.rizzbot.v2.ui.theme.Pink
 import com.rizzbot.v2.ui.theme.PinkDark
 import com.rizzbot.v2.ui.theme.Purple
@@ -25,11 +25,11 @@ private val OverlayPinkScheme = darkColorScheme(
     error = Color(0xFFEF5350)
 )
 
-private val OverlayGodModeScheme = darkColorScheme(
-    primary = GodModePrimary,
+private val OverlayPaidPlanScheme = darkColorScheme(
+    primary = PaidPlanPrimary,
     onPrimary = DarkOnGoldPrimary,
-    secondary = GodModeSecondary,
-    tertiary = GodModePrimaryDark,
+    secondary = PaidPlanSecondary,
+    tertiary = PaidPlanPrimaryDark,
     surface = Color.Transparent,
     onSurface = Color.White,
     background = Color.Transparent,
@@ -39,11 +39,11 @@ private val OverlayGodModeScheme = darkColorScheme(
 
 @Composable
 fun OverlayTheme(
-    isGodMode: Boolean = false,
+    isPaidPlan: Boolean = false,
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = if (isGodMode) OverlayGodModeScheme else OverlayPinkScheme,
+        colorScheme = if (isPaidPlan) OverlayPaidPlanScheme else OverlayPinkScheme,
         content = content
     )
 }

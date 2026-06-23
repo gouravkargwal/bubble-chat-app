@@ -40,7 +40,10 @@ from app.services.hybrid_stitch_pending import (
     has_pending_hybrid_resolution,
     store_pending_hybrid_resolution,
 )
-from app.services.memory_service import scrub_lore_from_contradictions, upsert_conversation_memory
+from app.services.memory_service import (
+    scrub_lore_from_contradictions,
+    upsert_conversation_memory,
+)
 from app.services.quota_manager import QuotaExceededException, QuotaManager
 from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
@@ -324,7 +327,9 @@ async def perform_full_vision_analysis(
 
     content: list = []
     for b64 in images_base64:
-        b64 = downscale_image_b64(b64)  # cap long edge ~768px → fewer Gemini image tiles
+        b64 = downscale_image_b64(
+            b64
+        )  # cap long edge ~768px → fewer Gemini image tiles
         image_url = encode_image_from_state(cast(AgentState, {"image_bytes": b64}))
         content.append({"type": "image_url", "image_url": {"url": image_url}})
 
@@ -363,7 +368,9 @@ async def perform_full_vision_analysis(
         past_memories_chars=0,
         ocr_hint_chars=0,
         images_attached_to_vision_llm=images_attached_to_vision_llm,
-        screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
+        screenshots_in_request=(
+            screenshots_in_request if screenshots_in_request is not None else n
+        ),
     )
     logger.info(
         "vision_node_llm_messages",
@@ -403,7 +410,9 @@ async def perform_full_vision_analysis(
             usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
             usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
             images_attached_to_vision_llm=images_attached_to_vision_llm,
-            screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
+            screenshots_in_request=(
+                screenshots_in_request if screenshots_in_request is not None else n
+            ),
         )
         return out
     except Exception as e:
@@ -417,7 +426,9 @@ async def perform_full_vision_analysis(
             error_type=type(e).__name__,
             elapsed_ms=int((time.monotonic() - t_start) * 1000),
             images_attached_to_vision_llm=images_attached_to_vision_llm,
-            screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
+            screenshots_in_request=(
+                screenshots_in_request if screenshots_in_request is not None else n
+            ),
         )
         raise
 
@@ -619,8 +630,12 @@ async def _run_generate_v2(
                 )
                 return JSONResponse(status_code=409, content=payload)
 
-        if outcome == "auto_stitch" and (matched_conversation_id or effective_conversation_id):
-            effective_conversation_id = effective_conversation_id or matched_conversation_id
+        if outcome == "auto_stitch" and (
+            matched_conversation_id or effective_conversation_id
+        ):
+            effective_conversation_id = (
+                effective_conversation_id or matched_conversation_id
+            )
         elif outcome == "new_match":
             new_conversation_person_name = ocr_person_name
 
@@ -644,33 +659,35 @@ async def _run_generate_v2(
         )
 
     # ------------------------------------------------------------------ #
-    # 6. Quota: check-only before running the expensive agent
+    # 6. Quota: check and spend credits before running the expensive agent
     # ------------------------------------------------------------------ #
-    daily_limit = tier_config["limits"]["chat_generations_per_day"]
-    effective_limit = daily_limit + user.bonus_replies
     quota_manager: QuotaManager | None = None
+    credits_remaining: int = 0
 
+    # Check quota upfront (no deduction yet) — blocks over-limit users before running agent.
+    # Credits are deducted only after the user sees a successful response.
     if user.google_provider_id:
         quota_manager = QuotaManager(db)
         try:
-            await quota_manager.check_only(
+            await quota_manager.check_only_credits(
                 user.google_provider_id,
-                daily_limit=effective_limit,
-                weekly_limit=None,
+                action="chat_generation",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
             )
         except QuotaExceededException:
             raise HTTPException(
                 status_code=429,
-                detail="Daily limit reached. Upgrade to Premium for more replies.",
+                detail="Credits exhausted. Upgrade or wait for daily reset.",
             )
+    else:
+        quota_manager = None
 
     logger.info(
         "llm_lifecycle",
         stage="v2_quota_checked",
         user_id=user.id,
         google_quota_enforced=bool(quota_manager),
-        daily_limit=daily_limit,
-        effective_limit=effective_limit,
     )
 
     # ------------------------------------------------------------------ #
@@ -791,10 +808,11 @@ async def _run_generate_v2(
     try:
         final_state = await _run_v2_agent(initial_state)
     except Exception as e:
+        # No refund needed — credits are deducted after success, not before.
         if _is_provider_timeout(e):
             raise HTTPException(
                 status_code=504,
-                detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
+                detail="The AI took too long. Try uploading fewer screenshots.",
             ) from e
         if _is_transient_provider_overload(e):
             raise HTTPException(
@@ -877,6 +895,7 @@ async def _run_generate_v2(
     analysis = final_state.get("analysis")
     if effective_conversation_id and analysis is not None:
         from agent.state import AnalystOutput
+
         if isinstance(analysis, dict):
             analysis = AnalystOutput(**analysis)
         facts: list[str] = []
@@ -984,12 +1003,22 @@ async def _run_generate_v2(
     )
 
     # ------------------------------------------------------------------ #
-    # 12. Increment quota now that we have a successful result
+    # 12. Deduct credits now — only after successful generation
     # ------------------------------------------------------------------ #
-    daily_used = 0
+    credits_remaining = 0
     if quota_manager and user.google_provider_id:
-        daily_used, _ = await quota_manager.increment(user.google_provider_id)
-        await db.commit()
+        try:
+            credits_remaining = await quota_manager.check_and_spend(
+                user.google_provider_id,
+                action="chat_generation",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+                idempotency_key=str(interaction.id),
+            )
+        except QuotaExceededException:
+            # Edge case: user hit limit between check and spend (concurrent request).
+            # Don't block — they already got the reply.
+            credits_remaining = 0
 
     # ------------------------------------------------------------------ #
     # 13. Build and return response
@@ -998,9 +1027,7 @@ async def _run_generate_v2(
         parsed=parsed,
         interaction=interaction,
         convo=convo,
-        daily_limit=daily_limit,
-        effective_limit=effective_limit,
-        daily_used=daily_used,
+        credits_remaining=credits_remaining,
     )
     # Full response observability (what the client receives).
     logger.info(
@@ -1044,6 +1071,7 @@ async def _run_generate_v2(
         if isinstance(_a, dict):
             try:
                 from agent.state import AnalystOutput as _AO
+
                 _a = _AO(**_a)
             except Exception:
                 _a = None
@@ -1070,13 +1098,17 @@ async def _run_generate_v2(
             stage=getattr(_a, "stage", "") if _a else "",
             detected_archetype=getattr(_a, "detected_archetype", "") if _a else "",
             detected_dialect=getattr(_a, "detected_dialect", "") if _a else "",
-            dimensions={
-                "warmth": getattr(_a, "warmth", ""),
-                "playfulness": getattr(_a, "playfulness", ""),
-                "engagement": getattr(_a, "engagement", ""),
-                "traditionalism": getattr(_a, "traditionalism", ""),
-                "intent": getattr(_a, "intent", ""),
-            } if _a else {},
+            dimensions=(
+                {
+                    "warmth": getattr(_a, "warmth", ""),
+                    "playfulness": getattr(_a, "playfulness", ""),
+                    "engagement": getattr(_a, "engagement", ""),
+                    "traditionalism": getattr(_a, "traditionalism", ""),
+                    "intent": getattr(_a, "intent", ""),
+                }
+                if _a
+                else {}
+            ),
             stable_dimensions=getattr(_ctx, "stable_dimensions", None),
             stable_archetype=getattr(_ctx, "stable_archetype", None),
             archetype_confidence=getattr(_ctx, "archetype_confidence", 0.0),
@@ -1111,10 +1143,17 @@ async def _run_generate_v2(
             gemini_call_count=gemini_call_count,
             latency_ms=latency_ms,
             total_tokens=sum(
-                int(u.get("total_tokens", 0) or 0) for u in _usage if isinstance(u, dict)
+                int(u.get("total_tokens", 0) or 0)
+                for u in _usage
+                if isinstance(u, dict)
             ),
             cost_usd=round(
-                sum(float(u.get("cost_usd", 0) or 0) for u in _usage if isinstance(u, dict)), 6
+                sum(
+                    float(u.get("cost_usd", 0) or 0)
+                    for u in _usage
+                    if isinstance(u, dict)
+                ),
+                6,
             ),
             contradiction_count=(
                 len(detected_contradictions)

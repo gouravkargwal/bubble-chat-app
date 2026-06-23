@@ -63,8 +63,8 @@ fun HomeScreen(
     val pullRefreshState = rememberPullToRefreshState()
     val context = LocalContext.current
 
-    val isGodMode = state.usage.isGodModeActive
-    val isProOrAbove = state.usage.tier == "pro" || isGodMode
+    val isPaidPlan = state.usage.isPaidPlan
+    val isProOrAbove = state.usage.isPaidPlan
     val primaryAccent = MaterialTheme.colorScheme.primary
     val heroGlow = primaryAccent.copy(alpha = 0.05f)
 
@@ -78,7 +78,7 @@ fun HomeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (isGodMode) "Cookd ✦" else "Cookd",
+                        text = if (isPaidPlan) "Cookd ✦" else "Cookd",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                     )
@@ -152,7 +152,7 @@ fun HomeScreen(
             )
             AutoProfileBuilderCard(
                 primaryAccent = primaryAccent,
-                isGodMode = isGodMode,
+                isPaidPlan = isPaidPlan,
                 isProOrAbove = isProOrAbove,
                 latestBlueprintTheme = state.latestBlueprintTheme,
                 latestBlueprintSlotCount = state.latestBlueprintSlotCount,
@@ -481,7 +481,7 @@ private fun BrutalProfileAuditorCard(
 @Composable
 private fun AutoProfileBuilderCard(
     primaryAccent: Color,
-    isGodMode: Boolean,
+    isPaidPlan: Boolean,
     isProOrAbove: Boolean,
     latestBlueprintTheme: String?,
     latestBlueprintSlotCount: Int,

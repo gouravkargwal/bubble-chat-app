@@ -3,7 +3,17 @@ import json
 import time
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -21,7 +31,12 @@ from app.config import settings
 from app.core.tier_config import TIER_CONFIG
 from app.domain.tiers import get_effective_tier
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import AuditedPhoto, AuditJob, BlueprintSlot, User
+from app.infrastructure.database.models import (
+    AuditedPhoto,
+    AuditJob,
+    BlueprintSlot,
+    User,
+)
 from app.infrastructure.oci_storage import (
     delete as oci_delete,
     get_signed_url as oci_get_signed_url,
@@ -69,33 +84,48 @@ async def profile_audit(
     # Failed jobs are ignored so the client can retry with the same key.
     if x_idempotency_key:
         existing_job = await db.execute(
-            select(AuditJob).where(
+            select(AuditJob)
+            .where(
                 AuditJob.user_id == user.id,
                 AuditJob.idempotency_key == x_idempotency_key,
                 AuditJob.status.in_(["pending", "processing", "completed"]),
-            ).limit(1)
+            )
+            .limit(1)
         )
         cached_job = existing_job.scalar_one_or_none()
         if cached_job:
-            logger.info("profile_audit_idempotent_hit", key=x_idempotency_key, job_id=cached_job.id)
-            return AuditJobSubmitResponse(job_id=cached_job.id, status=cached_job.status)
+            logger.info(
+                "profile_audit_idempotent_hit",
+                key=x_idempotency_key,
+                job_id=cached_job.id,
+            )
+            return AuditJobSubmitResponse(
+                job_id=cached_job.id, status=cached_job.status
+            )
 
     effective_tier = get_effective_tier(user)
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
-    audits_per_week = tier_config["limits"]["profile_audits_per_week"]
 
-    # Enforce weekly audit limit
-    if audits_per_week > 0 and user.google_provider_id:
-        qm = QuotaManager(db)
+    # Audit is a paid-only feature.
+    if effective_tier == "free":
+        raise HTTPException(
+            status_code=403,
+            detail="Profile audit requires a paid plan. Upgrade to Crush, Match, or Rizz.",
+        )
+
+    qm = QuotaManager(db) if user.google_provider_id else None
+    if qm:
         try:
-            await qm.check_and_increment_audits(
+            await qm.check_only_credits(
                 user.google_provider_id,
-                weekly_limit=audits_per_week,
+                action="profile_audit",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
             )
         except QuotaExceededException:
             raise HTTPException(
                 status_code=429,
-                detail=f"Weekly photo audit limit reached ({audits_per_week}/week). Resets on Monday.",
+                detail="Insufficient credits for profile audit.",
             )
 
     # Cap to 12 images
@@ -111,7 +141,9 @@ async def profile_audit(
             continue
         if len(data) > MAX_FILE_SIZE:
             await db.rollback()
-            raise HTTPException(status_code=400, detail=f"Image {i + 1} exceeds 5 MB limit.")
+            raise HTTPException(
+                status_code=400, detail=f"Image {i + 1} exceeds 5 MB limit."
+            )
         raw_images.append((i, data))
 
     # Upload validated images to temp OCI storage.
@@ -126,7 +158,9 @@ async def profile_audit(
         for key in image_keys:
             await oci_delete(key)
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to upload images. Please try again.")
+        raise HTTPException(
+            status_code=500, detail="Failed to upload images. Please try again."
+        )
 
     if not image_keys:
         await db.rollback()
@@ -152,22 +186,40 @@ async def profile_audit(
             await oci_delete(key)
         if x_idempotency_key:
             existing = await db.execute(
-                select(AuditJob).where(
+                select(AuditJob)
+                .where(
                     AuditJob.user_id == user.id,
                     AuditJob.idempotency_key == x_idempotency_key,
                     AuditJob.status.in_(["pending", "processing", "completed"]),
-                ).limit(1)
+                )
+                .limit(1)
             )
             winner = existing.scalar_one_or_none()
             if winner:
                 return AuditJobSubmitResponse(job_id=winner.id, status=winner.status)
-        raise HTTPException(status_code=409, detail="Duplicate audit request. Please retry.")
+        raise HTTPException(
+            status_code=409, detail="Duplicate audit request. Please retry."
+        )
     await db.refresh(job)
+
+    # Deduct credits now — job is guaranteed to run.
+    if qm and user.google_provider_id:
+        try:
+            await qm.check_and_spend(
+                user.google_provider_id,
+                action="profile_audit",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+            )
+        except QuotaExceededException:
+            pass  # Already checked above — edge case on concurrent requests.
 
     logger.info("profile_audit_job_created", job_id=job.id, images=len(image_keys))
 
     # Kick off background processing
-    background_tasks.add_task(process_audit_job, job.id, image_keys)
+    background_tasks.add_task(
+        process_audit_job, job.id, image_keys, user.google_provider_id, effective_tier
+    )
 
     return AuditJobSubmitResponse(job_id=job.id, status="pending")
 
@@ -314,7 +366,10 @@ async def stream_audit_progress(
                 yield f"event: error\ndata: {json.dumps({'message': 'Job not found'})}\n\n"
                 return
 
-            if current_job.progress_step != last_step or current_job.progress_current != last_current:
+            if (
+                current_job.progress_step != last_step
+                or current_job.progress_current != last_current
+            ):
                 last_step = current_job.progress_step
                 last_current = current_job.progress_current
                 progress_data = {

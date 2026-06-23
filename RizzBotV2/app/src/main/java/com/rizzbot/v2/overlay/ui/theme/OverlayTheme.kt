@@ -6,15 +6,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.rizzbot.v2.ui.theme.CardBg
-import com.rizzbot.v2.ui.theme.GodModePrimary
-import com.rizzbot.v2.ui.theme.GodModePrimaryDark
-import com.rizzbot.v2.ui.theme.GodModePrimaryLight
+import com.rizzbot.v2.ui.theme.PaidPlanPrimary
+import com.rizzbot.v2.ui.theme.PaidPlanPrimaryDark
+import com.rizzbot.v2.ui.theme.PaidPlanPrimaryLight
 import com.rizzbot.v2.ui.theme.Pink
 import com.rizzbot.v2.ui.theme.PinkDark
 
 /**
  * Design tokens for the bubble overlay — aligned with in-app [com.rizzbot.v2.ui.theme] colors.
- * Accent and gradients follow [MaterialTheme.colorScheme] / [overlayBubbleGradient] when God Mode is active.
+ * Accent and gradients follow [MaterialTheme.colorScheme] / [overlayBubbleGradient] when on a paid plan.
  */
 object OverlayColors {
     val PanelColor = CardBg
@@ -24,9 +24,9 @@ object OverlayColors {
 
 @Composable
 fun overlayBubbleGradient(): List<Color> {
-    val god = com.rizzbot.v2.ui.theme.LocalAppGodMode.current
-    return if (god) {
-        listOf(GodModePrimaryLight, GodModePrimary, GodModePrimaryDark)
+    val isPaidPlan = com.rizzbot.v2.ui.theme.LocalAppIsPaidPlan.current
+    return if (isPaidPlan) {
+        listOf(PaidPlanPrimaryLight, PaidPlanPrimary, PaidPlanPrimaryDark)
     } else {
         listOf(
             Color(0xFFFF4081),

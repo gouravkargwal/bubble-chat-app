@@ -125,8 +125,7 @@ fun ProfileAuditorScreen(
         }
     }
 
-    val weeklyAuditLimit = state.profileAuditsPerWeek
-    val weeklyAuditsUsed = state.weeklyAuditsUsed.coerceAtLeast(0)
+    val creditsRemaining = state.creditsRemaining
     val showIntro =
         state.result == null && !state.isLoading && !state.auditSessionStarted
 
@@ -211,11 +210,9 @@ fun ProfileAuditorScreen(
                             }
                         }
                         showIntro -> {
-                            if (TierQuota.isFinite(weeklyAuditLimit) &&
-                                state.weeklyAuditsUsed >= weeklyAuditLimit
-                            ) {
+                            if (creditsRemaining < TierQuota.CREDIT_COST_AUDIT) {
                                 Text(
-                                    text = "You’ve used your weekly audits. Tap Run audit to see upgrade options.",
+                                    text = "You need ${TierQuota.CREDIT_COST_AUDIT} credits to run an audit. Tap Run audit to see upgrade options.",
                                     color = Color.Gray,
                                     fontSize = 12.sp,
                                 )
@@ -316,18 +313,7 @@ fun ProfileAuditorScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = when {
-                                TierQuota.isUnlimited(weeklyAuditLimit) ->
-                                    "Unlimited photo audits on your plan."
-                                TierQuota.isNotOnPlan(weeklyAuditLimit) ->
-                                    "Photo audits aren't included on your current plan."
-                                else -> {
-                                    val limit = weeklyAuditLimit
-                                    val used = weeklyAuditsUsed.coerceAtMost(limit)
-                                    val noun = if (limit == 1) "audit" else "audits"
-                                    "You've used $used of $limit $noun this week."
-                                }
-                            },
+                            text = "Costs ${TierQuota.CREDIT_COST_AUDIT} credits per audit. You have $creditsRemaining credits.",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,

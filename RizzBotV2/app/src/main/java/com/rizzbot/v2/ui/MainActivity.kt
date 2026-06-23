@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
             val navigateTo = pendingNavigation.value
             val shouldShowPaywall = showPaywallFromIntent.value
             val usage by hostedRepository.usageState.collectAsState()
-            val isGodMode = usage.isGodModeActive
+            val isPaidPlan = usage.isPaidPlan
 
             // Resolve onboarding/auth state before selecting a start destination.
             // This avoids rendering the onboarding screen on the first frame when DataStore emits `false` initially.
@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            RizzBotV2Theme(isGodMode = isGodMode) {
+            RizzBotV2Theme(isPaidPlan = isPaidPlan) {
                 when (val state = bootState.value) {
                     BootState.Refreshing -> {
                         BrandedBootScreen()

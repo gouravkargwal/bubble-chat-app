@@ -53,7 +53,7 @@ fun ErrorPanel(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             when {
-                isQuotaExceeded -> "Daily free limit reached"
+                isQuotaExceeded -> "Credits exhausted. Upgrade or wait for your daily refill."
                 isRateLimited -> "We're getting a lot of requests. Please try again in a minute."
                 else -> {
                     // Hide low-level error details (e.g. provider quota, timeouts)

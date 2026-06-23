@@ -53,7 +53,7 @@ import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
 import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
 import com.rizzbot.v2.overlay.ui.theme.OverlayShapes
-import com.rizzbot.v2.ui.theme.LocalAppGodMode
+import com.rizzbot.v2.ui.theme.LocalAppIsPaidPlan
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -88,9 +88,9 @@ fun BubbleOverlay(
         currentState is BubbleState.RequiresUserConfirmation ||
         currentState is BubbleState.Error
 
-    val isGodMode = usage.isGodModeActive
-    CompositionLocalProvider(LocalAppGodMode provides isGodMode) {
-        OverlayTheme(isGodMode = isGodMode) {
+    val isPaidPlan = usage.isPaidPlan
+    CompositionLocalProvider(LocalAppIsPaidPlan provides isPaidPlan) {
+        OverlayTheme(isPaidPlan = isPaidPlan) {
             Box(
                 modifier = if (isFullScreen) Modifier.fillMaxSize()
                 else Modifier.background(Color.Transparent)
@@ -285,10 +285,7 @@ private fun FullScreenCard(
                             modifier = Modifier.fillMaxSize()
                         )
                         is BubbleState.ScreenshotPreview -> {
-                            val hasRepliesLeft =
-                                TierQuota.isUnlimited(usage.dailyLimit) ||
-                                    usage.dailyUsed < usage.dailyLimit
-                            val canGenerate = usage.isGodModeActive || hasRepliesLeft
+                            val canGenerate = usage.canGenerate
 
                             ScreenshotPreviewPanel(
                                 bitmaps = s.bitmaps,

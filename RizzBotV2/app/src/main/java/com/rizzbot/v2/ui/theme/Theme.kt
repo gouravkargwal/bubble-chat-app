@@ -7,7 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-val LocalAppGodMode = compositionLocalOf { false }
+val LocalAppIsPaidPlan = compositionLocalOf { false }
 
 private val DarkOnGoldPrimary = Color(0xFF1C1508)
 
@@ -24,11 +24,11 @@ private val DarkColorScheme = darkColorScheme(
     onError = TextWhite
 )
 
-private val GodModeColorScheme = darkColorScheme(
-    primary = GodModePrimary,
+private val PaidPlanColorScheme = darkColorScheme(
+    primary = PaidPlanPrimary,
     onPrimary = DarkOnGoldPrimary,
-    secondary = GodModeSecondary,
-    tertiary = GodModePrimaryDark,
+    secondary = PaidPlanSecondary,
+    tertiary = PaidPlanPrimaryDark,
     surface = CardBg,
     onSurface = TextWhite,
     background = DarkBg,
@@ -39,12 +39,12 @@ private val GodModeColorScheme = darkColorScheme(
 
 @Composable
 fun RizzBotV2Theme(
-    isGodMode: Boolean = false,
+    isPaidPlan: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    CompositionLocalProvider(LocalAppGodMode provides isGodMode) {
+    CompositionLocalProvider(LocalAppIsPaidPlan provides isPaidPlan) {
         MaterialTheme(
-            colorScheme = if (isGodMode) GodModeColorScheme else DarkColorScheme,
+            colorScheme = if (isPaidPlan) PaidPlanColorScheme else DarkColorScheme,
             typography = CookdTypography,
             content = content
         )

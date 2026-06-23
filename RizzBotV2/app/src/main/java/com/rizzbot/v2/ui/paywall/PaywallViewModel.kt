@@ -32,14 +32,15 @@ sealed class PaywallUiState {
 }
 
 enum class PaywallTier {
-    Pro, Premium
+    Crush, Match, Rizz
 }
 
 data class PaywallState(
     val uiState: PaywallUiState = PaywallUiState.Loading,
-    val proPackages: List<Package> = emptyList(),
-    val premiumPackages: List<Package> = emptyList(),
-    val selectedTier: PaywallTier = PaywallTier.Premium,
+    val crushPackages: List<Package> = emptyList(),
+    val matchPackages: List<Package> = emptyList(),
+    val rizzPackages: List<Package> = emptyList(),
+    val selectedTier: PaywallTier = PaywallTier.Match,
     val selectedPackage: Package? = null,
     val activeTier: PaywallTier? = null,
     val activeProductId: String? = null,
@@ -84,21 +85,26 @@ class PaywallViewModel @Inject constructor(
 
     /** Align paywall UI with RevenueCat entitlements (same keys as [SubscriptionManager]). */
     private fun applyRcCustomerInfo(customerInfo: com.revenuecat.purchases.CustomerInfo) {
-        val premiumEntitlement = customerInfo.entitlements["premium"]
-        val proEntitlement = customerInfo.entitlements["pro"]
+        val rizzEntitlement = customerInfo.entitlements["rizz"]
+        val matchEntitlement = customerInfo.entitlements["match"]
+        val crushEntitlement = customerInfo.entitlements["crush"]
 
-        val hasPremium = premiumEntitlement?.isActive == true
-        val hasPro = proEntitlement?.isActive == true
+        val hasRizz = rizzEntitlement?.isActive == true
+        val hasMatch = matchEntitlement?.isActive == true
+        val hasCrush = crushEntitlement?.isActive == true
 
+        // Priority: rizz > match > crush
         val tier = when {
-            hasPremium -> PaywallTier.Premium
-            hasPro -> PaywallTier.Pro
+            hasRizz -> PaywallTier.Rizz
+            hasMatch -> PaywallTier.Match
+            hasCrush -> PaywallTier.Crush
             else -> null
         }
 
         val activeId = when {
-            hasPremium -> premiumEntitlement?.productIdentifier
-            hasPro -> proEntitlement?.productIdentifier
+            hasRizz -> rizzEntitlement?.productIdentifier
+            hasMatch -> matchEntitlement?.productIdentifier
+            hasCrush -> crushEntitlement?.productIdentifier
             else -> null
         }
 
@@ -106,8 +112,9 @@ class PaywallViewModel @Inject constructor(
     }
 
     private fun hasCookdPaidEntitlement(customerInfo: com.revenuecat.purchases.CustomerInfo): Boolean {
-        return customerInfo.entitlements["premium"]?.isActive == true ||
-            customerInfo.entitlements["pro"]?.isActive == true
+        return customerInfo.entitlements["rizz"]?.isActive == true ||
+            customerInfo.entitlements["match"]?.isActive == true ||
+            customerInfo.entitlements["crush"]?.isActive == true
     }
 
     fun retryLoadOfferings() {
@@ -137,24 +144,20 @@ class PaywallViewModel @Inject constructor(
                         return
                     }
 
-                    // Use the correct accessors for Pro packages
-                    // RevenueCat Offering has weekly and monthly properties for standard packages
-                    // 1. Get standard Pro packages (These are null-safe by default)
-                    val weeklyPackage = defaultOffering.weekly
-                    val monthlyPackage = defaultOffering.monthly
+                    // RC package identifiers set in RevenueCat dashboard:
+                    // Crush Weekly → $rc_weekly, Match Monthly → $rc_monthly, Rizz Monthly → rizz-monthly
+                    val crushWeeklyPackage = defaultOffering.availablePackages.find { it.identifier == "\$rc_weekly" }
+                    val matchMonthlyPackage = defaultOffering.availablePackages.find { it.identifier == "\$rc_monthly" }
+                    val rizzMonthlyPackage = defaultOffering.availablePackages.find { it.identifier == "rizz-monthly" }
 
-                    // 2. Safely find Premium packages using .find {} instead of .getPackage()
-                    // .find returns null if not found, instead of crashing the app.
-                    val premiumWeeklyPackage = defaultOffering.availablePackages.find { it.identifier == "premium_weekly" }
-                    val premiumMonthlyPackage = defaultOffering.availablePackages.find { it.identifier == "premium_monthly" }
+                    val crushPackages = listOfNotNull(crushWeeklyPackage)
+                    val matchPackages = listOfNotNull(matchMonthlyPackage)
+                    val rizzPackages = listOfNotNull(rizzMonthlyPackage)
 
-                    val proPackages = listOfNotNull(weeklyPackage, monthlyPackage)
-                    val premiumPackages = listOfNotNull(premiumWeeklyPackage, premiumMonthlyPackage)
-                    
-                    // Default to Premium Monthly
-                    val defaultSelected = premiumMonthlyPackage ?: premiumPackages.firstOrNull()
+                    // Default to Match Monthly (⭐ recommended)
+                    val defaultSelected = matchMonthlyPackage
 
-                    if (proPackages.isEmpty() && premiumPackages.isEmpty()) {
+                    if (crushPackages.isEmpty() && matchPackages.isEmpty() && rizzPackages.isEmpty()) {
                         _state.update {
                             it.copy(
                                 uiState = PaywallUiState.Error("No packages found in default offering")
@@ -163,10 +166,11 @@ class PaywallViewModel @Inject constructor(
                     } else {
                         _state.update {
                             it.copy(
-                                uiState = PaywallUiState.Success(proPackages + premiumPackages),
-                                proPackages = proPackages,
-                                premiumPackages = premiumPackages,
-                                selectedTier = PaywallTier.Premium,
+                                uiState = PaywallUiState.Success(crushPackages + matchPackages + rizzPackages),
+                                crushPackages = crushPackages,
+                                matchPackages = matchPackages,
+                                rizzPackages = rizzPackages,
+                                selectedTier = PaywallTier.Match,
                                 selectedPackage = defaultSelected
                             )
                         }
@@ -188,8 +192,9 @@ class PaywallViewModel @Inject constructor(
     fun selectTier(tier: PaywallTier) {
         _state.update {
             val packages = when (tier) {
-                PaywallTier.Pro -> it.proPackages
-                PaywallTier.Premium -> it.premiumPackages
+                PaywallTier.Crush -> it.crushPackages
+                PaywallTier.Match -> it.matchPackages
+                PaywallTier.Rizz -> it.rizzPackages
             }
             val defaultPackage = packages.firstOrNull { 
                 it.identifier.contains("monthly", ignoreCase = true) 

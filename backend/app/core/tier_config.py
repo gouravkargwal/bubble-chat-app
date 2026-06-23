@@ -1,26 +1,56 @@
-"""Master Tier Configuration — single source of truth for all tier limits and features."""
+"""Master Tier Configuration — 4 plans, credits-based quota.
+
+Plans:
+  - free:  ₹0   — 15 signup credits on first open, then 2/day forever.
+  - crush: ₹99  — 60 credits, resets every 7 days.
+  - match: ₹179 — 150 credits, resets every 30 days. (Most Popular ⭐)
+  - rizz:  ₹299 — 250 credits, resets every 30 days. Unlocks Get Number + Ask Out.
+
+Credit costs per action:
+  - chat_generation:   1 credit
+  - profile_audit:     5 credits
+  - profile_blueprint: 8 credits
+"""
 
 from app.config import settings
 from app.models.enums import ConversationDirection
 
 
 def voice_dna_feature_active(tier_config: dict) -> bool:
-    """True only when the global flag is on and the tier includes Voice DNA."""
     return settings.voice_dna_enabled and tier_config["features"]["voice_dna_enabled"]
 
-# Limits semantics (usage + enforcement):
-# - profile_blueprints_per_week: 0 = feature not on this tier (optimize endpoint returns 403);
-#   >0 = weekly cap. (Unlike chat_generations where 0 can mean unlimited in some paths, here 0 is locked.)
-# - Other numeric limits: see each endpoint / QuotaManager.
+
+# Credit costs per action.
+CREDIT_COSTS = {
+    "chat_generation": 1,
+    "profile_audit": 5,
+    "profile_blueprint": 8,
+}
+
+# Free tier: 15 signup credits on first open, then 2/day forever.
+FREE_SIGNUP_CREDITS = 15
+FREE_DAILY_CREDITS = 2
+
+# Credits and billing period per paid plan.
+BILLING_CREDITS = {
+    "crush": 60,  # ₹99/week
+    "match": 150,  # ₹179/month
+    "rizz": 250,  # ₹299/month
+}
+
+BILLING_PERIOD_DAYS = {
+    "crush": 7,
+    "match": 30,
+    "rizz": 30,
+}
 
 TIER_CONFIG = {
     "free": {
         "limits": {
-            "chat_generations_per_day": 3,
-            "max_screenshots_per_request": 3,
-            "profile_audits_per_week": 1,
+            "daily_credits": FREE_DAILY_CREDITS,
+            "signup_credits": FREE_SIGNUP_CREDITS,
+            "max_screenshots_per_request": 2,
             "max_photos_per_audit": 3,
-            "profile_blueprints_per_week": 0,
             "max_context_messages": 10,
             "max_custom_hint_chars": 0,
         },
@@ -33,18 +63,15 @@ TIER_CONFIG = {
             "allowed_ui_directions": [
                 ConversationDirection.OPENER.value,
                 ConversationDirection.QUICK_REPLY.value,
-                ConversationDirection.KEEP_PLAYFUL.value,
-                ConversationDirection.CHANGE_TOPIC.value,
             ],
         },
     },
-    "pro": {
+    "crush": {
         "limits": {
-            "chat_generations_per_day": 20,
+            "daily_credits": 0,
+            "period_credits": BILLING_CREDITS["crush"],
             "max_screenshots_per_request": 5,
-            "profile_audits_per_week": 3,
             "max_photos_per_audit": 6,
-            "profile_blueprints_per_week": 1,
             "max_context_messages": 20,
             "max_custom_hint_chars": 300,
         },
@@ -65,13 +92,38 @@ TIER_CONFIG = {
             ],
         },
     },
-    "premium": {
+    "match": {
         "limits": {
-            "chat_generations_per_day": 50,
+            "daily_credits": 0,
+            "period_credits": BILLING_CREDITS["match"],
+            "max_screenshots_per_request": 5,
+            "max_photos_per_audit": 6,
+            "max_context_messages": 25,
+            "max_custom_hint_chars": 300,
+        },
+        "features": {
+            "voice_dna_enabled": False,
+            "custom_hints_enabled": True,
+            "include_coach_reasoning": True,
+            "advanced_languages_enabled": True,
+            "chemistry_tracking_enabled": True,
+            "allowed_ui_directions": [
+                ConversationDirection.OPENER.value,
+                ConversationDirection.QUICK_REPLY.value,
+                ConversationDirection.KEEP_PLAYFUL.value,
+                ConversationDirection.CHANGE_TOPIC.value,
+                ConversationDirection.TEASE.value,
+                ConversationDirection.REVIVE_CHAT.value,
+                ConversationDirection.DE_ESCALATE.value,
+            ],
+        },
+    },
+    "rizz": {
+        "limits": {
+            "daily_credits": 0,
+            "period_credits": BILLING_CREDITS["rizz"],
             "max_screenshots_per_request": 7,
-            "profile_audits_per_week": 10,
             "max_photos_per_audit": 10,
-            "profile_blueprints_per_week": 3,
             "max_context_messages": 40,
             "max_custom_hint_chars": 500,
         },

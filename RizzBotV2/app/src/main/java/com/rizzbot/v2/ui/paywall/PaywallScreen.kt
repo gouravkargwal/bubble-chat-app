@@ -179,7 +179,7 @@ fun PaywallScreen(
                         val selectedPackage = state.selectedPackage
                         if (selectedPackage != null && activity != null) {
                             val isUpgradeToPremium =
-                                state.activeTier == PaywallTier.Pro && state.selectedTier == PaywallTier.Premium
+                                state.activeTier == PaywallTier.Crush && state.selectedTier == PaywallTier.Rizz
                             val isCurrentTier = state.activeTier == state.selectedTier
                             Button(
                                 onClick = {
@@ -399,8 +399,9 @@ fun PaywallScreen(
                                 label = "packages"
                             ) { tier ->
                                 val packages = when (tier) {
-                                    PaywallTier.Pro -> state.proPackages
-                                    PaywallTier.Premium -> state.premiumPackages
+                                    PaywallTier.Crush -> state.crushPackages
+                                    PaywallTier.Match -> state.matchPackages
+                                    PaywallTier.Rizz -> state.rizzPackages
                                 }
                                 Column(
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -502,7 +503,7 @@ fun PaywallScreen(
 @Composable
 private fun CurrentPlanChip(tier: String) {
     val (label, container, border) = when (tier) {
-        "premium", "god_mode" -> Triple(
+        "premium", "rizz" -> Triple(
             "Your plan: Premium",
             Color(0xFF2A2418),
             Color(0xFFFFD700).copy(alpha = 0.35f)
@@ -600,16 +601,23 @@ private fun TierTabs(
                 .selectableGroup()
         ) {
             TabButton(
-                text = if (activeTier == PaywallTier.Pro) "Pro · current" else "Pro",
-                isSelected = selectedTier == PaywallTier.Pro,
-                onClick = { onTierSelected(PaywallTier.Pro) },
+                text = if (activeTier == PaywallTier.Crush) "Crush · current" else "Crush",
+                isSelected = selectedTier == PaywallTier.Crush,
+                onClick = { onTierSelected(PaywallTier.Crush) },
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.width(4.dp))
             TabButton(
-                text = if (activeTier == PaywallTier.Premium) "Premium · current" else "Premium",
-                isSelected = selectedTier == PaywallTier.Premium,
-                onClick = { onTierSelected(PaywallTier.Premium) },
+                text = if (activeTier == PaywallTier.Match) "Match · current" else "Match",
+                isSelected = selectedTier == PaywallTier.Match,
+                onClick = { onTierSelected(PaywallTier.Match) },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            TabButton(
+                text = if (activeTier == PaywallTier.Rizz) "Rizz · current" else "Rizz",
+                isSelected = selectedTier == PaywallTier.Rizz,
+                onClick = { onTierSelected(PaywallTier.Rizz) },
                 modifier = Modifier.weight(1f)
             )
         }

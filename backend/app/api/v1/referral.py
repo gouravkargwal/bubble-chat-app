@@ -17,12 +17,15 @@ from app.api.v1.schemas.schemas import (
 )
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Referral, User
+from app.services.quota_manager import QuotaManager
 
 router = APIRouter()
 logger = structlog.get_logger()
 
 MAX_REFERRALS = 10
 BONUS_PER_REFERRAL = 5
+REFERRAL_CREDITS_REFERRER = 10  # Credits granted to referrer per valid referral
+REFERRAL_CREDITS_REFEREE = 5   # Credits granted to new user on signup via referral
 
 
 def generate_referral_code(length: int = 8) -> str:
@@ -124,26 +127,20 @@ async def apply_referral(
             # Store device_id for future checks
             user.android_device_id = body.device_id
 
-    # 6. Grant 24 hours of premium ("God Mode") to both - stack time if already active
-    from datetime import datetime, timedelta, timezone
+    # 6. Grant referral credits to both users
+    from datetime import datetime, timezone
 
     user.referred_by = referrer.id
     now = datetime.now(timezone.utc)
 
-    # Stack time for referee (user applying the code)
-    if user.god_mode_expires_at and user.god_mode_expires_at > now:
-        user.god_mode_expires_at = user.god_mode_expires_at + timedelta(hours=24)
-    else:
-        user.god_mode_expires_at = now + timedelta(hours=24)
-
-    # Stack time for referrer (user who owns the code) - only if not fraud
     if should_grant_reward:
-        if referrer.god_mode_expires_at and referrer.god_mode_expires_at > now:
-            referrer.god_mode_expires_at = referrer.god_mode_expires_at + timedelta(
-                hours=24
-            )
-        else:
-            referrer.god_mode_expires_at = now + timedelta(hours=24)
+        qm = QuotaManager(db)
+        if referrer.google_provider_id:
+            referrer_quota = await qm._get_or_create_quota(referrer.google_provider_id, lock=True)
+            referrer_quota.credits_remaining += REFERRAL_CREDITS_REFERRER
+        if user.google_provider_id:
+            referee_quota = await qm._get_or_create_quota(user.google_provider_id, lock=True)
+            referee_quota.credits_remaining += REFERRAL_CREDITS_REFEREE
 
         referral = Referral(
             referrer_id=referrer.id,
@@ -173,27 +170,14 @@ async def apply_referral(
         "referral_applied",
         referee_id=user.id,
         referrer_id=referrer.id,
-        referee_god_mode_expires_at=(
-            int(user.god_mode_expires_at.timestamp())
-            if user.god_mode_expires_at
-            else None
-        ),
-        referrer_god_mode_expires_at=(
-            int(referrer.god_mode_expires_at.timestamp())
-            if referrer.god_mode_expires_at
-            else None
-        ),
-        duration_hours=24,
+        referee_credits_granted=REFERRAL_CREDITS_REFEREE if should_grant_reward else 0,
+        referrer_credits_granted=REFERRAL_CREDITS_REFERRER if should_grant_reward else 0,
         fraud_detected=not should_grant_reward,
         device_id=body.device_id,
     )
 
     return ApplyReferralResponse(
-        tier_granted="premium",
-        duration_hours=24,
-        expires_at=(
-            int(user.god_mode_expires_at.timestamp())
-            if user.god_mode_expires_at
-            else None
-        ),
+        tier_granted="credits",
+        duration_hours=0,
+        expires_at=None,
     )

@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import com.rizzbot.v2.R
@@ -97,11 +95,11 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { if (!isDeletingData) showDeleteAllDataDialog = false },
             title = { Text("Delete All My Data", color = Color.White) },
-            text = { 
+            text = {
                 Text(
                     "Are you sure? This will permanently wipe your chat history, roasts, and AI voice profile. This cannot be undone.",
                     color = Color.Gray
-                ) 
+                )
             },
             confirmButton = {
                 TextButton(
@@ -111,7 +109,6 @@ fun SettingsScreen(
                             onSuccess = {
                                 isDeletingData = false
                                 showDeleteAllDataDialog = false
-                                // Optionally sign out after deletion
                                 viewModel.signOut()
                             },
                             onError = { error ->
@@ -222,16 +219,14 @@ fun SettingsScreen(
                     HorizontalDivider(color = Color(0xFF252542), modifier = Modifier.padding(vertical = 12.dp))
 
                     // Plan info
-                    val godModeExpiresAt = state.godModeExpiresAt
-                    val isGodMode = godModeExpiresAt != null && godModeExpiresAt.isAfter(java.time.Instant.now())
-                    // Backend returns tier="premium" when God Mode is active (via get_effective_tier)
-                    // So we should show God Mode if either isGodMode is true OR tier is premium
-                    val effectiveTier = if (isGodMode || state.tier == "premium") "premium" else state.tier
+                    val isPaidPlan = state.tier == TierQuota.PLAN_CRUSH ||
+                        state.tier == TierQuota.PLAN_MATCH ||
+                        state.tier == TierQuota.PLAN_RIZZ
                     PlanStatusCard(
-                        tier = effectiveTier,
-                        isGodMode = isGodMode || state.tier == "premium",
-                        godModeExpiresAt = godModeExpiresAt,
-                        dailyLimit = state.dailyLimit,
+                        tier = state.tier,
+                        isPaidPlan = isPaidPlan,
+                        creditsRemaining = state.creditsRemaining,
+                        creditsPeriodLimit = state.creditsPeriodLimit,
                         billingPeriod = state.billingPeriod,
                         onUpgradeClick = onPremium,
                         onInviteClick = {
@@ -243,8 +238,8 @@ fun SettingsScreen(
                         }
                     )
 
-                    // Active perks for God Mode users
-                    if (state.tier == "premium" || state.tier == "god_mode") {
+                    // Active perks for paid users
+                    if (isPaidPlan) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF14142B)),
@@ -262,25 +257,12 @@ fun SettingsScreen(
                                     fontSize = 13.sp
                                 )
                                 Text(
-                                    text = when {
-                                        TierQuota.isUnlimited(state.dailyLimit) ->
-                                            "• Unlimited daily AI replies"
-                                        else ->
-                                            "• Up to ${state.dailyLimit} AI replies per ${TierQuota.billingPeriodNoun(state.billingPeriod)}"
-                                    },
+                                    "• ${state.creditsRemaining} credits remaining this ${TierQuota.billingPeriodNoun(state.billingPeriod)}",
                                     color = Color.Gray,
                                     fontSize = 12.sp
                                 )
-                                Text("• AI Voice Cloning", color = Color.Gray, fontSize = 12.sp)
                                 Text(
-                                    text = when {
-                                        TierQuota.isUnlimited(state.profileAuditsPerWeek) ->
-                                            "• Unlimited profile photo audits"
-                                        TierQuota.isNotOnPlan(state.profileAuditsPerWeek) ->
-                                            "• Profile photo audits not on this plan"
-                                        else ->
-                                            "• Up to ${state.profileAuditsPerWeek} profile photo audit(s) per week"
-                                    },
+                                    "• Audit costs ${TierQuota.CREDIT_COST_AUDIT} credits, Blueprint costs ${TierQuota.CREDIT_COST_BLUEPRINT} credits",
                                     color = Color.Gray,
                                     fontSize = 12.sp
                                 )
@@ -290,7 +272,7 @@ fun SettingsScreen(
 
                     // Usage Limits section
                     HorizontalDivider(color = Color(0xFF252542), modifier = Modifier.padding(vertical = 12.dp))
-                    
+
                     Text(
                         "Usage Limits",
                         color = Color.White,
@@ -298,15 +280,11 @@ fun SettingsScreen(
                         fontSize = 14.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     UsageLimitsDisplay(
-                        dailyLimit = state.dailyLimit,
-                        dailyUsed = state.dailyUsed,
+                        creditsRemaining = state.creditsRemaining,
+                        creditsPeriodLimit = state.creditsPeriodLimit,
                         billingPeriod = state.billingPeriod,
-                        weeklyAuditsLimit = state.profileAuditsPerWeek,
-                        weeklyAuditsUsed = state.weeklyAuditsUsed,
-                        weeklyBlueprintsLimit = state.profileBlueprintsPerWeek,
-                        weeklyBlueprintsUsed = state.weeklyBlueprintsUsed
                     )
                 }
             }
@@ -367,7 +345,7 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            "${referral.totalReferrals}/${referral.maxReferrals} friends invited  •  ${referral.bonusRepliesEarned} God Mode unlocks earned",
+                            "${referral.totalReferrals}/${referral.maxReferrals} friends invited  •  ${referral.bonusRepliesEarned} bonus credits earned",
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
@@ -430,9 +408,11 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                val isGodMode = state.tier == "premium" || state.tier == "god_mode"
-                if (isGodMode) {
-                    // Manage subscription entry point for God Mode users
+                val isPaidPlanReferralSection = state.tier == TierQuota.PLAN_CRUSH ||
+                    state.tier == TierQuota.PLAN_MATCH ||
+                    state.tier == TierQuota.PLAN_RIZZ
+                if (isPaidPlanReferralSection) {
+                    // Manage subscription entry point for paid users
                     Button(
                         onClick = {
                             val intent = Intent(
@@ -546,13 +526,9 @@ fun SettingsScreen(
 
 @Composable
 private fun UsageLimitsDisplay(
-    dailyLimit: Int,
-    dailyUsed: Int,
+    creditsRemaining: Int,
+    creditsPeriodLimit: Int,
     billingPeriod: String,
-    weeklyAuditsLimit: Int,
-    weeklyAuditsUsed: Int,
-    weeklyBlueprintsLimit: Int,
-    weeklyBlueprintsUsed: Int = 0
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -561,32 +537,28 @@ private fun UsageLimitsDisplay(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "Daily AI Replies",
+                "Credits Remaining",
                 color = Color.White,
                 fontSize = 14.sp
             )
             when {
-                TierQuota.isUnlimited(dailyLimit) -> Text(
-                    "Unlimited",
+                creditsPeriodLimit <= 0 -> Text(
+                    "$creditsRemaining credits",
                     color = Color(0xFF4CAF50),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                TierQuota.isNotOnPlan(dailyLimit) -> Text(
-                    "Not on your plan",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
                 else -> Text(
-                    "$dailyUsed of $dailyLimit used",
-                    color = Color.Gray,
+                    "$creditsRemaining of $creditsPeriodLimit",
+                    color = if (creditsRemaining == 0) Color(0xFFEF5350) else Color.Gray,
                     fontSize = 12.sp
                 )
             }
         }
 
-        if (TierQuota.isFinite(dailyLimit)) {
-            val progress = (dailyUsed.toFloat() / dailyLimit).coerceIn(0f, 1f)
+        if (creditsPeriodLimit > 0) {
+            val creditsUsed = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
+            val progress = (creditsUsed.toFloat() / creditsPeriodLimit).coerceIn(0f, 1f)
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
@@ -600,114 +572,8 @@ private fun UsageLimitsDisplay(
                 when (billingPeriod.lowercase()) {
                     "weekly" -> "Resets each billing week."
                     "monthly" -> "Resets each billing month."
-                    else -> "Resets every 24 hours."
+                    else -> "Resets each billing period."
                 },
-                color = Color.Gray,
-                fontSize = 11.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(color = Color(0xFF252542))
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Weekly Photo Audits",
-                color = Color.White,
-                fontSize = 14.sp
-            )
-            when {
-                TierQuota.isUnlimited(weeklyAuditsLimit) -> Text(
-                    "Unlimited",
-                    color = Color(0xFF4CAF50),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                TierQuota.isNotOnPlan(weeklyAuditsLimit) -> Text(
-                    "Not on your plan",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-                else -> Text(
-                    "$weeklyAuditsUsed of $weeklyAuditsLimit used",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-            }
-        }
-
-        if (TierQuota.isFinite(weeklyAuditsLimit)) {
-            val progress =
-                (weeklyAuditsUsed.toFloat() / weeklyAuditsLimit).coerceIn(0f, 1f)
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = if (progress >= 1f) Color(0xFFEF5350) else MaterialTheme.colorScheme.primary,
-                trackColor = Color(0xFF252542)
-            )
-            Text(
-                "Resets every Monday.",
-                color = Color.Gray,
-                fontSize = 11.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        HorizontalDivider(color = Color(0xFF252542))
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Weekly Profile Blueprints",
-                color = Color.White,
-                fontSize = 14.sp
-            )
-            when {
-                TierQuota.isUnlimited(weeklyBlueprintsLimit) -> Text(
-                    "Unlimited",
-                    color = Color(0xFF4CAF50),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                TierQuota.isNotOnPlan(weeklyBlueprintsLimit) -> Text(
-                    "Not on your plan",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-                else -> Text(
-                    "$weeklyBlueprintsUsed of $weeklyBlueprintsLimit used",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-            }
-        }
-
-        if (TierQuota.isFinite(weeklyBlueprintsLimit)) {
-            val progress =
-                (weeklyBlueprintsUsed.toFloat() / weeklyBlueprintsLimit).coerceIn(0f, 1f)
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = if (progress >= 1f) Color(0xFFEF5350) else MaterialTheme.colorScheme.primary,
-                trackColor = Color(0xFF252542)
-            )
-            Text(
-                "Resets every Monday.",
                 color = Color.Gray,
                 fontSize = 11.sp
             )
@@ -718,39 +584,25 @@ private fun UsageLimitsDisplay(
 @Composable
 private fun PlanStatusCard(
     tier: String,
-    isGodMode: Boolean,
-    godModeExpiresAt: java.time.Instant?,
-    dailyLimit: Int,
+    isPaidPlan: Boolean,
+    creditsRemaining: Int,
+    creditsPeriodLimit: Int,
     billingPeriod: String,
     onUpgradeClick: () -> Unit,
     onInviteClick: () -> Unit
 ) {
-    // Live timer state for God Mode countdown
-    var currentTime by remember { mutableStateOf(java.time.Instant.now()) }
-    
-    // Update timer every second when in God Mode
-    LaunchedEffect(godModeExpiresAt) {
-        if (isGodMode && godModeExpiresAt != null) {
-            while (true) {
-                delay(1000L)
-                currentTime = java.time.Instant.now()
-            }
-        }
-    }
-    
-    // Determine card styling based on tier
-    val cardBackground = if (isGodMode || tier == "premium") {
-        Color(0xFF221A22) // Subtle pink tint — gold is reserved for locked / upgrade CTAs
+    val cardBackground = if (isPaidPlan) {
+        Color(0xFF221A22)
     } else {
         Color(0xFF1A1A2E)
     }
 
-    val cardBorder = if (isGodMode || tier == "premium") {
+    val cardBorder = if (isPaidPlan) {
         BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))
     } else {
         null
     }
-    
+
     Card(
         colors = CardDefaults.cardColors(containerColor = cardBackground),
         shape = RoundedCornerShape(16.dp),
@@ -772,55 +624,39 @@ private fun PlanStatusCard(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    when {
-                        // Check God Mode first - either isGodMode is true OR tier is premium (from backend effective tier)
-                        isGodMode || tier == "premium" -> {
+                    when (tier) {
+                        TierQuota.PLAN_RIZZ -> {
                             Text(
-                                "GOD MODE ACTIVE",
+                                "Rizz Plan Active",
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
                             )
-                            godModeExpiresAt?.let { expiresAt ->
-                                val duration = java.time.Duration.between(currentTime, expiresAt)
-                                if (duration.isNegative || duration.isZero) {
-                                    Text(
-                                        "Expired",
-                                        color = Color.Gray,
-                                        fontSize = 12.sp
-                                    )
-                                } else {
-                                    val hoursRemaining = duration.toHours()
-                                    val minutesRemaining = duration.toMinutes() % 60
-                                    val secondsRemaining = duration.seconds % 60
-                                    Text(
-                                        "Expires in ${hoursRemaining}h ${minutesRemaining}m ${secondsRemaining}s",
-                                        color = Color.Gray,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            } ?: run {
-                                Text(
-                                    "Full tier perks — see Usage Limits below for your live quotas.",
-                                    color = Color.Gray,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                        tier == "pro" -> {
                             Text(
-                                "Pro Wingman Active",
-                                color = Color(0xFF7C4DFF),
+                                "$creditsRemaining credits remaining this ${TierQuota.billingPeriodNoun(billingPeriod)}.",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
+                        TierQuota.PLAN_MATCH -> {
+                            Text(
+                                "Match Plan Active ⭐",
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                when {
-                                    TierQuota.isUnlimited(dailyLimit) ->
-                                        "Expanded vibes and tools. Unlimited replies on your plan."
-                                    TierQuota.isFinite(dailyLimit) ->
-                                        "Higher reply caps than Free — up to $dailyLimit AI replies per ${TierQuota.billingPeriodNoun(billingPeriod)}."
-                                    else ->
-                                        "Expanded tools — quotas in Usage Limits below."
-                                },
+                                "$creditsRemaining credits remaining this ${TierQuota.billingPeriodNoun(billingPeriod)}.",
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
+                        TierQuota.PLAN_CRUSH -> {
+                            Text(
+                                "Crush Plan Active",
+                                color = Color(0xFFB388FF),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "$creditsRemaining credits remaining this ${TierQuota.billingPeriodNoun(billingPeriod)}.",
                                 color = Color.Gray,
                                 fontSize = 12.sp
                             )
@@ -832,14 +668,7 @@ private fun PlanStatusCard(
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                when {
-                                    TierQuota.isFinite(dailyLimit) ->
-                                        "Up to $dailyLimit AI replies per ${TierQuota.billingPeriodNoun(billingPeriod)}."
-                                    TierQuota.isUnlimited(dailyLimit) ->
-                                        "Plan includes unlimited daily replies."
-                                    else ->
-                                        "Standard access — see Usage Limits for quotas."
-                                },
+                                "Upgrade to get credits for AI replies, photo audits, and profile blueprints.",
                                 color = Color.Gray,
                                 fontSize = 12.sp
                             )
@@ -848,35 +677,20 @@ private fun PlanStatusCard(
                 }
             }
 
-            // Upgrade Button (only show if not in God Mode)
-            when {
-                isGodMode || tier == "premium" -> {
-                    // No upgrade button when in God Mode
-                }
-                tier == "pro" -> {
-                    Button(
-                        onClick = onUpgradeClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = LockedFeatureGold),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Upgrade Plan", fontSize = 13.sp, color = Color.Black, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                else -> {
-                    Button(
-                        onClick = onUpgradeClick,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = LockedFeatureGold),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            "Upgrade Plan",
-                            fontSize = 13.sp,
-                            color = Color.Black,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+            // Upgrade Button (only show if not on top tier)
+            if (tier != TierQuota.PLAN_RIZZ) {
+                Button(
+                    onClick = onUpgradeClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = LockedFeatureGold),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        if (isPaidPlan) "Upgrade Plan" else "Compare Plans & Upgrade",
+                        fontSize = 13.sp,
+                        color = Color.Black,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 
@@ -885,7 +699,7 @@ private fun PlanStatusCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    "Invite friends — earn God Mode",
+                    "Invite friends — earn bonus credits",
                     color = Color(0xFF9E9EAE),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium

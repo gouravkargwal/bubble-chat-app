@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.domain.model.UserPreferences
 import com.rizzbot.v2.domain.repository.HostedRepository
-import com.rizzbot.v2.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -17,6 +16,8 @@ data class StatsState(
     val preferences: UserPreferences = UserPreferences(),
     val tier: String = "free",
 )
+// Note: totalGenerated/totalCopied are now derived from local history (getHistory), not from
+// usage.totalRepliesGenerated / usage.totalRepliesCopied which no longer exist in UsageState.
 
 @HiltViewModel
 class StatsViewModel @Inject constructor(
@@ -30,36 +31,39 @@ class StatsViewModel @Inject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     init {
-        // Collect stats from backend usage state
+        // Collect tier from backend usage state
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
                 _state.update {
-                    it.copy(
-                        totalGenerated = usage.totalRepliesGenerated,
-                        totalCopied = usage.totalRepliesCopied,
-                        tier = usage.tier
-                    )
+                    it.copy(tier = usage.tier)
                 }
             }
         }
-        
+
         // Refresh both usage and preferences on init (use cache if available)
         viewModelScope.launch {
             hostedRepository.refreshUsage(force = false)
         }
-        
+
         viewModelScope.launch {
             refreshPreferences()
         }
 
-        // Pull recent interactions to estimate "conversations influenced"
+        // Pull recent interactions to derive totalGenerated, totalCopied, and conversationsInfluenced
         viewModelScope.launch {
             val history = hostedRepository.getHistory(limit = 200, offset = 0)
             val conversations = history
                 .mapNotNull { it.personName ?: it.id }
                 .distinct()
                 .size
-            _state.update { it.copy(totalConversationsInfluenced = conversations) }
+            val copied = history.count { it.copiedIndex != null }
+            _state.update {
+                it.copy(
+                    totalGenerated = history.size,
+                    totalCopied = copied,
+                    totalConversationsInfluenced = conversations
+                )
+            }
         }
     }
 
@@ -74,7 +78,14 @@ class StatsViewModel @Inject constructor(
                     .mapNotNull { it.personName ?: it.id }
                     .distinct()
                     .size
-                _state.update { it.copy(totalConversationsInfluenced = conversations) }
+                val copied = history.count { it.copiedIndex != null }
+                _state.update {
+                    it.copy(
+                        totalGenerated = history.size,
+                        totalCopied = copied,
+                        totalConversationsInfluenced = conversations
+                    )
+                }
             } finally {
                 _isRefreshing.value = false
             }

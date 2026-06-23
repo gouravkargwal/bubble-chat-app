@@ -13,21 +13,15 @@ from app.api.v1.schemas.schemas import (
     VerifyPurchaseRequest,
     VerifyPurchaseResponse,
 )
+from app.core.tier_config import BILLING_CREDITS, BILLING_PERIOD_DAYS
 from app.domain.tiers import PRODUCT_TIER_MAP, get_effective_tier
 from app.infrastructure.billing.google_play import get_play_client
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Purchase, User
+from app.services.quota_manager import QuotaManager
 
 router = APIRouter()
 logger = structlog.get_logger()
-
-# Maps Google Play product IDs to premium tier
-PREMIUM_PRODUCTS = {
-    "cookd_premium_weekly",
-    "cookd_premium_monthly",
-    "cookd_pro_weekly",
-    "cookd_pro_monthly",
-}
 
 
 @router.post("/billing/verify", response_model=VerifyPurchaseResponse)
@@ -37,7 +31,7 @@ async def verify_purchase(
     db: AsyncSession = Depends(get_db),
 ) -> VerifyPurchaseResponse:
     """Verify a Google Play purchase and activate premium."""
-    if body.product_id not in PREMIUM_PRODUCTS:
+    if body.product_id not in PRODUCT_TIER_MAP:
         raise HTTPException(status_code=400, detail="Unknown product ID.")
 
     # Check if already verified
@@ -77,9 +71,11 @@ async def verify_purchase(
         if expiry_str:
             expires_at = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
 
-    auto_renewing = line_items[0].get("autoRenewingPlan", {}).get(
-        "autoRenewEnabled", False
-    ) if line_items else False
+    auto_renewing = (
+        line_items[0].get("autoRenewingPlan", {}).get("autoRenewEnabled", False)
+        if line_items
+        else False
+    )
 
     # Save purchase record
     purchase = Purchase(
@@ -94,11 +90,21 @@ async def verify_purchase(
     db.add(purchase)
 
     # Activate tier from purchase
-    tier = PRODUCT_TIER_MAP.get(body.product_id, "premium")
+    tier = PRODUCT_TIER_MAP.get(body.product_id, "crush")
     user.tier = tier
     user.tier_expires_at = expires_at
     user.tier_source = "purchase"
     await db.commit()
+
+    # Grant period credits for this purchase.
+    if user.google_provider_id:
+        credits = BILLING_CREDITS.get(tier, 60)
+        period_days = BILLING_PERIOD_DAYS.get(tier, 7)
+        await QuotaManager(db).grant_period_credits(
+            user.google_provider_id,
+            credits=credits,
+            period_days=period_days,
+        )
 
     # Acknowledge the purchase — retry once on failure
     for attempt in range(2):
@@ -114,6 +120,7 @@ async def verify_purchase(
             )
             if attempt == 0:
                 import asyncio
+
                 await asyncio.sleep(1)
 
     logger.info(
@@ -150,6 +157,10 @@ async def billing_status(
         is_premium=effective_tier != "free",
         tier=effective_tier,
         product_id=purchase.product_id if purchase else None,
-        expires_at=int(purchase.expires_at.timestamp()) if purchase and purchase.expires_at else None,
+        expires_at=(
+            int(purchase.expires_at.timestamp())
+            if purchase and purchase.expires_at
+            else None
+        ),
         auto_renewing=purchase.auto_renewing if purchase else False,
     )
