@@ -307,6 +307,19 @@ class ConversationMemory(Base):
     )
     fact_text: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
+    # Importance scoring for RAG retrieval prioritization (1-5 scale)
+    # 5 = critical identity facts (marriage, religion, location)
+    # 4 = important preferences (diet, job, kids)
+    # 3 = opinions/goals
+    # 2 = general facts (default)
+    # 1 = minor details
+    importance_score: Mapped[int | None] = mapped_column(
+        Integer, default=2, nullable=True
+    )
+    # Categorization: identity, preference, opinion, factual, preference
+    fact_category: Mapped[str | None] = mapped_column(
+        String(50), default="factual", nullable=True
+    )
     superseded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

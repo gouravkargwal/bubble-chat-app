@@ -162,7 +162,8 @@ def generator_node(state: AgentState) -> dict:
     if (
         stable_archetype
         and archetype_confidence >= 0.6
-        and str(stable_archetype).strip().upper() != str(detected_archetype).strip().upper()
+        and str(stable_archetype).strip().upper()
+        != str(detected_archetype).strip().upper()
     ):
         logger.info(
             "archetype_stabilized_override",
@@ -171,8 +172,6 @@ def generator_node(state: AgentState) -> dict:
             confidence=archetype_confidence,
         )
         detected_archetype = str(stable_archetype)
-
-
 
     payload: dict[str, Any] = {
         "analysis": analysis.model_dump(),
@@ -328,18 +327,28 @@ def generator_node(state: AgentState) -> dict:
                     primary_provider="gemini",
                     primary_model=gen_model,
                     primary_replies=[
-                        {"text": r.text, "strategy_label": r.strategy_label, "is_recommended": r.is_recommended}
+                        {
+                            "text": r.text,
+                            "strategy_label": r.strategy_label,
+                            "is_recommended": r.is_recommended,
+                        }
                         for r in gen_out.replies
                     ],
                     shadow_provider="groq",
                     shadow_model=settings.groq_model,
                     shadow_replies=[
-                        {"text": r.text, "strategy_label": r.strategy_label, "is_recommended": r.is_recommended}
+                        {
+                            "text": r.text,
+                            "strategy_label": r.strategy_label,
+                            "is_recommended": r.is_recommended,
+                        }
                         for r in shadow_out.replies
                     ],
                 )
             except Exception:
-                logger.warning("v2_generator_ab_shadow_failed", trace_id=trace_id, exc_info=True)
+                logger.warning(
+                    "v2_generator_ab_shadow_failed", trace_id=trace_id, exc_info=True
+                )
 
         logger.info(
             "generator_node_llm_result",

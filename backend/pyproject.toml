@@ -25,6 +25,7 @@ dependencies = [
     "pgvector>=0.2",
     "oci>=2.0",
     "pillow>=10.0",  # backend image downscaling before vision (cut Gemini image tokens)
+    "flashrank>=0.2",  # CPU-only cross-encoder reranker for RAG (no GPU needed)
 ]
 
 [project.optional-dependencies]

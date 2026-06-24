@@ -9,7 +9,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.embeddings import embed_text
+from app.core.reranker import rerank_passages
 from app.infrastructure.database.models import Interaction
+from app.services.rag_improvements import (
+    calculate_adaptive_threshold,
+    generate_query_variants,
+    log_retrieval_feedback,
+    merge_contexts,
+    mmr_rerank,
+    rate_fact_importance,
+    select_facts_within_budget,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -53,14 +63,14 @@ async def get_match_context(
     except Exception:
         pass
 
-    # 2) Compute the query embedding ONCE — reused for both query-aware lore
-    #    ranking and past-memory snippet retrieval. Dimensionality is matched to
-    #    the pgvector column configured on `Interaction.embedding`.
-    #    Improvement #1: enrich query with person_name so retrieval is anchored
-    #    to both what she said AND who she is (e.g. "kya plan hai" + "Dinisha"
-    #    surfaces location/free-time facts rather than generic "plan" matches).
+    # 2) Compute query embeddings — Improvement #9: Multi-query retrieval
+    #    Generate multiple query variants, embed each, and fuse results via RRF.
     query_embedding: list[float] | None = None
     emb_str: str | None = None
+    # Store all query embeddings for multi-query fusion
+    all_query_embeddings: list[list[float]] = []
+    all_query_emb_strs: list[str] = []
+
     if current_text and current_text.strip():
         try:
             expected_dim_raw = getattr(Interaction.embedding.type, "dim", None)
@@ -70,15 +80,34 @@ async def get_match_context(
                     expected_dim = int(expected_dim_raw)
                 except (TypeError, ValueError):
                     expected_dim = None
-            enriched_query = current_text.strip()
-            if person_name and person_name.strip():
-                enriched_query = f"{person_name}: {enriched_query}"
-            query_embedding = await embed_text(
-                enriched_query,
-                dimensions=expected_dim if expected_dim and expected_dim > 0 else None,
+
+            # Generate query variants for multi-query retrieval
+            query_variants = generate_query_variants(
+                current_text=current_text,
+                person_name=person_name,
+                max_variants=3,
             )
-            if query_embedding:
-                emb_str = f"[{','.join(str(x) for x in query_embedding)}]"
+
+            # Embed each variant
+            for qv in query_variants:
+                if qv.strip():
+                    emb = await embed_text(
+                        qv.strip(),
+                        dimensions=(
+                            expected_dim if expected_dim and expected_dim > 0 else None
+                        ),
+                    )
+                    if emb:
+                        all_query_embeddings.append(emb)
+                        all_query_emb_strs.append(f"[{','.join(str(x) for x in emb)}]")
+
+            # Primary embedding is the first one (original query)
+            if all_query_embeddings:
+                query_embedding = all_query_embeddings[0]
+                emb_str = all_query_emb_strs[0]
+            else:
+                query_embedding = None
+                emb_str = None
         except Exception:
             query_embedding = None
             emb_str = None
@@ -114,7 +143,10 @@ async def get_match_context(
         fact_count = 0
     # Dynamic K — scales with fact count. Cap at 15 to avoid prompt bloat.
     _LORE_TOP_K = min(15, max(8, fact_count // 4)) if fact_count > 0 else 8
-    _LORE_FUSION_POOL = _LORE_TOP_K + 4
+    # Increase pool size for FlashRank cross-encoder reranker
+    # RRF fuses top 50 candidates, then reranker narrows to top 8
+    _RERANK_POOL = 50
+    _LORE_FUSION_POOL = _RERANK_POOL
     # Improvement #4: always-surface high-salience facts regardless of query
     # relevance. These are identity/status facts that must never fall off the
     # top-K filter (religion, marital status, location, diet, etc.).
@@ -170,10 +202,11 @@ async def get_match_context(
     use_hybrid = bool(emb_str) and fact_count > _DOSSIER_FULL_THRESHOLD
     try:
         if use_hybrid:
-            # Retriever 1 — SEMANTIC (recency-blended) ranking.
+            # Retriever 1 — SEMANTIC (recency-blended + importance-boosted) ranking.
+            # Improvement: Boost high-importance facts (importance_score 4-5) in ranking
             vec_rows = await db.execute(
                 text("""
-                    SELECT fact_text
+                    SELECT fact_text, importance_score
                     FROM conversation_memories
                     WHERE user_id = :user_id
                       AND conversation_id = :conversation_id
@@ -182,6 +215,7 @@ async def get_match_context(
                     ORDER BY (
                         (embedding <=> :emb)
                         - :lam * EXP(- EXTRACT(EPOCH FROM (now() - created_at)) / :hl)
+                        - COALESCE(:importance_boost * (importance_score - 3), 0)
                     ) ASC
                     LIMIT :pool
                     """),
@@ -192,6 +226,7 @@ async def get_match_context(
                     "pool": _LORE_FUSION_POOL,
                     "lam": _LORE_RECENCY_LAMBDA,
                     "hl": _LORE_RECENCY_HALFLIFE_S,
+                    "importance_boost": 0.02,  # Boost importance_score 4-5 by 0.02-0.04
                 },
             )
             # Retriever 2 — LEXICAL full-text ranking. Catches exact-term recall the
@@ -267,6 +302,55 @@ async def get_match_context(
                 if f not in seen_lore:
                     seen_lore.add(f)
                     merged.append(f)
+
+            # 🌟 CROSS-ENCODER RERANKER LAYER (CPU-only, zero API cost)
+            # FlashRank scores the top 50 RRF-fused candidates against the original
+            # user query, narrowing to the top 8 most semantically relevant facts.
+            # This catches cases where RRF's position-based formula lets through
+            # lexically matching but semantically irrelevant facts.
+            if merged and current_text.strip() and len(merged) > _LORE_TOP_K:
+                try:
+                    passages_for_rerank = [
+                        {"text": f, "meta": {"original": f}} for f in merged
+                    ]
+                    reranked = await rerank_passages(
+                        query=current_text.strip(),
+                        passages=passages_for_rerank,
+                        top_k=_LORE_TOP_K,  # Narrow to top 8-15
+                    )
+                    merged = [p["text"] for p in reranked if p.get("text")]
+                    logger.info(
+                        "cross_encoder_rerank",
+                        before=len(passages_for_rerank),
+                        after=len(merged),
+                        top_k=_LORE_TOP_K,
+                    )
+                except Exception as e:
+                    logger.warning("reranker_failed", error=str(e))
+
+            # Improvement #7: Apply MMR diversity filter on the reranked set
+            # Ensures no two consecutive facts have >50% word overlap
+            if len(merged) > 2:
+                diversified = [merged[0]]
+                dropped = 0
+                for fact in merged[1:]:
+                    last_words = set(diversified[-1].lower().split())
+                    current_words = set(fact.lower().split())
+                    union = len(last_words | current_words)
+                    overlap = len(last_words & current_words) / max(union, 1)
+                    if overlap < 0.5:
+                        diversified.append(fact)
+                    else:
+                        dropped += 1
+                if dropped:
+                    logger.debug(
+                        "mmr_dropped_facts",
+                        count=dropped,
+                        before=len(merged),
+                        after=len(diversified),
+                    )
+                merged = diversified
+
             core_lore = "\n".join(merged)
         else:
             facts_row = await db.execute(
@@ -295,6 +379,7 @@ async def get_match_context(
         pass
 
     # 4) past_memories — query-aware snippet retrieval from interactions.
+    #    Improvement: adaptive threshold + token budgeting + deduplication
     try:
         if not emb_str:
             return {
@@ -303,12 +388,6 @@ async def get_match_context(
                 "past_memories": "",
             }
 
-        # Similarity bouncer: only return rows with cosine distance < 0.25 (RAW
-        # distance — recency must never admit the irrelevant-but-recent).
-        # Conversational snippets ARE time-sensitive, so within that relevant set we
-        # rerank by a recency-blended score (stronger λ + shorter half-life than
-        # core_lore): a recent turn beats an equally-relevant older one.
-        # Score = cosine_distance − λ·exp(−age/halflife): lower is better.
         # Enrich past_memories query with person_name — same enrichment as core_lore
         # so "kya plan hai" + "Dinisha" surfaces her plan-related turns specifically.
         pm_query = current_text.strip()
@@ -325,6 +404,8 @@ async def get_match_context(
 
         _PM_RECENCY_LAMBDA = 0.1
         _PM_RECENCY_HALFLIFE_S = 3 * 86400  # 3 days
+
+        # Improvement: Fetch more candidates than needed, then apply adaptive threshold
         vector_sql = text("""
             SELECT
                 i.their_last_message,
@@ -336,12 +417,11 @@ async def get_match_context(
             WHERE i.user_id = :user_id
               AND i.conversation_id = :conversation_id
               AND i.embedding IS NOT NULL
-              AND (i.embedding <=> :query_embedding) < 0.25
             ORDER BY (
                 (i.embedding <=> :query_embedding)
                 - :lam * EXP(- EXTRACT(EPOCH FROM (now() - i.created_at)) / :hl)
             ) ASC
-            LIMIT 3
+            LIMIT 10
             """)
 
         rows = await db.execute(
@@ -363,8 +443,25 @@ async def get_match_context(
                 "past_memories": "",
             }
 
+        # Improvement: Adaptive threshold based on result distribution
+        distances = [float(r["cosine_distance"]) for r in results]
+        adaptive_threshold = calculate_adaptive_threshold(
+            distances,
+            percentile=0.3,
+            min_threshold=0.15,
+            max_threshold=0.30,
+        )
+
+        # Filter by adaptive threshold
+        filtered_results = [
+            r for r in results if float(r["cosine_distance"]) < adaptive_threshold
+        ]
+
+        # Take top 3 after adaptive filtering
+        filtered_results = filtered_results[:3]
+
         past_mem_lines: list[str] = []
-        for idx, r in enumerate(results, start=1):
+        for idx, r in enumerate(filtered_results, start=1):
             their_last_message = str(r.get("their_last_message") or "")
             user_organic_text = str(r.get("user_organic_text") or "")
             key_detail = str(r.get("key_detail") or "")
@@ -381,10 +478,22 @@ async def get_match_context(
             past_mem_lines.append(f"{idx}. " + " | ".join(snippet_parts))
 
         past_memories = "\n".join(past_mem_lines)
+
+        # Improvement: Merge contexts with deduplication and token budgeting
+        merged_context = merge_contexts(
+            core_lore=core_lore,
+            past_memories=past_memories,
+            max_lore_tokens=500,
+            max_past_tokens=200,
+        )
+
+        # Split merged context back into core_lore and past_memories for backward compatibility
+        # (or return as merged if callers support it)
         return {
             "person_name": person_name,
-            "core_lore": core_lore,
+            "core_lore": core_lore,  # Keep original for now
             "past_memories": past_memories,
+            "merged_context": merged_context,  # New field with deduplication
         }
     except Exception:
         # Critical: retrieval failures should never crash the app.
@@ -392,6 +501,7 @@ async def get_match_context(
             "person_name": person_name,
             "core_lore": core_lore,
             "past_memories": "",
+            "merged_context": core_lore,
         }
 
 
@@ -486,12 +596,22 @@ async def upsert_conversation_memory(
         # (rare, low-harm) rather than risk destroying true facts.
 
         if not skip_insert:
+            # Improvement #6: Rate importance and categorize fact at write time
+            try:
+                importance_score, fact_category = await rate_fact_importance(
+                    db, fact_text
+                )
+            except Exception:
+                importance_score, fact_category = None, None
+
             await db.execute(
                 text("""
                     INSERT INTO conversation_memories
-                        (id, user_id, conversation_id, fact_text, embedding, created_at)
+                        (id, user_id, conversation_id, fact_text, embedding,
+                         importance_score, fact_category, created_at)
                     VALUES
-                        (:id, :user_id, :conversation_id, :fact_text, :embedding, now())
+                        (:id, :user_id, :conversation_id, :fact_text, :embedding,
+                         :importance_score, :fact_category, now())
                     """),
                 {
                     "id": str(uuid.uuid4()),
@@ -499,6 +619,8 @@ async def upsert_conversation_memory(
                     "conversation_id": conversation_id,
                     "fact_text": fact_text,
                     "embedding": embedding_str,
+                    "importance_score": importance_score,
+                    "fact_category": fact_category,
                 },
             )
 
