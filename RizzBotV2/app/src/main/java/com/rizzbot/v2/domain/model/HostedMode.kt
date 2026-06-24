@@ -6,7 +6,7 @@ data class UsageState(
     val creditsPeriodLimit: Int = 0,
     val billingPeriod: String = "monthly",
     val tierExpiresAt: Long? = null,
-    val allowedDirections: List<String> = listOf("opener", "quick_reply"),
+    val allowedDirections: List<String> = listOf("opener", "quick_reply", "keep_playful", "revive_chat"),
     val customHintsEnabled: Boolean = false,
     val maxScreenshots: Int = 2,
     val maxPhotosPerAudit: Int = 3,

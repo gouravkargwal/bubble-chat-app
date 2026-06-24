@@ -2,24 +2,34 @@ package com.rizzbot.v2.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Pink = Color(0xFFE91E63)
-val PinkDark = Color(0xFFC2185B)
-val Purple = Color(0xFF9C27B0)
-val DarkBg = Color(0xFF0F0F1A)
-val CardBg = Color(0xFF1A1A2E)
-val CardBgLight = Color(0xFF252542)
-val Success = Color(0xFF4CAF50)
-val ErrorRed = Color(0xFFEF5350)
-val TextWhite = Color(0xFFFFFFFF)
-val TextGray = Color(0xFFB0B0B0)
+// ── Nothing OS / Teenage Engineering-inspired palette ──
+// Strict dark mode: pitch black background, pure white text.
+// Exactly one accent color (vibrant neon red) used strictly for the primary 'Generate' action.
+// No drop shadows. Hard, crisp 1dp borders. Monospaced labels. Bold geometric titles.
 
-/**
- * Gold for **locked / paywalled** affordances and the **God Mode** app theme primary accent.
- */
-val LockedFeatureGold = Color(0xFFFFD700)
-val LockedFeatureGoldMuted = LockedFeatureGold.copy(alpha = 0.15f)
+/** Pitch black background — no compromises. */
+val NothingBlack = Color(0xFF000000)
 
-val PaidPlanPrimary = LockedFeatureGold
-val PaidPlanPrimaryLight = Color(0xFFFFEC73)
-val PaidPlanPrimaryDark = Color(0xFFB8860B)
-val PaidPlanSecondary = Color(0xFFFFAB00)
+/** Pure white for all primary text. */
+val NothingWhite = Color(0xFFFFFFFF)
+
+/** Vibrant neon red — the *only* accent color, reserved for the primary Generate CTA. */
+val NeonRed = Color(0xFFFF003C)
+
+/** Near-black surface for cards and elevated elements (subtle distinction from pitch black). */
+val NothingSurface = Color(0xFF050505)
+
+/** Subtle border color (10% white) for card outlines. */
+val NothingBorder = Color(0x1AFFFFFF)
+
+/** Muted secondary text (45% white) for labels and metadata. */
+val NothingTextSecondary = Color(0x73FFFFFF)
+
+/** Tertiary/muted metadata text (30% white). */
+val NothingTextTertiary = Color(0x4DFFFFFF)
+
+/** Success green — kept minimal, used only for passing badges. */
+val NothingSuccess = Color(0xFF00FF66)
+
+/** Error/delete red — distinct from neon accent. */
+val NothingError = Color(0xFFFF3355)

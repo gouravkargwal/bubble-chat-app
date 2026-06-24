@@ -1,11 +1,11 @@
 package com.rizzbot.v2.ui.profile
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,23 +54,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-private val BgColor = Color(0xFF050510)
-private val CardColor = Color(0xFF0D0D22)
-private val TextPrimary = Color.White
-private val TextSecondary = Color(0xFFB0B0D0)
-private val TextMuted = Color(0xFF606080)
-private val HingeColor = Color(0xFFFF6B6B)
-private val AisleColor = Color(0xFF6BDDFF)
-
-private fun formatBlueprintDateLine(createdAt: String): String {
-    val t = createdAt.trim()
-    if (t.length >= 10 && t[4] == '-' && t[7] == '-') return t.take(10)
-    return try {
-        java.time.Instant.parse(t).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
-    } catch (_: Exception) {
-        t.take(16).ifEmpty { "—" }
-    }
-}
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingError
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,397 +71,88 @@ fun ProfileStrategyScreen(
 ) {
     val historyState by viewModel.historyState.collectAsState()
     val clipboard = LocalClipboardManager.current
-
-    // null = list view; non-null = detail view for that blueprint
     var detailBlueprint by remember { mutableStateOf<ProfileBlueprint?>(null) }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadHistory()
-    }
+    LaunchedEffect(Unit) { viewModel.loadHistory() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = if (detailBlueprint != null) "Blueprint detail" else "Profile blueprints",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
-                        )
-                        if (detailBlueprint == null) {
-                            Text(
-                                text = "From Auto-Build Profile",
-                                color = TextMuted,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Normal
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (detailBlueprint != null) detailBlueprint = null else onBack()
-                    }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = TextPrimary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BgColor,
-                    titleContentColor = TextPrimary
-                )
+                title = { Column {
+                    Text(if (detailBlueprint != null) "Blueprint detail" else "Profile blueprints", fontWeight = FontWeight.SemiBold, color = NothingWhite)
+                    if (detailBlueprint == null) Text("From Auto-Build Profile", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
+                } },
+                navigationIcon = { IconButton(onClick = { if (detailBlueprint != null) detailBlueprint = null else onBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = NothingWhite) } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = NothingBlack, titleContentColor = NothingWhite)
             )
         },
-        containerColor = BgColor
+        containerColor = NothingBlack
     ) { padding ->
         val currentDetail = detailBlueprint
         if (currentDetail != null) {
-            BlueprintDetailView(
-                blueprint = currentDetail,
-                modifier = Modifier.padding(padding),
-                onCopy = { text -> clipboard.setText(AnnotatedString(text)) }
-            )
+            BlueprintDetailView(blueprint = currentDetail, modifier = Modifier.padding(padding), onCopy = { text -> clipboard.setText(AnnotatedString(text)) })
         } else {
-            BlueprintHistoryListView(
-                historyState = historyState,
-                modifier = Modifier.padding(padding),
-                onBlueprintClick = { blueprint -> detailBlueprint = blueprint },
-                onRetry = { viewModel.loadHistory() }
-            )
+            BlueprintHistoryListView(historyState = historyState, modifier = Modifier.padding(padding), onBlueprintClick = { detailBlueprint = it }, onRetry = { viewModel.loadHistory() })
         }
     }
 }
 
 @Composable
-private fun BlueprintHistoryListView(
-    historyState: BlueprintHistoryState,
-    modifier: Modifier = Modifier,
-    onBlueprintClick: (ProfileBlueprint) -> Unit,
-    onRetry: () -> Unit,
-) {
+private fun BlueprintHistoryListView(historyState: BlueprintHistoryState, modifier: Modifier = Modifier, onBlueprintClick: (ProfileBlueprint) -> Unit, onRetry: () -> Unit) {
     when (historyState) {
-        is BlueprintHistoryState.Idle, is BlueprintHistoryState.Loading -> {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Loading blueprints…", color = TextSecondary, fontSize = 14.sp)
-            }
-        }
-
+        is BlueprintHistoryState.Idle, is BlueprintHistoryState.Loading -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Loading\u2026", color = NothingTextSecondary, style = MaterialTheme.typography.bodyMedium) }
         is BlueprintHistoryState.Success -> {
             if (historyState.blueprints.isEmpty()) {
-                Box(
-                    modifier = modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "No blueprints yet.\nOpen Auto-Build Profile from Home to generate one.",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
-                }
+                Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No blueprints yet.", color = NothingTextSecondary, style = MaterialTheme.typography.bodyMedium) }
             } else {
-                LazyColumn(
-                    modifier = modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(
-                        items = historyState.blueprints.sortedByDescending { it.createdAt },
-                        key = { it.id }
-                    ) { blueprint ->
-                        val index = historyState.blueprints
-                            .sortedByDescending { it.createdAt }
-                            .indexOf(blueprint)
-                        BlueprintListCard(
-                            label = "Blueprint ${index + 1}",
-                            blueprint = blueprint,
-                            onClick = { onBlueprintClick(blueprint) }
-                        )
+                LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(NothingDimens.screenPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+                    items(items = historyState.blueprints.sortedByDescending { it.createdAt }, key = { it.id }) { blueprint ->
+                        Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth().clickable { onBlueprintClick(blueprint) }) {
+                            Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
+                                Text(blueprint.overallTheme, color = NothingWhite, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Spacer(modifier = Modifier.height(NothingDimens.textGap))
+                                Text("${blueprint.slots.size} photos", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
             }
         }
-
         is BlueprintHistoryState.Error -> {
-            Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(historyState.message, color = Color(0xFFFF6B6B), fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
-                ) {
-                    Text("Try again", fontWeight = FontWeight.SemiBold)
-                }
+            Column(modifier = modifier.fillMaxSize().padding(NothingDimens.screenPadding), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(historyState.message, color = NothingError, style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(NothingDimens.elementGap))
+                Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = NothingWhite), shape = RoundedCornerShape(NothingDimens.pillRadius)) { Text("Try again", color = NothingBlack, fontWeight = FontWeight.SemiBold) }
             }
         }
     }
 }
 
 @Composable
-private fun BlueprintListCard(
-    label: String,
-    blueprint: ProfileBlueprint,
-    onClick: () -> Unit
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardColor),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = label,
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = blueprint.overallTheme,
-                color = TextPrimary,
-                fontSize = 13.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "${blueprint.slots.size} photos · ${formatBlueprintDateLine(blueprint.createdAt)}",
-                color = TextMuted,
-                fontSize = 12.sp
-            )
+private fun BlueprintDetailView(blueprint: ProfileBlueprint, modifier: Modifier = Modifier, onCopy: (String) -> Unit) {
+    LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(NothingDimens.screenPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+        item { Text(blueprint.overallTheme, color = NothingWhite, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
+        items(items = blueprint.slots.sortedBy { it.slotNumber }, key = { it.id }) { slot ->
+            Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
+                    Text("Slot ${slot.slotNumber} \u2014 ${slot.role}", color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                    if (slot.imageUrl.isNotBlank()) { Spacer(modifier = Modifier.height(NothingDimens.textGap)); AsyncImage(model = slot.imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().aspectRatio(4f / 5f).clip(RoundedCornerShape(NothingDimens.cardRadius))) }
+                    if (slot.caption.isNotBlank()) { Spacer(modifier = Modifier.height(NothingDimens.textGap)); Text(slot.caption, color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall) }
+                    if (slot.hingePrompt.isNotBlank()) { Spacer(modifier = Modifier.height(NothingDimens.textGap)); Text("Hinge: ${slot.hingePrompt}", color = NothingWhite, style = MaterialTheme.typography.labelSmall) }
+                    if (slot.aislePrompt.isNotBlank()) { Spacer(modifier = Modifier.height(NothingDimens.textGap)); Text("Aisle: ${slot.aislePrompt}", color = NothingWhite, style = MaterialTheme.typography.labelSmall) }
+                }
+            }
         }
-    }
-}
-
-@Composable
-private fun BlueprintDetailView(
-    blueprint: ProfileBlueprint,
-    modifier: Modifier = Modifier,
-    onCopy: (String) -> Unit
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Overall theme
-        item {
-            Text(
-                text = blueprint.overallTheme,
-                color = MaterialTheme.colorScheme.primary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 20.sp
-            )
-        }
-
-        // Photo slots
-        items(
-            items = blueprint.slots.sortedBy { it.slotNumber },
-            key = { it.id }
-        ) { slot ->
-            SlotDetailCard(slot = slot, onCopy = onCopy)
-        }
-
-        // Bio section
         if (blueprint.bio.isNotBlank()) {
             item {
-                HorizontalDivider(
-                    color = Color.White.copy(alpha = 0.08f),
-                    thickness = 0.5.dp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                BioCard(bio = blueprint.bio, onCopy = { onCopy(blueprint.bio) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun SlotDetailCard(slot: OptimizedSlot, onCopy: (String) -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardColor),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            // Slot header
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Slot ${slot.slotNumber}",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = slot.role,
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Photo + caption
-            if (slot.imageUrl.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                AsyncImage(
-                    model = slot.imageUrl,
-                    contentDescription = "Slot ${slot.slotNumber} photo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(4f / 5f)
-                        .clip(RoundedCornerShape(8.dp))
-                )
-            }
-
-            if (slot.caption.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = slot.caption,
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp
-                )
-            }
-
-            // Hinge prompt
-            if (slot.hingePrompt.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), thickness = 0.5.dp)
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Hinge",
-                            color = HingeColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = slot.hingePrompt,
-                            color = TextSecondary,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp
-                        )
-                    }
-                    IconButton(
-                        onClick = { onCopy(slot.hingePrompt) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = "Copy Hinge prompt",
-                            tint = HingeColor,
-                            modifier = Modifier.size(16.dp)
-                        )
+                Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
+                        Text("Bio", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Spacer(modifier = Modifier.height(NothingDimens.textGap))
+                        Text(blueprint.bio, color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-
-            // Aisle prompt
-            if (slot.aislePrompt.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), thickness = 0.5.dp)
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Aisle",
-                            color = AisleColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = slot.aislePrompt,
-                            color = TextSecondary,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp
-                        )
-                    }
-                    IconButton(
-                        onClick = { onCopy(slot.aislePrompt) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = "Copy Aisle prompt",
-                            tint = AisleColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BioCard(bio: String, onCopy: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardColor),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Bio",
-                    color = TextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(
-                    onClick = onCopy,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) {
-                    Text(
-                        text = "Copy",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = bio,
-                color = TextSecondary,
-                fontSize = 14.sp,
-                lineHeight = 21.sp
-            )
         }
     }
 }

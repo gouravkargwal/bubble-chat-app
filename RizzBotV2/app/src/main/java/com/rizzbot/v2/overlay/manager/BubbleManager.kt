@@ -687,11 +687,13 @@ class BubbleManager @Inject constructor(
 
     private fun launchTransparentGalleryActivity() {
         try {
+            val maxItems = hostedRepository.usageState.value.maxScreenshots.coerceAtLeast(1)
             suspendOverlayForGalleryPicker()
             val intent = android.content.Intent(
                 context,
                 com.rizzbot.v2.overlay.gallery.TransparentGalleryActivity::class.java
             ).apply {
+                putExtra(com.rizzbot.v2.overlay.gallery.TransparentGalleryActivity.EXTRA_MAX_ITEMS, maxItems)
                 addFlags(
                     android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
                         android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP

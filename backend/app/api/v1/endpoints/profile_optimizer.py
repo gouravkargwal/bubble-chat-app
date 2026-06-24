@@ -58,11 +58,11 @@ async def optimize_profile(
             detail="A verified account is required to generate blueprints.",
         )
 
-    # Blueprint is a paid-only feature.
-    if effective_tier == "free":
+    # Blueprint is a Match+ feature (not available on Free or Crush).
+    if effective_tier in ("free", "crush"):
         raise HTTPException(
             status_code=403,
-            detail="Profile blueprint requires a paid plan. Upgrade to Crush, Match, or Rizz.",
+            detail="Profile blueprint requires Match or Rizz. Upgrade to unlock.",
         )
 
     if current_user.google_provider_id:

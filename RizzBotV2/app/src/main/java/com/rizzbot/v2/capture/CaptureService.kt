@@ -57,7 +57,7 @@ class CaptureService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Capturing screenshot")
             .setContentText("Cookd is taking a screenshot...")
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(com.rizzbot.v2.R.drawable.ic_notification)
             .setOngoing(true)
             .build()
     }

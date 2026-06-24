@@ -5,39 +5,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.rizzbot.v2.ui.theme.CardBg
-import com.rizzbot.v2.ui.theme.PaidPlanPrimary
-import com.rizzbot.v2.ui.theme.PaidPlanPrimaryDark
-import com.rizzbot.v2.ui.theme.PaidPlanPrimaryLight
-import com.rizzbot.v2.ui.theme.Pink
-import com.rizzbot.v2.ui.theme.PinkDark
+import com.rizzbot.v2.ui.theme.NeonRed
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingSurface
 
 /**
  * Design tokens for the bubble overlay — aligned with in-app [com.rizzbot.v2.ui.theme] colors.
- * Accent and gradients follow [MaterialTheme.colorScheme] / [overlayBubbleGradient] when on a paid plan.
  */
 object OverlayColors {
-    val PanelColor = CardBg
-    val PanelBorderColor = Color.White.copy(alpha = 0.08f)
+    val PanelColor = NothingSurface
+    val PanelBorderColor = NothingBorder
     val ScrimColor = Color.Black.copy(alpha = 0.6f)
 }
 
-@Composable
-fun overlayBubbleGradient(): List<Color> {
-    val isPaidPlan = com.rizzbot.v2.ui.theme.LocalAppIsPaidPlan.current
-    return if (isPaidPlan) {
-        listOf(PaidPlanPrimaryLight, PaidPlanPrimary, PaidPlanPrimaryDark)
-    } else {
-        listOf(
-            Color(0xFFFF4081),
-            Pink,
-            PinkDark
-        )
-    }
-}
-
 object OverlayShapes {
-    val PanelShape = RoundedCornerShape(24.dp)
-    val CardShape = RoundedCornerShape(12.dp)
-    val BubbleShape = RoundedCornerShape(16.dp)
+    val PanelShape = RoundedCornerShape(12.dp)
+    val CardShape = RoundedCornerShape(10.dp)
+    val BubbleShape = RoundedCornerShape(12.dp)
 }

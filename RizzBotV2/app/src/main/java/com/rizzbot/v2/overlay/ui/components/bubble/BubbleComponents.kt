@@ -25,12 +25,10 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Whatshot
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,11 +47,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInteropFilter
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.overlay.manager.BubbleState
-import com.rizzbot.v2.overlay.ui.theme.overlayBubbleGradient
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingWhite
+import com.rizzbot.v2.ui.components.CookdLogo
 import kotlinx.coroutines.delay
 
 /**
@@ -65,8 +64,6 @@ fun RizzButton(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    val bubbleGradient = overlayBubbleGradient()
     val pulse = rememberInfiniteTransition(label = "rizz_pulse")
     
     // Normal gentle pulse
@@ -91,13 +88,27 @@ fun RizzButton(
         label = "loading_rotation"
     )
 
+    // Determine background brush (Brush type for type consistency)
+    val backgroundBrush: Brush = if (isLoading) {
+        Brush.radialGradient(
+            colors = listOf(
+                Color(0xFF1A1A1A),
+                Color(0xFF000000)
+            )
+        )
+    } else {
+        Brush.radialGradient(
+            colors = listOf(NothingWhite, NothingWhite)
+        )
+    }
+
     Box(
         modifier = modifier
             .size(56.dp)
             .shadow(
                 elevation = 8.dp,
                 shape = CircleShape,
-                spotColor = accent
+                spotColor = NothingWhite.copy(alpha = 0.3f)
             )
             .scale(scale),
         contentAlignment = Alignment.Center
@@ -107,21 +118,8 @@ fun RizzButton(
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(
-                    if (isLoading) {
-                        // Black background when loading to make white indicator visible
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF1A1A1A),
-                                Color(0xFF000000)
-                            )
-                        )
-                    } else {
-                        // Normal pink gradient when not loading
-                        Brush.radialGradient(colors = bubbleGradient)
-                    }
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                .background(backgroundBrush)
+                .border(1.dp, NothingBorder.copy(alpha = 0.3f), CircleShape)
         )
         
         // Circular loading indicator (drawn on top, NOT clipped)
@@ -148,13 +146,10 @@ fun RizzButton(
             }
         }
         
-        // Rizz icon on top (vector, consistent across devices)
-        Icon(
-            imageVector = Icons.Filled.Whatshot,
-            contentDescription = "Rizz",
-            tint = Color.White,
-            modifier = Modifier.size(24.dp)
-        )
+        // "C" logo (hidden during loading)
+        if (!isLoading) {
+            CookdLogo(size = 32.dp, textStyle = MaterialTheme.typography.headlineLarge)
+        }
     }
 }
 

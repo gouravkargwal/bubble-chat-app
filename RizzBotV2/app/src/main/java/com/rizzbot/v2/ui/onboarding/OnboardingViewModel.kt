@@ -12,7 +12,6 @@ import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.HapticHelper
-import com.rizzbot.v2.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -27,7 +26,6 @@ import javax.inject.Inject
 
 data class OnboardingState(
     val currentStep: Int = 0,
-    val hasOverlayPermission: Boolean = false,
     val isAuthenticating: Boolean = false,
     val authError: String? = null,
     val onboardingDone: Boolean = false,
@@ -48,7 +46,6 @@ class OnboardingViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val hostedRepository: HostedRepository,
     val googleSignInHelper: GoogleSignInHelper,
-    private val permissionHelper: PermissionHelper,
     private val analyticsHelper: AnalyticsHelper,
     private val hapticHelper: HapticHelper,
 ) : ViewModel() {
@@ -60,22 +57,12 @@ class OnboardingViewModel @Inject constructor(
 
     init {
         analyticsHelper.onboardingStarted()
-        refreshPermissions()
-    }
-
-    fun refreshPermissions() {
-        _state.update { it.copy(hasOverlayPermission = permissionHelper.canDrawOverlays()) }
     }
 
     private fun advanceOnboardingStep() {
         val next = _state.value.currentStep + 1
         _state.update { it.copy(currentStep = next) }
         analyticsHelper.onboardingStepCompleted(next)
-    }
-
-    fun nextStep() {
-        hapticHelper.lightTap()
-        advanceOnboardingStep()
     }
 
     fun setOnboardingVibe(vibe: String) {
@@ -86,7 +73,8 @@ class OnboardingViewModel @Inject constructor(
     fun completeVibeStep() {
         hapticHelper.mediumTap()
         _state.value.onboardingVibe?.let { analyticsHelper.onboardingVibeSelected(it) }
-        advanceOnboardingStep()
+        // Vibe Check is the last onboarding step — complete directly
+        completeOnboarding()
     }
 
     fun signInWithGoogle(activity: Activity) {
@@ -136,23 +124,14 @@ class OnboardingViewModel @Inject constructor(
             _state.update { it.copy(isNewUser = true) }
             advanceOnboardingStep()
         } else {
-            // Returning user: skip Vibe Check and Demo
-            refreshPermissions()
-            val hasPermission = permissionHelper.canDrawOverlays()
-            if (hasPermission) {
-                // Already has permissions: go straight to Home
-                // Persist onboarding completion so MainActivity can skip onboarding on next app start.
-                settingsRepository.setOnboardingCompleted(true)
-                android.util.Log.d(
-                    "AuthDebug",
-                    "Persisted onboardingCompleted=true (returning user + overlay permission)"
-                )
-                analyticsHelper.onboardingCompleted()
-                _state.update { it.copy(onboardingDone = true) }
-            } else {
-                // Needs to re-grant permissions: go to TrustAndTechStep (Step 3)
-                _state.update { it.copy(currentStep = 3, isNewUser = false) }
-            }
+            // Returning user: skip Vibe Check, go straight to Home
+            settingsRepository.setOnboardingCompleted(true)
+            android.util.Log.d(
+                "AuthDebug",
+                "Persisted onboardingCompleted=true (returning user)"
+            )
+            analyticsHelper.onboardingCompleted()
+            _state.update { it.copy(onboardingDone = true) }
         }
     }
 

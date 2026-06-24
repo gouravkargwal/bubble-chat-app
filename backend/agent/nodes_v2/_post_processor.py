@@ -5,6 +5,10 @@ Deterministic post-processing for reply validation and style enforcement.
 - post_process_replies: strips punctuation, forces lowercase (runs after auditor approves)
 
 These run in code with zero latency cost — no LLM calls.
+
+Word count enforcement is handled entirely by the generator prompt (the LLM must
+respect the 5-10 word limit). No post-hoc truncation — that would mutilate
+otherwise good replies and produce awkward clipped text.
 """
 
 import structlog
@@ -70,6 +74,10 @@ def post_process_replies(drafts: WriterOutput) -> WriterOutput:
     """
     Deterministic mechanical fixes applied after auditor approval.
     Zero latency cost, 100% enforcement of style rules.
+
+    Does NOT enforce word count — that is the LLM's responsibility via the
+    generator prompt's LENGTH RULE (5-10 words). Post-hoc truncation would
+    produce awkward clipped replies.
     """
     fixed_replies = []
     for r in drafts.replies:

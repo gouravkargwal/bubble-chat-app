@@ -28,13 +28,8 @@ from app.infrastructure.oci_storage import (
 )
 from app.llm.gemini_client import GeminiClient
 from app.models.profile_auditor import AuditResponse, PhotoFeedback, PhotoTier
-from app.services.profile_auditor_service import (
-    MAX_FILE_SIZE,
-    PROFILE_AUDIT_SCHEMA,
-    _score_to_tier,
-    build_profile_audit_system_prompt,
-    build_profile_audit_user_prompt,
-)
+from app.prompts.profile_auditor import PROFILE_AUDIT_SCHEMA, build_profile_audit_system_prompt, build_profile_audit_user_prompt
+from app.services.profile_auditor_service import MAX_FILE_SIZE, _score_to_tier
 from app.services.quota_manager import QuotaManager
 
 logger = structlog.get_logger(__name__)

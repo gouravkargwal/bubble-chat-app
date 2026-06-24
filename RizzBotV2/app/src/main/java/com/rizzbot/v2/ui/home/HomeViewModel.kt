@@ -25,6 +25,7 @@ import javax.inject.Inject
 data class HomeState(
     val isServiceEnabled: Boolean = false,
     val hasOverlayPermission: Boolean = false,
+    val showOverlayPermissionPrompt: Boolean = false,
     val showHowItWorks: Boolean = true,
     val rizzProfile: UserPreferences? = null,
     val usage: UsageState = UsageState(),
@@ -209,6 +210,19 @@ class HomeViewModel @Inject constructor(
     }
 
     fun toggleService(enabled: Boolean) {
+        if (enabled && !permissionHelper.canDrawOverlays()) {
+            // Permission not granted — show the prompt instead of toggling
+            _state.update { it.copy(showOverlayPermissionPrompt = true) }
+            return
+        }
+        performToggle(enabled)
+    }
+
+    fun dismissOverlayPermissionPrompt() {
+        _state.update { it.copy(showOverlayPermissionPrompt = false) }
+    }
+
+    private fun performToggle(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setServiceEnabled(enabled)
             if (enabled) {

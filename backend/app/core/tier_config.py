@@ -1,10 +1,14 @@
 """Master Tier Configuration — 4 plans, credits-based quota.
 
-Plans:
-  - free:  ₹0   — 15 signup credits on first open, then 2/day forever.
-  - crush: ₹99  — 60 credits, resets every 7 days.
-  - match: ₹179 — 150 credits, resets every 30 days. (Most Popular ⭐)
-  - rizz:  ₹299 — 250 credits, resets every 30 days. Unlocks Get Number + Ask Out.
+Feature gating by tier:
+  - free:  Opener, Quick Reply, Keep Playful, Revive Chat. 2/day credits.
+            No custom hints, no chemistry tracking, no power tools.
+  - crush: 7/9 directions (no Get Number / Ask Out). Custom hints +
+            chemistry tracking + photo audits. 60 credits / 7 days.
+  - match: All 9 directions + everything in Crush + profile blueprints.
+            150 credits / 30 days. (Most Popular ⭐)
+  - rizz:  All 9 directions + everything in Match + max limits.
+            250 credits / 30 days.
 
 Credit costs per action:
   - chat_generation:   1 credit
@@ -63,6 +67,8 @@ TIER_CONFIG = {
             "allowed_ui_directions": [
                 ConversationDirection.OPENER.value,
                 ConversationDirection.QUICK_REPLY.value,
+                ConversationDirection.KEEP_PLAYFUL.value,
+                ConversationDirection.REVIVE_CHAT.value,
             ],
         },
     },
@@ -114,6 +120,8 @@ TIER_CONFIG = {
                 ConversationDirection.CHANGE_TOPIC.value,
                 ConversationDirection.TEASE.value,
                 ConversationDirection.REVIVE_CHAT.value,
+                ConversationDirection.GET_NUMBER.value,
+                ConversationDirection.ASK_OUT.value,
                 ConversationDirection.DE_ESCALATE.value,
             ],
         },

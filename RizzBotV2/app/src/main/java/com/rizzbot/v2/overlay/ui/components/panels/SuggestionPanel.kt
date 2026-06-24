@@ -36,19 +36,7 @@ fun SuggestionPanel(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val vibeLabels = listOf("🔥 Flirty", "😏 Witty", "✨ Smooth", "💪 Bold")
-
-    // Map strategy labels to emojis
-    fun getStrategyEmoji(strategyLabel: String): String {
-        return when (strategyLabel.uppercase()) {
-            "PUSH-PULL" -> "🔄"
-            "FRAME CONTROL" -> "🎯"
-            "SOFT CLOSE" -> "☕"
-            "VALUE ANCHOR" -> "💎"
-            "PATTERN INTERRUPT" -> "⚡"
-            else -> "💬"
-        }
-    }
+    val vibeLabels = listOf("Flirty", "Witty", "Smooth", "Bold")
 
     Column(
         modifier = modifier
@@ -72,15 +60,14 @@ fun SuggestionPanel(
         Spacer(modifier = Modifier.height(8.dp))
 
         result.replies.forEachIndexed { index, replyOption ->
-            val label = vibeLabels.getOrElse(index) { "💬 Reply" }
+            val label = vibeLabels.getOrElse(index) { "Reply" }
 
-            // Build the strategy badge text with appropriate emoji
+            // Build the strategy badge text
             val strategy =
                 if (replyOption.strategyLabel.isNotBlank() && replyOption.strategyLabel != "STANDARD") {
-                    val emoji = getStrategyEmoji(replyOption.strategyLabel)
-                    "$emoji ${replyOption.strategyLabel.uppercase()}"
+                    "${replyOption.strategyLabel.uppercase()}"
                 } else {
-                    "💬 REPLY"
+                    "REPLY"
                 }
             val strategyBadge = "[ $strategy ]"
 

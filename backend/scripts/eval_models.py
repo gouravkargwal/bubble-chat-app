@@ -26,22 +26,14 @@ import argparse
 import json
 import os
 
-from agent.nodes_v2._generator import _build_generator_prompt
-from agent.nodes_v2._personality import build_tone_prior
+from app.prompts.generator import _build_generator_prompt
+from app.prompts.scripts import _JSON_INSTRUCTION
 from app.config import settings
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_PAYLOAD = os.path.join(_HERE, "sample_payload.json")
 
-# Plain-chat models can't be forced into the Pydantic schema, so we ask for the JSON
-# shape in the prompt and just read whatever comes back. No 400s — writing only.
-_JSON_INSTRUCTION = (
-    "\n\n---\nRESPOND WITH ONLY THIS JSON (no prose, no markdown fences):\n"
-    '{"recommended_strategy_label":"<one label>","hook_point":"...","right_energy":"...",'
-    '"wrong_moves":["..."],"replies":[{"text":"...","strategy_label":"<PUSH-PULL|FRAME '
-    'CONTROL|SOFT CLOSE|VALUE ANCHOR|PATTERN INTERRUPT|HONEST FRAME>","is_recommended":'
-    'true,"coach_reasoning":"..."}]}\nExactly 4 replies; exactly one is_recommended=true.'
-)
+# _JSON_INSTRUCTION has been moved to app/prompts/scripts.py (imported above)
 
 
 def _val(d: dict, key: str, default: str) -> str:
@@ -51,29 +43,12 @@ def _val(d: dict, key: str, default: str) -> str:
 def build_system_prompt(payload: dict) -> str:
     """Reproduce generator_node's _build_generator_prompt call from a captured payload."""
     analysis = payload.get("analysis", {}) or {}
-    ctx = payload.get("conversation_context_dict", {}) or {}
-    stable = ctx.get("stable_dimensions") or {}
-
-    def dim(name: str, default: str) -> str:
-        return str(stable.get(name) or analysis.get(name) or default)
-
-    personality_prior = build_tone_prior(
-        dim("warmth", "neutral"),
-        dim("playfulness", "balanced"),
-        dim("engagement", "medium"),
-        dim("traditionalism", "mixed"),
-        dim("intent", "open"),
-    )
     return _build_generator_prompt(
+        person_name=_val(analysis, "person_name", "unknown"),
         direction=payload.get("direction", "quick_reply"),
-        custom_hint=payload.get("user_custom_hint", "") or "",
         detected_dialect=_val(analysis, "detected_dialect", "ENGLISH"),
-        stage=_val(analysis, "stage", "early_talking"),
-        conversation_temperature=_val(analysis, "conversation_temperature", "warm"),
-        their_tone=_val(analysis, "their_tone", "neutral"),
-        their_effort=_val(analysis, "their_effort", "medium"),
-        preferred_strategies=ctx.get("preferred_strategies") or [],
-        personality_prior=personality_prior,
+        transcript_text=payload.get("transcript_text", ""),
+        custom_hint=payload.get("user_custom_hint", "") or "",
     )
 
 

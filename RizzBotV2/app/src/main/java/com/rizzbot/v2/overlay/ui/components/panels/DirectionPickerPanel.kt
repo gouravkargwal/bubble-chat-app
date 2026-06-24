@@ -103,8 +103,6 @@ fun DirectionPicker(
                     .padding(vertical = 10.dp, horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(direction.emoji, fontSize = 20.sp)
-                Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     direction.displayName,
                     color = if (isLocked) Color.Gray else Color.White,
@@ -112,12 +110,10 @@ fun DirectionPicker(
                 )
                 if (isLocked) {
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("\uD83D\uDD12", fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        "UNLOCK",
-                        color = accent,
-                        fontSize = 10.sp,
+                        "[LOCKED]",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -152,21 +148,16 @@ fun DirectionPicker(
                     .padding(vertical = 10.dp, horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("\u270D\uFE0F", fontSize = 20.sp)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    "Custom hint",
+                Text("Custom hint",
                     color = if (customHintsEnabled) Color.White else Color.Gray,
                     fontSize = 14.sp
                 )
                 if (!customHintsEnabled) {
                     Spacer(modifier = Modifier.weight(1f))
-                    Text("\uD83D\uDD12", fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        "UNLOCK",
-                        color = accent,
-                        fontSize = 10.sp,
+                        "[LOCKED]",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -226,7 +217,7 @@ private fun InputModeToggle(
         val gallerySelected = isGalleryMode
 
         ModeChip(
-            label = "📸 Live Screen",
+            label = "Live Screen",
             selected = liveSelected,
             enabled = !isLoading,
             onClick = { if (!liveSelected) onInputModeChanged(false) },
@@ -234,7 +225,7 @@ private fun InputModeToggle(
         )
         Spacer(modifier = Modifier.width(4.dp))
         ModeChip(
-            label = "🖼️ Gallery",
+            label = "Gallery",
             selected = gallerySelected,
             enabled = !isLoading,
             onClick = { if (!gallerySelected) onInputModeChanged(true) },

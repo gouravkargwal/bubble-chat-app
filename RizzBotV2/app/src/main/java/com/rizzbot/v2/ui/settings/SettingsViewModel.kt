@@ -34,6 +34,19 @@ data class SettingsState(
     val roastLanguage: String = "English"
 ) {
     val isPaidPlan: Boolean get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH || tier == TierQuota.PLAN_RIZZ
+    val isOnTrial: Boolean
+        get() {
+            val expiresAt = tierExpiresAt ?: return false
+            val nowSec = System.currentTimeMillis() / 1000
+            val diffDays = ((expiresAt - nowSec) / 86400).toInt()
+            return tier == TierQuota.PLAN_RIZZ && diffDays in 0..30 && creditsPeriodLimit == 15
+        }
+    val trialDaysRemaining: Int
+        get() {
+            val expiresAt = tierExpiresAt ?: return 0
+            val nowSec = System.currentTimeMillis() / 1000
+            return ((expiresAt - nowSec) / 86400).toInt().coerceAtLeast(0)
+        }
     val canGenerate: Boolean get() = creditsRemaining > 0
     val creditsUsed: Int get() = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
 }

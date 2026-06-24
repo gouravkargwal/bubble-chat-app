@@ -9,25 +9,13 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Article
@@ -43,7 +31,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,7 +52,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -76,12 +62,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.rizzbot.v2.ui.theme.DarkBg
+import com.rizzbot.v2.ui.theme.NeonRed
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 import com.rizzbot.v2.util.HapticHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-private val CardBg = Color(0xFF111122)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,631 +88,114 @@ fun ProfileOptimizerScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Keep existing idle CTA; we can also auto-trigger if you want:
-    // LaunchedEffect(Unit) { viewModel.generateBlueprint() }
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = "Auto-Build Profile",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onViewStrategy) {
-                        Icon(
-                            imageVector = Icons.Filled.Article,
-                            contentDescription = "Saved profile blueprints",
-                            tint = Color.White
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DarkBg,
-                    titleContentColor = Color.White
-                )
+                title = { Text("Auto-Build Profile", fontWeight = FontWeight.SemiBold, color = NothingWhite) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = NothingWhite) } },
+                actions = { IconButton(onClick = onViewStrategy) { Icon(Icons.Filled.Article, contentDescription = "Saved blueprints", tint = NothingWhite) } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = NothingBlack, titleContentColor = NothingWhite)
             )
         },
-        containerColor = DarkBg,
+        containerColor = NothingBlack,
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            if (state is OptimizerState.Success) {
-                FloatingActionButton(
-                    onClick = { viewModel.generateBlueprint() },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.navigationBarsPadding()
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Cached,
-                            contentDescription = "Recalibrate",
-                            tint = Color.Black
-                        )
-                        Text(
-                            text = "Recalibrate",
-                            color = Color.Black,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(DarkBg, Color(0xFF050515))
-                    )
-                )
-        ) {
+        Box(modifier = Modifier.padding(padding).fillMaxSize().background(NothingBlack)) {
             when (val s = state) {
-                is OptimizerState.Idle -> {
-                    IdleOptimizerCard(
-                        selectedLanguage = selectedLanguage,
-                        onLanguageSelected = { viewModel.setLanguage(it) },
-                        onGenerate = { viewModel.generateBlueprint() }
-                    )
-                }
-
-                is OptimizerState.Loading -> {
-                    LoadingState()
-                }
-
-                is OptimizerState.Success -> {
-                    SuccessState(
-                        blueprint = s.blueprint,
-                        selectedLanguage = selectedLanguage,
-                        onLanguageSelected = { viewModel.setLanguage(it) },
-                        onCopy = { text ->
-                            clipboardManager.setText(AnnotatedString(text))
-                            HapticHelper(context).successTap()
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Copied to clipboard")
-                            }
-                        },
-                        onRecalibrate = { viewModel.generateBlueprint() },
-                        onViewStrategy = onViewStrategy
-                    )
-                }
-
-                is OptimizerState.Error -> {
-                    ErrorState(
-                        message = s.message,
-                        selectedLanguage = selectedLanguage,
-                        onLanguageSelected = { viewModel.setLanguage(it) },
-                        onRetry = { viewModel.generateBlueprint() },
-                        onBackToIdle = { viewModel.reset() }
-                    )
-                }
+                is OptimizerState.Idle -> IdleOptimizerCard(selectedLanguage = selectedLanguage, onLanguageSelected = { viewModel.setLanguage(it) }, onGenerate = { viewModel.generateBlueprint() })
+                is OptimizerState.Loading -> LoadingState()
+                is OptimizerState.Success -> SuccessState(blueprint = s.blueprint, selectedLanguage = selectedLanguage, onLanguageSelected = { viewModel.setLanguage(it) }, onCopy = { text -> clipboardManager.setText(AnnotatedString(text)); HapticHelper(context).successTap(); scope.launch { snackbarHostState.showSnackbar("Copied") } }, onRecalibrate = { viewModel.generateBlueprint() }, onViewStrategy = onViewStrategy)
+                is OptimizerState.Error -> ErrorState(message = s.message, selectedLanguage = selectedLanguage, onLanguageSelected = { viewModel.setLanguage(it) }, onRetry = { viewModel.generateBlueprint() }, onBackToIdle = { viewModel.reset() })
             }
         }
     }
 }
 
 @Composable
-private fun IdleOptimizerCard(
-    selectedLanguage: String,
-    onLanguageSelected: (String) -> Unit,
-    onGenerate: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = CardBg),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 22.dp, vertical = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                Text(
-                    text = "Uses your audited photos to produce slot order, captions, and cross-app prompts. No new uploads.",
-                    color = Color(0xFF9FA0BF),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                )
-
-                BlueprintLanguageRow(
-                    selectedLanguage = selectedLanguage,
-                    onSelect = onLanguageSelected,
-                    enabled = true
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "How it works",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.3.sp
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FeatureBullet("Pulls from photos you’ve already run through Photo Audit")
-                        FeatureBullet("Orders slots using scores and feedback text only")
-                        FeatureBullet("Writes captions and Hinge/Aisle-style prompts in your chosen language")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Button(
-                    onClick = onGenerate,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    contentPadding = PaddingValues(vertical = 16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color.Black,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "Generate My Profile Blueprint",
-                            color = Color.Black,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+private fun IdleOptimizerCard(selectedLanguage: String, onLanguageSelected: (String) -> Unit, onGenerate: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(NothingDimens.screenPadding), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+                Text("Uses your audited photos to produce slot order, captions, and cross-app prompts.", color = NothingTextSecondary, style = MaterialTheme.typography.bodyMedium)
+                Text("How it works", color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                Text("\u2022 Pulls from photos you've already run through Photo Audit", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("\u2022 Orders slots using scores and feedback", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                Text("\u2022 Writes captions and prompts in your chosen language", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                Button(onClick = onGenerate, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = NothingWhite), shape = RoundedCornerShape(NothingDimens.pillRadius)) {
+                    Text("Generate My Profile Blueprint", color = NothingBlack, fontWeight = FontWeight.Bold)
                 }
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
 @Composable
 private fun LoadingState() {
-    val phrases = listOf(
-        "Analyzing your best angles...",
-        "Reordering your lineup like a creative director...",
-        "Designing a Tinder/Bumble/Hinge-proof blueprint...",
-        "Balancing status, warmth, and fun...",
-        "Locking in a first-photo glow-up..."
-    )
-    val index = remember { mutableStateOf(0) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1600)
-            index.value = (index.value + 1) % phrases.size
-        }
-    }
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            val transition = rememberInfiniteTransition(label = "loadingPulse")
-            val scale by transition.animateFloat(
-                initialValue = 0.9f,
-                targetValue = 1.1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "scaleAnim"
-            )
-
-            Box(
-                modifier = Modifier
-                    .height(80.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 3.dp
-                )
-            }
-            AnimatedContent(targetState = index.value, label = "loadingText") { idx ->
-                Text(
-                    text = phrases[idx],
-                    color = Color.White,
-                    fontSize = 14.sp
-                )
-            }
-            Text(
-                text = "This usually takes ~5–10 seconds.",
-                color = Color(0xFF9090B0),
-                fontSize = 12.sp
-            )
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+            CircularProgressIndicator(color = NothingWhite, strokeWidth = 3.dp)
+            Text("Analyzing your best angles...", color = NothingTextSecondary, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
 
 @Composable
-private fun SuccessState(
-    blueprint: ProfileBlueprint,
-    selectedLanguage: String,
-    onLanguageSelected: (String) -> Unit,
-    onCopy: (String) -> Unit,
-    onRecalibrate: () -> Unit,
-    onViewStrategy: () -> Unit = {}
-) {
-    // Extra bottom inset: extended Recalibrate FAB + nav bar — list must scroll past them.
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 140.dp)
-    ) {
+private fun SuccessState(blueprint: ProfileBlueprint, selectedLanguage: String, onLanguageSelected: (String) -> Unit, onCopy: (String) -> Unit, onRecalibrate: () -> Unit, onViewStrategy: () -> Unit) {
+    LazyColumn(modifier = Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = NothingDimens.screenPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap), contentPadding = PaddingValues(top = NothingDimens.elementGap, bottom = 40.dp)) {
         item {
-            Text(
-                text = blueprint.overallTheme,
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 26.sp
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            BlueprintLanguageRow(
-                selectedLanguage = selectedLanguage,
-                onSelect = onLanguageSelected,
-                enabled = true
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onViewStrategy,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A33)),
-                contentPadding = PaddingValues(vertical = 14.dp)
-            ) {
-                Text(
-                    text = "View Blueprints & History",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(blueprint.overallTheme, color = NothingWhite, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(NothingDimens.elementGap))
+            TextButton(onClick = onViewStrategy, modifier = Modifier.fillMaxWidth()) { Text("View Blueprints & History", color = NothingTextSecondary, fontWeight = FontWeight.SemiBold) }
         }
-
-        items(
-            items = blueprint.slots.sortedBy { it.slotNumber },
-            key = { it.slotNumber }
-        ) { slot ->
+        items(items = blueprint.slots.sortedBy { it.slotNumber }, key = { it.slotNumber }) { slot ->
             SlotCard(slot = slot, onCopy = onCopy)
         }
-
         item {
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(
-                onClick = onRecalibrate,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Cached,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Recalibrate with a new blueprint",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 13.sp
-                    )
-                }
-            }
+            TextButton(onClick = onRecalibrate, modifier = Modifier.fillMaxWidth()) { Text("Recalibrate", color = NothingTextSecondary) }
         }
     }
 }
 
 @Composable
-private fun SlotCard(
-    slot: OptimizedSlot,
-    onCopy: (String) -> Unit
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-                    .clip(RoundedCornerShape(18.dp))
-            ) {
-                AsyncImage(
-                    model = slot.imageUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                BadgedBox(
-                    badge = {
-                        Badge(
-                            containerColor = Color.Black.copy(alpha = 0.85f),
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ) {
-                            Text(
-                                text = "Slot ${slot.slotNumber}: ${slot.role}",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(10.dp)
-                ) {
-                    // No anchor content
-                }
+private fun SlotCard(slot: OptimizedSlot, onCopy: (String) -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+            Text("Slot ${slot.slotNumber}: ${slot.role}", color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+            if (slot.imageUrl.isNotBlank()) {
+                AsyncImage(model = slot.imageUrl, contentDescription = null, modifier = Modifier.fillMaxWidth().aspectRatio(0.75f).clip(RoundedCornerShape(NothingDimens.cardRadius)))
             }
-
-            Text(
-                text = slot.caption,
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
+            Text(slot.caption, color = NothingWhite, style = MaterialTheme.typography.bodyMedium)
             if (slot.hingePrompt.isNotBlank()) {
-                PlatformPromptCard(
-                    label = "Hinge Prompt",
-                    labelColor = Color(0xFFFF6B6B),
-                    text = slot.hingePrompt,
-                    onCopy = { onCopy(slot.hingePrompt) }
-                )
+                Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder)) {
+                    Row(modifier = Modifier.padding(NothingDimens.cardPadding).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Hinge", color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
+                        IconButton(onClick = { onCopy(slot.hingePrompt) }, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.ContentCopy, "Copy", tint = NothingTextSecondary, modifier = Modifier.size(16.dp)) }
+                    }
+                    Text(slot.hingePrompt, color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = NothingDimens.cardPadding, bottom = NothingDimens.cardPadding))
+                }
             }
             if (slot.aislePrompt.isNotBlank()) {
-                PlatformPromptCard(
-                    label = "Aisle Prompt",
-                    labelColor = Color(0xFF6BDDFF),
-                    text = slot.aislePrompt,
-                    onCopy = { onCopy(slot.aislePrompt) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlatformPromptCard(
-    label: String,
-    labelColor: Color,
-    text: String,
-    onCopy: () -> Unit
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D22)),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = label,
-                    color = labelColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                IconButton(
-                    onClick = onCopy,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Copy",
-                        tint = labelColor.copy(alpha = 0.8f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = text,
-                color = Color(0xFFD0D0F0),
-                fontSize = 13.sp,
-                lineHeight = 19.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun BlueprintLanguageRow(
-    selectedLanguage: String,
-    onSelect: (String) -> Unit,
-    enabled: Boolean = true
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            text = "Blueprint language",
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            text = "Captions, bio, and app prompts. Same setting as Photo Audit feedback style.",
-            color = Color(0xFF9090B0),
-            fontSize = 12.sp
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val options = listOf("English", "Hinglish", "Gen-Z Slang")
-            options.forEach { option ->
-                val isSelected = option == selectedLanguage
-                AssistChip(
-                    onClick = {
-                        if (enabled) onSelect(option)
-                    },
-                    enabled = enabled,
-                    label = {
-                        Text(
-                            text = option,
-                            color = if (isSelected) Color.Black else Color.White,
-                            fontSize = 12.sp
-                        )
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = if (isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            CardBg
-                        }
-                    )
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeatureBullet(text: String) {
-    Row(
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-                .padding(top = 6.dp)
-        )
-        Text(
-            text = text,
-            color = Color(0xFFB0B0D0),
-            fontSize = 13.sp,
-            lineHeight = 18.sp
-        )
-    }
-}
-
-@Composable
-private fun ErrorState(
-    message: String,
-    selectedLanguage: String,
-    onLanguageSelected: (String) -> Unit,
-    onRetry: () -> Unit,
-    onBackToIdle: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = CardBg),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Couldn't generate a blueprint",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = message,
-                    color = Color(0xFFEF9A9A),
-                    fontSize = 13.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                BlueprintLanguageRow(
-                    selectedLanguage = selectedLanguage,
-                    onSelect = onLanguageSelected,
-                    enabled = true
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Button(
-                        onClick = onRetry,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text(
-                            text = "Try Again",
-                            color = Color.Black,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder)) {
+                    Row(modifier = Modifier.padding(NothingDimens.cardPadding).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Aisle", color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
+                        IconButton(onClick = { onCopy(slot.aislePrompt) }, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.ContentCopy, "Copy", tint = NothingTextSecondary, modifier = Modifier.size(16.dp)) }
                     }
-                    TextButton(
-                        onClick = onBackToIdle,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = "Back",
-                            color = Color(0xFFB0B0D0),
-                            fontSize = 13.sp
-                        )
-                    }
+                    Text(slot.aislePrompt, color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = NothingDimens.cardPadding, bottom = NothingDimens.cardPadding))
                 }
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
+@Composable
+private fun ErrorState(message: String, selectedLanguage: String, onLanguageSelected: (String) -> Unit, onRetry: () -> Unit, onBackToIdle: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(NothingDimens.screenPadding), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+                Text("Couldn't generate a blueprint", color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                Text(message, color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall)
+                Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = NothingWhite), shape = RoundedCornerShape(NothingDimens.pillRadius)) { Text("Try Again", color = NothingBlack, fontWeight = FontWeight.SemiBold) }
+            }
+        }
+    }
+}

@@ -1,8 +1,8 @@
 package com.rizzbot.v2.ui.sync
 
-import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,272 +23,84 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rizzbot.v2.domain.model.PersonProfileResult
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-
-private val DarkBg = Color(0xFF0F0F1A)
-private val CardBg = Color(0xFF1A1A2E)
+import com.rizzbot.v2.ui.theme.NeonRed
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SyncPersonScreen(
-    onBack: () -> Unit,
-    viewModel: SyncPersonViewModel = hiltViewModel()
-) {
+fun SyncPersonScreen(onBack: () -> Unit, viewModel: SyncPersonViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        viewModel.addImages(uris)
-    }
+    val imagePickerLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetMultipleContents()) { uris -> viewModel.addImages(uris) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sync Person Profile", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DarkBg,
-                    titleContentColor = Color.White
-                )
+                title = { Text("Sync Person Profile", fontWeight = FontWeight.Bold, color = NothingWhite) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = NothingWhite) } },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = NothingBlack, titleContentColor = NothingWhite)
             )
         },
-        containerColor = DarkBg
+        containerColor = NothingBlack
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(modifier = Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(NothingDimens.screenPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
             when (val result = state.result) {
-                is PersonProfileResult.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("Extracting profile info...", color = Color.White)
-                            Text("This may take a few seconds", color = Color.Gray, fontSize = 12.sp)
-                        }
-                    }
+                is PersonProfileResult.Loading -> Box(modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(color = NothingWhite); Spacer(modifier = Modifier.height(NothingDimens.elementGap)); Text("Extracting profile info...", color = NothingWhite) }
                 }
-                is PersonProfileResult.Success -> {
-                    ProfileResultCard(result = result, onDone = { viewModel.clearResult() })
-                }
-                is PersonProfileResult.Error -> {
-                    Card(colors = CardDefaults.cardColors(containerColor = CardBg), shape = RoundedCornerShape(16.dp)) {
-                        Column(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text("Something went wrong", color = Color.White, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(result.message, color = Color.Gray, fontSize = 13.sp)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = { viewModel.clearResult() },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) { Text("Try Again") }
-                        }
-                    }
+                is PersonProfileResult.Success -> ProfileResultCard(result = result, onDone = { viewModel.clearResult() })
+                is PersonProfileResult.Error -> Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(NothingDimens.cardPadding).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { Text("Something went wrong", color = NothingWhite, fontWeight = FontWeight.Bold); Text(result.message, color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall) }
                 }
                 null -> {
-                    // Instructions
-                    Card(colors = CardDefaults.cardColors(containerColor = CardBg), shape = RoundedCornerShape(16.dp)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("How it works", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            StepRow("1", "Take screenshots of their dating profile")
-                            StepRow("2", "Upload 1-5 screenshots here")
-                            StepRow("3", "AI extracts their interests, bio & personality")
-                            StepRow("4", "Get more personalized reply suggestions")
+                    Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder)) {
+                        Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.textGap)) {
+                            Text("How it works", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text("1. Take screenshots of their profile", color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall)
+                            Text("2. Upload 1-5 screenshots here", color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall)
+                            Text("3. AI extracts their interests & personality", color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall)
+                            Text("4. Get more personalized reply suggestions", color = NothingTextSecondary, style = MaterialTheme.typography.bodySmall)
                         }
                     }
-
-                    // Image picker
-                    Text("Profile Screenshots", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text("Add 1-5 screenshots of their profile", color = Color.Gray, fontSize = 12.sp)
-
-                    if (state.selectedImages.isEmpty()) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp)
-                                .clickable { imagePickerLauncher.launch("image/*") },
-                            colors = CardDefaults.cardColors(containerColor = CardBg),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.AddPhotoAlternate, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("Tap to add screenshots", color = Color.Gray)
-                                }
-                            }
-                        }
-                    } else {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(state.selectedImages) { uri ->
-                                Card(
-                                    modifier = Modifier.size(100.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF252542)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(Icons.Default.Image, null, tint = Color.Gray, modifier = Modifier.size(40.dp))
-                                        }
-                                        IconButton(
-                                            onClick = { viewModel.removeImage(uri) },
-                                            modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
-                                        ) {
-                                            Icon(Icons.Default.Close, "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
-                                        }
-                                    }
-                                }
-                            }
-                            if (state.selectedImages.size < 5) {
-                                item {
-                                    Card(
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .clickable { imagePickerLauncher.launch("image/*") },
-                                        colors = CardDefaults.cardColors(containerColor = CardBg),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Button(
-                            onClick = {
-                                val bitmaps = state.selectedImages.mapNotNull { uri ->
-                                    try {
-                                        context.contentResolver.openInputStream(uri)?.use {
-                                            BitmapFactory.decodeStream(it)
-                                        }
-                                    } catch (_: Exception) { null }
-                                }
-                                viewModel.syncProfile(bitmaps)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Sync Profile", modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    // Saved profiles will be loaded from backend when feature is ready
+                    Text("Profile Screenshots", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    Card(
+                        modifier = Modifier.fillMaxWidth().height(120.dp).clickable { imagePickerLauncher.launch("image/*") },
+                        colors = CardDefaults.cardColors(containerColor = NothingSurface),
+                        shape = RoundedCornerShape(NothingDimens.cardRadius),
+                        border = BorderStroke(NothingDimens.borderThickness, NothingBorder)
+                    ) { Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.AddPhotoAlternate, null, tint = NothingWhite, modifier = Modifier.size(40.dp)); Text("Tap to add screenshots", color = NothingTextSecondary) } } }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun StepRow(number: String, text: String) {
-    Row(modifier = Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(number, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(text, color = Color.Gray, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
 @Composable
 private fun ProfileResultCard(result: PersonProfileResult.Success, onDone: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = CardBg), shape = RoundedCornerShape(16.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = NothingSurface), shape = RoundedCornerShape(NothingDimens.cardRadius), border = BorderStroke(NothingDimens.borderThickness, NothingBorder), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(result.name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(result.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    if (result.age != null) {
-                        Text("Age: ${result.age}", color = Color.Gray, fontSize = 13.sp)
-                    }
-                }
+                Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(NothingDimens.cardRadius)).background(NothingWhite), contentAlignment = Alignment.Center) { Text(result.name.take(1).uppercase(), color = NothingBlack, fontWeight = FontWeight.Bold) }
+                Spacer(modifier = Modifier.width(NothingDimens.elementGap))
+                Column { Text(result.name, color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall); result.age?.let { Text("Age: $it", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall) } }
             }
-
-            if (result.bio != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Bio", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(result.bio, color = Color.White, fontSize = 13.sp)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Interests", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            result.interests.forEach { interest ->
-                Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                    Text("  \u2022  ", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
-                    Text(interest, color = Color.White, fontSize = 13.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Personality Traits", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            result.personalityTraits.forEach { trait ->
-                Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                    Text("  \u2022  ", color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
-                    Text(trait, color = Color.White, fontSize = 13.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Conversation Angles", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(result.fullExtraction, color = Color.White, fontSize = 13.sp)
-
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = onDone,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Done", modifier = Modifier.padding(4.dp))
-            }
+            result.bio?.let { Text("Bio", color = NothingTextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall); Text(it, color = NothingWhite, style = MaterialTheme.typography.bodySmall) }
+            Text("Interests", color = NothingTextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+            result.interests.forEach { Text("\u2022 $it", color = NothingWhite, style = MaterialTheme.typography.bodySmall) }
+            Text("Personality Traits", color = NothingTextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+            result.personalityTraits.forEach { Text("\u2022 $it", color = NothingWhite, style = MaterialTheme.typography.bodySmall) }
+            Text("Conversation Angles", color = NothingTextSecondary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+            Text(result.fullExtraction, color = NothingWhite, style = MaterialTheme.typography.bodySmall)
+            Button(onClick = onDone, colors = ButtonDefaults.buttonColors(containerColor = NothingWhite), shape = RoundedCornerShape(NothingDimens.pillRadius), modifier = Modifier.fillMaxWidth()) { Text("Done", color = NothingBlack) }
         }
     }
 }
-
