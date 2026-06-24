@@ -148,7 +148,7 @@ fun RizzButton(
         
         // "C" logo (hidden during loading)
         if (!isLoading) {
-            CookdLogo(size = 32.dp, textStyle = MaterialTheme.typography.headlineLarge)
+            CookdLogo(size = 32.dp)
         }
     }
 }
