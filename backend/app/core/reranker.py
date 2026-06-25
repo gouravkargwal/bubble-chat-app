@@ -17,6 +17,7 @@ Fallback:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 import structlog
 
@@ -92,7 +93,8 @@ async def rerank_passages(
             )
 
         request = RerankRequest(query=query, passages=formatted)
-        reranked = ranker.rerank(request)
+        # ⚠️ FlashRank's rerank is CPU-bound — offload to thread to avoid blocking the event loop
+        reranked = await asyncio.to_thread(ranker.rerank, request)
 
         # Take top_k results
         top = reranked[:top_k]

@@ -15,11 +15,8 @@ from app.infrastructure.database.models import Interaction
 from app.services.rag_improvements import (
     calculate_adaptive_threshold,
     generate_query_variants,
-    log_retrieval_feedback,
     merge_contexts,
-    mmr_rerank,
     rate_fact_importance,
-    select_facts_within_budget,
 )
 
 logger = structlog.get_logger(__name__)
@@ -82,12 +79,19 @@ async def get_match_context(
                 except (TypeError, ValueError):
                     expected_dim = None
 
+            # 🎯 Fix #7: Prepend person_name early so all embeddings are automatically
+            # enriched for both core_lore and past_memories — no redundant embed_text later.
+            query_base = current_text.strip()
+            if person_name and person_name.strip():
+                query_base = f"{person_name}: {query_base}"
+
             # Generate query variants for multi-query retrieval
+            # person_name="" since it's already prepended in query_base above
             query_variants = [
                 qv.strip()
                 for qv in generate_query_variants(
-                    current_text=current_text,
-                    person_name=person_name,
+                    current_text=query_base,
+                    person_name="",
                     max_variants=3,
                 )
                 if qv.strip()
@@ -116,10 +120,18 @@ async def get_match_context(
                         all_query_embeddings.append(emb)
                         all_query_emb_strs.append(f"[{','.join(str(x) for x in emb)}]")
 
-            # Primary embedding is the first one (original query)
+            # Primary embedding is the averaged vector across all query variants
+            # (Fix #2: multi-query fusion — no more throwing away extra embeddings)
             if all_query_embeddings:
-                query_embedding = all_query_embeddings[0]
-                emb_str = all_query_emb_strs[0]
+                num_emb = len(all_query_embeddings)
+                if num_emb > 1:
+                    # Average all variant embeddings for broader semantic coverage
+                    avg_emb = [sum(dims) / num_emb for dims in zip(*all_query_embeddings)]
+                    query_embedding = avg_emb
+                    emb_str = f"[{','.join(str(x) for x in avg_emb)}]"
+                else:
+                    query_embedding = all_query_embeddings[0]
+                    emb_str = all_query_emb_strs[0]
             else:
                 query_embedding = None
                 emb_str = None
@@ -162,55 +174,32 @@ async def get_match_context(
     # RRF fuses top 50 candidates, then reranker narrows to top 8
     _RERANK_POOL = 50
     _LORE_FUSION_POOL = _RERANK_POOL
-    # Improvement #4: always-surface high-salience facts regardless of query
-    # relevance. These are identity/status facts that must never fall off the
-    # top-K filter (religion, marital status, location, diet, etc.).
-    _HIGH_SALIENCE_KEYWORDS = (
-        "divorced",
-        "married",
-        "single",
-        "widowed",
-        "has kids",
-        "no kids",
-        "muslim",
-        "hindu",
-        "sikh",
-        "christian",
-        "jain",
-        "buddhist",
-        "vegetarian",
-        "vegan",
-        "non-vegetarian",
-        "lives in",
-        "from ",
-        "based in",
-        "hometown",
-        "works as",
-        "job",
-        "profession",
-        "engineer",
-        "doctor",
-        "lawyer",
-        "phd",
-        "masters",
-        "degree",
-    )
+    # Fix #5: high-salience identity facts pinned via SQL (fact_category='identity' OR regex)
+    # instead of loading all facts into Python memory.
     pinned_facts: list[str] = []
     try:
-        all_facts_row = await db.execute(
+        # Fix #5: Push pinned-fact filtering to SQL instead of loading all facts into Python.
+        # Uses both fact_category (set at write time) and regex fallback for coverage.
+        pinned_rows = await db.execute(
             text("""
                 SELECT fact_text FROM conversation_memories
                 WHERE user_id = :user_id
                   AND conversation_id = :conversation_id
                   AND superseded_at IS NULL
+                  AND (
+                      fact_category = 'identity'
+                      OR fact_text ~* 'divorced|married|single|widowed|has kids|no kids|muslim|hindu|sikh|christian|jain|buddhist|vegetarian|vegan|non.vegetarian|lives in|from |based in|hometown|works as|job|profession|engineer|doctor|lawyer|phd|masters|degree'
+                  )
                 ORDER BY created_at ASC
+                LIMIT 20
                 """),
             {"user_id": user_id, "conversation_id": conversation_id},
         )
-        for r in all_facts_row.mappings().all():
-            ft = (r["fact_text"] or "").strip().lower()
-            if any(kw in ft for kw in _HIGH_SALIENCE_KEYWORDS):
-                pinned_facts.append(r["fact_text"].strip())
+        pinned_facts = [
+            r["fact_text"].strip()
+            for r in pinned_rows.mappings().all()
+            if r["fact_text"]
+        ]
     except Exception:
         pinned_facts = []
 
@@ -248,6 +237,8 @@ async def get_match_context(
             # embedding can miss: she names a place/person/topic now ("Goa", "Pixel")
             # and we surface the stored fact mentioning it even if it sat just
             # outside the vector pool. Postgres built-in FTS, no extension needed.
+            # Fix #3: Use websearch_to_tsquery which handles conversational stop words
+            # better than plainto_tsquery (was failing on "So what are you up to?")
             lex_rows = await db.execute(
                 text("""
                     SELECT fact_text
@@ -257,10 +248,10 @@ async def get_match_context(
                       AND superseded_at IS NULL
                       AND embedding IS NOT NULL
                       AND to_tsvector('simple', fact_text)
-                          @@ plainto_tsquery('simple', :q)
+                          @@ websearch_to_tsquery('simple', :q)
                     ORDER BY ts_rank(
                         to_tsvector('simple', fact_text),
-                        plainto_tsquery('simple', :q)
+                        websearch_to_tsquery('simple', :q)
                     ) DESC
                     LIMIT :pool
                     """),
@@ -292,7 +283,8 @@ async def get_match_context(
             seen: set[str] = set(fused)
             lore_facts: list[str] = list(fused)
             # Facts that never embedded (write-time embed failure) can't be ranked by
-            # either retriever — append unconditionally so they're never dropped.
+            # either retriever — append a few so they're never completely dropped.
+            # Fix #6: Limit to 5 to avoid blowing up the prompt budget.
             unranked_rows = await db.execute(
                 text("""
                     SELECT fact_text
@@ -302,6 +294,7 @@ async def get_match_context(
                       AND superseded_at IS NULL
                       AND embedding IS NULL
                     ORDER BY created_at ASC
+                    LIMIT 5
                     """),
                 {"user_id": user_id, "conversation_id": conversation_id},
             )
@@ -342,18 +335,23 @@ async def get_match_context(
                     )
                 except Exception as e:
                     logger.warning("reranker_failed", exc_info=True)
-            # Improvement #7: Apply MMR diversity filter on the reranked set
-            # Ensures no two consecutive facts have >50% word overlap
+            # Fix #4: MMR checks overlap against ALL previously selected facts,
+            # not just the immediately preceding one. Word-overlap comparison
+            # ensures diversity across the full selected set.
             if len(merged) > 2:
                 diversified = [merged[0]]
+                all_selected_word_sets = [set(merged[0].lower().split())]
                 dropped = 0
                 for fact in merged[1:]:
-                    last_words = set(diversified[-1].lower().split())
                     current_words = set(fact.lower().split())
-                    union = len(last_words | current_words)
-                    overlap = len(last_words & current_words) / max(union, 1)
-                    if overlap < 0.5:
+                    max_overlap = 0.0
+                    for selected_words in all_selected_word_sets:
+                        union = len(selected_words | current_words)
+                        overlap = len(selected_words & current_words) / max(union, 1)
+                        max_overlap = max(max_overlap, overlap)
+                    if max_overlap < 0.5:
                         diversified.append(fact)
+                        all_selected_word_sets.append(current_words)
                     else:
                         dropped += 1
                 if dropped:
@@ -393,7 +391,8 @@ async def get_match_context(
         pass
 
     # 4) past_memories — query-aware snippet retrieval from interactions.
-    #    Improvement: adaptive threshold + token budgeting + deduplication
+    #    Fix #7: Reuse the already-enriched query_embedding (person_name is already
+    #    prepended at the top) to avoid a redundant embed_text API call.
     try:
         if not emb_str:
             return {
@@ -402,19 +401,9 @@ async def get_match_context(
                 "past_memories": "",
             }
 
-        # Enrich past_memories query with person_name — same enrichment as core_lore
-        # so "kya plan hai" + "Dinisha" surfaces her plan-related turns specifically.
-        pm_query = current_text.strip()
-        if person_name and person_name.strip():
-            pm_query = f"{person_name}: {pm_query}"
-        pm_embedding = (
-            await embed_text(pm_query)
-            if pm_query != current_text.strip()
-            else query_embedding
-        )
-        pm_emb_str = (
-            f"[{','.join(str(x) for x in pm_embedding)}]" if pm_embedding else emb_str
-        )
+        # Reuse the enriched query embedding — no redundant API call
+        pm_embedding = query_embedding
+        pm_emb_str = emb_str
 
         _PM_RECENCY_LAMBDA = 0.1
         _PM_RECENCY_HALFLIFE_S = 3 * 86400  # 3 days

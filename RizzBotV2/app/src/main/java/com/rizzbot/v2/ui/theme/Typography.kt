@@ -18,7 +18,10 @@ import com.rizzbot.v2.R
 
 private val JakartaFontFamily = FontFamily(
     Font(R.font.plus_jakarta_regular, FontWeight.Normal),
+    Font(R.font.plus_jakarta_medium, FontWeight.Medium),
+    Font(R.font.plus_jakarta_semibold, FontWeight.SemiBold),
     Font(R.font.plus_jakarta_bold, FontWeight.Bold),
+    Font(R.font.plus_jakarta_extrabold, FontWeight.ExtraBold),
 )
 
 val NothingTypography: Typography
