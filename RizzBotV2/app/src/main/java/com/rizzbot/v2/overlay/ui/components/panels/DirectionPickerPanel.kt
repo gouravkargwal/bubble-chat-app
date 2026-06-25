@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,6 +36,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.rizzbot.v2.domain.model.ConversationDirection
 import com.rizzbot.v2.domain.model.DirectionWithHint
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 /**
  * Panel for selecting conversation direction and vibe
  */
@@ -58,13 +64,12 @@ fun DirectionPicker(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scrollState = rememberScrollState()
-    val accent = MaterialTheme.colorScheme.primary
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(scrollState)
-            .padding(16.dp)
+            .padding(NothingDimens.cardPadding)
     ) {
         InputModeToggle(
             isGalleryMode = isGalleryMode,
@@ -73,9 +78,8 @@ fun DirectionPicker(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Show all 7 directions - locked ones will show with lock icon
+        // Show all 7 directions - locked ones will show with lock indicator
         ConversationDirection.entries.forEach { direction ->
-            // Match enum name (e.g., "REVIVE_CHAT") to backend format (e.g., "revive_chat")
             val dirKey = direction.name.lowercase()
             val isLocked = allowedDirections.isNotEmpty() && dirKey !in allowedDirections
 
@@ -83,10 +87,10 @@ fun DirectionPicker(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(NothingDimens.cardRadius))
                     .background(
-                        if (isLocked) accent.copy(alpha = 0.05f)
-                        else Color.White.copy(alpha = 0.05f)
+                        if (isLocked) NothingWhite.copy(alpha = 0.05f)
+                        else NothingWhite.copy(alpha = 0.03f)
                     )
                     .clickable(enabled = !isLoading) {
                         if (isLocked) onUpgrade() else onDirectionSelected(DirectionWithHint(direction))
@@ -94,9 +98,9 @@ fun DirectionPicker(
                     .then(
                         if (isLocked) Modifier
                             .border(
-                                width = 1.dp,
-                                color = accent.copy(alpha = 0.9f),
-                                shape = RoundedCornerShape(12.dp)
+                                width = NothingDimens.borderThickness,
+                                color = NothingWhite.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(NothingDimens.cardRadius)
                             )
                         else Modifier
                     )
@@ -105,14 +109,14 @@ fun DirectionPicker(
             ) {
                 Text(
                     direction.displayName,
-                    color = if (isLocked) Color.Gray else Color.White,
+                    color = if (isLocked) NothingTextSecondary else NothingWhite,
                     fontSize = 14.sp
                 )
                 if (isLocked) {
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
-                        "[LOCKED]",
-                        color = Color.White.copy(alpha = 0.5f),
+                        "LOCKED",
+                        color = NothingTextTertiary,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -126,8 +130,8 @@ fun DirectionPicker(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 2.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = if (customHintsEnabled) 0.05f else 0.02f))
+                    .clip(RoundedCornerShape(NothingDimens.cardRadius))
+                    .background(if (customHintsEnabled) NothingWhite.copy(alpha = 0.03f) else NothingWhite.copy(alpha = 0.02f))
                     .clickable(enabled = !isLoading) {
                         if (customHintsEnabled) {
                             showCustomInput = true
@@ -139,9 +143,9 @@ fun DirectionPicker(
                     .then(
                         if (!customHintsEnabled) Modifier
                             .border(
-                                width = 1.dp,
-                                color = accent.copy(alpha = 0.9f),
-                                shape = RoundedCornerShape(12.dp)
+                                width = NothingDimens.borderThickness,
+                                color = NothingWhite.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(NothingDimens.cardRadius)
                             )
                         else Modifier
                     )
@@ -149,14 +153,14 @@ fun DirectionPicker(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Custom hint",
-                    color = if (customHintsEnabled) Color.White else Color.Gray,
+                    color = if (customHintsEnabled) NothingWhite else NothingTextSecondary,
                     fontSize = 14.sp
                 )
                 if (!customHintsEnabled) {
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
-                        "[LOCKED]",
-                        color = Color.White.copy(alpha = 0.5f),
+                        "LOCKED",
+                        color = NothingTextTertiary,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -170,16 +174,18 @@ fun DirectionPicker(
             OutlinedTextField(
                 value = customHint,
                 onValueChange = { customHint = it },
-                placeholder = { Text("e.g., mention that I also love hiking", color = Color.Gray) },
+                placeholder = { Text("e.g., mention that I also love hiking", color = NothingTextTertiary) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = accent,
-                    unfocusedBorderColor = Color.Gray
+                    focusedTextColor = NothingWhite,
+                    unfocusedTextColor = NothingWhite,
+                    focusedBorderColor = NothingWhite,
+                    unfocusedBorderColor = NothingBorder,
+                    cursorColor = NothingWhite,
                 ),
+                shape = RoundedCornerShape(NothingDimens.cardRadius),
                 singleLine = true
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -190,10 +196,11 @@ fun DirectionPicker(
                     onDirectionSelected(DirectionWithHint(customHint = customHint))
                 },
                 enabled = !isLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = accent),
-                modifier = Modifier.fillMaxWidth()
+                colors = ButtonDefaults.buttonColors(containerColor = NothingWhite),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(NothingDimens.cardRadius),
             ) {
-                Text(if (isLoading) "Cooking..." else "Generate")
+                Text(if (isLoading) "Cooking..." else "Generate", color = NothingBlack)
             }
         }
     }
@@ -208,8 +215,8 @@ private fun InputModeToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .clip(RoundedCornerShape(NothingDimens.pillRadius))
+            .background(NothingWhite.copy(alpha = 0.06f))
             .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -242,17 +249,16 @@ private fun ModeChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val accent = MaterialTheme.colorScheme.primary
     val background =
-        if (selected) accent.copy(alpha = 0.95f)
-        else Color.Transparent
+        if (selected) NothingWhite
+        else NothingSurface
     val contentColor =
-        if (selected) Color.Black
-        else Color.White.copy(alpha = 0.85f)
+        if (selected) NothingBlack
+        else NothingWhite.copy(alpha = 0.85f)
 
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(NothingDimens.pillRadius))
             .background(background)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 6.dp, horizontal = 10.dp),

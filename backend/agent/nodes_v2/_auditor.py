@@ -93,7 +93,7 @@ class AuditorNodeOutput(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def auditor_node(state: AgentState) -> dict:
+async def auditor_node(state: AgentState) -> dict:
     """
     Evaluates the quality of generated replies against context, archetype,
     direction, and substance rules.
@@ -301,59 +301,34 @@ def auditor_node(state: AgentState) -> dict:
         return {"is_cringe": False, "auditor_feedback": ""}
     failed_verdicts = [v for v in audit.verdicts if not v.passes]
 
-    if audit.overall_passes:
-        logger.info(
-            "auditor_node_full_verdicts",
-            trace_id=trace_id,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            direction=direction,
-            overall_passes=True,
-            summary=audit.summary,
-            verdicts=[
-                {
-                    "reply_index": v.reply_index,
-                    "passes": v.passes,
-                    "issue": v.issue,
-                    "pivot_suggestion": v.pivot_suggestion,
-                }
-                for v in audit.verdicts[:4]
-            ],
-        )
-        logger.info(
-            "llm_lifecycle",
-            stage="auditor_node_complete",
-            trace_id=trace_id,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            overall_passes=True,
-            failed_reply_count=len(failed_verdicts),
-            elapsed_ms=int((time.monotonic() - t_start) * 1000),
-            usage_phase=usage_row.get("phase"),
-            usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
-            usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
-        )
-        return {
-            "is_cringe": False,
-            "auditor_feedback": "",
-            "gemini_usage_log": [usage_row],
-        }
-
-    # Build structured feedback for the generator.
-    # Explicitly mark passing replies so the generator preserves their exact
-    # hooks/tone instead of regenerating from scratch and losing diversity.
-    passing_verdicts = [v for v in audit.verdicts if v.passes]
+    # ---------------------------------------------------------------------------
+    # Targeted Rewrite Mapping (Extract Winners vs Losers)
+    # ---------------------------------------------------------------------------
+    passed_replies = []
+    failed_assignments = []
     feedback_lines = [audit.summary, ""]
-    for v in passing_verdicts:
-        feedback_lines.append(
-            f"- Reply {v.reply_index}: PASS — keep this structure and hook exactly, only improve the failing replies."
-        )
-    feedback_lines.append("")
-    for v in failed_verdicts:
-        line = f"- Reply {v.reply_index}: {v.issue}"
-        if v.pivot_suggestion:
-            line += f"\n  PIVOT → {v.pivot_suggestion}"
-        feedback_lines.append(line)
+
+    for idx, verdict in enumerate(audit.verdicts[:4]):
+        original_reply = eval_payload["replies"][idx]
+
+        if verdict.passes:
+            passed_replies.append(original_reply)
+            feedback_lines.append(
+                f"- Reply {idx}: PASS — keep this structure and hook exactly, only improve the failing replies."
+            )
+        else:
+            failed_assignments.append(
+                {
+                    "slot_index": idx,
+                    "assigned_hook": original_reply["text"],
+                    "strategy_label": original_reply["strategy_label"],
+                    "pivot_suggestion": verdict.pivot_suggestion or verdict.issue,
+                }
+            )
+            line = f"- Reply {idx}: {verdict.issue}"
+            if verdict.pivot_suggestion:
+                line += f"\n  PIVOT → {verdict.pivot_suggestion}"
+            feedback_lines.append(line)
 
     logger.info(
         "auditor_node_full_verdicts",
@@ -361,17 +336,10 @@ def auditor_node(state: AgentState) -> dict:
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
-        overall_passes=False,
+        overall_passes=audit.overall_passes,
         summary=audit.summary,
-        verdicts=[
-            {
-                "reply_index": v.reply_index,
-                "passes": v.passes,
-                "issue": v.issue,
-                "pivot_suggestion": v.pivot_suggestion,
-            }
-            for v in audit.verdicts[:4]
-        ],
+        passed_count=len(passed_replies),
+        failed_count=len(failed_assignments),
     )
 
     logger.info(
@@ -380,8 +348,8 @@ def auditor_node(state: AgentState) -> dict:
         trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
-        overall_passes=False,
-        failed_reply_count=len(failed_verdicts),
+        overall_passes=audit.overall_passes,
+        failed_reply_count=len(failed_assignments),
         summary_preview=(audit.summary or "")[:160],
         elapsed_ms=int((time.monotonic() - t_start) * 1000),
         usage_phase=usage_row.get("phase"),
@@ -390,7 +358,9 @@ def auditor_node(state: AgentState) -> dict:
     )
 
     return {
-        "is_cringe": True,
+        "is_cringe": not audit.overall_passes,
+        "safe_replies": passed_replies,
+        "failed_assignments": failed_assignments,
         "auditor_feedback": "\n".join(feedback_lines),
         "gemini_usage_log": [usage_row],
     }

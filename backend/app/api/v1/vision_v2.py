@@ -56,7 +56,10 @@ from agent.nodes_v2._shared import (
 from agent.nodes_v2._vision import VisionNodeOutput
 from agent.nodes_v2._personality import derive_archetype
 from agent.state import AgentState
-from app.prompts.vision_api import _multi_screenshot_user_hint, build_vision_system_prompt
+from app.prompts.vision_api import (
+    _multi_screenshot_user_hint,
+    build_vision_system_prompt,
+)
 from langchain_core.messages import HumanMessage, SystemMessage
 
 router = APIRouter()
@@ -246,14 +249,10 @@ async def perform_full_vision_analysis(
 # ---------------------------------------------------------------------------
 
 
-def _run_v2_agent_sync(initial_state: dict) -> dict:
+async def _run_v2_agent(initial_state: dict) -> dict:
     from agent.graph_v2 import rizz_agent_v2
 
-    return rizz_agent_v2.invoke(initial_state)
-
-
-async def _run_v2_agent(initial_state: dict) -> dict:
-    return await asyncio.to_thread(_run_v2_agent_sync, initial_state)
+    return await rizz_agent_v2.ainvoke(initial_state)
 
 
 # ---------------------------------------------------------------------------

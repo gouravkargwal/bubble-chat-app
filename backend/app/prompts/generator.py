@@ -18,24 +18,205 @@ from app.prompts.prompt_fragments import _resolve_scene_direction
 # ---------------------------------------------------------------------------
 
 _DIRECTION_WORD_LIMITS: dict[str, tuple[int, int, str]] = {
-    "opener": (4, 9, "Tight — 4-9 words. No greeting, fire the observation from her profile and stop."),
-    "quick_reply": (5, 12, "Natural — 5-12 words. Ride her last message into a push or flip."),
-    "keep_playful": (5, 12, "Natural — 5-12 words. Extend the banter, don't explain the joke."),
+    "opener": (
+        4,
+        9,
+        "Tight — 4-9 words. No greeting, fire the observation from her profile and stop.",
+    ),
+    "quick_reply": (
+        5,
+        12,
+        "Natural — 5-12 words. Ride her last message into a push or flip.",
+    ),
+    "keep_playful": (
+        5,
+        12,
+        "Natural — 5-12 words. Extend the banter, don't explain the joke.",
+    ),
     "tease": (4, 10, "Sharp — 4-10 words. A quick jab lands harder than a long setup."),
-    "change_topic": (5, 11, "Pivot — 5-11 words. State the new angle quickly, don't meta-comment."),
-    "revive_chat": (4, 8, "Ultra-light — 4-8 words. Low investment, easy to respond to."),
-    "get_number": (7, 12, "Room for ask — 7-12 words. Needs the ask + anchor context but no explaining."),
-    "ask_out": (7, 12, "Room for ask — 7-12 words. Activity + timing reference, then stop."),
-    "go_deeper": (5, 10, "Warm — 5-10 words. Raw and short, not rambling. Acknowledge, don't analyse."),
-    "de_escalate": (6, 12, "Room for warmth — 6-12 words. Acknowledgment + open space forward."),
+    "change_topic": (
+        5,
+        11,
+        "Pivot — 5-11 words. State the new angle quickly, don't meta-comment.",
+    ),
+    "revive_chat": (
+        4,
+        8,
+        "Ultra-light — 4-8 words. Low investment, easy to respond to.",
+    ),
+    "get_number": (
+        7,
+        12,
+        "Room for ask — 7-12 words. Needs the ask + anchor context but no explaining.",
+    ),
+    "ask_out": (
+        7,
+        12,
+        "Room for ask — 7-12 words. Activity + timing reference, then stop.",
+    ),
+    "go_deeper": (
+        5,
+        10,
+        "Warm — 5-10 words. Raw and short, not rambling. Acknowledge, don't analyse.",
+    ),
+    "de_escalate": (
+        6,
+        12,
+        "Room for warmth — 6-12 words. Acknowledgment + open space forward.",
+    ),
 }
 
 _DEFAULT_WORD_LIMIT = (5, 10, "5-10 words.")
 
 
+# ---------------------------------------------------------------------------
+# Strategy → Trait/Behavior Directives for Single-Line Fan-Out
+# ---------------------------------------------------------------------------
+# Each slot in the fan-out gets a unique behavioral directive injected into its
+# system prompt. For OPENERS, the directives emphasize different PERSONALITY
+# TRAITS so each reply approaches her profile from a distinct character angle.
+# For NON-OPENERS (chat directions), the directives emphasize different
+# TACTICAL STRATEGIES so each reply uses a different conversational blueprint.
+# This prevents semantic convergence even when two slots land on similar hooks.
+
+_STRATEGY_TRAIT_DIRECTIVES: dict[str, str] = {
+    "FRAME CONTROL": (
+        "You are the critic/fan judge. Do not ask a question. Write a line that "
+        "confidently places Kabir in the dominant position of evaluating her profile "
+        "choice as if she is putting on a show for him. Force her to defend or play "
+        "along with the narrative."
+    ),
+    "PATTERN INTERRUPT": (
+        "Completely break the conversational fourth wall. Subvert her expectations by "
+        "bypassing standard logic. Comment on the staging, lighting, or formatting of "
+        "her choice in a way that shows Kabir cuts right through curated pretense."
+    ),
+    "PUSH-PULL": (
+        "Deliver a validation immediately followed by a playful retraction or "
+        "high-standard challenge. Compliment her choice or trait subtly, but instantly "
+        "undermine it with a witty caveat that demands she try harder."
+    ),
+    "VALUE ANCHOR": (
+        "Maintain complete emotional detachment. Write an observational, matter-of-fact "
+        "deadpan line about her choice that strips it of its curated importance while "
+        "keeping the vibe light and unbothered."
+    ),
+    "SOFT CLOSE": (
+        "Keep it light and open-ended. Write a line that implies Kabir is interested "
+        "but not invested, leaving the next move entirely in her court with a relaxed, "
+        "low-pressure vibe."
+    ),
+    "HONEST FRAME": (
+        "Drop the game entirely. Write a direct, vulnerable-but-not-needy line that "
+        "names something genuine about the interaction without over-explaining or "
+        "asking for validation."
+    ),
+}
+
+_STRATEGY_BEHAVIOR_DIRECTIVES: dict[str, str] = {
+    "FRAME CONTROL": (
+        "Assert Kabir's frame by making a confident assumption about her actions or "
+        "choices. Set the premise she must play along with — do not ask a question "
+        "that gives her control of the direction."
+    ),
+    "PATTERN INTERRUPT": (
+        "Break her expected response pattern with a witty non-sequitur or unexpected "
+        "angle. Do not respond to her message head-on — surprise her by reframing "
+        "what she said."
+    ),
+    "PUSH-PULL": (
+        "Combine a subtle validation with a playful challenge. Make her feel seen but "
+        "also slightly off-balance — the pull makes the push land harder."
+    ),
+    "VALUE ANCHOR": (
+        "Anchor Kabir's value by being unbothered and detached. Let her effort or "
+        "message be the focus while he remains relaxed and unreactive."
+    ),
+    "SOFT CLOSE": (
+        "Keep the door open with minimal investment. Acknowledge what she said and "
+        "offer a low-pressure path forward without asking directly."
+    ),
+    "HONEST FRAME": (
+        "Speak plainly without tactical framing. A short, genuine line that names "
+        "something true about the interaction without evaluation or agenda."
+    ),
+}
+
+
+def _resolve_strategy_directive(strategy: str, direction: str) -> str:
+    """
+    Pick the right behavioral directive for this slot.
+
+    For openers, inject trait-focused directives (personality angle).
+    For all other directions, inject strategy-focused directives (tactical blueprint).
+    Falls back to a generic instruction if the strategy isn't in the map.
+    """
+    if direction == "opener":
+        return _STRATEGY_TRAIT_DIRECTIVES.get(
+            strategy,
+            f"Write a reply that executes the '{strategy}' strategy naturally.",
+        )
+    return _STRATEGY_BEHAVIOR_DIRECTIVES.get(
+        strategy,
+        f"Write a reply that executes the '{strategy}' strategy naturally.",
+    )
+
+
 def _word_limit_for_direction(direction: str) -> tuple[int, int, str]:
     """Return (min_words, max_words, description) for the given direction."""
     return _DIRECTION_WORD_LIMITS.get(direction, _DEFAULT_WORD_LIMIT)
+
+
+# ---------------------------------------------------------------------------
+# New: Single-line generator prompt for Async Fan-Out pattern
+# ---------------------------------------------------------------------------
+
+_SINGLE_LINE_GENERATOR_PROMPT = """
+You are an award-winning screenwriter for Netflix India, celebrated for writing hyper-realistic, sharp, and effortless modern dialogue for youth-centric web series (like 'Mismatched' or 'Panchayat').
+
+You are currently writing an authentic texting scene between two characters:
+
+- SENDER ("Kabir"): A confident, slightly detached, witty guy from an Indian metro city. He talks in relaxed, unbothered, lowercase sentences. He never uses emojis, exclamation points, or formal punctuation.
+- RECEIVER ("{person_name}"): A girl he recently crossed paths with.
+{photo_persona_section}
+
+CRITICAL DIALECT & STYLE CONSTRAINTS:
+
+1. Pure Contemporary Hinglish: Kabir speaks exactly how sharp, modern young adults text on WhatsApp. He organically mixes Romanized Hindi phrases (matlab, yaar, thoda, bas, acha, scene, vaise, ladai) without making them look forced or robotic. Never use stiff, formal, or textbook English.
+2. Format Rules: Strictly lowercase text values for his dialogue. Skip formal punctuation, periods, and trailing filler. Fire the spike and stop immediately—never explain the subtext or the joke.
+3. {word_limit_rule}
+4. The Spike: Every single option must carry an edge—a bold playful assumption, a deadpan challenge, or a confident hot take. Avoid nice-guy validation, clinical analytical statements, or generic compliments.
+5. Alphabet Constraint: Use ONLY standard Latin characters (a-z) for all text dialogue outputs. Under no circumstance should any Cyrillic, Greek, Devnagari, or foreign scripts leak into the string data.
+
+STALE LINE PREVENTION:
+
+Before writing your reply, check `last_ai_replies_shown` in the payload (if present). Your reply must be ENTIRELY NOVEL — no similar phrasing, structure, or core concept to any line in that array. If you are on a rewrite, also check `previous_replies` and `AUDITOR_FEEDBACK` for what needs fixing.
+
+YOUR ASSIGNED TASK — YOU MUST ANCHOR ON THIS EXACT DETAIL:
+
+- Assigned Hook: "{assigned_hook}"
+- Assigned Strategy: "{assigned_strategy}"
+
+You are writing EXACTLY ONE reply. Your reply must be anchored on the specific hook above and must execute the specific strategy above. Do not invent a different hook or a different strategy.
+
+{strategy_directive_section}
+
+OUTPUT SCHEMA — YOU MUST OUTPUT EXACTLY THIS JSON:
+
+{{"text": "...", "strategy_label": "...", "coach_reasoning": "..."}}
+
+- text: The single reply line from Kabir.
+- strategy_label: MUST be exactly one of: PUSH-PULL, FRAME CONTROL, SOFT CLOSE, VALUE ANCHOR, PATTERN INTERRUPT, HONEST FRAME. Use the assigned strategy.
+- coach_reasoning: One short sentence explaining why this angle fits the context and archetype.
+
+CURRENT SCENE TIMELINE:
+
+{scene_direction}
+- Current Scene Dialect: {detected_dialect}
+- Text Transcript Log:
+  {transcript_text}
+{custom_hint_section}
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +340,7 @@ def _build_generator_prompt(
     photo_persona_section = ""
     if pp:
         photo_persona_section = (
-            f"\nHER CURATED AESTHETIC (photo persona): \"{pp}\" — "
+            f'\nHER CURATED AESTHETIC (photo persona): "{pp}" — '
             "Kabir's lines should subtly align with or play against this vibe.\n"
         )
 
@@ -169,8 +350,8 @@ def _build_generator_prompt(
         f"LENGTH RULE — NON-NEGOTIABLE: Every reply MUST be {min_w} to {max_w} words. "
         f"A word is any whitespace-separated token. {desc} "
         f"Shorter is better: {min_w}-{min_w + 2} words is ideal. "
-        "If a reply needs a comma, a \"that/who/which\" clause, or "
-        "\"but/so/or\" to hold itself together, it is TOO LONG. "
+        'If a reply needs a comma, a "that/who/which" clause, or '
+        '"but/so/or" to hold itself together, it is TOO LONG. '
         f"A {max_w}-word cap means the spike must fire immediately with zero setup. "
         "Count your words before finalizing. If a reply is over the limit, "
         "rewrite it to fit — do not assume any external system will fix it."
@@ -181,6 +362,75 @@ def _build_generator_prompt(
         scene_direction=scene_direction,
         detected_dialect=detected_dialect,
         transcript_text=transcript_text,
+        custom_hint_section=custom_hint_section,
+        photo_persona_section=photo_persona_section,
+        word_limit_rule=word_limit_rule,
+    )
+
+
+def _build_single_line_prompt(
+    person_name: str,
+    direction: str,
+    detected_dialect: str,
+    transcript_text: str,
+    assigned_hook: str,
+    assigned_strategy: str,
+    custom_hint: str = "",
+    photo_persona: str = "",
+) -> str:
+    """Build the stripped-down single-line generator prompt for async fan-out.
+
+    Each slot receives a strategy-specific behavioral directive injected into
+    the prompt. For openers, the directive targets a distinct PERSONALITY TRAIT
+    so each reply approaches her profile from a completely different character
+    angle. For all other directions, the directive targets a distinct TACTICAL
+    STRATEGY so each reply uses a different conversational blueprint.
+    """
+    scene_direction = _resolve_scene_direction(direction)
+
+    hint = (custom_hint or "").strip()
+    custom_hint_section = ""
+    if hint:
+        custom_hint_section = (
+            "\n\nUSER-SPECIFIC REQUEST — HIGHEST PRIORITY:\n"
+            f"The user asked for this angle (verbatim intent): {hint!r}\n"
+            "Strategy and this reply MUST reflect this.\n"
+        )
+
+    pp = (photo_persona or "").strip()
+    photo_persona_section = ""
+    if pp:
+        photo_persona_section = (
+            f'\nHER CURATED AESTHETIC (photo persona): "{pp}" — '
+            "Kabir's line should subtly align with or play against this vibe.\n"
+        )
+
+    min_w, max_w, desc = _word_limit_for_direction(direction)
+    word_limit_rule = (
+        f"LENGTH RULE — NON-NEGOTIABLE: This reply MUST be {min_w} to {max_w} words. "
+        f"A word is any whitespace-separated token. {desc} "
+        f"Shorter is better: {min_w}-{min_w + 2} words is ideal. "
+        'If a reply needs a comma, a "that/who/which" clause, or '
+        '"but/so/or" to hold itself together, it is TOO LONG. '
+        f"A {max_w}-word cap means the spike must fire immediately with zero setup. "
+        "Count your words before finalizing. If the reply is over the limit, "
+        "rewrite it to fit — do not assume any external system will fix it."
+    )
+
+    strategy_directive = _resolve_strategy_directive(assigned_strategy, direction)
+    strategy_directive_section = (
+        "STRATEGY DIRECTIVE — THIS IS YOUR PERSONALITY FOR THIS REPLY:\n"
+        f"{strategy_directive}"
+    )
+
+    return _SINGLE_LINE_GENERATOR_PROMPT.format(
+        person_name=person_name,
+        scene_direction=scene_direction,
+        detected_dialect=detected_dialect,
+        transcript_text=transcript_text,
+        assigned_hook=assigned_hook,
+        assigned_strategy=assigned_strategy,
+        strategy_directive_section=strategy_directive_section,
         custom_hint_section=custom_hint_section,
         photo_persona_section=photo_persona_section,
         word_limit_rule=word_limit_rule,

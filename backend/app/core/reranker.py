@@ -17,10 +17,11 @@ Fallback:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
+import structlog
 
-logger = logging.getLogger(__name__)
+# Convert logger to use your application's structured logging engine
+logger = structlog.get_logger(__name__)
 
 # Lazy-loaded singleton ranker
 _ranker_instance = None

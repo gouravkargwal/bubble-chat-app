@@ -3,20 +3,29 @@ package com.rizzbot.v2.overlay.ui
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingError
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTypography
 import com.rizzbot.v2.ui.theme.NothingWhite
 
 private val OverlayColorScheme = darkColorScheme(
     primary = NothingWhite,
     onPrimary = NothingBlack,
     secondary = NothingWhite,
-    tertiary = Color(0xFFCCCCCC),
-    surface = NothingBlack,
+    tertiary = NothingTextSecondary,
+    surface = NothingSurface,
     onSurface = NothingWhite,
-    background = Color.Transparent,
+    surfaceVariant = NothingSurface,
+    onSurfaceVariant = NothingTextSecondary,
+    background = NothingBlack,
     onBackground = NothingWhite,
-    error = Color(0xFFFF3355)
+    error = NothingError,
+    onError = NothingWhite,
+    outline = NothingBorder,
+    outlineVariant = NothingBorder.copy(alpha = 0.5f),
 )
 
 @Composable
@@ -26,6 +35,7 @@ fun OverlayTheme(
 ) {
     MaterialTheme(
         colorScheme = OverlayColorScheme,
+        typography = NothingTypography,
         content = content
     )
 }

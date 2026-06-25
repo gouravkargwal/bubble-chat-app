@@ -14,15 +14,15 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxSize
 import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.overlay.ui.SuggestionCard
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingWhite
 /**
  * Panel showing generated reply suggestions
  */
@@ -50,10 +50,10 @@ fun SuggestionPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onRegenerate) {
-                Icon(Icons.Default.Refresh, "Regenerate", tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Default.Refresh, "Regenerate", tint = NothingWhite)
             }
             IconButton(onClick = onClear) {
-                Icon(Icons.Default.Delete, "Clear", tint = Color.Gray)
+                Icon(Icons.Default.Delete, "Clear", tint = NothingTextSecondary)
             }
         }
 

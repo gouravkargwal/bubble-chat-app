@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
+import asyncio
 from typing import Any
 
 import structlog
@@ -82,22 +83,36 @@ async def get_match_context(
                     expected_dim = None
 
             # Generate query variants for multi-query retrieval
-            query_variants = generate_query_variants(
-                current_text=current_text,
-                person_name=person_name,
-                max_variants=3,
-            )
+            query_variants = [
+                qv.strip()
+                for qv in generate_query_variants(
+                    current_text=current_text,
+                    person_name=person_name,
+                    max_variants=3,
+                )
+                if qv.strip()
+            ]
 
-            # Embed each variant
-            for qv in query_variants:
-                if qv.strip():
-                    emb = await embed_text(
-                        qv.strip(),
+            # 🚀 SURGICAL SPEED FIX: Fire all embedding network requests concurrently
+            if query_variants:
+                embedding_tasks = [
+                    embed_text(
+                        qv,
                         dimensions=(
                             expected_dim if expected_dim and expected_dim > 0 else None
                         ),
                     )
-                    if emb:
+                    for qv in query_variants
+                ]
+
+                # Resolve all network tasks simultaneously
+                resolved_embeddings = await asyncio.gather(
+                    *embedding_tasks, return_exceptions=True
+                )
+
+                for emb in resolved_embeddings:
+                    # Ensure the result is a valid float array and didn't throw an API error
+                    if emb and isinstance(emb, list):
                         all_query_embeddings.append(emb)
                         all_query_emb_strs.append(f"[{','.join(str(x) for x in emb)}]")
 
@@ -326,8 +341,7 @@ async def get_match_context(
                         top_k=_LORE_TOP_K,
                     )
                 except Exception as e:
-                    logger.warning("reranker_failed", error=str(e))
-
+                    logger.warning("reranker_failed", exc_info=True)
             # Improvement #7: Apply MMR diversity filter on the reranked set
             # Ensures no two consecutive facts have >50% word overlap
             if len(merged) > 2:

@@ -41,14 +41,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.MaterialTheme
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 /**
  * Panel for previewing captured screenshots before generating replies
@@ -83,7 +88,7 @@ fun ScreenshotPreviewPanel(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp)
+            .padding(NothingDimens.cardPadding)
     ) {
         if (bitmaps.isNotEmpty()) {
             Box(
@@ -96,8 +101,8 @@ fun ScreenshotPreviewPanel(
                     contentDescription = "Captured screenshot",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                        .clip(RoundedCornerShape(NothingDimens.cardRadius))
+                        .border(NothingDimens.borderThickness, NothingBorder, RoundedCornerShape(NothingDimens.cardRadius)),
                     contentScale = ContentScale.Fit
                 )
 
@@ -108,12 +113,12 @@ fun ScreenshotPreviewPanel(
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                         .size(32.dp)
-                        .background(Color.Black.copy(alpha = 0.85f), CircleShape)
+                        .background(NothingBlack.copy(alpha = 0.85f), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove screenshot",
-                        tint = Color.White,
+                        tint = NothingWhite,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -137,9 +142,9 @@ fun ScreenshotPreviewPanel(
                             .clip(RoundedCornerShape(10.dp))
                             .background(
                                 if (index == selectedIndex) {
-                                    Color.White.copy(alpha = 0.12f)
+                                    NothingWhite.copy(alpha = 0.12f)
                                 } else {
-                                    Color.White.copy(alpha = 0.04f)
+                                    NothingWhite.copy(alpha = 0.04f)
                                 }
                             )
                             .clickable(enabled = !isLoading) { selectedIndex = index }
@@ -167,7 +172,7 @@ fun ScreenshotPreviewPanel(
                 else ->
                     "${bitmaps.size}/$maxScreenshots screenshots ready"
             },
-            color = Color.Gray,
+            color = NothingTextSecondary,
             fontSize = 13.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
@@ -183,18 +188,18 @@ fun ScreenshotPreviewPanel(
                 onClick = onRetake,
                 enabled = !isLoading,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(NothingDimens.cardRadius)
             ) {
-                Text("Retake", color = Color.White)
+                Text("Retake", color = NothingWhite)
             }
             if (bitmaps.size < maxScreenshots) {
                 OutlinedButton(
                     onClick = onAddMore,
                     enabled = !isLoading,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(NothingDimens.cardRadius)
                 ) {
-                    Text("+ Add more", color = MaterialTheme.colorScheme.primary)
+                    Text("+ Add more", color = NothingWhite)
                 }
             }
         }
@@ -205,15 +210,16 @@ fun ScreenshotPreviewPanel(
             onClick = onConfirm,
             enabled = canGenerate && !isLoading,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            shape = RoundedCornerShape(12.dp)
+            colors = ButtonDefaults.buttonColors(containerColor = NothingWhite),
+            shape = RoundedCornerShape(NothingDimens.cardRadius)
         ) {
             Text(
                 when {
                     isLoading -> "Cooking..."
-                    !canGenerate -> "🔒 Out of free replies"
+                    !canGenerate -> "Out of free replies"
                     else -> "Generate replies"
-                }
+                },
+                color = NothingBlack,
             )
         }
     }

@@ -1,27 +1,5 @@
 package com.rizzbot.v2.overlay.ui.components.panels
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.VectorConverter
@@ -29,11 +7,36 @@ import androidx.compose.animation.core.animateValue
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 /**
  * Loading panel shown while generating replies (Skeleton State)
@@ -71,11 +74,22 @@ fun ProcessingOverlay(modifier: Modifier = Modifier) {
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+        CircularProgressIndicator(
+            color = NothingWhite,
+            strokeWidth = 3.dp,
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Analyzing her vibe...", color = Color.White)
+        Text(
+            "Analyzing her vibe...",
+            color = NothingWhite,
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Spacer(modifier = Modifier.height(4.dp))
-        Text("Cloning your style...", color = Color.Gray)
+        Text(
+            "Cloning your style...",
+            color = NothingTextSecondary,
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 
@@ -93,14 +107,18 @@ fun SkeletonSuggestionCard(modifier: Modifier = Modifier) {
         label = "shimmer_alpha"
     )
 
-    val shimmerColor = Color.White.copy(alpha = alpha)
-    val cardBgColor = Color(0xFF252542)
+    val shimmerColor = NothingWhite.copy(alpha = alpha)
 
-    androidx.compose.material3.Card(
+    Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = cardBgColor),
-        elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(NothingDimens.cardRadius),
+        colors = CardDefaults.cardColors(
+            containerColor = NothingSurface
+        ),
+        border = BorderStroke(
+            NothingDimens.borderThickness,
+            NothingBorder,
+        )
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header
@@ -136,7 +154,7 @@ fun SkeletonSuggestionCard(modifier: Modifier = Modifier) {
             // Footer (Actions)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Box(
                     modifier = Modifier
@@ -156,4 +174,3 @@ fun SkeletonSuggestionCard(modifier: Modifier = Modifier) {
         }
     }
 }
-

@@ -3,7 +3,6 @@ from typing import Annotated, TypedDict, List, Dict, Any, Optional, Literal
 
 from pydantic import BaseModel, Field
 
-
 # ---------- Structured outputs ----------
 
 StrategyLabel = Literal[
@@ -33,7 +32,7 @@ class AnalystOutput(BaseModel):
     visual_transcript: List[ChatBubble] = Field(default_factory=list)
     visual_hooks: List[str] = Field(
         default_factory=list,
-        description="List 3-4 specific physical or environmental details from the photos."
+        description="List 3-4 specific physical or environmental details from the photos.",
     )
     photo_persona: str = Field(
         default="",
@@ -68,9 +67,13 @@ class AnalystOutput(BaseModel):
         description="Chat: three distinct hooks; first must match key_detail. Profile: empty.",
     )
     key_detail: str
-    person_name: str = Field(default="unknown", description="First name if visible, else 'unknown'.")
+    person_name: str = Field(
+        default="unknown", description="First name if visible, else 'unknown'."
+    )
     stage: str = Field(default="early_talking", description="Conversation stage.")
-    their_last_message: str = Field(default="", description="Paraphrase of the other person's last message.")
+    their_last_message: str = Field(
+        default="", description="Paraphrase of the other person's last message."
+    )
     user_last_move: str = Field(
         default="",
         description=(
@@ -147,7 +150,9 @@ class AgentState(TypedDict):
     conversation_id: str | None
     voice_dna_dict: Dict[str, Any]
     conversation_context_dict: Dict[str, Any]
-    ocr_hint_text: str  # last OCR text from hybrid stitch, used for semantic memory search
+    ocr_hint_text: (
+        str  # last OCR text from hybrid stitch, used for semantic memory search
+    )
 
     # Bouncer state
     is_valid_chat: bool
@@ -167,6 +172,8 @@ class AgentState(TypedDict):
     is_cringe: bool
     auditor_feedback: str
     revision_count: int
+    safe_replies: list[dict]
+    failed_assignments: list[dict]
 
     # Token usage + exact gemini_pricing cost per LangChain call (concatenated by LangGraph)
     gemini_usage_log: Annotated[list[dict[str, Any]], operator.add]

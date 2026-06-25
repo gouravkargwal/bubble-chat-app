@@ -3,9 +3,8 @@ package com.rizzbot.v2.overlay.ui.theme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.rizzbot.v2.ui.theme.NeonRed
+import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingSurface
 
@@ -15,7 +14,7 @@ import com.rizzbot.v2.ui.theme.NothingSurface
 object OverlayColors {
     val PanelColor = NothingSurface
     val PanelBorderColor = NothingBorder
-    val ScrimColor = Color.Black.copy(alpha = 0.6f)
+    val ScrimColor = NothingBlack.copy(alpha = 0.7f)
 }
 
 object OverlayShapes {

@@ -4,7 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,9 +33,18 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 /**
  * Data class representing a single generated opener suggestion.
@@ -46,12 +57,12 @@ data class GeneratedOpener(
 /**
  * Displays a list of AI-generated opening messages.
  *
- * Design system rules enforced:
- * - Colors: Only [MaterialTheme.colorScheme] tokens — no hardcoded hex values.
- * - Spacing: Strict 8-point grid (4, 8, 16, 24, 32 dp).
- * - Shapes: Cards use [RoundedCornerShape(12.dp)] with 1dp crisp borders. Buttons use [CircleShape].
+ * Nothing OS design rules enforced:
+ * - Colors: Nothing OS palette (NothingBlack, NothingSurface, NothingWhite, NothingTextSecondary).
+ * - Spacing: NothingDimens tokens for consistency across the app.
+ * - Shapes: Cards use NothingDimens.cardRadius (12dp) with 1dp NothingBorder outlines.
  * - Elevation: None. Drop shadows are forbidden.
- * - Typography: [MaterialTheme.typography.headlineMedium], [bodyLarge], [labelSmall].
+ * - Typography: NothingTypography via MaterialTheme (monospaced labels, bold titles).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,9 +93,9 @@ fun GeneratedOpenersScreen(
                 title = {
                     Text(
                         text = "Kabir's Suggestions",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = NothingWhite,
                     )
                 },
                 navigationIcon = {
@@ -92,29 +103,29 @@ fun GeneratedOpenersScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            tint = NothingWhite,
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    containerColor = NothingBlack,
+                    titleContentColor = NothingWhite,
                 ),
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = NothingBlack,
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
+                start = NothingDimens.screenPadding,
+                end = NothingDimens.screenPadding,
+                top = NothingDimens.screenPadding,
                 bottom = 32.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(NothingDimens.sectionSpacing),
         ) {
             itemsIndexed(openers) { index, opener ->
                 OpenerCard(
@@ -133,12 +144,12 @@ fun GeneratedOpenersScreen(
 }
 
 /**
- * A single opener card showing the generated message, a strategy label, and a copy button.
+ * A single opener card following Nothing OS design system.
  *
- * - Card uses MaterialTheme surface color, no elevation, crisp 1dp border.
- * - Strategy label uses [MaterialTheme.typography.labelSmall] (monospaced in the Nothing OS theme).
- * - Body text uses [MaterialTheme.typography.bodyLarge].
- * - Copy button is a pill-shaped [CircleShape] icon button.
+ * - Card uses NothingSurface, no elevation, crisp 1dp NothingBorder.
+ * - Strategy label uses labelSmall (monospaced in NothingTypography).
+ * - Body text uses bodyMedium.
+ * - Copy button is a clean icon within the card.
  */
 @Composable
 private fun OpenerCard(
@@ -149,17 +160,17 @@ private fun OpenerCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = NothingSurface,
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(NothingDimens.cardRadius),
         border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outline,
+            width = NothingDimens.borderThickness,
+            color = NothingBorder,
         ),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(NothingDimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap),
         ) {
             // Strategy label — uses labelSmall (monospaced in Nothing OS theme)
             Row(
@@ -168,38 +179,47 @@ private fun OpenerCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = opener.strategy,
+                    text = opener.strategy.uppercase(),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = NothingTextSecondary,
                 )
-                Text(
-                    text = "#${index + 1}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(NothingBorder),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${index + 1}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NothingTextSecondary,
+                        fontSize = 11.sp,
+                    )
+                }
             }
 
             // Generated message
             Text(
                 text = opener.text,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.bodyMedium,
+                color = NothingWhite,
             )
 
-            // Copy to Clipboard — pill-shaped icon button (CircleShape per spec)
+            // Copy to Clipboard
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
                 IconButton(
                     onClick = onCopy,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(NothingDimens.minTouchTarget),
                 ) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
                         contentDescription = "Copy opener",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = NothingTextSecondary,
                         modifier = Modifier.size(16.dp),
                     )
                 }

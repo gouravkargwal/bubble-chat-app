@@ -1,14 +1,17 @@
 """
 Node 2: generator_node
 
-Single Gemini call with structured output that performs:
-  1. Strategy decision (wrong moves, right energy, hook point, label)
-  2. Write 4 reply options
-  3. On rewrites: incorporates auditor feedback to fix flagged replies
+Async Fan-Out Ensemble Pattern:
+  - Fires concurrent LLM calls, each tasked with writing exactly ONE line
+    targeting a specific assigned hook and strategy.
+  - On rewrite, selectively re-rolls ONLY the failed slots while preserving
+    previously approved replies to prevent data leakage and repetition.
+  - Stitches results back into the contract expected by the Auditor node.
 
 Model: `settings.gemini_model` (GEMINI_MODEL) with dynamic temperature
 """
 
+import asyncio
 import json
 import time
 from typing import Any, cast
@@ -23,7 +26,6 @@ from agent.nodes_v2._shared import (
     GENERATOR_MODEL,
     opener_hook_priority,
     transcript_text_from_analysis,
-    sanitize_llm_messages_for_logging,
 )
 from agent.state import (
     AgentState,
@@ -34,43 +36,26 @@ from agent.state import (
     WriterOutput,
 )
 from app.config import settings
-from app.prompts.generator import _build_generator_prompt
+from app.prompts.generator import _build_single_line_prompt
 from app.prompts.temperature import calculate_temperature
 
 logger = structlog.get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Schema
+# Schema for single-line calls
 # ---------------------------------------------------------------------------
 
 
-class GeneratorOutput(BaseModel):
-    """Combined strategy + writer output from a single call with structured output."""
+class SingleLineReply(BaseModel):
+    """One reply from a single-line async fan-out call."""
 
-    # Strategy thinking
-    wrong_moves: list[str] = Field(
-        description="2-3 concrete anti-patterns or vibes to avoid for this exact context."
+    text: str = Field(description="The single reply line from Kabir.")
+    strategy_label: StrategyLabel = Field(
+        description="Dominant tactic for this reply; must match what the text actually does."
     )
-    right_energy: str = Field(
-        description="Single phrase naming the tone/energy the set of replies should embody."
-    )
-    hook_point: str = Field(
-        description="The main specific detail, tension, or thread to build around (named explicitly)."
-    )
-    recommended_strategy_label: StrategyLabel = Field(
-        description=(
-            "The headline strategy for the recommended reply. "
-            "If double-texting, favor PATTERN INTERRUPT or VALUE ANCHOR to re-engage."
-        )
-    )
-
-    # Writer output — exactly 4 reply options
-    replies: list[ReplyOption] = Field(
-        description=(
-            "Exactly 4 reply options. Exactly ONE must have is_recommended=true. "
-            "Four genuinely different angles — no repeated hook or parallel phrasing."
-        )
+    coach_reasoning: str = Field(
+        description="One short sentence: why this angle fits context and archetype."
     )
 
 
@@ -79,14 +64,13 @@ class GeneratorOutput(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def generator_node(state: AgentState) -> dict:
+async def generator_node(state: AgentState) -> dict:
     """
-    Gemini call with structured output that performs:
-      1. Strategy decision (wrong moves, right energy, hook point, label)
-      2. Write 4 reply options
-      3. On rewrites: incorporates auditor feedback to fix flagged replies
+    Async Fan-Out Generator — fires concurrent LLM calls, writing
+    exactly ONE reply anchored on a specific assigned hook and strategy.
 
-    Uses dynamic temperature from direction × conversation state.
+    Selectively target-rewrites only failed allocations if in a rewrite loop.
+    Uses dynamic temperature from direction x conversation state.
     Returns partial state update (LangGraph merges into full state).
     """
     user_id = state.get("user_id", "")
@@ -136,11 +120,7 @@ def generator_node(state: AgentState) -> dict:
         custom_hint=custom_hint,
     )
 
-    # --- Model collapse guard: bump temperature on rewrites to break stale phrasing ---
-    # At the base temperature (0.65–0.85) the model stays too close to its original
-    # ideas and just shuffles them. A rewrite must force genuinely different angles,
-    # so we floor the temp to 0.90 so even low-base directions (de_escalate, get_number)
-    # get enough randomness, capped at 0.95 to avoid incoherence.
+    # --- Model collapse guard: bump temperature on rewrites ---
     if is_rewrite:
         llm_temperature = max(llm_temperature + 0.15, 0.90)
         llm_temperature = min(llm_temperature, 0.95)
@@ -150,9 +130,7 @@ def generator_node(state: AgentState) -> dict:
         or "THE LOW-INVESTMENT"
     )
 
-    # Phase 4: once enough scans agree, trust the stable archetype over a single
-    # noisy per-scan classification. The volatile scan can flip on a short reply;
-    # the accumulated mode is far steadier. Only override at >=0.6 confidence.
+    # Phase 4: trust stable archetype when confidence is high
     stable_archetype = (conversation_context or {}).get("stable_archetype")
     archetype_confidence = (conversation_context or {}).get("archetype_confidence", 0.0)
     try:
@@ -173,37 +151,37 @@ def generator_node(state: AgentState) -> dict:
         )
         detected_archetype = str(stable_archetype)
 
-    payload: dict[str, Any] = {
-        "analysis": analysis.model_dump(),
-        "direction": direction,
+    # --- Build payload shared across all micro-calls ---
+    # We include last_ai_replies_shown so each micro-call can do stale-line prevention.
+    shared_payload: dict[str, Any] = {
         "person_name": person_name,
+        "direction": direction,
+        "detected_dialect": getattr(analysis, "detected_dialect", "ENGLISH")
+        or "ENGLISH",
+        "transcript_text": transcript_text,
+        "photo_persona": getattr(analysis, "photo_persona", "") or "",
         "core_lore": core_lore,
         "past_memories": past_memories,
-        "transcript_text": transcript_text,
         "voice_dna_dict": voice_dna,
         "conversation_context_dict": conversation_context,
-        "user_custom_hint": custom_hint,
+        "custom_hint": custom_hint,
+        "key_detail": getattr(analysis, "key_detail", "") or "",
+        "visual_hooks": getattr(analysis, "visual_hooks", None) or [],
+        "durable_facts": getattr(analysis, "durable_facts", None) or [],
+        "their_last_message": getattr(analysis, "their_last_message", "") or "",
+        "inbound_image_detail": getattr(analysis, "inbound_image_detail", "") or "",
+        "last_ai_replies_shown": (
+            (conversation_context or {}).get("last_ai_replies_shown") or []
+        ),
     }
-    # Carry-forward: if THIS scan has no photo read (chat turn, no photos), use the
-    # sticky persona captured at the opener so tone stays matched to her vibe.
-    if not (payload["analysis"].get("photo_persona") or "").strip():
-        carried = (conversation_context or {}).get("photo_persona") or ""
-        if carried:
-            payload["analysis"]["photo_persona"] = carried
-    if direction == "opener":
-        payload["opener_hook_priority"] = opener_hook_priority(
-            analysis, transcript_text
-        )
-
-    # --- On rewrite: inject the previous drafts + auditor feedback ---
     if is_rewrite:
         prev_drafts = state.get("drafts")
         if prev_drafts:
             if isinstance(prev_drafts, dict):
-                payload["previous_replies"] = prev_drafts
+                shared_payload["previous_replies"] = prev_drafts
             elif hasattr(prev_drafts, "model_dump"):
-                payload["previous_replies"] = prev_drafts.model_dump()
-        payload["AUDITOR_FEEDBACK"] = (
+                shared_payload["previous_replies"] = prev_drafts.model_dump()
+        shared_payload["AUDITOR_FEEDBACK"] = (
             "CRITICAL: Your previous replies were rejected by the quality auditor. "
             "Fix the specific issues below while keeping what worked. "
             "Do NOT just regenerate from scratch — improve the flagged replies. "
@@ -213,20 +191,113 @@ def generator_node(state: AgentState) -> dict:
             f"{auditor_feedback}"
         )
 
-    # --- Build conditional prompt using the screenplay hack ---
-    detected_dialect = getattr(analysis, "detected_dialect", "ENGLISH") or "ENGLISH"
-    photo_persona = getattr(analysis, "photo_persona", "") or ""
-    system_prompt = _build_generator_prompt(
-        person_name=person_name,
-        direction=direction,
-        detected_dialect=str(detected_dialect),
-        transcript_text=transcript_text,
-        custom_hint=custom_hint,
-        photo_persona=photo_persona,
-    )
+    # On rewrite, also pass previous strategy if available so the ensemble can
+    # preserve the winning hooks/labels where the auditor said PASS.
+    gen_strategy = state.get("strategy")
+    if gen_strategy and is_rewrite:
+        if isinstance(gen_strategy, dict):
+            shared_payload["previous_strategy"] = gen_strategy
+        elif hasattr(gen_strategy, "model_dump"):
+            shared_payload["previous_strategy"] = gen_strategy.model_dump()
 
-    t_call = time.monotonic()
+    if direction == "opener":
+        shared_payload["opener_hook_priority"] = opener_hook_priority(
+            analysis, transcript_text
+        )
+
+    # -----------------------------------------------------------------------
+    # Define the 4 strict assignments (hook + strategy per slot)
+    # -----------------------------------------------------------------------
+    visual_hooks: list[str] = getattr(analysis, "visual_hooks", None) or []
+    key_detail: str = getattr(analysis, "key_detail", "") or ""
+    photo_persona_hook = getattr(analysis, "photo_persona", "") or ""
+    inbound_image_detail = getattr(analysis, "inbound_image_detail", "") or ""
+    their_last_message = getattr(analysis, "their_last_message", "") or ""
+
+    # Fallback helpers
+    def _first_visual_or_key(idx: int) -> str:
+        if idx < len(visual_hooks) and visual_hooks[idx]:
+            return visual_hooks[idx]
+        return key_detail or "her profile"
+
+    assignments: list[tuple[str, str]] = []
+
+    if (
+        direction == "opener"
+        and opener_hook_priority(analysis, transcript_text) == "text_first"
+    ):
+        # Text-first opener: Reply 1 anchors on bio/text
+        assignments.append(
+            (
+                key_detail or photo_persona_hook or "her profile",
+                "FRAME CONTROL",
+            )
+        )
+        assignments.append((_first_visual_or_key(0), "PATTERN INTERRUPT"))
+        assignments.append((_first_visual_or_key(1), "PUSH-PULL"))
+        assignments.append(
+            (
+                inbound_image_detail or _first_visual_or_key(2) or "any bio detail",
+                "VALUE ANCHOR",
+            )
+        )
+    else:
+        # Default slot mapping
+        assignments.append((key_detail or "her profile", "FRAME CONTROL"))
+        assignments.append((_first_visual_or_key(0), "PATTERN INTERRUPT"))
+        assignments.append((_first_visual_or_key(1), "PUSH-PULL"))
+        assignments.append(
+            (
+                inbound_image_detail
+                or _first_visual_or_key(2)
+                or photo_persona_hook
+                or their_last_message
+                or "any unused detail",
+                "VALUE ANCHOR",
+            )
+        )
+
+    # -----------------------------------------------------------------------
+    # Provider routing
+    # -----------------------------------------------------------------------
+    _provider = settings.generator_provider.strip().lower()
+    _use_groq = _provider == "groq"
+    _run_shadow = _provider == "both"
+    gen_model = settings.groq_model if _use_groq else GENERATOR_MODEL
+
     phase = "v2_generator_rewrite" if is_rewrite else "v2_generator"
+
+    # -----------------------------------------------------------------------
+    # Targeted Rewrite Pre-Population Logic (Filter Winners vs Losers)
+    # -----------------------------------------------------------------------
+    stitched_slots: dict[int, ReplyOption] = {}
+    failed_assignments = state.get("failed_assignments", [])
+
+    if is_rewrite:
+        # Load up the lines that previously passed so we don't clear them out
+        for sr in state.get("safe_replies", []):
+            idx = sr.get("index")
+            if idx is not None:
+                stitched_slots[idx] = ReplyOption(
+                    text=sr["text"],
+                    strategy_label=sr["strategy_label"],
+                    is_recommended=sr.get("is_recommended", False),
+                    coach_reasoning=sr.get("coach_reasoning", ""),
+                )
+
+    # Establish localized logging configurations for fan-out execution
+    active_assignments = []
+    if is_rewrite and failed_assignments:
+        for fa in failed_assignments:
+            idx = fa["slot_index"]
+            strategy = fa["strategy_label"]
+            hook = assignments[idx][0] if idx < len(assignments) else "her profile"
+            active_assignments.append((idx, hook, strategy))
+    else:
+        active_assignments = [
+            (idx, hook, strategy) for idx, (hook, strategy) in enumerate(assignments)
+        ]
+
     logger.info(
         "llm_lifecycle",
         stage="generator_node_start",
@@ -246,23 +317,12 @@ def generator_node(state: AgentState) -> dict:
             interaction_count if isinstance(interaction_count, int) else 0
         ),
         has_voice_dna=bool(voice_dna),
+        fan_out_count=len(active_assignments),
+        assignments=active_assignments,
     )
 
-    # Provider routing — the generator (writer) can A/B on Groq while vision/auditor
-    # stay on Gemini. GENERATOR_PROVIDER:
-    #   "gemini" (default) → Gemini drives the pipeline
-    #   "groq"             → Groq drives the pipeline
-    #   "both"             → Gemini drives the pipeline AND Groq runs in shadow on the
-    #                        SAME prompt (first pass only), both logged in v2_generator_ab
-    #                        for side-by-side comparison. Shadow never affects the response.
-    _provider = settings.generator_provider.strip().lower()
-    _use_groq = _provider == "groq"
-    _run_shadow = _provider == "both"
-    gen_model = settings.groq_model if _use_groq else GENERATOR_MODEL
-
     logger.info(
-        "llm_lifecycle",
-        stage="generator_node_pre_llm",
+        "generator_node_pre_llm",
         trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
@@ -270,116 +330,259 @@ def generator_node(state: AgentState) -> dict:
         model=gen_model,
         provider=settings.generator_provider,
         phase=phase,
-        payload_keys=sorted(payload.keys()),
-        payload_replies_count=(
-            len((payload.get("previous_replies") or {}).get("replies", []))
-            if isinstance(payload.get("previous_replies"), dict)
-            else 0
-        ),
-    )
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=json.dumps(payload)),
-    ]
-
-    logger.info(
-        "generator_node_llm_messages",
-        trace_id=trace_id,
-        user_id=user_id,
-        conversation_id=conversation_id,
-        direction=direction,
-        phase=phase,
-        model=gen_model,
-        provider=settings.generator_provider,
-        messages=sanitize_llm_messages_for_logging(messages),
+        payload_keys=sorted(shared_payload.keys()),
     )
 
-    try:
-        _invoke = invoke_structured_groq if _use_groq else invoke_structured_gemini
-        result, usage_row = _invoke(
+    # -----------------------------------------------------------------------
+    # Async Fan-Out: build target coroutines and fire concurrently
+    # -----------------------------------------------------------------------
+    t_call = time.monotonic()
+
+    async def _call_single_line(
+        slot_index: int,
+        assigned_hook: str,
+        assigned_strategy: str,
+    ) -> tuple[int, SingleLineReply | None, dict]:
+        """Run one single-line LLM call. Returns (index, result, usage_row)."""
+        system_prompt = _build_single_line_prompt(
+            person_name=person_name,
+            direction=direction,
+            detected_dialect=shared_payload["detected_dialect"],
+            transcript_text=transcript_text,
+            assigned_hook=assigned_hook,
+            assigned_strategy=assigned_strategy,
+            custom_hint=custom_hint,
+            photo_persona=shared_payload["photo_persona"],
+        )
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=json.dumps(shared_payload)),
+        ]
+
+        call_phase = f"{phase}_slot_{slot_index}"
+
+        logger.info(
+            "generator_fan_out_slot_start",
+            trace_id=trace_id,
+            slot=slot_index,
+            assigned_hook=assigned_hook,
+            assigned_strategy=assigned_strategy,
+            phase=call_phase,
             model=gen_model,
-            temperature=llm_temperature,
-            schema=GeneratorOutput,
+        )
+
+        t0 = time.monotonic()
+        try:
+            result, usage_row = await asyncio.to_thread(
+                _invoke_sync,
+                model=gen_model,
+                temperature=llm_temperature,
+                schema=SingleLineReply,
+                messages=messages,
+                phase=call_phase,
+                use_groq=_use_groq,
+            )
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            logger.info(
+                "generator_fan_out_slot_complete",
+                trace_id=trace_id,
+                slot=slot_index,
+                phase=call_phase,
+                elapsed_ms=elapsed_ms,
+                text=(result.text or "")[:60],
+                strategy_label=result.strategy_label,
+            )
+            return slot_index, result, usage_row
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - t0) * 1000)
+            logger.error(
+                "generator_fan_out_slot_error",
+                trace_id=trace_id,
+                slot=slot_index,
+                phase=call_phase,
+                error=str(exc),
+                error_type=type(exc).__name__,
+                elapsed_ms=elapsed_ms,
+            )
+            return slot_index, None, {}
+
+    def _invoke_sync(
+        *,
+        model: str,
+        temperature: float,
+        schema: type[BaseModel],
+        messages: list,
+        phase: str,
+        use_groq: bool,
+    ) -> tuple[Any, dict]:
+        """Sync invoke wrapper for asyncio.to_thread."""
+        _invoke = invoke_structured_groq if use_groq else invoke_structured_gemini
+        return _invoke(
+            model=model,
+            temperature=temperature,
+            schema=schema,
             messages=messages,
             phase=phase,
         )
-        gen_out = cast(GeneratorOutput, result)
 
-        # A/B shadow: when GENERATOR_PROVIDER=both, also run Groq on the SAME prompt
-        # (first pass only) and log both reply sets side by side. Best-effort — a
-        # shadow failure must never affect the real (Gemini) response.
-        if _run_shadow and not is_rewrite:
-            try:
-                shadow_result, _ = invoke_structured_groq(
-                    model=settings.groq_model,
-                    temperature=llm_temperature,
-                    schema=GeneratorOutput,
-                    messages=messages,
-                    phase="v2_generator_shadow_groq",
-                )
-                shadow_out = cast(GeneratorOutput, shadow_result)
-                logger.info(
-                    "v2_generator_ab",
-                    trace_id=trace_id,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    direction=direction,
-                    primary_provider="gemini",
-                    primary_model=gen_model,
-                    primary_replies=[
-                        {
-                            "text": r.text,
-                            "strategy_label": r.strategy_label,
-                            "is_recommended": r.is_recommended,
-                        }
-                        for r in gen_out.replies
-                    ],
-                    shadow_provider="groq",
-                    shadow_model=settings.groq_model,
-                    shadow_replies=[
-                        {
-                            "text": r.text,
-                            "strategy_label": r.strategy_label,
-                            "is_recommended": r.is_recommended,
-                        }
-                        for r in shadow_out.replies
-                    ],
-                )
-            except Exception:
-                logger.warning(
-                    "v2_generator_ab_shadow_failed", trace_id=trace_id, exc_info=True
-                )
+    # Fire ONLY the required micro-calls concurrently
+    tasks = [
+        _call_single_line(idx, hook, strategy)
+        for idx, hook, strategy in active_assignments
+    ]
+    raw_results = asyncio.gather(*tasks, return_exceptions=True)
+    results = await raw_results
 
-        logger.info(
-            "generator_node_llm_result",
-            trace_id=trace_id,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            direction=direction,
-            phase=phase,
-            out=gen_out.model_dump(),
-            usage_phase=usage_row.get("phase"),
-            usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
-            usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
+    # -----------------------------------------------------------------------
+    # Stitch: build reply list preserving slot order
+    # -----------------------------------------------------------------------
+    replies: list[ReplyOption] = []
+    usage_rows: list[dict] = []
+    recommended_strategy: str = assignments[0][1]  # default fallback
+    first_success = len(stitched_slots) > 0
+
+    sorted_items: list[tuple[int, Any]] = []
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error(
+                "generator_fan_out_exception",
+                trace_id=trace_id,
+                error=str(r),
+                error_type=type(r).__name__,
+            )
+            continue
+        sorted_items.append(r)
+    sorted_items.sort(key=lambda x: x[0])
+
+    for slot_index, single_line_result, usage_row in sorted_items:
+        if usage_row:
+            usage_rows.append(usage_row)
+
+        if single_line_result is None:
+            # Slot failed — inject localized fallback so we still return complete array
+            fallback_label = (
+                assignments[slot_index][1]
+                if slot_index < len(assignments)
+                else "PATTERN INTERRUPT"
+            )
+            fallback_text = f"(slot {slot_index + 1} failed — generated fallback)"
+            stitched_slots[slot_index] = ReplyOption(
+                text=fallback_text,
+                strategy_label=fallback_label,
+                is_recommended=False,
+                coach_reasoning="(auto-generated fallback due to slot failure)",
+            )
+            continue
+
+        # Determine is_recommended locally for newly generated lines if no slots exist
+        is_rec = not first_success
+        if is_rec:
+            first_success = True
+
+        stitched_slots[slot_index] = ReplyOption(
+            text=single_line_result.text,
+            strategy_label=single_line_result.strategy_label,
+            is_recommended=is_rec,
+            coach_reasoning=single_line_result.coach_reasoning,
         )
-    except Exception as e:
-        logger.error(
-            "agent_v2_generator_llm_error",
-            trace_id=trace_id,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            direction=direction,
-            error=str(e),
-            error_type=type(e).__name__,
-            elapsed_ms=int((time.monotonic() - t_call) * 1000),
-        )
-        raise
 
-    # --- Validate reply count and fix if needed ---
+    # Flatten the finalized stitched map back to standard list ordering (Slots 0-3)
+    for i in range(4):
+        if i in stitched_slots:
+            replies.append(stitched_slots[i])
+        else:
+            replies.append(
+                ReplyOption(
+                    text="(generation incomplete — fallback reply)",
+                    strategy_label="PATTERN INTERRUPT",
+                    is_recommended=False,
+                    coach_reasoning="(auto-generated fallback)",
+                )
+            )
+
+    # Ensure exactly 1 recommended across the final combined array
+    rec_count = sum(1 for r in replies if r.is_recommended)
+    if rec_count == 0 and replies:
+        replies[0] = replies[0].model_copy(update={"is_recommended": True})
+    elif rec_count > 1:
+        seen_first = False
+        for i, r in enumerate(replies):
+            if r.is_recommended:
+                if seen_first:
+                    replies[i] = r.model_copy(update={"is_recommended": False})
+                else:
+                    seen_first = True
+
+    # Pull out recommended strategy label to feed down the pipeline
+    for r in replies:
+        if r.is_recommended:
+            recommended_strategy = r.strategy_label
+            break
+
+    # --- A/B shadow: run Groq on the SAME fan-out prompt set (first pass only) ---
+    if _run_shadow and not is_rewrite:
+        try:
+            shadow_replies = _run_shadow_ensemble(
+                state=state,
+                analysis=analysis,
+                shared_payload=shared_payload,
+                assignments=assignments,
+                llm_temperature=llm_temperature,
+                phase="v2_generator_shadow_groq",
+                use_groq=True,
+            )
+            logger.info(
+                "v2_generator_ab",
+                trace_id=trace_id,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                direction=direction,
+                primary_provider="gemini",
+                primary_model=gen_model,
+                primary_replies=[
+                    {
+                        "text": r.text,
+                        "strategy_label": r.strategy_label,
+                        "is_recommended": r.is_recommended,
+                    }
+                    for r in replies
+                ],
+                shadow_provider="groq",
+                shadow_model=settings.groq_model,
+                shadow_replies=[
+                    {
+                        "text": r.text,
+                        "strategy_label": r.strategy_label,
+                        "is_recommended": r.is_recommended,
+                    }
+                    for r in shadow_replies
+                ],
+            )
+        except Exception:
+            logger.warning(
+                "v2_generator_ab_shadow_failed",
+                trace_id=trace_id,
+                exc_info=True,
+            )
+
+    # --- Validate and fix ---
+    gen_out = _stitch_generator_output(
+        recommended_strategy_label=recommended_strategy,
+        replies=replies,
+    )
     gen_out = validate_and_fix_replies(gen_out)
 
-    # Full observability: log the exact 4 reply options we plan to ship.
-    # NOTE: This can create large log entries; intentionally no truncation.
+    # Aggregate telemetry metrics for only the models that actually fired
+    total_usage = {
+        "phase": phase,
+        "model": gen_model,
+        "prompt_tokens": sum(r.get("prompt_tokens", 0) for r in usage_rows),
+        "candidates_tokens": sum(r.get("candidates_tokens", 0) for r in usage_rows),
+        "total_tokens": sum(r.get("total_tokens", 0) for r in usage_rows),
+        "cost_usd": sum(float(r.get("cost_usd", 0) or 0) for r in usage_rows),
+        "cost_inr": sum(float(r.get("cost_inr", 0) or 0) for r in usage_rows),
+        "call_count": len(usage_rows),
+    }
 
     logger.info(
         "generator_node_full_output",
@@ -389,9 +592,9 @@ def generator_node(state: AgentState) -> dict:
         direction=direction,
         phase=phase,
         recommended_strategy_label=gen_out.recommended_strategy_label,
-        wrong_moves=gen_out.wrong_moves,
-        right_energy=gen_out.right_energy,
-        hook_point=gen_out.hook_point,
+        wrong_moves=[],
+        right_energy="",
+        hook_point="",
         replies=[
             {
                 "text": r.text,
@@ -414,16 +617,15 @@ def generator_node(state: AgentState) -> dict:
         elapsed_ms=int((time.monotonic() - t_call) * 1000),
         recommended_strategy_label=gen_out.recommended_strategy_label,
         reply_count=len(gen_out.replies),
-        usage_phase=usage_row.get("phase"),
-        usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
-        usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
+        fan_out_calls=len(usage_rows),
+        usage_prompt_tokens=total_usage.get("prompt_tokens", 0),
+        usage_candidates_tokens=total_usage.get("candidates_tokens", 0),
     )
 
-    # Build StrategyOutput and WriterOutput from GeneratorOutput
     strategy = StrategyOutput(
-        wrong_moves=gen_out.wrong_moves,
-        right_energy=gen_out.right_energy,
-        hook_point=gen_out.hook_point,
+        wrong_moves=[],
+        right_energy="",
+        hook_point="",
         recommended_strategy_label=gen_out.recommended_strategy_label,
     )
     drafts = WriterOutput(replies=gen_out.replies)
@@ -432,8 +634,124 @@ def generator_node(state: AgentState) -> dict:
         "strategy": strategy,
         "drafts": drafts,
         "revision_count": revision_count + 1,
-        # Clear auditor feedback after consuming it
         "auditor_feedback": "",
         "is_cringe": False,
-        "gemini_usage_log": [usage_row],
+        "gemini_usage_log": [total_usage],
     }
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _stitch_generator_output(
+    recommended_strategy_label: str,
+    replies: list[ReplyOption],
+) -> "GeneratorOutput":  # type: ignore[name-defined]
+    """Reconstruct GeneratorOutput from fan-out results."""
+    from pydantic import BaseModel
+
+    class StitchedOutput(BaseModel):
+        recommended_strategy_label: str
+        replies: list[ReplyOption]
+        wrong_moves: list[str] = []
+        right_energy: str = ""
+        hook_point: str = ""
+
+    return StitchedOutput(
+        recommended_strategy_label=recommended_strategy_label,
+        replies=replies,
+    )
+
+
+def _run_shadow_ensemble(
+    *,
+    state: AgentState,
+    analysis: AnalystOutput,
+    shared_payload: dict[str, Any],
+    assignments: list[tuple[str, str]],
+    llm_temperature: float,
+    phase: str,
+    use_groq: bool,
+) -> list[ReplyOption]:
+    """Run a shadow ensemble on Groq for A/B comparison. Best-effort."""
+    import asyncio
+
+    person_name = getattr(analysis, "person_name", None) or "unknown"
+    direction = state.get("direction", "quick_reply")
+    custom_hint = (state.get("custom_hint") or "").strip()
+    photo_persona = getattr(analysis, "photo_persona", "") or ""
+    transcript_text = transcript_text_from_analysis(analysis)
+    detected_dialect = getattr(analysis, "detected_dialect", "ENGLISH") or "ENGLISH"
+
+    async def _call(idx: int, hook: str, strategy: str):
+        system_prompt = _build_single_line_prompt(
+            person_name=person_name,
+            direction=direction,
+            detected_dialect=detected_dialect,
+            transcript_text=transcript_text,
+            assigned_hook=hook,
+            assigned_strategy=strategy,
+            custom_hint=custom_hint,
+            photo_persona=photo_persona,
+        )
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=json.dumps(shared_payload)),
+        ]
+        call_phase = f"{phase}_slot_{idx}"
+        result, _ = invoke_structured_groq(
+            model=settings.groq_model,
+            temperature=llm_temperature,
+            schema=SingleLineReply,
+            messages=messages,
+            phase=call_phase,
+        )
+        return idx, result
+
+    tasks = [
+        _call(idx, hook, strategy) for idx, (hook, strategy) in enumerate(assignments)
+    ]
+    raw = asyncio.run(asyncio.gather(*tasks, return_exceptions=True))
+
+    replies: list[ReplyOption] = []
+    sorted_items: list[tuple[int, Any]] = []
+    for r in raw:
+        if isinstance(r, Exception):
+            continue
+        sorted_items.append(r)
+    sorted_items.sort(key=lambda x: x[0])
+
+    first = True
+    for idx, result in sorted_items:
+        replies.append(
+            ReplyOption(
+                text=result.text,
+                strategy_label=result.strategy_label,
+                is_recommended=first,
+                coach_reasoning=result.coach_reasoning,
+            )
+        )
+        first = False
+
+    while len(replies) < 4:
+        fallback_labels: list[StrategyLabel] = [
+            "PUSH-PULL",
+            "FRAME CONTROL",
+            "SOFT CLOSE",
+            "VALUE ANCHOR",
+            "PATTERN INTERRUPT",
+        ]
+        used = {r.strategy_label for r in replies}
+        unused = [l for l in fallback_labels if l not in used]
+        label = unused[0] if unused else "PATTERN INTERRUPT"
+        replies.append(
+            ReplyOption(
+                text="(shadow fallback)",
+                strategy_label=label,
+                is_recommended=False,
+                coach_reasoning="(shadow fallback)",
+            )
+        )
+    return replies[:4]

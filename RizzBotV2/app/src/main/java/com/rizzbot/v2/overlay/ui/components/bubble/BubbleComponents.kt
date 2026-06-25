@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 
@@ -40,9 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -50,35 +48,26 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.overlay.manager.BubbleState
+import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingSurface
 import com.rizzbot.v2.ui.theme.NothingWhite
 import com.rizzbot.v2.ui.components.CookdLogo
 import kotlinx.coroutines.delay
 
 /**
- * The main floating bubble button with pulsing animation
- * Shows a circular loading indicator around the border when loading
+ * The main floating bubble button.
+ * Shows a circular loading indicator around the border when loading.
+ * No idle pulsing — Nothing OS is static and precise, not bouncy.
  */
 @Composable
 fun RizzButton(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val pulse = rememberInfiniteTransition(label = "rizz_pulse")
-    
-    // Normal gentle pulse
-    val scale by pulse.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "rizz_pulse_scale"
-    )
-    
-    // Rotation animation for loading indicator
-    val rotation by pulse.animateFloat(
+    // Rotation animation for loading indicator — runs continuously but only visible when loading
+    val loadingTransition = rememberInfiniteTransition(label = "loading_rotate")
+    val rotation by loadingTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
@@ -88,56 +77,67 @@ fun RizzButton(
         label = "loading_rotation"
     )
 
-    // Determine background brush (Brush type for type consistency)
-    val backgroundBrush: Brush = if (isLoading) {
-        Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF1A1A1A),
-                Color(0xFF000000)
-            )
-        )
-    } else {
-        Brush.radialGradient(
-            colors = listOf(NothingWhite, NothingWhite)
-        )
-    }
+    val bubbleColor = NothingBlack.copy(alpha = 0.75f)
+    val borderColor = NothingWhite
+    val borderWidth = 2.dp
+    val bubbleSize = 56.dp
 
     Box(
-        modifier = modifier
-            .size(56.dp)
-            .shadow(
-                elevation = 8.dp,
-                shape = CircleShape,
-                spotColor = NothingWhite.copy(alpha = 0.3f)
-            )
-            .scale(scale),
+        modifier = modifier.size(bubbleSize),
         contentAlignment = Alignment.Center
     ) {
-        // Background circle (clipped)
+        // Background circle with white border
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(bubbleSize)
                 .clip(CircleShape)
-                .background(backgroundBrush)
-                .border(1.dp, NothingBorder.copy(alpha = 0.3f), CircleShape)
+                .background(bubbleColor)
+                .border(borderWidth, borderColor, CircleShape)
         )
-        
-        // Circular loading indicator (drawn on top, NOT clipped)
+
+        // ── Dot-matrix ring: Nothing OS signature element ──
+        // A circle of evenly-spaced dots around the inner edge of the bubble.
+        // Replicates the NDot / Glyph interface aesthetic.
+        Canvas(
+            modifier = Modifier
+                .size(bubbleSize)
+                .clip(CircleShape)
+        ) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val dotRadius = 1.2.dp.toPx()
+            val ringRadius = size.minDimension / 2f - borderWidth.toPx() - 4.dp.toPx()
+            val dotCount = 24
+
+            for (i in 0 until dotCount) {
+                val angle = (360.0 / dotCount) * i * kotlin.math.PI / 180.0
+                val x = center.x + ringRadius * kotlin.math.cos(angle).toFloat()
+                val y = center.y + ringRadius * kotlin.math.sin(angle).toFloat()
+                drawCircle(
+                    color = NothingWhite.copy(alpha = 0.5f),
+                    radius = dotRadius,
+                    center = Offset(x, y)
+                )
+            }
+        }
+
+        // Circular loading indicator (drawn on top, clipped to circle)
         if (isLoading) {
-            Canvas(modifier = Modifier.size(56.dp)) {
-                val strokeWidth = 4.dp.toPx()
-                // Draw inside the bubble, accounting for stroke width and border
-                val padding = strokeWidth / 2 + 2.dp.toPx()
+            Canvas(
+                modifier = Modifier
+                    .size(bubbleSize)
+                    .clip(CircleShape)
+            ) {
+                val strokeWidth = 3.dp.toPx()
+                val padding = borderWidth.toPx() + 4.dp.toPx()
                 val diameter = size.minDimension - (padding * 2)
                 
                 drawArc(
-                    color = Color.White,
+                    color = NothingWhite,
                     startAngle = rotation,
-                    // Use a partial arc so the \"head\" of the loader is clearly visible
-                    sweepAngle = 110f,
+                    sweepAngle = 160f,
                     useCenter = false,
-                    topLeft = androidx.compose.ui.geometry.Offset(padding, padding),
-                    size = androidx.compose.ui.geometry.Size(diameter, diameter),
+                    topLeft = Offset(padding, padding),
+                    size = Size(diameter, diameter),
                     style = Stroke(
                         width = strokeWidth,
                         cap = StrokeCap.Round
@@ -148,7 +148,11 @@ fun RizzButton(
         
         // "C" logo (hidden during loading)
         if (!isLoading) {
-            CookdLogo(size = 32.dp)
+            CookdLogo(
+                size = 30.dp,
+                backgroundColor = Color.Transparent,
+                iconTint = NothingWhite,
+            )
         }
     }
 }
@@ -190,8 +194,7 @@ fun BubbleWithHints(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (dockOnLeft) {
                 RizzButton(isLoading = showLoadingHint)
-                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
-                // Hint bubble to the right (only show for "add more" hint, not loading)
+                Box(modifier = Modifier.width(8.dp))
                 Box(modifier = Modifier.wrapContentWidth()) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showAddMoreHintWithTimeout,
@@ -204,7 +207,6 @@ fun BubbleWithHints(
                     }
                 }
             } else {
-                // Hint bubble to the left (only show for "add more" hint, not loading)
                 Box(modifier = Modifier.wrapContentWidth()) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showAddMoreHintWithTimeout,
@@ -216,7 +218,7 @@ fun BubbleWithHints(
                         TalkingBubble(text = "Tap for next screenshot")
                     }
                 }
-                Box(modifier = Modifier.width(8.dp)) // Fixed spacer
+                Box(modifier = Modifier.width(8.dp))
                 RizzButton(isLoading = showLoadingHint)
             }
         }
@@ -232,12 +234,11 @@ fun TalkingBubble(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color(0xFF111111),
-        contentColor = Color.White,
-        shape = RoundedCornerShape(16.dp),
+        color = NothingSurface,
+        contentColor = NothingWhite,
+        shape = RoundedCornerShape(12.dp),
         tonalElevation = 0.dp,
-        shadowElevation = 6.dp,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+        border = BorderStroke(1.dp, NothingBorder),
         modifier = modifier
     ) {
         Text(

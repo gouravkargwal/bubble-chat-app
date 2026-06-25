@@ -23,10 +23,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rizzbot.v2.ui.theme.NeonRed
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 /**
  * The close target UI that appears at the bottom of the screen
@@ -39,7 +43,7 @@ fun CloseTargetUI(isHovering: Boolean) {
         label = "close_target_scale"
     )
     val containerColor by animateColorAsState(
-        targetValue = if (isHovering) Color(0xFFD32F2F) else Color(0xFF1A1A2E).copy(alpha = 0.8f),
+        targetValue = if (isHovering) NeonRed else NothingBlack.copy(alpha = 0.8f),
         label = "close_target_color"
     )
     Box(
@@ -55,25 +59,25 @@ fun CloseTargetUI(isHovering: Boolean) {
                     .scale(scale)
                     .clip(CircleShape)
                     .background(containerColor)
-                    .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
+                    .border(2.dp, NothingWhite.copy(alpha = 0.5f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Close",
-                    tint = Color.White,
+                    tint = NothingWhite,
                     modifier = Modifier.size(36.dp)
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Close",
-                color = Color.White,
+                color = NothingWhite,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp)
+                    .background(NothingBlack.copy(alpha = 0.6f), RoundedCornerShape(NothingDimens.borderThickness * 4))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
             )
         }
     }

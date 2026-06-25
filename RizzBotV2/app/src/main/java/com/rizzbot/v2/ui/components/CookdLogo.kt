@@ -19,14 +19,19 @@ import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingWhite
 
 /**
- * Single source of truth for the Cookd logo — a white circle with a bold black geometric "C".
+ * Single source of truth for the Cookd logo — a bold geometric "C".
  *
- * @param size Diameter of the white circle. Default 100dp.
+ * @param size Diameter of the circle. Default 100dp.
+ * @param backgroundColor Fill color behind the "C" path. Default NothingWhite for standard use.
+ *        Pass Color.Transparent when placing on a dark overlay bubble to avoid nested circles.
+ * @param iconTint Color of the "C" path. Default NothingBlack.
  */
 @Composable
 fun CookdLogo(
     modifier: Modifier = Modifier,
     size: Dp = 100.dp,
+    backgroundColor: androidx.compose.ui.graphics.Color = NothingWhite,
+    iconTint: androidx.compose.ui.graphics.Color = NothingBlack,
 ) {
     val cookdCVector = remember { VectorCookdC }
 
@@ -34,13 +39,17 @@ fun CookdLogo(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(NothingWhite),
+            .then(
+                if (backgroundColor != androidx.compose.ui.graphics.Color.Transparent) {
+                    Modifier.background(backgroundColor)
+                } else Modifier
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = cookdCVector,
-            contentDescription = "Cookd Logo C",
-            tint = NothingBlack,
+            contentDescription = "Cookd Logo",
+            tint = iconTint,
             modifier = Modifier.size(size)
         )
     }

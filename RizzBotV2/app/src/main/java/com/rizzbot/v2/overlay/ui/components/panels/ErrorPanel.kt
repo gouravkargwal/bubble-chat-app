@@ -18,13 +18,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.domain.model.SuggestionResult
-import androidx.compose.material3.MaterialTheme
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 /**
  * Panel showing error messages with retry/upgrade options
@@ -46,7 +50,7 @@ fun ErrorPanel(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp),
+            .padding(NothingDimens.cardPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(if (isQuotaExceeded) "\uD83D\uDCA8" else "\uD83D\uDE15", fontSize = 32.sp)
@@ -55,13 +59,9 @@ fun ErrorPanel(
             when {
                 isQuotaExceeded -> "Credits exhausted. Upgrade or wait for your daily refill."
                 isRateLimited -> "We're getting a lot of requests. Please try again in a minute."
-                else -> {
-                    // Hide low-level error details (e.g. provider quota, timeouts)
-                    // behind a friendly, generic server error message.
-                    "Something went wrong on our side. We're looking into it."
-                }
+                else -> "Something went wrong on our side. We're looking into it."
             },
-            color = Color.White,
+            color = NothingWhite,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
@@ -69,7 +69,7 @@ fun ErrorPanel(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Upgrade for a higher daily reply allowance",
-                color = Color.Gray,
+                color = NothingTextSecondary,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
             )
@@ -77,30 +77,35 @@ fun ErrorPanel(
             Button(
                 onClick = onUpgrade,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(12.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = NothingWhite),
+                shape = RoundedCornerShape(NothingDimens.cardRadius)
             ) {
-                Text("Upgrade Now")
+                Text("Upgrade Now", color = NothingBlack)
             }
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(NothingDimens.cardRadius),
+                border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
             ) {
-                Text("Dismiss", color = Color.White)
+                Text("Dismiss", color = NothingWhite)
             }
         } else {
             Spacer(modifier = Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onDismiss) {
-                    Text("Dismiss", color = Color.White)
+                OutlinedButton(
+                    onClick = onDismiss,
+                    border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
+                ) {
+                    Text("Dismiss", color = NothingWhite)
                 }
                 Button(
                     onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    colors = ButtonDefaults.buttonColors(containerColor = NothingWhite),
+                    shape = RoundedCornerShape(NothingDimens.cardRadius),
                 ) {
-                    Text("Retry")
+                    Text("Retry", color = NothingBlack)
                 }
             }
         }

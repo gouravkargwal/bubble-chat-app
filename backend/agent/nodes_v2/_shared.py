@@ -6,6 +6,8 @@ from typing import Any, Literal, cast
 import asyncio
 import base64
 import hashlib
+import io
+import time
 
 import structlog
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -86,7 +88,9 @@ def opener_hook_priority(
     Keeps generator and auditor aligned so text-led openers are not failed for skipping glasses/color.
     """
     t = (transcript_text or "").strip().lower()
-    hooks = [h for h in (getattr(analysis, "visual_hooks", None) or []) if str(h).strip()]
+    hooks = [
+        h for h in (getattr(analysis, "visual_hooks", None) or []) if str(h).strip()
+    ]
     text_signals = any(s in t for s in _OPENER_TEXT_SIGNALS)
     substantive = len(t) >= 40
     # A bare structured-field label (e.g. "relationship goals: long-term relationship")
@@ -94,9 +98,8 @@ def opener_hook_priority(
     # produces monotony (4 variations of "long-term"). If that's essentially all the
     # text there is and photos exist, spread across the visual hooks instead.
     bare_label = (
-        ("relationship goal" in t or "long-term" in t or "long term" in t)
-        and len(t) <= 70
-    )
+        "relationship goal" in t or "long-term" in t or "long term" in t
+    ) and len(t) <= 70
     if bare_label and len(hooks) >= 1 and not text_signals:
         return "either"
     if (text_signals or substantive) and len(t) >= 8:
@@ -160,35 +163,115 @@ def encode_image_from_state(state: AgentState) -> str:
 def downscale_image_b64(b64: str, max_edge: int = 768, jpeg_quality: int = 82) -> str:
     """Resize a base64 image so its longest edge is <= max_edge, re-encoded as JPEG.
 
-    Gemini bills images by 768px tiles, so a tall phone screenshot (e.g. 1080x2400)
-    costs several tiles. Capping the long edge at ~768 collapses it to ~one tile —
-    cutting vision token cost sharply with no OCR-legibility loss. Best-effort:
-    returns the input UNCHANGED on any failure (incl. Pillow not installed), so the
-    vision call is never blocked. Accepts a raw base64 string or a data: URL; returns
-    raw base64 (the caller's encoder re-adds the MIME prefix).
+    Fully instrumented with diagnostic logging to track downscale bypass bugs.
     """
+    t_start = time.monotonic()
+
+    # 1. Inspect incoming payload type and structural presence
+    if not b64:
+        logger.warning("downscale_skipped_empty_input", input_type=type(b64).__name__)
+        return b64
+
+    if not isinstance(b64, str):
+        logger.warning("downscale_skipped_invalid_type", input_type=type(b64).__name__)
+        return b64
+
+    input_chars = len(b64)
+    starts_with_data = b64.startswith("data:")
+    logger.debug(
+        "downscale_processing_start",
+        input_chars=input_chars,
+        starts_with_data=starts_with_data,
+        prefix_preview=b64[:30],
+    )
+
     try:
-        if not b64 or not isinstance(b64, str):
+        # 2. Extract raw cryptographic payload
+        if starts_with_data:
+            parts = b64.split(",", 1)
+            if len(parts) < 2:
+                logger.error("downscale_split_failed", parts_found=len(parts))
+                return b64
+            payload = parts[1]
+        else:
+            payload = b64
+
+        # 3. Base64 decode verification
+        try:
+            raw = base64.b64decode(payload)
+            logger.debug("downscale_b64_decode_success", decoded_bytes=len(raw))
+        except Exception as b64_err:
+            logger.error("downscale_b64_decode_failed", error=str(b64_err))
             return b64
-        payload = b64.split(",", 1)[1] if b64.startswith("data:") else b64
 
-        import io
-
+        # 4. Open with Pillow and inspect visual metadata
         from PIL import Image
 
-        raw = base64.b64decode(payload)
         img = Image.open(io.BytesIO(raw))
-        if max(img.size) <= max_edge:
-            return b64  # already small — leave untouched (preserve original)
+        orig_w, orig_h = img.size
+        orig_max = max(orig_w, orig_h)
+        logger.info(
+            "downscale_image_metadata",
+            width=orig_w,
+            height=orig_h,
+            max_edge=orig_max,
+            mode=img.mode,
+            format=img.format,
+        )
+
+        # 5. Guard check: Is the asset already under the threshold?
+        if orig_max <= max_edge:
+            logger.info(
+                "downscale_skipped_already_optimized",
+                max_edge_found=orig_max,
+                limit_threshold=max_edge,
+            )
+            return b64  # Leave untouched to preserve quality
+
+        # 6. Color profile conversion step
         if img.mode not in ("RGB", "L"):
+            logger.debug(
+                "downscale_converting_color_mode",
+                source_mode=img.mode,
+                target_mode="RGB",
+            )
             img = img.convert("RGB")
-        w, h = img.size
-        scale = max_edge / float(max(w, h))
-        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
+
+        # 7. Math calculations for resizing
+        scale = max_edge / float(orig_max)
+        new_w = max(1, int(orig_w * scale))
+        new_h = max(1, int(orig_h * scale))
+
+        logger.debug(
+            "downscale_calculating_resize",
+            scale_factor=round(scale, 4),
+            target_width=new_w,
+            target_height=new_h,
+        )
+
+        # 8. Visual downsampling execution
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+
+        # 9. Binary serialization block
         out = io.BytesIO()
         img.save(out, format="JPEG", quality=jpeg_quality, optimize=True)
-        return base64.b64encode(out.getvalue()).decode("utf-8")
-    except Exception:
+        compressed_bytes = out.getvalue()
+
+        final_b64 = base64.b64encode(compressed_bytes).decode("utf-8")
+        elapsed_ms = int((time.monotonic() - t_start) * 1000)
+
+        logger.info(
+            "downscale_execution_complete",
+            original_chars=input_chars,
+            final_chars=len(final_b64),
+            compression_ratio=round(len(final_b64) / input_chars, 3),
+            elapsed_ms=elapsed_ms,
+        )
+        return final_b64
+
+    except Exception as e:
+        # Structured log tracking with context trace properties included safely
+        logger.error("screenshot_downscale_failed", error=str(e), exc_info=True)
         return b64
 
 
