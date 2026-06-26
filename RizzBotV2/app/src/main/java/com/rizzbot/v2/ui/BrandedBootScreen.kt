@@ -45,12 +45,14 @@ fun BrandedBootScreen() {
             // Push content to true vertical center, accounting for the indicator below
             Spacer(modifier = Modifier.weight(1f))
 
-            CookdLogo()
+            CookdLogo(size = 80.dp)
             Spacer(modifier = Modifier.height(28.dp))
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.displaySmall,
                 color = NothingWhite,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(NothingDimens.elementGap))
             Box(
