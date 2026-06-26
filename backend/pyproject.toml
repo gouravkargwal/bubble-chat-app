@@ -26,6 +26,8 @@ dependencies = [
     "oci>=2.0",
     "pillow>=10.0",  # backend image downscaling before vision (cut Gemini image tokens)
     "flashrank>=0.2",  # CPU-only cross-encoder reranker for RAG (no GPU needed)
+    "numpy>=1.24.0",   # Added for ultra-fast vectorized matrix math in MMR reranking
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]

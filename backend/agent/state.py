@@ -163,7 +163,9 @@ class AgentState(TypedDict):
     strategy: Optional[StrategyOutput]
     drafts: Optional[WriterOutput]
     core_lore: str
-    past_memories: str
+    past_memories: str  # deprecated — kept for backward compat
+    tier_1_raw_exchanges: str  # Tier 1: FIFO sliding window of last N raw messages
+    tier_2_summary: str  # Tier 2: compressed narrative of recent conversation arc
     # OCR output is now structured so ownership can be handled deterministically.
     raw_ocr_text: List["RawOcrTextItem"]
     detected_contradictions: List[str]

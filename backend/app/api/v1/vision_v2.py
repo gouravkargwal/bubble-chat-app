@@ -563,7 +563,8 @@ async def _run_generate_v2(
     # Fetch librarian context after stitching resolved so conversation_id is final.
     ocr_hint_text = " ".join(extracted_texts[-2:]) if extracted_texts else ""
     core_lore = ""
-    past_memories = ""
+    tier_1_raw = ""
+    tier_2_summary = ""
     if effective_conversation_id:
         try:
             librarian = await fetch_librarian_context_async(
@@ -572,7 +573,8 @@ async def _run_generate_v2(
                 current_text=ocr_hint_text,
             )
             core_lore = librarian.get("core_lore") or ""
-            past_memories = librarian.get("past_memories") or ""
+            tier_1_raw = librarian.get("tier_1_raw_exchanges") or ""
+            tier_2_summary = librarian.get("tier_2_summary") or ""
         except Exception as e:
             logger.warning(
                 "agent_v2_librarian_failed",
@@ -597,7 +599,8 @@ async def _run_generate_v2(
     # Inject the already-computed full Vision Node output + librarian context.
     initial_state["vision_out"] = vision_out.model_dump()
     initial_state["core_lore"] = core_lore
-    initial_state["past_memories"] = past_memories
+    initial_state["tier_1_raw_exchanges"] = tier_1_raw
+    initial_state["tier_2_summary"] = tier_2_summary
     if (usage_row := _vision_usage_row_var.get()) is not None:
         initial_state["gemini_usage_log"] = [usage_row]
 

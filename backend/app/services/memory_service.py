@@ -13,9 +13,12 @@ from app.core.embeddings import embed_text
 from app.core.reranker import rerank_passages
 from app.infrastructure.database.models import Interaction
 from app.services.rag_improvements import (
-    calculate_adaptive_threshold,
+    build_tier1_raw_exchanges,
+    build_tier2_narrative_summary,
+    extract_graph_triples,
     generate_query_variants,
-    merge_contexts,
+    generate_sparse_lexical_extensions,
+    mmr_rerank,
     rate_fact_importance,
 )
 
@@ -35,10 +38,16 @@ async def get_match_context(
       - person_name
       - core_lore: query-aware top-K relevant facts from conversation_memories
         (falls back to a flat chronological load when no query is available)
-      - past_memories (formatted string of top-3 similarity snippets)
+      - tier_1_raw_exchanges: FIFO sliding window of last N raw message exchanges
+      - tier_2_summary: compressed narrative of the recent conversation arc
     """
 
-    empty = {"person_name": "", "core_lore": "", "past_memories": ""}
+    empty = {
+        "person_name": "",
+        "core_lore": "",
+        "tier_1_raw_exchanges": "",
+        "tier_2_summary": "",
+    }
     if not conversation_id:
         return empty
 
@@ -78,18 +87,35 @@ async def get_match_context(
                 except (TypeError, ValueError):
                     expected_dim = None
 
-            # Prepend person_name early so all embeddings are automatically enriched
-            query_base = current_text.strip()
-            if person_name and person_name.strip():
-                query_base = f"{person_name}: {query_base}"
+            # Fetch a lightweight corpus of existing facts for BM25 keyword extraction.
+            # This replaces hardcoded stop-word lists with IDF-based token importance.
+            bm25_corpus: list[str] = []
+            try:
+                corpus_rows = await db.execute(
+                    text("""
+                        SELECT fact_text FROM conversation_memories
+                        WHERE user_id = :user_id
+                          AND conversation_id = :conversation_id
+                          AND superseded_at IS NULL
+                        LIMIT 100
+                    """),
+                    {"user_id": user_id, "conversation_id": conversation_id},
+                )
+                bm25_corpus = [str(r[0]) for r in corpus_rows.scalars().all() if r[0]]
+            except Exception:
+                pass
 
-            # Generate query variants for multi-query retrieval
+            # Generate query variants for multi-query retrieval.
+            # generate_query_variants handles person_name enrichment internally.
+            query_base = current_text.strip()
+
             query_variants = [
                 qv.strip()
                 for qv in generate_query_variants(
                     current_text=query_base,
-                    person_name="",
+                    person_name=person_name,
                     max_variants=3,
+                    corpus=bm25_corpus,
                 )
                 if qv.strip()
             ]
@@ -179,10 +205,34 @@ async def get_match_context(
             core_lore = "\n".join(all_lore)
         except Exception:
             pass
+        # Even in no-embedding path, build Tier 1 + Tier 2 from recent interactions.
+        tier_1 = ""
+        tier_2 = ""
+        try:
+            recent_rows = await db.execute(
+                text("""
+                    SELECT transcript_json, their_last_message, direction,
+                           copied_index, reply_0, reply_1, reply_2, reply_3,
+                           key_detail, created_at
+                    FROM interactions
+                    WHERE user_id = :user_id
+                      AND conversation_id = :conversation_id
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                """),
+                {"user_id": user_id, "conversation_id": conversation_id},
+            )
+            recent = list(reversed([dict(r) for r in recent_rows.mappings().all()]))
+            tier_1 = build_tier1_raw_exchanges(recent)
+            tier_2 = build_tier2_narrative_summary(recent)
+        except Exception:
+            pass
+
         return {
             "person_name": person_name,
             "core_lore": core_lore,
-            "past_memories": "",
+            "tier_1_raw_exchanges": tier_1,
+            "tier_2_summary": tier_2,
         }
 
     # ── Constants shared by both retrieval streams ──
@@ -324,7 +374,9 @@ async def get_match_context(
                         rrf_order.append(ft)
                     rrf_scores[ft] += 1.0 / (_RRF_K + rank)
 
-            fused = sorted(rrf_order, key=lambda f: rrf_scores[f], reverse=True)[:_LORE_TOP_K]
+            fused = sorted(rrf_order, key=lambda f: rrf_scores[f], reverse=True)[
+                :_LORE_TOP_K
+            ]
 
             seen: set[str] = set(fused)
             lore_facts: list[str] = list(fused)
@@ -365,31 +417,26 @@ async def get_match_context(
                 except Exception:
                     logger.warning("reranker_failed", exc_info=True)
 
-            # --- MMR diversity ---
+            # --- Vector MMR diversity (uses actual embeddings) ---
             if len(merged) > 2:
-                diversified = [merged[0]]
-                all_selected_word_sets = [set(merged[0].lower().split())]
-                dropped = 0
-                for fact in merged[1:]:
-                    current_words = set(fact.lower().split())
-                    max_overlap = 0.0
-                    for selected_words in all_selected_word_sets:
-                        union = len(selected_words | current_words)
-                        overlap = len(selected_words & current_words) / max(union, 1)
-                        max_overlap = max(max_overlap, overlap)
-                    if max_overlap < 0.5:
-                        diversified.append(fact)
-                        all_selected_word_sets.append(current_words)
-                    else:
-                        dropped += 1
-                if dropped:
-                    logger.debug(
-                        "mmr_dropped_facts",
-                        count=dropped,
-                        before=len(merged),
-                        after=len(diversified),
+                try:
+                    diversified = await mmr_rerank(
+                        db=db,
+                        facts=merged,
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                        query_embedding=query_embedding,
+                        lambda_param=0.7,
                     )
-                merged = diversified
+                    if diversified != merged:
+                        logger.debug(
+                            "mmr_rerank_applied",
+                            before=len(merged),
+                            after=len(diversified),
+                        )
+                    merged = diversified
+                except Exception:
+                    logger.warning("mmr_rerank_failed", exc_info=True)
 
             return "\n".join(merged)
 
@@ -397,96 +444,127 @@ async def get_match_context(
             logger.warning("core_lore_fetch_failed", exc_info=True)
             return ""
 
-    async def _fetch_past_memories() -> str:
-        """Retrieve query-aware snippet context from interactions."""
+    async def _fetch_tier1_tier2() -> tuple[str, str]:
+        """Tier 1 (raw FIFO) + Tier 2 (narrative summary) from recent interactions."""
         try:
-            _PM_RECENCY_LAMBDA = 0.1
-            _PM_RECENCY_HALFLIFE_S = 3 * 86400  # 3 days
-
             rows = await db.execute(
                 text("""
-                    SELECT
-                        i.their_last_message,
-                        i.user_organic_text,
-                        i.key_detail,
-                        i.created_at,
-                        (i.embedding <=> :query_embedding) AS cosine_distance
-                    FROM interactions AS i
-                    WHERE i.user_id = :user_id
-                      AND i.conversation_id = :conversation_id
-                      AND i.embedding IS NOT NULL
-                    ORDER BY (
-                        (i.embedding <=> :query_embedding)
-                        - :lam * EXP(- EXTRACT(EPOCH FROM (now() - i.created_at)) / :hl)
-                    ) ASC
-                    LIMIT 10
+                    SELECT transcript_json, their_last_message, direction,
+                           copied_index, reply_0, reply_1, reply_2, reply_3,
+                           key_detail, created_at
+                    FROM interactions
+                    WHERE user_id = :user_id
+                      AND conversation_id = :conversation_id
+                    ORDER BY created_at DESC
+                    LIMIT 5
                 """),
+                {"user_id": user_id, "conversation_id": conversation_id},
+            )
+            recent = list(reversed([dict(r) for r in rows.mappings().all()]))
+            return (
+                build_tier1_raw_exchanges(recent),
+                build_tier2_narrative_summary(recent),
+            )
+        except Exception:
+            logger.warning("tier1_tier2_fetch_failed", exc_info=True)
+            return ("", "")
+
+    # ── Fire core_lore, tiers, and graph traversal concurrently ──
+    async def _fetch_graph_context() -> str:
+        """Fetch Graph RAG subnetwork context via recursive CTE traversal."""
+        try:
+            # Extract seed keywords from the query text
+            query_words = [
+                w.lower().strip()
+                for w in current_text.split()
+                if len(w.strip()) > 2
+            ]
+            if not query_words:
+                return ""
+
+            # Also include person_name as a seed if available
+            seeds = list(query_words)
+            if person_name and person_name.lower() not in seeds:
+                seeds.append(person_name.lower())
+
+            graph_sql = text("""
+                WITH RECURSIVE graph_traversal(
+                    source_id, target_id, rel_type, depth
+                ) AS (
+                    -- Anchor: locate initial matching entity nodes
+                    SELECT e.source_entity_id, e.target_entity_id,
+                           e.relationship_type, 1 AS depth
+                    FROM conversation_memory_edges e
+                    JOIN conversation_memory_entities ent
+                        ON e.source_entity_id = ent.id
+                    WHERE e.user_id = :user_id
+                      AND e.conversation_id = :conversation_id
+                      AND ent.entity_name = ANY(:seeds)
+
+                    UNION
+
+                    -- Recursive: discover connected sub-nodes (max 2 hops)
+                    SELECT e.source_entity_id, e.target_entity_id,
+                           e.relationship_type, gt.depth + 1
+                    FROM conversation_memory_edges e
+                    JOIN graph_traversal gt
+                        ON e.source_entity_id = gt.target_id
+                    WHERE gt.depth < 2
+                      AND NOT EXISTS (
+                        SELECT 1 FROM graph_traversal gt2
+                        WHERE gt2.target_id = e.source_entity_id
+                      )
+                )
+                SELECT DISTINCT
+                    ent1.entity_name AS source_node,
+                    gt.rel_type AS relationship,
+                    ent2.entity_name AS target_node
+                FROM graph_traversal gt
+                JOIN conversation_memory_entities ent1
+                    ON gt.source_id = ent1.id
+                JOIN conversation_memory_entities ent2
+                    ON gt.target_id = ent2.id
+                LIMIT 15
+            """)
+
+            rows = await db.execute(
+                graph_sql,
                 {
                     "user_id": user_id,
                     "conversation_id": conversation_id,
-                    "query_embedding": emb_str,
-                    "lam": _PM_RECENCY_LAMBDA,
-                    "hl": _PM_RECENCY_HALFLIFE_S,
+                    "seeds": seeds,
                 },
             )
-
-            results = rows.mappings().all()
-            if not results:
+            triples = rows.all()
+            if not triples:
                 return ""
 
-            distances = [float(r["cosine_distance"]) for r in results]
-            adaptive_threshold = calculate_adaptive_threshold(
-                distances,
-                percentile=0.3,
-                min_threshold=0.15,
-                max_threshold=0.30,
+            context_lines = [
+                f"- ({r[0]}) -[{r[1]}]-> ({r[2]})" for r in triples
+            ]
+            return (
+                "=== Network Knowledge Graph Context ===\n"
+                + "\n".join(context_lines)
             )
-
-            filtered_results = [
-                r for r in results if float(r["cosine_distance"]) < adaptive_threshold
-            ][:3]
-
-            past_mem_lines: list[str] = []
-            for idx, r in enumerate(filtered_results, start=1):
-                their_last_message = str(r.get("their_last_message") or "")
-                user_organic_text = str(r.get("user_organic_text") or "")
-                key_detail = str(r.get("key_detail") or "")
-
-                snippet_parts: list[str] = []
-                if their_last_message:
-                    snippet_parts.append(f"her_last_message: {their_last_message}")
-                if user_organic_text:
-                    snippet_parts.append(f"your_organic_text: {user_organic_text}")
-                if key_detail:
-                    snippet_parts.append(f"key_detail: {key_detail}")
-
-                past_mem_lines.append(f"{idx}. " + " | ".join(snippet_parts))
-
-            return "\n".join(past_mem_lines)
-
-        except Exception:
-            logger.warning("past_memories_fetch_failed", exc_info=True)
+        except Exception as e:
+            logger.warning("graph_context_traversal_failed", error=str(e))
             return ""
 
-    # ── Fire both streams concurrently (FIX 1) ──
-    core_lore, past_memories = await asyncio.gather(
+    core_lore, (tier_1_raw, tier_2_summary), graph_context = await asyncio.gather(
         _fetch_core_lore(),
-        _fetch_past_memories(),
+        _fetch_tier1_tier2(),
+        _fetch_graph_context(),
     )
 
-    # Merge contexts with deduplication and token budgeting
-    merged_context = merge_contexts(
-        core_lore=core_lore,
-        past_memories=past_memories,
-        max_lore_tokens=500,
-        max_past_tokens=200,
-    )
+    # Append graph context to core_lore for prompt injection
+    if graph_context:
+        core_lore = f"{core_lore}\n\n{graph_context}" if core_lore else graph_context
 
     return {
         "person_name": person_name,
         "core_lore": core_lore,
-        "past_memories": past_memories,
-        "merged_context": merged_context,
+        "tier_1_raw_exchanges": tier_1_raw,
+        "tier_2_summary": tier_2_summary,
     }
 
 
@@ -581,22 +659,37 @@ async def upsert_conversation_memory(
         # (rare, low-harm) rather than risk destroying true facts.
 
         if not skip_insert:
-            # Improvement #6: Rate importance and categorize fact at write time
-            try:
-                importance_score, fact_category = await rate_fact_importance(
-                    db, fact_text
+            # Run importance scoring, lexical expansion, and graph extraction
+            # concurrently to minimize write-path latency.
+            importance_task = rate_fact_importance(fact_text)
+            expansion_task = generate_sparse_lexical_extensions(fact_text)
+            graph_task = extract_graph_triples(fact_text)
+
+            (importance_score, fact_category), lexical_expansion, graph_data = (
+                await asyncio.gather(
+                    importance_task, expansion_task, graph_task,
+                    return_exceptions=True,
                 )
-            except Exception:
+            )
+            # Unpack exceptions gracefully
+            if isinstance(importance_score, Exception):
                 importance_score, fact_category = None, None
+            if isinstance(lexical_expansion, Exception):
+                lexical_expansion = ""
+            if isinstance(graph_data, Exception):
+                from app.services.rag_improvements import KnowledgeGraphTriples
+                graph_data = KnowledgeGraphTriples()
 
             await db.execute(
                 text("""
                     INSERT INTO conversation_memories
                         (id, user_id, conversation_id, fact_text, embedding,
-                         importance_score, fact_category, created_at)
+                         importance_score, fact_category, lexical_expansion,
+                         created_at)
                     VALUES
                         (:id, :user_id, :conversation_id, :fact_text, :embedding,
-                         :importance_score, :fact_category, now())
+                         :importance_score, :fact_category, :lexical_expansion,
+                         now())
                     """),
                 {
                     "id": str(uuid.uuid4()),
@@ -606,10 +699,79 @@ async def upsert_conversation_memory(
                     "embedding": embedding_str,
                     "importance_score": importance_score,
                     "fact_category": fact_category,
+                    "lexical_expansion": lexical_expansion,
                 },
             )
 
-        await db.commit()
+            # --- Graph RAG ingestion: extract entities + edges ---
+            try:
+                graph_data = await extract_graph_triples(fact_text)
+                if graph_data.entities:
+                    # 1. Insert entity nodes (upsert via ON CONFLICT)
+                    for entity in graph_data.entities:
+                        entity_name = entity.name.strip().lower()
+                        entity_type = entity.type.strip().lower()
+                        if not entity_name or not entity_type:
+                            continue
+                        await db.execute(
+                            text("""
+                                INSERT INTO conversation_memory_entities
+                                    (id, user_id, conversation_id, entity_name,
+                                     entity_type, created_at)
+                                VALUES
+                                    (:id, :user_id, :conversation_id, :name,
+                                     :type, now())
+                                ON CONFLICT (conversation_id, entity_name)
+                                DO UPDATE SET entity_type = EXCLUDED.entity_type
+                            """),
+                            {
+                                "id": str(uuid.uuid4()),
+                                "user_id": user_id,
+                                "conversation_id": conversation_id,
+                                "name": entity_name,
+                                "type": entity_type,
+                            },
+                        )
+
+                    # 2. Insert directed edges
+                    for rel in graph_data.relationships:
+                        src = rel.source.strip().lower()
+                        tgt = rel.target.strip().lower()
+                        rel_type = rel.relationship.strip().upper()
+                        if not src or not tgt or not rel_type:
+                            continue
+                        await db.execute(
+                            text("""
+                                INSERT INTO conversation_memory_edges
+                                    (id, user_id, conversation_id,
+                                     source_entity_id, target_entity_id,
+                                     relationship_type, created_at)
+                                VALUES (
+                                    :id, :user_id, :conversation_id,
+                                    (SELECT id FROM conversation_memory_entities
+                                     WHERE conversation_id = :conversation_id
+                                       AND entity_name = :src LIMIT 1),
+                                    (SELECT id FROM conversation_memory_entities
+                                     WHERE conversation_id = :conversation_id
+                                       AND entity_name = :tgt LIMIT 1),
+                                    :rel, now()
+                                )
+                                ON CONFLICT DO NOTHING
+                            """),
+                            {
+                                "id": str(uuid.uuid4()),
+                                "user_id": user_id,
+                                "conversation_id": conversation_id,
+                                "src": src,
+                                "tgt": tgt,
+                                "rel": rel_type,
+                            },
+                        )
+            except Exception as graph_err:
+                logger.warning("graph_db_ingestion_failed", error=str(graph_err))
+
+        # NB: No db.commit() here — transaction boundaries are managed by the
+        # outer LangGraph workflow or FastAPI router request context.
 
     except Exception as e:
         logger.warning(

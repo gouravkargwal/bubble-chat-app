@@ -94,7 +94,8 @@ async def generator_node(state: AgentState) -> dict:
     voice_dna = state.get("voice_dna_dict", {})
     conversation_context = state.get("conversation_context_dict", {})
     core_lore = state.get("core_lore", "") or ""
-    past_memories = state.get("past_memories", "") or ""
+    tier_1_raw = state.get("tier_1_raw_exchanges", "") or ""
+    tier_2_summary = state.get("tier_2_summary", "") or ""
 
     # Resolve person_name from context or analysis
     person_name = getattr(analysis, "person_name", None) or "unknown"
@@ -161,7 +162,8 @@ async def generator_node(state: AgentState) -> dict:
         "transcript_text": transcript_text,
         "photo_persona": getattr(analysis, "photo_persona", "") or "",
         "core_lore": core_lore,
-        "past_memories": past_memories,
+        "tier_1_raw_exchanges": tier_1_raw,
+        "tier_2_summary": tier_2_summary,
         "voice_dna_dict": voice_dna,
         "conversation_context_dict": conversation_context,
         "custom_hint": custom_hint,
@@ -312,7 +314,8 @@ async def generator_node(state: AgentState) -> dict:
         has_custom_hint=bool(custom_hint),
         transcript_chars=len(transcript_text or ""),
         core_lore_chars=len(core_lore),
-        past_memories_chars=len(past_memories),
+        tier_1_chars=len(tier_1_raw),
+        tier_2_chars=len(tier_2_summary),
         context_interaction_count=(
             interaction_count if isinstance(interaction_count, int) else 0
         ),

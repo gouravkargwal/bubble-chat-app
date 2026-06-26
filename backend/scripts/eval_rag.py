@@ -127,10 +127,12 @@ async def run_evaluation_pipeline():
                 current_text=question,
             )
             retrieved_contexts = []
-            if librarian_ctx["core_lore"]:
+            if librarian_ctx.get("core_lore"):
                 retrieved_contexts.append(librarian_ctx["core_lore"])
-            if librarian_ctx["past_memories"]:
-                retrieved_contexts.append(librarian_ctx["past_memories"])
+            if librarian_ctx.get("tier_1_raw_exchanges"):
+                retrieved_contexts.append(librarian_ctx["tier_1_raw_exchanges"])
+            if librarian_ctx.get("tier_2_summary"):
+                retrieved_contexts.append(librarian_ctx["tier_2_summary"])
             if not retrieved_contexts:
                 retrieved_contexts = ["No matching context found."]
 
@@ -176,8 +178,10 @@ async def run_evaluation_pipeline():
                 analysis=mock_analysis,
                 strategy=None,
                 drafts=None,
-                core_lore=librarian_ctx["core_lore"],
-                past_memories=librarian_ctx["past_memories"],
+                core_lore=librarian_ctx.get("core_lore", ""),
+                past_memories="",
+                tier_1_raw_exchanges=librarian_ctx.get("tier_1_raw_exchanges", ""),
+                tier_2_summary=librarian_ctx.get("tier_2_summary", ""),
                 is_cringe=False,
                 auditor_feedback="",
                 revision_count=0,

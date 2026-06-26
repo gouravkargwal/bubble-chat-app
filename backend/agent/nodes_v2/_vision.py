@@ -178,7 +178,8 @@ async def vision_node(state: AgentState) -> dict:
     out = VisionNodeOutput.model_validate(out_raw)
 
     core_lore = state.get("core_lore", "") or ""
-    past_memories = state.get("past_memories", "") or ""
+    tier_1_raw = state.get("tier_1_raw_exchanges", "") or ""
+    tier_2_summary = state.get("tier_2_summary", "") or ""
 
     logger.info(
         "llm_lifecycle",
@@ -200,7 +201,8 @@ async def vision_node(state: AgentState) -> dict:
             "analysis": None,
             "raw_ocr_text": [],
             "core_lore": core_lore,
-            "past_memories": past_memories,
+            "tier_1_raw_exchanges": tier_1_raw,
+            "tier_2_summary": tier_2_summary,
         }
 
     # Build AnalystOutput from VisionNodeOutput fields
@@ -269,5 +271,6 @@ async def vision_node(state: AgentState) -> dict:
         "raw_ocr_text": raw_ocr_text,
         "analysis": analysis,
         "core_lore": core_lore,
-        "past_memories": past_memories,
+        "tier_1_raw_exchanges": tier_1_raw,
+        "tier_2_summary": tier_2_summary,
     }

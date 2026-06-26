@@ -302,9 +302,7 @@ class ConversationMemory(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
-    conversation_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("conversations.id"), index=True
-    )
+    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
     fact_text: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
     # Importance scoring for RAG retrieval prioritization (1-5 scale)
@@ -320,9 +318,77 @@ class ConversationMemory(Base):
     fact_category: Mapped[str | None] = mapped_column(
         String(50), default="factual", nullable=True
     )
+    # Learned Sparse Retrieval: LLM-expanded synonyms and cross-lingual
+    # tokens that feed into the combined GIN full-text-search index.
+    lexical_expansion: Mapped[str | None] = mapped_column(
+        Text, default="", nullable=True
+    )
     superseded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ConversationMemoryEntity(Base):
+    """Graph RAG — entity nodes extracted from conversational facts.
+
+    Each row represents a concrete noun (person, profession, location, hobby,
+    organization, etc.) discovered by the LLM extraction layer.
+    """
+
+    __tablename__ = "conversation_memory_entities"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "entity_name",
+            name="unique_conversation_entity",
+        ),
+        Index("ix_graph_entities_lookup", "conversation_id", "entity_name"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    entity_name: Mapped[str] = mapped_column(String(100))
+    entity_type: Mapped[str] = mapped_column(String(50))  # person, profession, hobby, location, etc.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ConversationMemoryEdge(Base):
+    """Graph RAG — directional edges between entity nodes.
+
+    Each row represents a relationship (WORKS_AS, PLAYS, LIVES_IN, etc.)
+    between two entities in the same conversation.
+    """
+
+    __tablename__ = "conversation_memory_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "source_entity_id", "target_entity_id",
+            "relationship_type",
+            name="unique_conversation_edge",
+        ),
+        Index("ix_graph_edges_lookup", "conversation_id", "source_entity_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    source_entity_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversation_memory_entities.id", ondelete="CASCADE")
+    )
+    target_entity_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversation_memory_entities.id", ondelete="CASCADE")
+    )
+    relationship_type: Mapped[str] = mapped_column(String(50))  # WORKS_AS, PLAYS, LIVES_IN, etc.
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

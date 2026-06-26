@@ -48,6 +48,8 @@ def _build_agent_initial_state(
         "revision_count": 0,
         "core_lore": "",
         "past_memories": "",
+        "tier_1_raw_exchanges": "",
+        "tier_2_summary": "",
         "raw_ocr_text": [],
         "detected_contradictions": [],
         "ocr_hint_text": "",

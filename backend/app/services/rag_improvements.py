@@ -5,13 +5,35 @@ multi-query retrieval, and importance scoring.
 
 from __future__ import annotations
 
-import math
+import json
 import re
-from typing import Any, Callable
+from enum import Enum
+from typing import Any
 
 import structlog
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+import numpy as np
+from rank_bm25 import BM25Okapi
+
+# Lazy singleton for the Gemini client used by rate_fact_importance.
+# Avoids creating a new httpx.AsyncClient (connection pool) per fact.
+_llm_client: Any = None
+
+
+def _get_llm_client():
+    """Return a cached GeminiClient, creating it on first use."""
+    global _llm_client
+    if _llm_client is None:
+        from app.llm.gemini_client import GeminiClient
+        from app.config import settings
+
+        _llm_client = GeminiClient(
+            api_key=settings.gemini_api_key,
+            default_model=settings.gemini_model,
+        )
+    return _llm_client
 
 logger = structlog.get_logger(__name__)
 
@@ -96,12 +118,10 @@ async def mmr_rerank(
     query_embedding: list[float] | None = None,
     lambda_param: float = 0.7,
 ) -> list[str]:
-    """Rerank facts using Maximal Marginal Relevance for diversity.
+    """Rerank facts using NumPy-vectorized Maximal Marginal Relevance.
 
-    Uses pre-computed embeddings from the DB to balance relevance and diversity.
-    lambda_param controls trade-off: 1.0 = pure relevance, 0.0 = pure diversity.
-
-    This is O(n^2) in fact count but n is small (< 20 facts).
+    Uses pre-computed embeddings from the DB and NumPy matrix operations
+    to balance relevance and diversity with high-performance execution.
     """
     if len(facts) <= 2:
         return facts
@@ -110,8 +130,8 @@ async def mmr_rerank(
         logger.warning("mmr_rerank_skipped", reason="no_query_embedding")
         return facts
 
-    # Fetch pre-computed embeddings for all facts from DB
     try:
+        # Fetch pre-computed embeddings for all facts from DB
         emb_rows = await db.execute(
             text("""
                 SELECT fact_text, embedding
@@ -128,84 +148,111 @@ async def mmr_rerank(
                 "fact_texts": facts,
             },
         )
-        fact_embeddings: dict[str, list[float]] = {}
+
+        fact_texts: list[str] = []
+        fact_vectors: list[list[float]] = []
         for row in emb_rows.mappings().all():
             ft = str(row["fact_text"]).strip() if row["fact_text"] else ""
             emb_str = str(row["embedding"]) if row["embedding"] else ""
             if ft and emb_str:
                 try:
-                    emb = [float(x) for x in emb_str.strip("[]").split(",")]
-                    fact_embeddings[ft] = emb
+                    fact_texts.append(ft)
+                    fact_vectors.append(
+                        [float(x) for x in emb_str.strip("[]").split(",")]
+                    )
                 except (ValueError, TypeError):
                     pass
 
-        if not fact_embeddings:
+        if len(fact_texts) < 2:
             return facts
 
-        # Cosine similarity between two vectors
-        def cosine_sim(a: list[float], b: list[float]) -> float:
-            if not a or not b:
-                return 0.0
-            dot = sum(x * y for x, y in zip(a, b))
-            norm_a = math.sqrt(sum(x * x for x in a))
-            norm_b = math.sqrt(sum(x * x for x in b))
-            if norm_a == 0 or norm_b == 0:
-                return 0.0
-            return dot / (norm_a * norm_b)
+        # Vectorized operations via NumPy
+        q_vec = np.array(query_embedding)
+        f_matrix = np.array(fact_vectors)
 
-        # Relevance scores: cosine similarity with query
-        relevance: dict[str, float] = {}
-        for fact in facts:
-            emb = fact_embeddings.get(fact)
-            if emb:
-                relevance[fact] = cosine_sim(query_embedding, emb)
-            else:
-                relevance[fact] = 0.0
+        # Vector unit-normalization for precise Cosine Similarity metrics
+        q_norm = q_vec / (np.linalg.norm(q_vec) + 1e-10)
+        f_norms = f_matrix / (np.linalg.norm(f_matrix, axis=1, keepdims=True) + 1e-10)
 
-        # MMR selection: iteratively pick facts
-        selected: list[str] = []
-        remaining = list(facts)
+        # Batch dot product scores relevance for all factors instantly
+        relevance_scores = np.dot(f_norms, q_norm)
 
-        # First pick: highest relevance
-        best = max(remaining, key=lambda f: relevance.get(f, 0.0))
-        selected.append(best)
-        remaining.remove(best)
+        # Track elements by matching string references
+        fact_to_idx = {ft: i for i, ft in enumerate(fact_texts)}
 
-        while remaining and len(selected) < 15:
-            scores: dict[str, float] = {}
-            for fact in remaining:
-                rel = relevance.get(fact, 0.0)
-                # Max similarity to any already-selected fact (for diversity)
-                max_sim = max(
-                    (
-                        cosine_sim(
-                            fact_embeddings.get(fact, []), fact_embeddings.get(sel, [])
-                        )
-                        for sel in selected
-                        if fact in fact_embeddings and sel in fact_embeddings
-                    ),
-                    default=0.0,
+        # Build strict lookup arrays for elements containing vector entries
+        valid_indices = [i for i, f in enumerate(facts) if f in fact_to_idx]
+        if not valid_indices:
+            return facts
+
+        # Vectorized tracking coordinates
+        selected_indices = []
+        remaining_indices = list(valid_indices)
+
+        # Seed initial choice with the single highest relevance score element
+        ordered_scores = np.array(
+            [
+                (
+                    float(relevance_scores[fact_to_idx[facts[i]]])
+                    if facts[i] in fact_to_idx
+                    else 0.0
                 )
-                # MMR = lambda * rel - (1 - lambda) * max_sim
-                scores[fact] = lambda_param * rel - (1 - lambda_param) * max_sim
+                for i in range(len(facts))
+            ]
+        )
 
-            best = max(remaining, key=lambda f: scores.get(f, 0.0))
-            if scores.get(best, 0.0) < 0:
-                break  # Remaining facts are all too similar
-            selected.append(best)
-            remaining.remove(best)
+        best_initial = remaining_indices[
+            int(np.argmax(ordered_scores[remaining_indices]))
+        ]
+        selected_indices.append(best_initial)
+        remaining_indices.remove(best_initial)
+
+        # Dynamic MMR Loop Execution
+        while remaining_indices and len(selected_indices) < min(15, len(facts)):
+            rem_relevance = ordered_scores[remaining_indices]
+
+            # Map structural components out of matrix targets
+            rem_matrix_vecs = f_norms[
+                [fact_to_idx[facts[i]] for i in remaining_indices]
+            ]
+            sel_matrix_vecs = f_norms[[fact_to_idx[facts[i]] for i in selected_indices]]
+
+            # Matrix cross-multiplication dots all selected vs remaining arrays instantly
+            sim_matrix = np.dot(rem_matrix_vecs, sel_matrix_vecs.T)
+            max_sim_to_selected = np.max(sim_matrix, axis=1)
+
+            # Evaluate core MMR Equation: Maximize Relevance, Penalize Redundancy
+            mmr_scores = (
+                lambda_param * rem_relevance
+                - (1.0 - lambda_param) * max_sim_to_selected
+            )
+
+            best_pos = int(np.argmax(mmr_scores))
+            if mmr_scores[best_pos] < 0:
+                break  # Drop loop execution early if similarity threshold breaks bounds
+
+            best_idx = remaining_indices[best_pos]
+            selected_indices.append(best_idx)
+            remaining_indices.remove(best_idx)
+
+        # Stitch back any trailing structural facts lacking embeddings to prevent loss
+        result = [facts[i] for i in selected_indices]
+        seen_results = set(result)
+        for f in facts:
+            if f not in seen_results:
+                result.append(f)
 
         logger.info(
             "mmr_rerank_complete",
             before=len(facts),
-            after=len(selected),
+            after=len(result),
             lambda_param=lambda_param,
         )
-        return selected
+        return result
 
     except Exception as e:
         logger.warning("mmr_rerank_failed", error=str(e), fact_count=len(facts))
-        return facts  # Fallback: return original order
+        return facts
 
 
 # ---------------------------------------------------------------------------
@@ -217,11 +264,12 @@ def generate_query_variants(
     current_text: str,
     person_name: str = "",
     max_variants: int = 3,
+    corpus: list[str] | None = None,
 ) -> list[str]:
     """Generate multiple query variants for better recall.
 
-    Returns up to `max_variants` query strings that capture different aspects
-    of the user's input. These can be embedded separately and fused via RRF.
+    Utilizes explicit vocabulary IDF mappings from BM25 to strip multi-lingual
+    structural components naturally without keyword list maintenance dependencies.
     """
     text = current_text.strip()
     if not text:
@@ -230,11 +278,9 @@ def generate_query_variants(
     variants: list[str] = []
     seen: set[str] = set()
 
-    # Variant 0: Original query (always included)
     variants.append(text)
     seen.add(normalize_for_dedup(text))
 
-    # Variant 1: Enriched with person name (helps disambiguate)
     if person_name and person_name.strip():
         enriched = f"{person_name}: {text}"
         norm = normalize_for_dedup(enriched)
@@ -242,29 +288,37 @@ def generate_query_variants(
             variants.append(enriched)
             seen.add(norm)
 
-    # Variant 2: Keywords only (strips stop words, focuses on content)
     words = text.split()
-    if len(words) >= 3:
-        # Take first 3 content words (skip common stop words)
-        stop_words = {
-            "what",
-            "when",
-            "where",
-            "how",
-            "are",
-            "you",
-            "your",
-            "the",
-            "a",
-            "an",
-            "is",
-            "it",
-            "to",
-            "do",
-            "did",
-            "have",
-        }
-        content_words = [w for w in words if w.lower() not in stop_words][:3]
+    if len(words) >= 3 and len(variants) < max_variants:
+        content_words: list[str] = []
+
+        if corpus and len(corpus) > 2:
+            try:
+                tokenized_corpus = [
+                    doc.lower().split() for doc in corpus if doc.strip()
+                ]
+                if tokenized_corpus:
+                    bm25 = BM25Okapi(tokenized_corpus)
+
+                    # Target vocabulary inverse frequency map directly
+                    token_scores = []
+                    for w in words:
+                        w_low = w.lower()
+                        if len(w_low) > 2:
+                            # Pull native statistical scarcity metric directly out of corpus weights
+                            idf_score = float(bm25.idf.get(w_low, 0.0))
+                            token_scores.append((w, idf_score))
+
+                    # Sort terms from rarest to most common
+                    token_scores.sort(key=lambda x: x[1], reverse=True)
+                    content_words = [word for word, _ in token_scores[:3]]
+            except Exception:
+                pass
+
+        if not content_words:
+            # Fallback to length heuristics if background token counts are absent
+            content_words = [w for w in words if len(w) > 2][:3]
+
         if len(content_words) >= 2:
             kw_query = " ".join(content_words)
             norm = normalize_for_dedup(kw_query)
@@ -325,166 +379,377 @@ async def log_retrieval_feedback(
 
 
 # ---------------------------------------------------------------------------
-# Adaptive threshold calculation
+# 3-Tier Memory Buffer helpers
 # ---------------------------------------------------------------------------
 
 
-def calculate_adaptive_threshold(
-    distances: list[float],
-    percentile: float = 0.2,
-    min_threshold: float = 0.15,
-    max_threshold: float = 0.35,
-) -> float:
-    """Calculate adaptive cosine distance threshold based on result distribution."""
-    if not distances:
-        return min_threshold
-    sorted_distances = sorted(distances)
-    idx = int(len(sorted_distances) * percentile)
-    idx = min(idx, len(sorted_distances) - 1)
-    threshold = sorted_distances[idx]
-    threshold = max(min_threshold, min(max_threshold, threshold))
-    logger.info(
-        "adaptive_threshold_calculated",
-        threshold=threshold,
-        percentile=percentile,
-        result_count=len(distances),
-    )
-    return threshold
-
-
-# ---------------------------------------------------------------------------
-# Context merging with deduplication
-# ---------------------------------------------------------------------------
-
-
-def merge_contexts(
-    core_lore: str,
-    past_memories: str,
-    max_lore_tokens: int = 500,
-    max_past_tokens: int = 200,
+def build_tier1_raw_exchanges(
+    interactions: list[dict[str, Any]],
+    max_messages: int = 6,
 ) -> str:
-    """Merge core_lore and past_memories with deduplication and token budgeting."""
-    lore_lines = (
-        [line.strip() for line in core_lore.split("\n") if line.strip()]
-        if core_lore
-        else []
-    )
-    past_lines = (
-        [line.strip() for line in past_memories.split("\n") if line.strip()]
-        if past_memories
-        else []
-    )
+    """Tier 1 — FIFO sliding window of the last N raw message exchanges.
 
-    seen_normalized = set()
-    unique_lore = []
-    for line in lore_lines:
-        norm = normalize_for_dedup(line)
-        if norm and norm not in seen_normalized:
-            seen_normalized.add(norm)
-            unique_lore.append(line)
+    Extracts verbatim messages from ``transcript_json`` of the most recent
+    interactions and formats them as a chronological exchange log.  Falls
+    back to ``their_last_message`` when ``transcript_json`` is unavailable.
+    """
+    all_messages: list[tuple[str, str]] = []
 
-    unique_past = []
-    for line in past_lines:
-        norm = normalize_for_dedup(line)
-        if norm and norm not in seen_normalized:
-            seen_normalized.add(norm)
-            unique_past.append(line)
+    for interaction in interactions:  # already chronological (oldest → newest)
+        transcript_raw = interaction.get("transcript_json")
+        if transcript_raw:
+            try:
+                pairs = json.loads(transcript_raw)
+                for pair in pairs:
+                    if not isinstance(pair, dict):
+                        continue
+                    sender = pair.get("s", "")
+                    text = (pair.get("t") or "").strip()
+                    if not text:
+                        continue
+                    label = "them" if sender == "them" else "you"
+                    all_messages.append((label, text))
+                continue
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-    budgeted_lore = select_facts_within_budget(unique_lore, max_tokens=max_lore_tokens)
-    budgeted_past = select_facts_within_budget(
-        unique_past, max_tokens=max_past_tokens, min_facts=1
-    )
+        # Fallback: use their_last_message
+        their_msg = (interaction.get("their_last_message") or "").strip()
+        if their_msg:
+            all_messages.append(("them", their_msg))
 
-    parts = []
-    if budgeted_lore:
-        parts.append("=== Core Facts ===")
-        parts.extend(budgeted_lore)
-    if budgeted_past:
+    # Keep only the tail (most recent messages)
+    all_messages = all_messages[-max_messages:]
+
+    if not all_messages:
+        return ""
+
+    return "\n".join(f'{label}: "{text}"' for label, text in all_messages)
+
+
+def build_tier2_narrative_summary(
+    interactions: list[dict[str, Any]],
+) -> str:
+    """Tier 2 — Compressed narrative of the recent conversation arc.
+
+    Formats the last 5 interactions as a compact chronological narrative
+    showing what was discussed and how the conversation progressed, without
+    requiring an LLM call.
+    """
+    if not interactions:
+        return ""
+
+    lines: list[str] = []
+    for interaction in interactions:  # chronological (oldest → newest)
+        direction = interaction.get("direction", "unknown")
+        their_msg = (interaction.get("their_last_message") or "").strip()
+        copied_index = interaction.get("copied_index")
+        key_detail = (interaction.get("key_detail") or "").strip()
+
+        # Extract what was actually sent
+        sent_text = ""
+        if copied_index is not None:
+            raw_reply = interaction.get(f"reply_{copied_index}") or ""
+            if raw_reply:
+                try:
+                    loaded = json.loads(raw_reply)
+                    if isinstance(loaded, dict) and "text" in loaded:
+                        sent_text = str(loaded["text"]).strip()
+                except (json.JSONDecodeError, TypeError):
+                    sent_text = str(raw_reply).strip()
+
+        parts: list[str] = []
+        if key_detail:
+            parts.append(f"hook: {key_detail}")
+        if their_msg:
+            parts.append(f'her: "{their_msg}"')
+        if sent_text:
+            parts.append(f'you: "{sent_text}"')
+
         if parts:
-            parts.append("")
-        parts.append("=== Recent Context ===")
-        parts.extend(budgeted_past)
-    return "\n".join(parts)
+            lines.append(f"[{direction}] {' | '.join(parts)}")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
-# Importance scoring for facts
+# Graph RAG Extraction Schemas
+# ---------------------------------------------------------------------------
+
+
+class EntityNode(BaseModel):
+    """A concrete noun/entity extracted from a conversational fact."""
+
+    name: str = Field(
+        ..., description="The concrete noun/entity name, e.g., 'Ragini', 'MAMC', 'Guitar'."
+    )
+    type: str = Field(
+        ...,
+        description=(
+            "Category: 'person', 'profession', 'organization', 'hobby', "
+            "'location', 'status'."
+        ),
+    )
+
+
+class RelationshipEdge(BaseModel):
+    """A directed edge between two entity nodes."""
+
+    source: str = Field(..., description="The name of the source entity node.")
+    target: str = Field(..., description="The name of the target entity node.")
+    relationship: str = Field(
+        ...,
+        description=(
+            "Action link in UPPERCASE snake_case, "
+            "e.g., 'WORKS_AS', 'PLAYS', 'LIVES_IN'."
+        ),
+    )
+
+
+class KnowledgeGraphTriples(BaseModel):
+    """Schema enforced by Gemini Structured Outputs for graph extraction."""
+
+    entities: list[EntityNode] = Field(default_factory=list)
+    relationships: list[RelationshipEdge] = Field(default_factory=list)
+
+
+_GEMINI_GRAPH_SCHEMA: dict = KnowledgeGraphTriples.model_json_schema()
+
+
+# ---------------------------------------------------------------------------
+# Learned Sparse Retrieval — Write-Time Token Expansion
+# ---------------------------------------------------------------------------
+
+
+class SparseTokenExpansion(BaseModel):
+    """Schema for multi-lingual lexical expansion tokens."""
+
+    expanded_tokens: list[str] = Field(
+        ...,
+        description=(
+            "List of raw synonyms, hidden conceptual terms, context words, "
+            "and explicit cross-lingual translations (English <-> Hinglish)."
+        ),
+    )
+
+
+_GEMINI_SPARSE_SCHEMA: dict = SparseTokenExpansion.model_json_schema()
+
+
+async def generate_sparse_lexical_extensions(fact_text: str) -> str:
+    """Expand a fact into its semantic synonyms and cross-lingual equivalents.
+
+    The result is stored in ``conversation_memories.lexical_expansion`` and
+    fed into a combined GIN index so that PostgreSQL full-text search can
+    match dialectal and romanized variants without a dedicated SPLADE service.
+    """
+    if not fact_text or not fact_text.strip():
+        return ""
+
+    try:
+        client = _get_llm_client()
+
+        result = await client.generate_structured(
+            system_prompt=(
+                "You are a search index expansion engine. Output alternative "
+                "keywords, synonyms, and explicit English-to-Hinglish semantic "
+                "translations. For example, if the text contains 'married', "
+                "output ['shaadi', 'shuda', 'husband', 'wife', 'spouse']."
+            ),
+            user_prompt=(
+                f'Generate search index keyword expansions for this text '
+                f'fragment: "{fact_text}"'
+            ),
+            response_schema=_GEMINI_SPARSE_SCHEMA,
+            temperature=0.0,
+            max_output_tokens=256,
+            usage_phase="sparse_lexical_expansion",
+        )
+
+        data = SparseTokenExpansion.model_validate(result)
+        expanded = " ".join(data.expanded_tokens).lower()
+        logger.info(
+            "sparse_expansion_success",
+            fact=fact_text[:50],
+            token_count=len(data.expanded_tokens),
+        )
+        return expanded
+
+    except Exception as e:
+        logger.warning(
+            "sparse_expansion_failed",
+            error=str(e),
+            fact=fact_text[:50],
+        )
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Structured Output Schemas for LLM-based fact classification
+# ---------------------------------------------------------------------------
+
+
+class FactCategory(str, Enum):
+    """Semantic category for a user profile fact."""
+
+    IDENTITY = "identity"  # Core data: job, hometown, relationship status
+    PREFERENCE = "preference"  # Likes, dislikes, diet, habits
+    OPINION = "opinion"  # Explicit views, relationship goals, philosophies
+    FACTUAL = "factual"  # Informational, abstract text fragments
+
+
+class StructuredFactAnalysis(BaseModel):
+    """Schema enforced by Gemini Structured Outputs Mode."""
+
+    importance_score: int = Field(
+        ...,
+        description="Value from 1 to 5. 5 = Critical identity/status, 1 = trivial fleeting details.",
+        ge=1,
+        le=5,
+    )
+    category: FactCategory = Field(
+        ...,
+        description="The semantic category that best fits this statement.",
+    )
+
+
+# JSON Schema that Gemini receives via responseSchema — avoids runtime
+# dependency on google-genai SDK by using the existing REST client.
+_GEMINI_FACT_SCHEMA: dict = StructuredFactAnalysis.model_json_schema()
+
+# ---------------------------------------------------------------------------
+# Graph RAG Extraction Utility
+# ---------------------------------------------------------------------------
+
+
+async def extract_graph_triples(fact_text: str) -> KnowledgeGraphTriples:
+    """Extract semantic graph nodes and edges from raw text using Gemini.
+
+    Returns structured entity-relationship triples that get persisted into
+    the graph tables (conversation_memory_entities + conversation_memory_edges).
+    """
+    if not fact_text or not fact_text.strip():
+        return KnowledgeGraphTriples()
+
+    try:
+        client = _get_llm_client()
+
+        result = await client.generate_structured(
+            system_prompt=(
+                "You are a strict graph network data extractor. Break conversational "
+                "information into isolated entities and clear directed logical "
+                "predicate edges."
+            ),
+            user_prompt=(
+                f'Extract all knowledge graph entities and relationships from '
+                f'this text: "{fact_text}"'
+            ),
+            response_schema=_GEMINI_GRAPH_SCHEMA,
+            temperature=0.0,
+            max_output_tokens=512,
+            usage_phase="graph_triple_extraction",
+        )
+
+        triples = KnowledgeGraphTriples.model_validate(result)
+        logger.info(
+            "graph_triple_extraction_success",
+            fact=fact_text[:50],
+            entity_count=len(triples.entities),
+            relationship_count=len(triples.relationships),
+        )
+        return triples
+
+    except Exception as e:
+        logger.warning(
+            "graph_triple_extraction_failed",
+            error=str(e),
+            text=fact_text[:50],
+        )
+        return KnowledgeGraphTriples()
+
+
+# ---------------------------------------------------------------------------
+# LLM-Based Importance Scoring & Categorization
 # ---------------------------------------------------------------------------
 
 
 async def rate_fact_importance(
-    db: AsyncSession,
     fact_text: str,
-) -> tuple[int, str]:
-    """Rate the importance of a fact using a rule-based heuristic.
+) -> tuple[int | None, str | None]:
+    """Rate fact importance and categorize dynamically using Gemini Structured Outputs.
 
-    Returns (importance_score 1-5, category).
-    Requires no API call - pure heuristic matching.
+    Handles mixed multi-lingual inputs and romanized Hinglish/Hindi phrases
+    without relying on brittle hardcoded keyword lists.
+
+    Falls back to a lightweight heuristic chain when the LLM call fails
+    (rate-limits, network errors, etc.).
     """
-    text_lower = fact_text.lower()
+    if not fact_text or not fact_text.strip():
+        return None, None
 
-    # Critical identity facts (5)
-    identity_5_keywords = [
-        "married",
-        "divorced",
-        "widowed",
-        "single",
-        "muslim",
-        "hindu",
-        "sikh",
-        "christian",
-        "jain",
-        "buddhist",
-        "lives in",
-        "hometown",
-        "from ",
-        "based in",
-        "works as",
-        "job",
-        "profession",
-    ]
-    if any(kw in text_lower for kw in identity_5_keywords):
-        return 5, "identity"
+    try:
+        client = _get_llm_client()
 
-    # Important preferences / life details (4)
-    preference_4_keywords = [
-        "has kids",
-        "no kids",
-        "vegetarian",
-        "vegan",
-        "non-vegetarian",
-        "engineer",
-        "doctor",
-        "lawyer",
-        "phd",
-        "masters",
-        "degree",
-        "age",
-        "born",
-        "birthday",
-    ]
-    if any(kw in text_lower for kw in preference_4_keywords):
-        return 4, "preference"
+        result = await client.generate_structured(
+            system_prompt=(
+                "You are an expert user profiling metadata annotator. "
+                "Accurately categorize facts and assign importance weights."
+            ),
+            user_prompt=(
+                f'Analyze the following statement or profile trait extracted '
+                f'from a user\'s conversational profile history:\n\n"{fact_text}"'
+            ),
+            response_schema=_GEMINI_FACT_SCHEMA,
+            temperature=0.0,
+            max_output_tokens=256,
+            usage_phase="fact_importance_classification",
+        )
 
-    # Explicit opinions / relationship goals (3)
-    opinion_3_keywords = [
-        "looking for",
-        "want",
-        "interested in",
-        "love",
-        "hate",
-        "like",
-        "enjoys",
-        "hobby",
-        "passionate",
-        "goal",
-    ]
-    if any(kw in text_lower for kw in opinion_3_keywords):
-        return 3, "opinion"
+        analysis = StructuredFactAnalysis.model_validate(result)
 
-    # General facts (2)
-    if len(fact_text) > 30:  # Substantial text
-        return 2, "factual"
+        logger.info(
+            "llm_fact_categorization_success",
+            fact=fact_text[:50],
+            score=analysis.importance_score,
+            category=analysis.category.value,
+        )
+        return analysis.importance_score, analysis.category.value
 
-    # Minor details (1)
-    return 1, "preference"
+    except Exception as e:
+        logger.warning(
+            "llm_fact_categorization_failed",
+            error=str(e),
+            fact=fact_text[:50],
+        )
+
+        # Fallback heuristic chain — covers the common identity/preference
+        # cases when the API is unreachable or rate-limited.
+        text_lower = fact_text.lower()
+        identity_kws = [
+            "married", "divorced", "widowed", "single",
+            "muslim", "hindu", "sikh", "christian", "jain", "buddhist",
+            "lives in", "hometown", "from ", "based in",
+            "works as", "job", "profession",
+        ]
+        if any(kw in text_lower for kw in identity_kws):
+            return 5, "identity"
+
+        preference_kws = [
+            "has kids", "no kids", "vegetarian", "vegan",
+            "non-vegetarian", "engineer", "doctor", "lawyer",
+            "phd", "masters", "degree", "age", "born", "birthday",
+        ]
+        if any(kw in text_lower for kw in preference_kws):
+            return 4, "preference"
+
+        opinion_kws = [
+            "looking for", "want", "interested in", "love",
+            "hate", "like", "enjoys", "hobby", "passionate", "goal",
+        ]
+        if any(kw in text_lower for kw in opinion_kws):
+            return 3, "opinion"
+
+        if len(fact_text) > 30:
+            return 2, "factual"
+
+        return 1, "preference"

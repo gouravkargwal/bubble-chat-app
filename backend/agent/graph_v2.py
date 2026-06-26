@@ -48,7 +48,8 @@ def _state_snapshot(state: AgentState) -> dict:
         "reply_count": reply_count,
         "has_auditor_feedback": bool(state.get("auditor_feedback", "")),
         "core_lore_chars": len(state.get("core_lore", "") or ""),
-        "past_memories_chars": len(state.get("past_memories", "") or ""),
+        "tier_1_raw_exchanges_chars": len(state.get("tier_1_raw_exchanges", "") or ""),
+        "tier_2_summary_chars": len(state.get("tier_2_summary", "") or ""),
     }
 
 
