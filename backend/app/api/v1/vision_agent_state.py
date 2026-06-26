@@ -50,6 +50,7 @@ def _build_agent_initial_state(
         "past_memories": "",
         "tier_1_raw_exchanges": "",
         "tier_2_summary": "",
+        "precomputed_queries": [],
         "raw_ocr_text": [],
         "detected_contradictions": [],
         "ocr_hint_text": "",

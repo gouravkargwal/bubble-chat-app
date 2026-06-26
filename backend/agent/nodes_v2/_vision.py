@@ -154,6 +154,16 @@ class VisionNodeOutput(BaseModel):
         description="0-5 atomic, long-term third-person lifestyle facts explicitly gathered about her.",
     )
 
+    # --- RAG query generation (piggy-backed on the Vision call for zero latency) ---
+    rag_search_queries: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Array of 2-3 distinct, highly clean search strings optimized for database lookup. "
+            "Translate code-switching/Hinglish keywords into clear English core nouns "
+            "(e.g., if text mentions 'shaadi', output 'marriage' or 'relationship status')."
+        ),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Node function
@@ -270,6 +280,7 @@ async def vision_node(state: AgentState) -> dict:
         "bouncer_reason": out.bouncer_reason,
         "raw_ocr_text": raw_ocr_text,
         "analysis": analysis,
+        "precomputed_queries": out.rag_search_queries,
         "core_lore": core_lore,
         "tier_1_raw_exchanges": tier_1_raw,
         "tier_2_summary": tier_2_summary,

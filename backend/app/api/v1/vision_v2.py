@@ -571,6 +571,7 @@ async def _run_generate_v2(
                 user_id=user.id,
                 conversation_id=str(effective_conversation_id),
                 current_text=ocr_hint_text,
+                precomputed_queries=vision_out.rag_search_queries or None,
             )
             core_lore = librarian.get("core_lore") or ""
             tier_1_raw = librarian.get("tier_1_raw_exchanges") or ""

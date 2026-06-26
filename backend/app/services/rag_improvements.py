@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 import numpy as np
-from rank_bm25 import BM25Okapi
+
 
 # Lazy singleton for the Gemini client used by rate_fact_importance.
 # Avoids creating a new httpx.AsyncClient (connection pool) per fact.
@@ -43,10 +43,18 @@ logger = structlog.get_logger(__name__)
 
 
 def estimate_tokens(text: str) -> int:
-    """Estimate token count for a text string."""
+    """Estimate token count using tiktoken for accurate multi-lingual budgeting.
+
+    Falls back to a ~4 chars/token heuristic if tiktoken is unavailable.
+    """
     if not text:
         return 0
-    return max(1, len(text) // 4)
+    try:
+        import tiktoken
+        _enc = tiktoken.get_encoding("cl100k_base")
+        return len(_enc.encode(text))
+    except Exception:
+        return max(1, len(text) // 4)
 
 
 # ---------------------------------------------------------------------------
@@ -264,12 +272,12 @@ def generate_query_variants(
     current_text: str,
     person_name: str = "",
     max_variants: int = 3,
-    corpus: list[str] | None = None,
 ) -> list[str]:
     """Generate multiple query variants for better recall.
 
-    Utilizes explicit vocabulary IDF mappings from BM25 to strip multi-lingual
-    structural components naturally without keyword list maintenance dependencies.
+    Produces up to ``max_variants`` query strings that capture different
+    aspects of the user's input: the original, a person-name-enriched
+    variant, and a keyword-only variant (content words > 2 chars).
     """
     text = current_text.strip()
     if not text:
@@ -290,35 +298,8 @@ def generate_query_variants(
 
     words = text.split()
     if len(words) >= 3 and len(variants) < max_variants:
-        content_words: list[str] = []
-
-        if corpus and len(corpus) > 2:
-            try:
-                tokenized_corpus = [
-                    doc.lower().split() for doc in corpus if doc.strip()
-                ]
-                if tokenized_corpus:
-                    bm25 = BM25Okapi(tokenized_corpus)
-
-                    # Target vocabulary inverse frequency map directly
-                    token_scores = []
-                    for w in words:
-                        w_low = w.lower()
-                        if len(w_low) > 2:
-                            # Pull native statistical scarcity metric directly out of corpus weights
-                            idf_score = float(bm25.idf.get(w_low, 0.0))
-                            token_scores.append((w, idf_score))
-
-                    # Sort terms from rarest to most common
-                    token_scores.sort(key=lambda x: x[1], reverse=True)
-                    content_words = [word for word, _ in token_scores[:3]]
-            except Exception:
-                pass
-
-        if not content_words:
-            # Fallback to length heuristics if background token counts are absent
-            content_words = [w for w in words if len(w) > 2][:3]
-
+        # Select content words by length heuristic (> 2 chars)
+        content_words = [w for w in words if len(w) > 2][:3]
         if len(content_words) >= 2:
             kw_query = " ".join(content_words)
             norm = normalize_for_dedup(kw_query)
@@ -730,6 +711,11 @@ async def rate_fact_importance(
             "muslim", "hindu", "sikh", "christian", "jain", "buddhist",
             "lives in", "hometown", "from ", "based in",
             "works as", "job", "profession",
+            # Hinglish / Hindi romanized equivalents
+            "shaadi", "shuda", "married", "talaaq", "divorced",
+            "hindu", "muslim", "sikh", "christian", "jain",
+            "rahta hai", "rahiti hai", "rehti hai",  # lives in
+            "kaam", "naukri", "padhai",  # job, work, studies
         ]
         if any(kw in text_lower for kw in identity_kws):
             return 5, "identity"
@@ -738,6 +724,10 @@ async def rate_fact_importance(
             "has kids", "no kids", "vegetarian", "vegan",
             "non-vegetarian", "engineer", "doctor", "lawyer",
             "phd", "masters", "degree", "age", "born", "birthday",
+            # Hinglish / Hindi romanized equivalents
+            "bachche", "kids", "non-veg", "veg",
+            "nakshatra", "zodiac", "rashi",
+            "birthday", "janamdin", "age", "umra",
         ]
         if any(kw in text_lower for kw in preference_kws):
             return 4, "preference"
@@ -745,6 +735,11 @@ async def rate_fact_importance(
         opinion_kws = [
             "looking for", "want", "interested in", "love",
             "hate", "like", "enjoys", "hobby", "passionate", "goal",
+            # Hinglish / Hindi romanized equivalents
+            "chahti hai", "chahta hai",  # wants
+            "pasand", "nafrat",  # like, hate
+            "shauk", "hobby",  # hobby, interest
+            "intention", "plan",  # goals
         ]
         if any(kw in text_lower for kw in opinion_kws):
             return 3, "opinion"

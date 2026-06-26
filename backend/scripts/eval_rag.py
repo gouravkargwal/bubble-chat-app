@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -143,7 +144,7 @@ async def run_evaluation_pipeline():
                         if line.strip():
                             await log_retrieval_feedback(
                                 db,
-                                interaction_id=source_conversation_id,
+                                interaction_id=str(uuid.uuid4()),
                                 fact_text=line.strip()[:200],
                                 was_used=True,
                             )
@@ -252,5 +253,39 @@ async def run_evaluation_pipeline():
     logger.info("Evaluation complete!")
 
 
+async def analyze_production_retrieval_telemetry():
+    """Queries production logs to calculate the true hit-rate and alignment
+    precision of the RAG engine."""
+    logger.info("Analyzing production retrieval feedback records...")
+    async with async_session() as db:
+        stats_query = text("""
+            SELECT
+                COUNT(*) as total_retrieved,
+                SUM(CASE WHEN was_used = true THEN 1 ELSE 0 END) as total_used,
+                ROUND(100.0 * SUM(CASE WHEN was_used = true THEN 1 ELSE 0 END) / COUNT(*), 2) as generation_conversion_rate
+            FROM retrieval_feedback;
+        """)
+        try:
+            stats_res = await db.execute(stats_query)
+            stats = stats_res.mappings().first()
+            if not stats or stats["total_retrieved"] == 0:
+                print("\n=== Telemetry Alert: No feedback production data logged yet. ===\n")
+                return
+            print("\n==================================================")
+            print("   PRODUCTION RAG TELEMETRY OPTIMIZATION REPORT   ")
+            print("==================================================")
+            print(f"Total Context Elements Loaded: {stats['total_retrieved']}")
+            print(f"Total Elements Utilized by LLM:  {stats['total_used']}")
+            print(f"Core Generative Hit Rate:        {stats['generation_conversion_rate']}%")
+            print("==================================================\n")
+        except Exception as e:
+            logger.error("failed_to_extract_telemetry_metrics", error=str(e))
+
+
 if __name__ == "__main__":
-    asyncio.run(run_evaluation_pipeline())
+    import sys
+
+    if "--telemetry" in sys.argv:
+        asyncio.run(analyze_production_retrieval_telemetry())
+    else:
+        asyncio.run(run_evaluation_pipeline())

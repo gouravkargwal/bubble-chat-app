@@ -379,6 +379,7 @@ def fetch_librarian_context(
     user_id: str,
     conversation_id: str,
     current_text: str,
+    precomputed_queries: list[str] | None = None,
 ) -> dict[str, str]:
     """Sync wrapper for thread contexts that cannot `await` directly."""
 
@@ -387,6 +388,7 @@ def fetch_librarian_context(
             user_id=user_id,
             conversation_id=conversation_id,
             current_text=current_text,
+            precomputed_queries=precomputed_queries,
         )
 
     # LangGraph nodes run in threads via asyncio.to_thread, so we need a new loop
@@ -401,6 +403,7 @@ async def fetch_librarian_context_async(
     user_id: str,
     conversation_id: str,
     current_text: str,
+    precomputed_queries: list[str] | None = None,
 ) -> dict[str, str]:
     """Async-native librarian fetch for async endpoints/tasks."""
     async with librarian_async_session() as local_db:
@@ -409,6 +412,7 @@ async def fetch_librarian_context_async(
             user_id=user_id,
             conversation_id=conversation_id,
             current_text=current_text,
+            precomputed_queries=precomputed_queries,
         )
 
 

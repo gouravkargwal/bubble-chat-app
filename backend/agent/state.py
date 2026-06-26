@@ -166,6 +166,7 @@ class AgentState(TypedDict):
     past_memories: str  # deprecated — kept for backward compat
     tier_1_raw_exchanges: str  # Tier 1: FIFO sliding window of last N raw messages
     tier_2_summary: str  # Tier 2: compressed narrative of recent conversation arc
+    precomputed_queries: list[str]  # Vision-generated RAG search variants (zero-latency)
     # OCR output is now structured so ownership can be handled deterministically.
     raw_ocr_text: List["RawOcrTextItem"]
     detected_contradictions: List[str]
