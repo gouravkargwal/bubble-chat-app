@@ -40,6 +40,7 @@ class GeminiLangChainUsageCallback(BaseCallbackHandler):
             self._seen = True
 
     def to_usage_row(self) -> dict:
+        """Generate structured usage row, forwarding cached tokens for accurate discounting."""
         if not self._seen or (self.prompt_tokens == 0 and self.candidates_tokens == 0):
             logger.warning(
                 "gemini_langchain_usage_missing",
@@ -51,6 +52,7 @@ class GeminiLangChainUsageCallback(BaseCallbackHandler):
             model=self.model,
             prompt_tokens=self.prompt_tokens,
             candidates_tokens=self.candidates_tokens,
+            cached_tokens=self.cached_tokens,  # 🎯 FIXED: Forwarding cached tokens to the pricing engine
         )
 
 
@@ -137,7 +139,7 @@ def invoke_structured_groq(
         base_url="https://api.groq.com/openai/v1",
         timeout=LLM_TIMEOUT_SECONDS,
         max_retries=LLM_MAX_RETRIES,
-    ).with_structured_output(schema, method="function_calling")  # Groq llama-3.3 has tool-calling, NOT json_schema response_format
+    ).with_structured_output(schema, method="function_calling")
 
     t0 = time.monotonic()
     result = llm.invoke(messages, config={"callbacks": [cb]})
@@ -148,8 +150,9 @@ def invoke_structured_groq(
         "model": model,
         "prompt_tokens": pt,
         "candidates_tokens": ct,
+        "cached_tokens": 0,
         "total_tokens": pt + ct,
-        "cost_usd": 0.0,  # Groq is not Gemini-priced; not tracked here
+        "cost_usd": 0.0,
     }
     logger.info(
         "llm_lifecycle",
@@ -188,7 +191,9 @@ def invoke_structured_gemini(
     last_exc: BaseException | None = None
     for attempt_model in models_to_try:
         cb = GeminiLangChainUsageCallback(phase=phase, model=attempt_model)
-        llm = build_llm(model=attempt_model, temperature=temperature, structured_output=schema)
+        llm = build_llm(
+            model=attempt_model, temperature=temperature, structured_output=schema
+        )
         t0 = time.monotonic()
         try:
             result = llm.invoke(messages, config={"callbacks": [cb]})
@@ -222,5 +227,4 @@ def invoke_structured_gemini(
         )
         return result, row
 
-    # All attempts exhausted — re-raise last error
     raise last_exc  # type: ignore[misc]

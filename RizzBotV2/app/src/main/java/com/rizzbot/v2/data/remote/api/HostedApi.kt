@@ -16,8 +16,6 @@ import com.rizzbot.v2.data.remote.dto.TrackCopyRequest
 import com.rizzbot.v2.data.remote.dto.TrackRatingRequest
 import com.rizzbot.v2.data.remote.dto.UsageResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
-import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
-import com.rizzbot.v2.data.remote.dto.VerifyPurchaseResponse
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateResponse
 import com.rizzbot.v2.data.remote.dto.ResolveConversationRequest
@@ -74,10 +72,6 @@ interface HostedApi {
 
     @POST("api/v1/referral/apply")
     suspend fun applyReferral(@Body request: ApplyReferralRequest): ApplyReferralResponse
-
-    // Billing
-    @POST("api/v1/billing/verify")
-    suspend fun verifyPurchase(@Body request: VerifyPurchaseRequest): VerifyPurchaseResponse
 
     @GET("api/v1/billing/status")
     suspend fun getBillingStatus(): BillingStatusResponse

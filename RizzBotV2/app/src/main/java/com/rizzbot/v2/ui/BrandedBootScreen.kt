@@ -1,13 +1,6 @@
 package com.rizzbot.v2.ui
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -22,11 +15,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,7 +25,6 @@ import com.rizzbot.v2.R
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingDimens
-import com.rizzbot.v2.ui.theme.NothingSurface
 import com.rizzbot.v2.ui.theme.NothingTextSecondary
 import com.rizzbot.v2.ui.theme.NothingWhite
 import com.rizzbot.v2.ui.components.CookdLogo
@@ -51,8 +41,10 @@ fun BrandedBootScreen() {
                 .fillMaxSize()
                 .padding(horizontal = 36.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
         ) {
+            // Push content to true vertical center, accounting for the indicator below
+            Spacer(modifier = Modifier.weight(1f))
+
             CookdLogo()
             Spacer(modifier = Modifier.height(28.dp))
             Text(
@@ -76,16 +68,18 @@ fun BrandedBootScreen() {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
-        }
 
-        CircularProgressIndicator(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 52.dp)
-                .size(40.dp),
-            color = NothingWhite,
-            trackColor = NothingBorder,
-            strokeWidth = 3.dp,
-        )
+            // Reserve space below content so the indicator sits at the bottom
+            // without competing with the centered content block
+            Spacer(modifier = Modifier.weight(1f))
+
+            CircularProgressIndicator(
+                modifier = Modifier.size(40.dp),
+                color = NothingWhite,
+                trackColor = NothingBorder,
+                strokeWidth = 3.dp,
+            )
+            Spacer(modifier = Modifier.height(52.dp))
+        }
     }
 }

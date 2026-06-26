@@ -324,7 +324,37 @@ async def _run_generate_v2(
     )
 
     # ------------------------------------------------------------------ #
-    # 5. Hybrid Stitch: resolve conversation_id before agent runs
+    # 5. Quota guard gate — check credits before any expensive calls
+    # ------------------------------------------------------------------ #
+    quota_manager: QuotaManager | None = None
+    credits_remaining: int = 0
+
+    if user.google_provider_id:
+        quota_manager = QuotaManager(db)
+        try:
+            await quota_manager.check_only_credits(
+                user.google_provider_id,
+                action="chat_generation",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+            )
+        except QuotaExceededException:
+            raise HTTPException(
+                status_code=429,
+                detail="Credits exhausted. Upgrade or wait for daily reset.",
+            )
+    else:
+        quota_manager = None
+
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_quota_checked",
+        user_id=user.id,
+        google_quota_enforced=bool(quota_manager),
+    )
+
+    # ------------------------------------------------------------------ #
+    # 6. Hybrid Stitch: resolve conversation_id before agent runs
     # ------------------------------------------------------------------ #
     if cached_vision_out is not None:
         vision_out = cached_vision_out
@@ -464,38 +494,6 @@ async def _run_generate_v2(
             outcome="skipped_client_conversation_id",
             effective_conversation_id=effective_conversation_id or "",
         )
-
-    # ------------------------------------------------------------------ #
-    # 6. Quota: check and spend credits before running the expensive agent
-    # ------------------------------------------------------------------ #
-    quota_manager: QuotaManager | None = None
-    credits_remaining: int = 0
-
-    # Check quota upfront (no deduction yet) — blocks over-limit users before running agent.
-    # Credits are deducted only after the user sees a successful response.
-    if user.google_provider_id:
-        quota_manager = QuotaManager(db)
-        try:
-            await quota_manager.check_only_credits(
-                user.google_provider_id,
-                action="chat_generation",
-                tier=effective_tier,
-                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
-            )
-        except QuotaExceededException:
-            raise HTTPException(
-                status_code=429,
-                detail="Credits exhausted. Upgrade or wait for daily reset.",
-            )
-    else:
-        quota_manager = None
-
-    logger.info(
-        "llm_lifecycle",
-        stage="v2_quota_checked",
-        user_id=user.id,
-        google_quota_enforced=bool(quota_manager),
-    )
 
     # ------------------------------------------------------------------ #
     # 7. Voice DNA — load if tier supports it

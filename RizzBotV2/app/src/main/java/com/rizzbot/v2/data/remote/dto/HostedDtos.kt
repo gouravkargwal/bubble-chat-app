@@ -149,19 +149,6 @@ data class ApplyReferralResponse(
 // ── Billing ──
 
 @Serializable
-data class VerifyPurchaseRequest(
-    @SerialName("purchase_token") val purchaseToken: String,
-    @SerialName("product_id") val productId: String,
-    @SerialName("order_id") val orderId: String? = null
-)
-
-@Serializable
-data class VerifyPurchaseResponse(
-    @SerialName("is_valid") val isValid: Boolean,
-    @SerialName("premium_until") val premiumUntil: Long? = null
-)
-
-@Serializable
 data class BillingStatusResponse(
     @SerialName("is_premium") val isPremium: Boolean,
     val tier: String = "free",

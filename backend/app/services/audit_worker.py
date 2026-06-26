@@ -29,8 +29,19 @@ from app.infrastructure.oci_storage import (
 from app.llm.gemini_client import GeminiClient
 from app.models.profile_auditor import AuditResponse, PhotoFeedback, PhotoTier
 from app.prompts.profile_auditor import PROFILE_AUDIT_SCHEMA, build_profile_audit_system_prompt, build_profile_audit_user_prompt
-from app.services.profile_auditor_service import MAX_FILE_SIZE, _score_to_tier
 from app.services.quota_manager import QuotaManager
+
+
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB per image safety limit
+
+
+def _score_to_tier(score: int) -> PhotoTier:
+    """Deterministic score to tier mapping. Keeps tier consistent across runs."""
+    if score >= 8:
+        return PhotoTier.GOD_TIER
+    if score >= 6:
+        return PhotoTier.FILLER
+    return PhotoTier.GRAVEYARD
 
 logger = structlog.get_logger(__name__)
 

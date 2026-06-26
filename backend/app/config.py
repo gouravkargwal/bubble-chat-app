@@ -52,10 +52,6 @@ class Settings(BaseSettings):
     # "screenplay" (default, Netflix India Screenwriter roleplay) or "coach" (legacy Dating Coach rules).
     prompt_mode: str = "screenplay"
 
-    # Google Play Billing
-    google_play_service_account: str = ""
-    google_play_package_name: str = "com.cookd.app"
-
     # RevenueCat
     revenuecat_webhook_secret: str = ""
 

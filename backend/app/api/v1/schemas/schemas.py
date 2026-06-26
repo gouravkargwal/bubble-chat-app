@@ -156,17 +156,6 @@ class ApplyReferralResponse(BaseModel):
 
 
 # Billing
-class VerifyPurchaseRequest(BaseModel):
-    purchase_token: str
-    product_id: str
-    order_id: str | None = None
-
-
-class VerifyPurchaseResponse(BaseModel):
-    is_valid: bool
-    premium_until: int | None = None  # unix timestamp
-
-
 class BillingStatusResponse(BaseModel):
     is_premium: bool
     tier: str = "free"

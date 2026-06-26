@@ -9,7 +9,7 @@ the async audit worker.
 def build_profile_audit_system_prompt(lang: str) -> str:
     """Build the system prompt for profile photo auditing.
 
-    Shared by ``analyze_profile_photos`` and ``audit_worker.process_audit_job``.
+    Shared by ``audit_worker.process_audit_job``.
     """
     return (
         "1) Role: Elite cynical dating coach and gatekeeper. Most profiles are weak; say why in plain, swipe-level truth.\n\n"
@@ -46,7 +46,7 @@ def build_profile_audit_system_prompt(lang: str) -> str:
 def build_profile_audit_user_prompt(new_image_count: int) -> str:
     """Build the user prompt for profile photo auditing.
 
-    Shared by ``analyze_profile_photos`` and ``audit_worker.process_audit_job``.
+    Shared by ``audit_worker.process_audit_job``.
     """
     return (
         f"Evaluate these {new_image_count} images in the exact order provided "

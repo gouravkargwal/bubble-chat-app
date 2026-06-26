@@ -17,7 +17,6 @@ import com.rizzbot.v2.data.remote.dto.ResolveConversationRequest
 import com.rizzbot.v2.data.remote.dto.RequiresUserConfirmationResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
 import com.rizzbot.v2.data.remote.dto.UsageResponse
-import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.ReferralInfo
@@ -366,22 +365,6 @@ class HostedRepositoryImpl @Inject constructor(
         }
     }
 
-
-    override suspend fun verifyPurchase(
-        purchaseToken: String,
-        productId: String,
-        orderId: String?
-    ): Boolean {
-        return try {
-            val response = hostedApi.verifyPurchase(
-                VerifyPurchaseRequest(purchaseToken, productId, orderId)
-            )
-            if (response.isValid) {
-                refreshUsage(force = true) // Force refresh after purchase
-            }
-            response.isValid
-        } catch (_: Exception) { false }
-    }
 
     override suspend fun getHistory(limit: Int, offset: Int): List<HistoryItemResponse> {
         return try {

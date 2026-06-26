@@ -8,6 +8,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -21,19 +25,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,7 +68,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -427,11 +426,13 @@ private fun ScreenshotsStep(
             Spacer(modifier = Modifier.height(NothingDimens.elementGap))
 
             if (hasImages) {
-                ThumbnailStrip(previewBitmaps = state.previewBitmaps, maxScreenshots = maxScreenshots, onAddMore = onOpenGallery, onRemove = onRemoveImage)
+                ScreenshotGrid(previewBitmaps = state.previewBitmaps, maxScreenshots = maxScreenshots, onAddMore = onOpenGallery, onRemove = onRemoveImage)
             } else {
                 EmptyGalleryCta(onClick = onOpenGallery, maxScreenshots = maxScreenshots)
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = if (hasImages) onGenerate else onOpenGallery,
@@ -452,35 +453,134 @@ private fun ScreenshotsStep(
 }
 
 @Composable
-private fun ThumbnailStrip(previewBitmaps: List<android.graphics.Bitmap>, maxScreenshots: Int, onAddMore: () -> Unit, onRemove: (Int) -> Unit) {
-    var selectedPreviewIndex by remember(previewBitmaps) { mutableIntStateOf(previewBitmaps.lastIndex.coerceAtLeast(0)) }
-    Column {
-        LazyRow(contentPadding = PaddingValues(0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(100.dp)) {
-            itemsIndexed(previewBitmaps) { index, bitmap ->
-                Box(modifier = Modifier.width(68.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(NothingSurface).clickable { selectedPreviewIndex = index }.padding(2.dp)) {
-                    Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Screenshot ${index + 1}", modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
-                    IconButton(onClick = { onRemove(index) }, modifier = Modifier.align(Alignment.TopEnd).size(20.dp).background(NothingBlack.copy(alpha = 0.7f), CircleShape)) {
-                        Icon(Icons.Default.Close, "Remove", tint = NothingWhite, modifier = Modifier.size(12.dp))
-                    }
-                }
-            }
-            if (previewBitmaps.size < maxScreenshots) {
-                item {
-                    Box(modifier = Modifier.width(68.dp).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(NothingSurface.copy(alpha = 0.6f)).clickable { onAddMore() }, contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Add, "Add", tint = NothingWhite, modifier = Modifier.size(20.dp))
-                            Text("Add", color = NothingWhite, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
+private fun ScreenshotGrid(previewBitmaps: List<android.graphics.Bitmap>, maxScreenshots: Int, onAddMore: () -> Unit, onRemove: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        var idx = 0
+        while (idx < previewBitmaps.size) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // First cell in the row
+                ScreenshotCell(
+                    bitmap = previewBitmaps[idx],
+                    label = "Screenshot ${idx + 1}",
+                    onRemove = { onRemove(idx) },
+                    modifier = Modifier.weight(1f)
+                )
+                // Second cell: either another screenshot, add-more button, or empty
+                if (idx + 1 < previewBitmaps.size) {
+                    ScreenshotCell(
+                        bitmap = previewBitmaps[idx + 1],
+                        label = "Screenshot ${idx + 1 + 1}",
+                        onRemove = { onRemove(idx + 1) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    idx += 2
+                } else if (previewBitmaps.size < maxScreenshots) {
+                    AddMoreCell(
+                        currentCount = previewBitmaps.size,
+                        maxScreenshots = maxScreenshots,
+                        onAddMore = onAddMore,
+                        modifier = Modifier.weight(1f)
+                    )
+                    idx += 1
+                } else {
+                    // Odd count but at max — leave second slot empty
+                    Spacer(modifier = Modifier.weight(1f))
+                    idx += 1
                 }
             }
         }
-        if (selectedPreviewIndex in previewBitmaps.indices) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.5f).clip(RoundedCornerShape(NothingDimens.cardRadius)).border(NothingDimens.borderThickness, NothingBorder, RoundedCornerShape(NothingDimens.cardRadius))) {
-                Image(bitmap = previewBitmaps[selectedPreviewIndex].asImageBitmap(), contentDescription = "Selected screenshot", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        // If even-numbered images and room for more, add a full-width add-more row
+        if (previewBitmaps.size % 2 == 0 && previewBitmaps.size < maxScreenshots) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AddMoreCell(
+                    currentCount = previewBitmaps.size,
+                    maxScreenshots = maxScreenshots,
+                    onAddMore = onAddMore,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.weight(1f))
             }
-            Text("${previewBitmaps.size} of $maxScreenshots selected", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = NothingDimens.textGap))
+        }
+    }
+}
+
+@Composable
+private fun ScreenshotCell(
+    bitmap: android.graphics.Bitmap,
+    label: String,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(170.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(NothingSurface)
+            .border(NothingDimens.borderThickness, NothingBorder.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+    ) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = label,
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Crop,
+        )
+        // Semi-transparent label at bottom
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .align(Alignment.BottomCenter)
+                .background(NothingBlack.copy(alpha = 0.6f), RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(label, color = NothingWhite, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+        }
+        // Remove button
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(26.dp)
+                .padding(2.dp)
+                .background(NeonRed.copy(alpha = 0.85f), CircleShape)
+        ) {
+            Icon(Icons.Default.Close, "Remove", tint = NothingWhite, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+@Composable
+private fun AddMoreCell(
+    currentCount: Int,
+    maxScreenshots: Int,
+    onAddMore: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(170.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(NothingSurface.copy(alpha = 0.5f))
+            .border(NothingDimens.borderThickness, NothingBorder.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .clickable { onAddMore() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(NothingWhite.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Add, "Add", tint = NothingWhite, modifier = Modifier.size(24.dp))
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("Add more", color = NothingWhite, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Text("$currentCount of $maxScreenshots", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -499,17 +599,57 @@ private fun EmptyGalleryCta(onClick: () -> Unit, maxScreenshots: Int) {
 
 @Composable
 private fun GeneratingStep() {
-    Column(modifier = Modifier.fillMaxSize().padding(NothingDimens.cardPadding), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text("\uD83E\uDDD0", fontSize = 40.sp)
-        Spacer(modifier = Modifier.height(NothingDimens.elementGap))
-        Text("Cooking up your reply...", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(NothingDimens.textGap))
-        Text("Analyzing screenshots and crafting the perfect response", color = NothingTextSecondary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(NothingDimens.elementGap))
-        LinearProgressIndicator(
-            modifier = Modifier.fillMaxWidth(0.5f).height(4.dp).clip(RoundedCornerShape(2.dp)),
+    val infiniteTransition = rememberInfiniteTransition(label = "loading")
+
+    // Nothing OS dot-matrix loading — 3 pulsing dots
+    val dotAlphas = List(3) { index ->
+        infiniteTransition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600, delayMillis = index * 200),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "dot$index"
+        )
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(NothingDimens.cardPadding),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Nothing OS dot-matrix loading — 3 pulsing dots
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            dotAlphas.forEach { anim ->
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(NothingWhite.copy(alpha = anim.value))
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            "Cooking up your reply",
+            color = NothingWhite,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            "Analyzing screenshots and crafting the perfect response",
             color = NothingTextSecondary,
-            trackColor = NothingBorder
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
         )
     }
 }

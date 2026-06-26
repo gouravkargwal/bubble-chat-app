@@ -240,8 +240,12 @@ class PaywallViewModel @Inject constructor(
                     applyRcCustomerInfo(customerInfo)
                     _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
 
-                    // Sync tier in background so it's ready before "Start Exploring" navigates away
+                    // Sync backend + RevenueCat in background
                     viewModelScope.launch {
+                        // Refresh backend usage — guaranteed to see the new tier now
+                        hostedRepository.refreshUsage(force = true)
+
+                        // Sync local RevenueCat tier (catches any edge case)
                         subscriptionManager.updateUserTier()
                         Log.d("PaywallViewModel", "Purchase tier sync complete")
                     }
@@ -295,6 +299,8 @@ class PaywallViewModel @Inject constructor(
                             applyRcCustomerInfo(customerInfo)
 
                             if (hasCookdPaidEntitlement(customerInfo)) {
+                                // Force-refresh backend usage so tier syncs even if webhook is delayed
+                                hostedRepository.refreshUsage(force = true)
                                 hapticHelper.successTap()
                                 _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
                             } else {

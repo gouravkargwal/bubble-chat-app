@@ -72,7 +72,34 @@ class SmartReplyViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
-                _state.update { it.copy(usage = usage, maxScreenshots = usage.maxScreenshots.coerceIn(1, 10)) }
+                _state.update { current ->
+                    val updated = current.copy(
+                        usage = usage,
+                        maxScreenshots = usage.maxScreenshots.coerceIn(1, 10),
+                    )
+                    // Auto-dismiss quota error when credits are restored (e.g. after upgrade)
+                    // so the user continues from where they left off instead of seeing a stale error.
+                    if (usage.canGenerate &&
+                        updated.step == SmartReplyStep.RESULT &&
+                        updated.result is SuggestionResult.Error
+                    ) {
+                        val errorType = (updated.result as SuggestionResult.Error).errorType
+                        if (errorType == SuggestionResult.ErrorType.QUOTA_EXCEEDED) {
+                            // Preserve direction + images — go back to the screenshots step
+                            updated.copy(
+                                step = if (updated.imageUris.isNotEmpty() && updated.direction != null)
+                                    SmartReplyStep.SCREENSHOTS
+                                else
+                                    SmartReplyStep.DIRECTION,
+                                result = SuggestionResult.Idle,
+                            )
+                        } else {
+                            updated
+                        }
+                    } else {
+                        updated
+                    }
+                }
             }
         }
     }
