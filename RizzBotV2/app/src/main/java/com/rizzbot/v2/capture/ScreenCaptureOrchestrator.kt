@@ -210,6 +210,31 @@ class ScreenCaptureOrchestrator @Inject constructor(
     }
 
     /**
+     * Import externally provided base64-encoded images (e.g., Gallery picks) into the internal
+     * screenshot buffers so the user can preview them before generating.
+     */
+    fun importExternalImages(imagesBase64: List<String>) {
+        if (imagesBase64.isEmpty()) return
+
+        clearScreenshot()
+
+        for (b64 in imagesBase64) {
+            try {
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap != null) {
+                    base64Screenshots.add(b64)
+                    previewBitmaps.add(bitmap)
+                }
+            } catch (_: Exception) {
+                // Skip malformed images
+            }
+        }
+
+        _result.value = SuggestionResult.Idle
+    }
+
+    /**
      * Generate a reply from externally provided base64-encoded images (e.g., Gallery picks),
      * without modifying the internal screenshot buffers.
      */

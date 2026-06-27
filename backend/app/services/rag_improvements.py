@@ -16,7 +16,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 import numpy as np
 
-
 # Lazy singleton for the Gemini client used by rate_fact_importance.
 # Avoids creating a new httpx.AsyncClient (connection pool) per fact.
 _llm_client: Any = None
@@ -35,11 +34,60 @@ def _get_llm_client():
         )
     return _llm_client
 
+
 logger = structlog.get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Utility to inline Pydantic definitions for strict structural APIs like Gemini
+# ---------------------------------------------------------------------------
+
+
+def inline_pydantic_defs(schema: dict) -> dict:
+    """Recursively replaces Pydantic v2 $ref pointers with actual definitions.
+
+    Gemini's response_schema validation breaks if a root-level '$defs' map exists.
+    """
+    if not schema:
+        return schema
+
+    defs = schema.pop("$defs", {})
+    if not defs:
+        return schema
+
+    def resolve_refs(item: Any) -> Any:
+        if isinstance(item, dict):
+            if "$ref" in item:
+                # Reference pattern syntax: "#/$defs/ModelName"
+                ref_key = item["$ref"].split("/")[-1]
+                if ref_key in defs:
+                    return resolve_refs(defs[ref_key])
+            return {k: resolve_refs(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [resolve_refs(i) for i in item]
+        return item
+
+    return resolve_refs(schema)
+
 
 # ---------------------------------------------------------------------------
 # Token estimation (rough but fast: ~4 chars per token for English/Hinglish)
 # ---------------------------------------------------------------------------
+
+
+_TIKTOKEN_ENCODER: Any = None
+
+
+def _get_tiktoken_encoder():
+    """Return a cached tiktoken encoder, creating it on first use."""
+    global _TIKTOKEN_ENCODER
+    if _TIKTOKEN_ENCODER is None:
+        try:
+            import tiktoken
+
+            _TIKTOKEN_ENCODER = tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            _TIKTOKEN_ENCODER = False  # sentinel: tiktoken unavailable
+    return _TIKTOKEN_ENCODER
 
 
 def estimate_tokens(text: str) -> int:
@@ -49,12 +97,10 @@ def estimate_tokens(text: str) -> int:
     """
     if not text:
         return 0
-    try:
-        import tiktoken
-        _enc = tiktoken.get_encoding("cl100k_base")
-        return len(_enc.encode(text))
-    except Exception:
-        return max(1, len(text) // 4)
+    encoder = _get_tiktoken_encoder()
+    if encoder:
+        return len(encoder.encode(text))
+    return max(1, len(text) // 4)
 
 
 # ---------------------------------------------------------------------------
@@ -126,11 +172,7 @@ async def mmr_rerank(
     query_embedding: list[float] | None = None,
     lambda_param: float = 0.7,
 ) -> list[str]:
-    """Rerank facts using NumPy-vectorized Maximal Marginal Relevance.
-
-    Uses pre-computed embeddings from the DB and NumPy matrix operations
-    to balance relevance and diversity with high-performance execution.
-    """
+    """Rerank facts using NumPy-vectorized Maximal Marginal Relevance."""
     if len(facts) <= 2:
         return facts
 
@@ -273,12 +315,7 @@ def generate_query_variants(
     person_name: str = "",
     max_variants: int = 3,
 ) -> list[str]:
-    """Generate multiple query variants for better recall.
-
-    Produces up to ``max_variants`` query strings that capture different
-    aspects of the user's input: the original, a person-name-enriched
-    variant, and a keyword-only variant (content words > 2 chars).
-    """
+    """Generate multiple query variants for better recall."""
     text = current_text.strip()
     if not text:
         return [""]
@@ -368,19 +405,18 @@ def build_tier1_raw_exchanges(
     interactions: list[dict[str, Any]],
     max_messages: int = 6,
 ) -> str:
-    """Tier 1 — FIFO sliding window of the last N raw message exchanges.
-
-    Extracts verbatim messages from ``transcript_json`` of the most recent
-    interactions and formats them as a chronological exchange log.  Falls
-    back to ``their_last_message`` when ``transcript_json`` is unavailable.
-    """
+    """Tier 1 — FIFO sliding window of the last N raw message exchanges."""
     all_messages: list[tuple[str, str]] = []
 
-    for interaction in interactions:  # already chronological (oldest → newest)
+    for interaction in interactions:
         transcript_raw = interaction.get("transcript_json")
         if transcript_raw:
             try:
-                pairs = json.loads(transcript_raw)
+                pairs = (
+                    transcript_raw
+                    if isinstance(transcript_raw, (list, dict))
+                    else json.loads(transcript_raw)
+                )
                 for pair in pairs:
                     if not isinstance(pair, dict):
                         continue
@@ -394,12 +430,10 @@ def build_tier1_raw_exchanges(
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        # Fallback: use their_last_message
         their_msg = (interaction.get("their_last_message") or "").strip()
         if their_msg:
             all_messages.append(("them", their_msg))
 
-    # Keep only the tail (most recent messages)
     all_messages = all_messages[-max_messages:]
 
     if not all_messages:
@@ -411,23 +445,17 @@ def build_tier1_raw_exchanges(
 def build_tier2_narrative_summary(
     interactions: list[dict[str, Any]],
 ) -> str:
-    """Tier 2 — Compressed narrative of the recent conversation arc.
-
-    Formats the last 5 interactions as a compact chronological narrative
-    showing what was discussed and how the conversation progressed, without
-    requiring an LLM call.
-    """
+    """Tier 2 — Compressed narrative of the recent conversation arc."""
     if not interactions:
         return ""
 
     lines: list[str] = []
-    for interaction in interactions:  # chronological (oldest → newest)
+    for interaction in interactions:
         direction = interaction.get("direction", "unknown")
         their_msg = (interaction.get("their_last_message") or "").strip()
         copied_index = interaction.get("copied_index")
         key_detail = (interaction.get("key_detail") or "").strip()
 
-        # Extract what was actually sent
         sent_text = ""
         if copied_index is not None:
             raw_reply = interaction.get(f"reply_{copied_index}") or ""
@@ -462,7 +490,8 @@ class EntityNode(BaseModel):
     """A concrete noun/entity extracted from a conversational fact."""
 
     name: str = Field(
-        ..., description="The concrete noun/entity name, e.g., 'Ragini', 'MAMC', 'Guitar'."
+        ...,
+        description="The concrete noun/entity name, e.g., 'Ragini', 'MAMC', 'Guitar'.",
     )
     type: str = Field(
         ...,
@@ -494,7 +523,10 @@ class KnowledgeGraphTriples(BaseModel):
     relationships: list[RelationshipEdge] = Field(default_factory=list)
 
 
-_GEMINI_GRAPH_SCHEMA: dict = KnowledgeGraphTriples.model_json_schema()
+# FIXED: Wrapped in parsing logic to peel off Pydantic definitions
+_GEMINI_GRAPH_SCHEMA: dict = inline_pydantic_defs(
+    KnowledgeGraphTriples.model_json_schema()
+)
 
 
 # ---------------------------------------------------------------------------
@@ -514,16 +546,14 @@ class SparseTokenExpansion(BaseModel):
     )
 
 
-_GEMINI_SPARSE_SCHEMA: dict = SparseTokenExpansion.model_json_schema()
+# FIXED: Wrapped to prevent root definition schema blocks
+_GEMINI_SPARSE_SCHEMA: dict = inline_pydantic_defs(
+    SparseTokenExpansion.model_json_schema()
+)
 
 
 async def generate_sparse_lexical_extensions(fact_text: str) -> str:
-    """Expand a fact into its semantic synonyms and cross-lingual equivalents.
-
-    The result is stored in ``conversation_memories.lexical_expansion`` and
-    fed into a combined GIN index so that PostgreSQL full-text search can
-    match dialectal and romanized variants without a dedicated SPLADE service.
-    """
+    """Expand a fact into its semantic synonyms and cross-lingual equivalents."""
     if not fact_text or not fact_text.strip():
         return ""
 
@@ -538,7 +568,7 @@ async def generate_sparse_lexical_extensions(fact_text: str) -> str:
                 "output ['shaadi', 'shuda', 'husband', 'wife', 'spouse']."
             ),
             user_prompt=(
-                f'Generate search index keyword expansions for this text '
+                f"Generate search index keyword expansions for this text "
                 f'fragment: "{fact_text}"'
             ),
             response_schema=_GEMINI_SPARSE_SCHEMA,
@@ -573,10 +603,10 @@ async def generate_sparse_lexical_extensions(fact_text: str) -> str:
 class FactCategory(str, Enum):
     """Semantic category for a user profile fact."""
 
-    IDENTITY = "identity"  # Core data: job, hometown, relationship status
-    PREFERENCE = "preference"  # Likes, dislikes, diet, habits
-    OPINION = "opinion"  # Explicit views, relationship goals, philosophies
-    FACTUAL = "factual"  # Informational, abstract text fragments
+    IDENTITY = "identity"
+    PREFERENCE = "preference"
+    OPINION = "opinion"
+    FACTUAL = "factual"
 
 
 class StructuredFactAnalysis(BaseModel):
@@ -594,9 +624,10 @@ class StructuredFactAnalysis(BaseModel):
     )
 
 
-# JSON Schema that Gemini receives via responseSchema — avoids runtime
-# dependency on google-genai SDK by using the existing REST client.
-_GEMINI_FACT_SCHEMA: dict = StructuredFactAnalysis.model_json_schema()
+# FIXED: Inlined definition arrays cleanly to avoid Gemini engine parser crashes
+_GEMINI_FACT_SCHEMA: dict = inline_pydantic_defs(
+    StructuredFactAnalysis.model_json_schema()
+)
 
 # ---------------------------------------------------------------------------
 # Graph RAG Extraction Utility
@@ -604,11 +635,7 @@ _GEMINI_FACT_SCHEMA: dict = StructuredFactAnalysis.model_json_schema()
 
 
 async def extract_graph_triples(fact_text: str) -> KnowledgeGraphTriples:
-    """Extract semantic graph nodes and edges from raw text using Gemini.
-
-    Returns structured entity-relationship triples that get persisted into
-    the graph tables (conversation_memory_entities + conversation_memory_edges).
-    """
+    """Extract semantic graph nodes and edges from raw text using Gemini."""
     if not fact_text or not fact_text.strip():
         return KnowledgeGraphTriples()
 
@@ -622,7 +649,7 @@ async def extract_graph_triples(fact_text: str) -> KnowledgeGraphTriples:
                 "predicate edges."
             ),
             user_prompt=(
-                f'Extract all knowledge graph entities and relationships from '
+                f"Extract all knowledge graph entities and relationships from "
                 f'this text: "{fact_text}"'
             ),
             response_schema=_GEMINI_GRAPH_SCHEMA,
@@ -657,14 +684,7 @@ async def extract_graph_triples(fact_text: str) -> KnowledgeGraphTriples:
 async def rate_fact_importance(
     fact_text: str,
 ) -> tuple[int | None, str | None]:
-    """Rate fact importance and categorize dynamically using Gemini Structured Outputs.
-
-    Handles mixed multi-lingual inputs and romanized Hinglish/Hindi phrases
-    without relying on brittle hardcoded keyword lists.
-
-    Falls back to a lightweight heuristic chain when the LLM call fails
-    (rate-limits, network errors, etc.).
-    """
+    """Rate fact importance and categorize dynamically using Gemini Structured Outputs."""
     if not fact_text or not fact_text.strip():
         return None, None
 
@@ -677,7 +697,7 @@ async def rate_fact_importance(
                 "Accurately categorize facts and assign importance weights."
             ),
             user_prompt=(
-                f'Analyze the following statement or profile trait extracted '
+                f"Analyze the following statement or profile trait extracted "
                 f'from a user\'s conversational profile history:\n\n"{fact_text}"'
             ),
             response_schema=_GEMINI_FACT_SCHEMA,
@@ -703,43 +723,84 @@ async def rate_fact_importance(
             fact=fact_text[:50],
         )
 
-        # Fallback heuristic chain — covers the common identity/preference
-        # cases when the API is unreachable or rate-limited.
+        # Fallback heuristic chain — covers the common identity/preference cases
         text_lower = fact_text.lower()
         identity_kws = [
-            "married", "divorced", "widowed", "single",
-            "muslim", "hindu", "sikh", "christian", "jain", "buddhist",
-            "lives in", "hometown", "from ", "based in",
-            "works as", "job", "profession",
-            # Hinglish / Hindi romanized equivalents
-            "shaadi", "shuda", "married", "talaaq", "divorced",
-            "hindu", "muslim", "sikh", "christian", "jain",
-            "rahta hai", "rahiti hai", "rehti hai",  # lives in
-            "kaam", "naukri", "padhai",  # job, work, studies
+            "married",
+            "divorced",
+            "widowed",
+            "single",
+            "muslim",
+            "hindu",
+            "sikh",
+            "christian",
+            "jain",
+            "buddhist",
+            "lives in",
+            "hometown",
+            "from ",
+            "based in",
+            "works as",
+            "job",
+            "profession",
+            "shaadi",
+            "shuda",
+            "talaaq",
+            "rahta hai",
+            "rahiti hai",
+            "rehti hai",
+            "kaam",
+            "naukri",
+            "padhai",
         ]
         if any(kw in text_lower for kw in identity_kws):
             return 5, "identity"
 
         preference_kws = [
-            "has kids", "no kids", "vegetarian", "vegan",
-            "non-vegetarian", "engineer", "doctor", "lawyer",
-            "phd", "masters", "degree", "age", "born", "birthday",
-            # Hinglish / Hindi romanized equivalents
-            "bachche", "kids", "non-veg", "veg",
-            "nakshatra", "zodiac", "rashi",
-            "birthday", "janamdin", "age", "umra",
+            "has kids",
+            "no kids",
+            "vegetarian",
+            "vegan",
+            "non-vegetarian",
+            "engineer",
+            "doctor",
+            "lawyer",
+            "phd",
+            "masters",
+            "degree",
+            "age",
+            "born",
+            "birthday",
+            "bachche",
+            "non-veg",
+            "veg",
+            "nakshatra",
+            "zodiac",
+            "rashi",
+            "janamdin",
+            "umra",
         ]
         if any(kw in text_lower for kw in preference_kws):
             return 4, "preference"
 
         opinion_kws = [
-            "looking for", "want", "interested in", "love",
-            "hate", "like", "enjoys", "hobby", "passionate", "goal",
-            # Hinglish / Hindi romanized equivalents
-            "chahti hai", "chahta hai",  # wants
-            "pasand", "nafrat",  # like, hate
-            "shauk", "hobby",  # hobby, interest
-            "intention", "plan",  # goals
+            "looking for",
+            "want",
+            "interested in",
+            "love",
+            "hate",
+            "like",
+            "enjoys",
+            "hobby",
+            "passionate",
+            "goal",
+            "chahti hai",
+            "chahta hai",
+            "pasand",
+            "nafrat",
+            "shauk",
+            "intention",
+            "plan",
         ]
         if any(kw in text_lower for kw in opinion_kws):
             return 3, "opinion"

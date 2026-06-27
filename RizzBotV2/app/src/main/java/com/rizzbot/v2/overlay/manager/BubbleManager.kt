@@ -667,21 +667,17 @@ class BubbleManager @Inject constructor(
             return
         }
 
-        val activeScope = ensureScope()
-        activeScope.launch {
-            _state.value = BubbleState.RizzButton
-            orchestrator.resetResult()
-            orchestrator.clearScreenshot()
-
-            orchestrator.generateFromExternalImages(imagesBase64, direction)
-            val result = orchestrator.result.value
-            _state.value = when (result) {
-                is SuggestionResult.Success -> BubbleState.Expanded(result)
-                is SuggestionResult.Error -> BubbleState.Error(result.message, result.errorType, direction)
-                is SuggestionResult.RequiresUserConfirmation -> BubbleState.RequiresUserConfirmation(result.suggestedMatch)
-                is SuggestionResult.Loading -> BubbleState.Loading()
-                is SuggestionResult.Idle -> BubbleState.DirectionPicker
-            }
+        // Import gallery images into the orchestrator and show preview for user confirmation
+        orchestrator.importExternalImages(imagesBase64)
+        val previewBitmaps = orchestrator.getPreviewBitmaps()
+        if (previewBitmaps.isNotEmpty()) {
+            _state.value = BubbleState.ScreenshotPreview(previewBitmaps, direction)
+        } else {
+            _state.value = BubbleState.Error(
+                "Could not read selected images. Try again.",
+                SuggestionResult.ErrorType.UNKNOWN,
+                direction
+            )
         }
     }
 

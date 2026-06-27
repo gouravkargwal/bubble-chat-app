@@ -50,7 +50,7 @@ import com.rizzbot.v2.overlay.ui.components.panels.ErrorPanel
 import com.rizzbot.v2.overlay.ui.components.panels.LoadingOverlay
 import com.rizzbot.v2.overlay.ui.components.panels.MergeConfirmationPanel
 import com.rizzbot.v2.overlay.ui.components.panels.ScreenshotPreviewPanel
-import com.rizzbot.v2.overlay.ui.components.panels.SuggestionPanel
+import com.rizzbot.v2.overlay.ui.components.panels.OverlaySuggestionPanel
 import com.rizzbot.v2.overlay.ui.theme.OverlayColors
 import com.rizzbot.v2.overlay.ui.theme.OverlayShapes
 import com.rizzbot.v2.ui.theme.LocalAppIsPaidPlan
@@ -327,7 +327,7 @@ private fun FullScreenCard(
                                 LoadingOverlay()
                             }
                         }
-                        is BubbleState.Expanded -> SuggestionPanel(
+                        is BubbleState.Expanded -> OverlaySuggestionPanel(
                             result = s.result,
                             onCopy = { reply, index ->
                                 onEvent(OverlayEvent.CopyReply(reply, index, s.result.interactionId))
@@ -336,8 +336,6 @@ private fun FullScreenCard(
                                 onEvent(OverlayEvent.RateReply(index, positive, text, s.result.interactionId))
                             },
                             onRegenerate = { onEvent(OverlayEvent.Regenerate(DirectionWithHint())) },
-                            onClear = { onEvent(OverlayEvent.ClearAndStartOver) },
-                            onDismiss = { onEvent(OverlayEvent.DismissSuggestions) },
                             modifier = Modifier.fillMaxSize()
                         )
                         is BubbleState.RequiresUserConfirmation -> MergeConfirmationPanel(

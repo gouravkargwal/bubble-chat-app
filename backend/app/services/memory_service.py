@@ -214,8 +214,6 @@ async def get_match_context(
         }
 
     # -- Constants shared by both retrieval streams --
-    # Static top-K: FlashRank cross-encoder naturally trims the pool, so no
-    # expensive COUNT(*) needed for dynamic K. Reduces one DB round-trip.
     _LORE_TOP_K = 8
     _RRF_K = 60
     _RERANK_POOL = 150
@@ -252,8 +250,6 @@ async def get_match_context(
                 pinned_facts = []
 
             # --- Multi-vector CTE: one vector sub-query per variant ---
-            # Each query variant's embedding retrieves independently, then all
-            # results are fused via RRF -- avoids averaging-dilution.
             vec_emb_strs = (
                 all_query_emb_strs
                 if all_query_emb_strs
@@ -302,8 +298,7 @@ async def get_match_context(
                 )
 
             if not vec_cte_parts:
-                # No embeddings available -- skip vector retrieval entirely
-                vec_cte_parts = [""]
+                vec_cte_parts = []
                 vec_select_parts = [
                     "SELECT NULL::text AS source, NULL::text AS fact_text, NULL::int AS importance_score, NULL::int AS rank WHERE false"
                 ]
@@ -343,28 +338,37 @@ async def get_match_context(
                 ")\n"
             )
             vec_unions = "\nUNION ALL\n".join(vec_select_parts)
-            sql_str = (
-                "WITH\n"
-                + ",\n".join(vec_cte_parts)
-                + ",\n"
-                + lexical_cte
-                + unranked_cte
-                + vec_unions
-                + "\n"
-                + "UNION ALL\nSELECT 'lexical' AS source, fact_text, NULL::int AS importance_score, rank FROM lexical_results\n"
-                + "UNION ALL\nSELECT 'unranked' AS source, fact_text, NULL::int AS importance_score, rank FROM unranked_results"
-            )
+            if vec_cte_parts:
+                sql_str = (
+                    "WITH\n"
+                    + ",\n".join(vec_cte_parts)
+                    + ",\n"
+                    + lexical_cte
+                    + unranked_cte
+                    + vec_unions
+                    + "\n"
+                    + "UNION ALL\nSELECT 'lexical' AS source, fact_text, NULL::int AS importance_score, rank FROM lexical_results\n"
+                    + "UNION ALL\nSELECT 'unranked' AS source, fact_text, NULL::int AS importance_score, rank FROM unranked_results"
+                )
+            else:
+                sql_str = (
+                    "WITH\n"
+                    + lexical_cte
+                    + unranked_cte
+                    + vec_unions
+                    + "\n"
+                    + "UNION ALL\nSELECT 'lexical' AS source, fact_text, NULL::int AS importance_score, rank FROM lexical_results\n"
+                    + "UNION ALL\nSELECT 'unranked' AS source, fact_text, NULL::int AS importance_score, rank FROM unranked_results"
+                )
             combined_sql = text(sql_str)
 
             combined_rows = await db.execute(combined_sql, sql_params)
             combined = combined_rows.mappings().all()
 
-            # Group by source for RRF -- each vector CTE is an independent ranking
             vec_data = [r for r in combined if r["source"] == "vector"]
             lex_data = [r for r in combined if r["source"] == "lexical"]
             unranked_data = [r for r in combined if r["source"] == "unranked"]
 
-            # --- Reciprocal Rank Fusion across all vector variants + lexical ---
             rrf_scores: dict[str, float] = {}
             rrf_order: list[str] = []
             for data in (vec_data, lex_data):
@@ -385,14 +389,12 @@ async def get_match_context(
             seen: set[str] = set(fused)
             lore_facts: list[str] = list(fused)
 
-            # Append unranked facts (failed to embed at write time)
             for row in unranked_data:
                 ft = str(row["fact_text"]).strip() if row["fact_text"] else ""
                 if ft and ft not in seen:
                     seen.add(ft)
                     lore_facts.append(ft)
 
-            # Merge pinned facts first, then ranked -- dedup preserving order
             merged: list[str] = []
             seen_lore: set[str] = set()
             for f in pinned_facts + lore_facts:
@@ -400,7 +402,7 @@ async def get_match_context(
                     seen_lore.add(f)
                     merged.append(f)
 
-            # --- FlashRank Cross-Encoder Reranker (CPU, offloaded via asyncio.to_thread) ---
+            # --- FlashRank Cross-Encoder Reranker ---
             if merged and current_text.strip() and len(merged) > _LORE_TOP_K:
                 try:
                     passages_for_rerank = [
@@ -421,7 +423,7 @@ async def get_match_context(
                 except Exception:
                     logger.warning("reranker_failed", exc_info=True)
 
-            # --- Vector MMR diversity (uses actual embeddings) ---
+            # --- Vector MMR diversity ---
             if len(merged) > 2:
                 try:
                     diversified = await mmr_rerank(
@@ -473,52 +475,51 @@ async def get_match_context(
             logger.warning("tier1_tier2_fetch_failed", exc_info=True)
             return ("", "")
 
-    # -- Fire core_lore, tiers, and graph traversal concurrently --
+    # -- Fixed Graph Context Engine using path tracking arrays with ANSI CAST parsing --
     async def _fetch_graph_context() -> str:
         """Fetch Graph RAG subnetwork context via recursive CTE traversal."""
         try:
-            # Extract seed keywords from the query text
             query_words = [
                 w.lower().strip() for w in current_text.split() if len(w.strip()) > 2
             ]
             if not query_words:
                 return ""
 
-            # Also include person_name as a seed if available
             seeds = list(query_words)
             if person_name and person_name.lower() not in seeds:
                 seeds.append(person_name.lower())
 
             graph_sql = text("""
                 WITH RECURSIVE graph_traversal(
-                    source_id, target_id, rel_type, depth
+                    source_id, target_id, rel_type, depth, path
                 ) AS (
                     -- Anchor: fuzzy-match entity nodes via pg_trgm trigram similarity
                     SELECT e.source_entity_id, e.target_entity_id,
-                           e.relationship_type, 1 AS depth
+                        e.relationship_type, 1 AS depth,
+                        -- FIXED: Cast the initial array explicitly to an unconstrained varchar array
+                        CAST(ARRAY[e.source_entity_id, e.target_entity_id] AS varchar[]) AS path
                     FROM conversation_memory_edges e
                     JOIN conversation_memory_entities ent
                         ON e.source_entity_id = ent.id
                     WHERE e.user_id = :user_id
-                      AND e.conversation_id = :conversation_id
-                      AND EXISTS (
-                          SELECT 1 FROM unnest(:seeds) AS seed
-                          WHERE similarity(ent.entity_name, seed) > 0.3
-                      )
+                    AND e.conversation_id = :conversation_id
+                    AND EXISTS (
+                        -- Using ANSI CAST to avoid SQLAlchemy named parameter parsing conflicts
+                        SELECT 1 FROM unnest(CAST(:seeds AS text[])) AS seed
+                        WHERE similarity(ent.entity_name, seed) > 0.2
+                    )
 
                     UNION
 
                     -- Recursive: discover connected sub-nodes (max 2 hops)
                     SELECT e.source_entity_id, e.target_entity_id,
-                           e.relationship_type, gt.depth + 1
+                        e.relationship_type, gt.depth + 1,
+                        gt.path || e.target_entity_id AS path
                     FROM conversation_memory_edges e
                     JOIN graph_traversal gt
                         ON e.source_entity_id = gt.target_id
                     WHERE gt.depth < 2
-                      AND NOT EXISTS (
-                        SELECT 1 FROM graph_traversal gt2
-                        WHERE gt2.target_id = e.source_entity_id
-                      )
+                    AND NOT (e.target_entity_id = ANY(gt.path))
                 )
                 SELECT DISTINCT
                     ent1.entity_name AS source_node,
@@ -531,7 +532,6 @@ async def get_match_context(
                     ON gt.target_id = ent2.id
                 LIMIT 15
             """)
-
             rows = await db.execute(
                 graph_sql,
                 {
@@ -558,7 +558,6 @@ async def get_match_context(
         _fetch_graph_context(),
     )
 
-    # Append graph context to core_lore for prompt injection
     if graph_context:
         core_lore = f"{core_lore}\n\n{graph_context}" if core_lore else graph_context
 
@@ -711,7 +710,6 @@ async def upsert_conversation_memory(
 
             # --- Graph RAG ingestion: extract entities + edges ---
             try:
-                graph_data = await extract_graph_triples(fact_text)
                 if graph_data.entities:
                     # 1. Insert entity nodes (upsert via ON CONFLICT)
                     for entity in graph_data.entities:
@@ -748,22 +746,26 @@ async def upsert_conversation_memory(
                             continue
                         await db.execute(
                             text("""
-                                INSERT INTO conversation_memory_edges
-                                    (id, user_id, conversation_id,
-                                     source_entity_id, target_entity_id,
-                                     relationship_type, created_at)
-                                VALUES (
-                                    :id, :user_id, :conversation_id,
-                                    (SELECT id FROM conversation_memory_entities
-                                     WHERE conversation_id = :conversation_id
-                                       AND entity_name = :src LIMIT 1),
-                                    (SELECT id FROM conversation_memory_entities
-                                     WHERE conversation_id = :conversation_id
-                                       AND entity_name = :tgt LIMIT 1),
-                                    :rel, now()
-                                )
-                                ON CONFLICT DO NOTHING
-                            """),
+                            INSERT INTO conversation_memory_edges
+                                (id, user_id, conversation_id,
+                                source_entity_id, target_entity_id,
+                                relationship_type, weight, created_at) -- Added 'weight' column here
+                            VALUES (
+                                :id, 
+                                :user_id, 
+                                CAST(:conversation_id AS VARCHAR),
+                                (SELECT id FROM conversation_memory_entities
+                                WHERE conversation_id = CAST(:conversation_id AS VARCHAR)
+                                AND entity_name = :src LIMIT 1),
+                                (SELECT id FROM conversation_memory_entities
+                                WHERE conversation_id = CAST(:conversation_id AS VARCHAR)
+                                AND entity_name = :tgt LIMIT 1),
+                                :rel, 
+                                1.0,  -- Maps cleanly to 'weight' now
+                                now()
+                            )
+                            ON CONFLICT DO NOTHING
+                        """),
                             {
                                 "id": str(uuid.uuid4()),
                                 "user_id": user_id,
@@ -864,7 +866,6 @@ async def scrub_lore_from_contradictions(
                 "user_id": user_id,
             },
         )
-        await db.commit()
 
         logger.warning(
             "lore_memory_scrub_applied",

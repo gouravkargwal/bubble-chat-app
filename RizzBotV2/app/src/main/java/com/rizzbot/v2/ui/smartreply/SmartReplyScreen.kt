@@ -170,14 +170,22 @@ fun SmartReplyScreen(
                         SmartReplyStep.GENERATING -> GeneratingStep()
                         SmartReplyStep.RESULT -> {
                             when (val result = state.result) {
-                                is SuggestionResult.Success -> SuggestionPanel(
-                                    result = result,
-                                    onCopy = { reply, index -> viewModel.onCopyReply(reply, index, result.interactionId) },
-                                    onRate = { index, positive, text -> viewModel.onRateReply(index, positive, text, result.interactionId) },
-                                    onRegenerate = { viewModel.onRegenerate() },
-                                    onClear = { viewModel.onStartOver() },
-                                    onDismiss = { viewModel.onStartOver() }
-                                )
+                                is SuggestionResult.Success -> {
+                                    val directionName = state.direction?.direction?.displayName ?: "Reply"
+                                    val screenshotCount = state.imageUris.size
+                                    val hintText = state.direction?.customHint
+                                    SuggestionPanel(
+                                        result = result,
+                                        directionName = directionName,
+                                        screenshotCount = screenshotCount,
+                                        hintText = hintText,
+                                        onCopy = { reply, index -> viewModel.onCopyReply(reply, index, result.interactionId) },
+                                        onRate = { index, positive, text -> viewModel.onRateReply(index, positive, text, result.interactionId) },
+                                        onRegenerate = { viewModel.onRegenerate() },
+                                        onClear = { viewModel.onStartOver() },
+                                        onDismiss = { viewModel.onBackToDirection() }
+                                    )
+                                }
                                 is SuggestionResult.Error -> ErrorPanel(
                                     message = result.message,
                                     errorType = result.errorType,
@@ -185,7 +193,10 @@ fun SmartReplyScreen(
                                     onUpgrade = onShowPaywall,
                                     onDismiss = { viewModel.onStartOver() }
                                 )
-                                else -> viewModel.onStartOver()
+                                else -> {
+                                    // Should not happen — RESULT step only reached with Success or Error.
+                                    // Render nothing to avoid side-effects in composition.
+                                }
                             }
                         }
                     }
