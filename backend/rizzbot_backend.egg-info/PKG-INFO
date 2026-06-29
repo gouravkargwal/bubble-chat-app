@@ -18,10 +18,15 @@ Requires-Dist: sentry-sdk[fastapi]>=2.0
 Requires-Dist: firebase-admin>=6.0
 Requires-Dist: google-auth>=2.0
 Requires-Dist: pyinstrument>=4.6
-Requires-Dist: Pillow>=10.0.0
 Requires-Dist: langgraph>=0.2
 Requires-Dist: langchain-google-genai>=2.0
+Requires-Dist: langchain-openai>=0.2
 Requires-Dist: pgvector>=0.2
+Requires-Dist: oci>=2.0
+Requires-Dist: pillow>=10.0
+Requires-Dist: flashrank>=0.2
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: tiktoken>=0.7.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.24; extra == "dev"
