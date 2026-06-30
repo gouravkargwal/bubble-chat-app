@@ -31,13 +31,11 @@ data class OnboardingState(
     val onboardingDone: Boolean = false,
     val showPaywall: Boolean = false,
     val isNewUser: Boolean = false,
-    /** Selected onboarding vibe: flirty | playful | witty */
-    val onboardingVibe: String? = null,
     val userName: String? = null,
     val referralCode: String = "",
     val referralApplying: Boolean = false,
     val referralSuccess: String? = null,
-    val referralError: String? = null
+    val referralError: String? = null,
 )
 
 @HiltViewModel
@@ -59,22 +57,23 @@ class OnboardingViewModel @Inject constructor(
         analyticsHelper.onboardingStarted()
     }
 
-    private fun advanceOnboardingStep() {
+    /**
+     * Advances the onboarding to the next step.
+     * Step mapping: 0 = Value Cards, 1 = Google Sign-In, 2 = Signup Bonus.
+     */
+    fun advanceOnboardingStep() {
         val next = _state.value.currentStep + 1
         _state.update { it.copy(currentStep = next) }
         analyticsHelper.onboardingStepCompleted(next)
     }
 
-    fun setOnboardingVibe(vibe: String) {
-        hapticHelper.lightTap()
-        _state.update { it.copy(onboardingVibe = vibe) }
-    }
-
-    fun completeVibeStep() {
-        hapticHelper.mediumTap()
-        _state.value.onboardingVibe?.let { analyticsHelper.onboardingVibeSelected(it) }
-        // Vibe Check is the last onboarding step — complete directly
-        completeOnboarding()
+    /**
+     * Skip value cards and go directly to sign-in.
+     * Used when a returning user needs to re-authenticate.
+     */
+    fun skipToSignIn() {
+        _state.update { it.copy(currentStep = 1) }
+        analyticsHelper.onboardingStepCompleted(1)
     }
 
     fun signInWithGoogle(activity: Activity) {
@@ -99,7 +98,7 @@ class OnboardingViewModel @Inject constructor(
         _state.update {
             it.copy(
                 isAuthenticating = false,
-                authError = "Sign-in requires an Activity context."
+                authError = "Sign-in requires an Activity context.",
             )
         }
     }
@@ -114,22 +113,17 @@ class OnboardingViewModel @Inject constructor(
             it.copy(
                 isAuthenticating = false,
                 authError = null,
-                userName = googleSignInHelper.getCurrentUserName()
+                userName = googleSignInHelper.getCurrentUserName(),
             )
         }
 
-        // Smart routing based on isNewUser
         if (result.isNewUser) {
-            // New user: proceed to Vibe Check (Step 1) — haptics already fired in handleSuccessfulSignIn
+            // New user: proceed to Signup Bonus (Step 2)
             _state.update { it.copy(isNewUser = true) }
             advanceOnboardingStep()
         } else {
-            // Returning user: skip Vibe Check, go straight to Home
+            // Returning user: complete onboarding, go straight to Home
             settingsRepository.setOnboardingCompleted(true)
-            android.util.Log.d(
-                "AuthDebug",
-                "Persisted onboardingCompleted=true (returning user)"
-            )
             analyticsHelper.onboardingCompleted()
             _state.update { it.copy(onboardingDone = true) }
         }
@@ -147,7 +141,7 @@ class OnboardingViewModel @Inject constructor(
                 is GoogleSignInResult.Error -> _state.update {
                     it.copy(
                         isAuthenticating = false,
-                        authError = result.message
+                        authError = result.message,
                     )
                 }
             }
@@ -171,7 +165,7 @@ class OnboardingViewModel @Inject constructor(
                         it.copy(
                             referralApplying = false,
                             referralSuccess = "+$bonus bonus replies unlocked!",
-                            referralError = null
+                            referralError = null,
                         )
                     }
                 },
@@ -179,38 +173,38 @@ class OnboardingViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             referralApplying = false,
-                            referralError = error.message
+                            referralError = error.message,
                         )
                     }
-                }
+                },
             )
         }
     }
 
+    /**
+     * Completes the onboarding flow and navigates to the Home screen.
+     * Marks onboarding as complete and sets [onboardingDone] to trigger navigation.
+     */
     fun completeOnboarding() {
         viewModelScope.launch {
-            // For new users, show paywall instead of completing onboarding
-            if (_state.value.isNewUser) {
-                // New user: show paywall
-                _state.update { it.copy(showPaywall = true) }
-            } else {
-                // Returning user: complete onboarding
-                settingsRepository.setOnboardingCompleted(true)
-                analyticsHelper.onboardingCompleted()
-                _state.update { it.copy(onboardingDone = true) }
-            }
-        }
-    }
-    
-    fun onPaywallDismissed() {
-        viewModelScope.launch {
-            // After paywall is dismissed (purchased or skipped), complete onboarding
             settingsRepository.setOnboardingCompleted(true)
             analyticsHelper.onboardingCompleted()
-            _state.update { 
+            _state.update { it.copy(onboardingDone = true) }
+        }
+    }
+
+    /**
+     * Called when the paywall is dismissed (only relevant when triggered from outside onboarding,
+     * e.g. HomeScreen). Completes the onboarding if it was pending.
+     */
+    fun onPaywallDismissed() {
+        viewModelScope.launch {
+            settingsRepository.setOnboardingCompleted(true)
+            analyticsHelper.onboardingCompleted()
+            _state.update {
                 it.copy(
                     showPaywall = false,
-                    onboardingDone = true
+                    onboardingDone = true,
                 )
             }
         }

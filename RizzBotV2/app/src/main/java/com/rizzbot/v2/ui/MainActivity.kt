@@ -158,7 +158,7 @@ class MainActivity : ComponentActivity() {
                 ) { state ->
                     when (state) {
                         BootState.Refreshing -> {
-                            BrandedBootScreen()
+                            AnimatedCookdSplash()
                         }
                         is BootState.Ready -> {
                             NavGraph(
