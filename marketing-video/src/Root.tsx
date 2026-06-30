@@ -22,7 +22,7 @@ export const RemotionRoot: React.FC = () => {
     ],
     winningLine: "bet those heels made for a clumsy entrance",
     strategyLabel: "FRAME CONTROL",
-    voiceoverAudio: "./sample_vo.mp3",
+    voiceoverAudio: "",
   };
 
   return (
