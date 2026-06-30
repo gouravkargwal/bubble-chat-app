@@ -1,4 +1,4 @@
-# RizzBot / Cookd – Build, Install & Run Commands
+# RizzBot / Cookd – Build & Release Commands
 
 ## Android (RizzBotV2)
 
@@ -30,6 +30,41 @@ adb install -r app/build/outputs/apk/staging/release/app-staging-release.apk
 
 ---
 
+### Production Release AAB (for Google Play)
+
+```bash
+cd /Users/gouravkargwal/bubble-chat-app/RizzBotV2
+
+# Clean previous builds
+./gradlew clean
+
+# Build production release AAB
+./gradlew bundleProductionRelease
+
+# Output: app/build/outputs/bundle/productionRelease/app-production-release.aab
+```
+
+---
+
+### Production Release APK (for local testing)
+
+```bash
+cd /Users/gouravkargwal/bubble-chat-app/RizzBotV2
+./gradlew assembleProductionRelease
+adb install -r app/build/outputs/apk/production/release/app-production-release.apk
+```
+
+---
+
+### Build All Release Variants
+
+```bash
+cd /Users/gouravkargwal/bubble-chat-app/RizzBotV2
+./gradlew assembleStagingRelease assembleProductionRelease
+```
+
+---
+
 ### Useful ADB Commands
 
 ```bash
@@ -47,9 +82,25 @@ find app/build/outputs -name "*.apk" | grep staging
 
 ### App Details
 
-- **Application ID:** `com.cookd.mobile.stg`
-- **App Name:** `Cookd (Staging)`
-- **APK Location:** `app/build/outputs/apk/staging/<buildType>/`
+| Variant   | Application ID | App Name |
+|-----------|----------------|----------|
+| Staging   | `com.cookd.mobile.stg` | `Cookd (Staging)` |
+| Production | `com.cookd.mobile` | `Cookd` |
+
+### APK / AAB Locations
+
+| Variant   | Build Type | Output Path |
+|-----------|------------|-------------|
+| Staging   | Debug      | `app/build/outputs/apk/staging/debug/app-staging-debug.apk` |
+| Staging   | Release    | `app/build/outputs/apk/staging/release/app-staging-release.apk` |
+| Production | Release   | `app/build/outputs/bundle/productionRelease/app-production-release.aab` (run `bundleProductionRelease`) |
+| Production | Release   | `app/build/outputs/apk/production/release/app-production-release.apk` (APK for local testing) |
+
+### Versioning
+
+- **Current:** `versionCode = 29`, `versionName = "2.0.1"`
+- **Location:** `app/build.gradle.kts` → `defaultConfig` block
+- **Update:** Increment `versionCode` by 1 and bump `versionName` before each release
 
 ---
 
