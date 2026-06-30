@@ -1,17 +1,22 @@
-"""Centralized quota management using user_quotas table.
+"""Centralized quota management using user_quotas table — credits-based system.
 
-This module is the single source of truth for usage limits. It MUST NOT
-depend on chat history row counts (Interaction, etc.).
+Credits system:
+- Free users: 15 one-time signup bonus + 2 credits/day forever.
+- Paid users: period credit pool (weekly or monthly) set by billing.
+- Credit costs: chat_generation=1, profile_audit=5, profile_blueprint=8.
+- No daily cap for paid users — they spend from their period pool freely.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.tier_config import CREDIT_COSTS, FREE_SIGNUP_CREDITS
+
+FREE_SIGNUP_BONUS_CREDITS = FREE_SIGNUP_CREDITS  # 15 credits
 from app.infrastructure.database.models import UserQuota
 
 
@@ -20,11 +25,7 @@ class QuotaExceededException(Exception):
 
 
 class QuotaManager:
-    """Manages per-user quotas backed by the user_quotas table.
-
-    All limit checks MUST go through this class so we never accidentally
-    reintroduce SELECT COUNT(*)-based limits.
-    """
+    """Manages per-user credits backed by the user_quotas table."""
 
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
@@ -32,214 +33,190 @@ class QuotaManager:
     async def _get_or_create_quota(
         self, google_provider_id: str, *, lock: bool = False
     ) -> UserQuota:
-        """Fetch the quota row; optionally apply a row-level lock (FOR UPDATE)."""
         stmt = select(UserQuota).where(
             UserQuota.google_provider_id == google_provider_id
         )
         if lock:
-            # Prevents the "double-tap" race where two requests overspend quota.
             stmt = stmt.with_for_update()
 
         result = await self._db.execute(stmt)
         quota = result.scalar_one_or_none()
         if quota is None:
-            now = datetime.now(timezone.utc)
             quota = UserQuota(
                 google_provider_id=google_provider_id,
-                daily_usage_count=0,
-                weekly_usage_count=0,
-                weekly_audits_count=0,
-                weekly_blueprints_count=0,
-                daily_reset_at=now + timedelta(days=1),
-                weekly_reset_at=now + timedelta(weeks=1),
-                weekly_audits_reset_at=now + timedelta(weeks=1),
-                weekly_blueprints_reset_at=now + timedelta(weeks=1),
+                credits_remaining=0,
+                credits_period_limit=0,
+                credits_reset_at=None,
+                signup_bonus_granted=False,
+                daily_free_credits_used=0,
+                daily_free_reset_at=None,
             )
             self._db.add(quota)
-            # Flush so concurrent readers inside the same transaction see it.
             await self._db.flush()
         return quota
 
-    @staticmethod
-    def _maybe_reset_chat_windows(quota: UserQuota, now: datetime) -> bool:
-        """Reset daily/weekly chat windows if needed. Returns True if any reset occurred."""
-        reset = False
-        # Daily chat
-        if quota.daily_reset_at is None or now >= quota.daily_reset_at:
-            quota.daily_usage_count = 0
-            quota.daily_reset_at = now + timedelta(days=1)
-            reset = True
-
-        # Weekly chat
-        if quota.weekly_reset_at is None or now >= quota.weekly_reset_at:
-            quota.weekly_usage_count = 0
-            quota.weekly_reset_at = now + timedelta(weeks=1)
-            reset = True
-
-        return reset
-
-    @staticmethod
-    def _maybe_reset_audit_windows(quota: UserQuota, now: datetime) -> bool:
-        """Reset weekly profile-audit window if needed. Returns True if reset occurred."""
-        if quota.weekly_audits_reset_at is None or now >= quota.weekly_audits_reset_at:
-            quota.weekly_audits_count = 0
-            quota.weekly_audits_reset_at = now + timedelta(weeks=1)
-            return True
-        return False
-
-    @staticmethod
-    def _maybe_reset_blueprint_windows(quota: UserQuota, now: datetime) -> bool:
-        """Reset weekly blueprint window if needed. Returns True if reset occurred."""
-        if (
-            quota.weekly_blueprints_reset_at is None
-            or now >= quota.weekly_blueprints_reset_at
-        ):
-            quota.weekly_blueprints_count = 0
-            quota.weekly_blueprints_reset_at = now + timedelta(weeks=1)
-            return True
-        return False
-
-    async def get_usage(self, google_provider_id: str) -> Tuple[int, int, int, int]:
-        """Return (daily_chat, weekly_chat, weekly_audits, weekly_blueprints) AFTER any resets."""
-        now = datetime.now(timezone.utc)
-        # No lock for a simple read.
-        quota = await self._get_or_create_quota(google_provider_id, lock=False)
-
-        reset_chats = self._maybe_reset_chat_windows(quota, now)
-        reset_audits = self._maybe_reset_audit_windows(quota, now)
-        reset_blueprints = self._maybe_reset_blueprint_windows(quota, now)
-
-        if reset_chats or reset_audits or reset_blueprints:
-            # Persist reset so subsequent requests don't redo the math.
-            await self._db.commit()
-
-        return (
-            quota.daily_usage_count,
-            quota.weekly_usage_count,
-            quota.weekly_audits_count,
-            quota.weekly_blueprints_count,
-        )
-
-    async def check_and_increment(
-        self,
-        google_provider_id: str,
-        *,
-        daily_limit: int,
-        weekly_limit: int | None = None,
-    ) -> Tuple[int, int]:
-        """Check limits, raise if exceeded, and increment counters on success.
-
-        Returns (new_daily_usage, new_weekly_usage) AFTER increment.
-        """
-        now = datetime.now(timezone.utc)
-        # Lock row so concurrent calls can't overspend.
-        quota = await self._get_or_create_quota(google_provider_id, lock=True)
-        self._maybe_reset_chat_windows(quota, now)
-
-        # Interpret 0 or negative as "unlimited".
-        effective_daily_limit = max(daily_limit, 0)
-
-        if (
-            effective_daily_limit > 0
-            and quota.daily_usage_count >= effective_daily_limit
-        ):
-            raise QuotaExceededException(
-                f"Daily quota exceeded for {google_provider_id}"
-            )
-
-        if weekly_limit is not None and weekly_limit > 0:
-            if quota.weekly_usage_count >= weekly_limit:
-                raise QuotaExceededException(
-                    f"Weekly quota exceeded for {google_provider_id}"
-                )
-
-        # Increment on success.
-        quota.daily_usage_count += 1
-        quota.weekly_usage_count += 1
-
-        # Caller is responsible for committing.
-        return quota.daily_usage_count, quota.weekly_usage_count
-
-    async def check_only(
-        self,
-        google_provider_id: str,
-        *,
-        daily_limit: int,
-        weekly_limit: int | None = None,
+    def _reset_daily_free_window_if_needed(
+        self, quota: UserQuota, now: datetime
     ) -> None:
-        """Check limits and raise if exceeded, but do NOT increment.
+        """Reset daily free credit window for free tier users."""
+        if quota.daily_free_reset_at is None or now >= quota.daily_free_reset_at:
+            quota.daily_free_credits_used = 0
+            quota.daily_free_reset_at = now + timedelta(days=1)
 
-        Use this before running the agent. Call increment() after success.
-        """
+    def _reset_period_if_needed(self, quota: UserQuota, now: datetime) -> None:
+        """Zero paid pool when prepaid period expires — no auto-refill."""
+        if quota.credits_reset_at is not None and now >= quota.credits_reset_at:
+            quota.credits_remaining = 0
+            quota.credits_period_limit = 0
+            quota.credits_reset_at = None
+
+    async def grant_signup_bonus(self, google_provider_id: str) -> bool:
+        """Grant one-time 15-credit signup bonus. Returns True if bonus was newly granted."""
+        quota = await self._get_or_create_quota(google_provider_id, lock=True)
+        if quota.signup_bonus_granted:
+            return False
+        quota.credits_remaining += FREE_SIGNUP_BONUS_CREDITS
+        quota.signup_bonus_granted = True
+        await self._db.commit()
+        return True
+
+    async def grant_period_credits(
+        self,
+        google_provider_id: str,
+        *,
+        credits: int,
+        period_days: int,
+    ) -> None:
+        """Grant a new period credit pool (called by billing webhook on purchase)."""
         now = datetime.now(timezone.utc)
+        quota = await self._get_or_create_quota(google_provider_id, lock=True)
+        quota.credits_remaining = credits
+        quota.credits_period_limit = credits
+        quota.credits_reset_at = now + timedelta(days=period_days)
+        await self._db.commit()
+
+    async def check_only_credits(
+        self,
+        google_provider_id: str,
+        *,
+        action: str,
+        tier: str,
+        daily_free_limit: int = 2,
+    ) -> None:
+        """Check if user has credits without deducting. Raises QuotaExceededException if not."""
+        now = datetime.now(timezone.utc)
+        cost = CREDIT_COSTS.get(action, 1)
         quota = await self._get_or_create_quota(google_provider_id, lock=False)
-        self._maybe_reset_chat_windows(quota, now)
 
-        effective_daily_limit = max(daily_limit, 0)
-        if effective_daily_limit > 0 and quota.daily_usage_count >= effective_daily_limit:
-            raise QuotaExceededException(
-                f"Daily quota exceeded for {google_provider_id}"
-            )
-
-        if weekly_limit is not None and weekly_limit > 0:
-            if quota.weekly_usage_count >= weekly_limit:
+        if tier == "free":
+            # Check signup bonus first.
+            if not quota.signup_bonus_granted or quota.credits_remaining >= cost:
+                return  # Has bonus credits or will get them on first spend.
+            self._reset_daily_free_window_if_needed(quota, now)
+            if quota.daily_free_credits_used + cost > daily_free_limit:
                 raise QuotaExceededException(
-                    f"Weekly quota exceeded for {google_provider_id}"
+                    "Daily free quota exceeded. Upgrade to get more credits."
+                )
+        else:
+            self._reset_period_if_needed(quota, now)
+            if quota.credits_remaining < cost:
+                raise QuotaExceededException(
+                    f"Insufficient credits. {quota.credits_remaining} remaining, need {cost}."
                 )
 
-    async def increment(self, google_provider_id: str) -> Tuple[int, int]:
-        """Increment usage counters after a successful generation.
-
-        Returns (new_daily_usage, new_weekly_usage) AFTER increment.
-        Caller is responsible for committing.
-        """
-        now = datetime.now(timezone.utc)
-        quota = await self._get_or_create_quota(google_provider_id, lock=True)
-        self._maybe_reset_chat_windows(quota, now)
-        quota.daily_usage_count += 1
-        quota.weekly_usage_count += 1
-        return quota.daily_usage_count, quota.weekly_usage_count
-
-    async def check_and_increment_audits(
+    async def refund(
         self,
         google_provider_id: str,
         *,
-        weekly_limit: int,
-    ) -> int:
-        """Check weekly profile-audit limit and increment on success.
-
-        Returns new weekly audit count after increment.
-        """
-        now = datetime.now(timezone.utc)
+        action: str,
+        tier: str,
+    ) -> None:
+        """Refund credits for a failed job. Restores to credits_remaining for all tiers."""
+        cost = CREDIT_COSTS.get(action, 1)
         quota = await self._get_or_create_quota(google_provider_id, lock=True)
-        self._maybe_reset_audit_windows(quota, now)
+        quota.credits_remaining += cost
+        await self._db.commit()
 
-        if weekly_limit > 0 and quota.weekly_audits_count >= weekly_limit:
-            raise QuotaExceededException(
-                f"Weekly profile-audit quota exceeded for {google_provider_id}"
-            )
-
-        quota.weekly_audits_count += 1
-        return quota.weekly_audits_count
-
-    async def check_and_increment_blueprints(
+    async def check_and_spend(
         self,
         google_provider_id: str,
         *,
-        weekly_limit: int,
+        action: str,
+        tier: str,
+        daily_free_limit: int = 2,
+        idempotency_key: str | None = None,
     ) -> int:
-        """Check weekly profile-blueprint limit and increment on success.
+        """Check if user has enough credits, deduct them, return credits remaining.
 
-        Returns new weekly blueprint count after increment.
+        For free tier: checks daily free credits (resets daily).
+        For paid tiers: checks period pool.
+        idempotency_key: if provided, skip deduction if this key was already processed
+        (prevents double-charge on network retries).
+        Raises QuotaExceededException if insufficient.
         """
+        import json
+
         now = datetime.now(timezone.utc)
+        cost = CREDIT_COSTS.get(action, 1)
         quota = await self._get_or_create_quota(google_provider_id, lock=True)
-        self._maybe_reset_blueprint_windows(quota, now)
 
-        if weekly_limit > 0 and quota.weekly_blueprints_count >= weekly_limit:
-            raise QuotaExceededException(
-                f"Weekly blueprint quota exceeded for {google_provider_id}"
-            )
+        # Idempotency check — skip deduction if this key was already processed.
+        if idempotency_key:
+            try:
+                charged_keys: list[str] = json.loads(quota.last_charged_keys or "[]")
+            except Exception:
+                charged_keys = []
+            if idempotency_key in charged_keys:
+                # Already charged — return current remaining without deducting again.
+                return quota.credits_remaining
+            # Record this key (keep last 10 only).
+            charged_keys = ([idempotency_key] + charged_keys)[:10]
+            quota.last_charged_keys = json.dumps(charged_keys)
 
-        quota.weekly_blueprints_count += 1
-        return quota.weekly_blueprints_count
+        if tier == "free":
+            # Grant signup bonus on first use if not yet granted.
+            if not quota.signup_bonus_granted:
+                quota.credits_remaining = FREE_SIGNUP_BONUS_CREDITS
+                quota.signup_bonus_granted = True
+
+            # Check signup bonus pool first.
+            if quota.credits_remaining >= cost:
+                quota.credits_remaining -= cost
+                await self._db.commit()
+                return quota.credits_remaining
+
+            # Bonus exhausted — fall back to daily free credits.
+            self._reset_daily_free_window_if_needed(quota, now)
+            if quota.daily_free_credits_used + cost > daily_free_limit:
+                raise QuotaExceededException(
+                    f"Daily free quota exceeded. Upgrade to get more credits."
+                )
+            quota.daily_free_credits_used += cost
+            await self._db.commit()
+            return max(0, daily_free_limit - quota.daily_free_credits_used)
+
+        else:
+            # Paid tier — use period pool.
+            self._reset_period_if_needed(quota, now)
+            if quota.credits_remaining < cost:
+                raise QuotaExceededException(
+                    f"Insufficient credits. {quota.credits_remaining} remaining, need {cost}."
+                )
+            quota.credits_remaining -= cost
+            await self._db.commit()
+            return quota.credits_remaining
+
+    async def get_credits_remaining(self, google_provider_id: str, tier: str) -> int:
+        """Return current credits remaining for display in app."""
+        now = datetime.now(timezone.utc)
+        quota = await self._get_or_create_quota(google_provider_id, lock=False)
+
+        if tier == "free":
+            if not quota.signup_bonus_granted:
+                return FREE_SIGNUP_BONUS_CREDITS
+            self._reset_daily_free_window_if_needed(quota, now)
+            daily_remaining = max(0, 2 - quota.daily_free_credits_used)
+            return quota.credits_remaining + daily_remaining
+        else:
+            self._reset_period_if_needed(quota, now)
+            return quota.credits_remaining

@@ -16,12 +16,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.overlay.manager.BubbleState
-import androidx.compose.material3.MaterialTheme
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 /**
  * Header component for all full-screen panels showing step progress and navigation
@@ -72,7 +74,7 @@ fun BubbleHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.02f))
+            .background(NothingBlack.copy(alpha = 0.5f))
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -83,7 +85,7 @@ fun BubbleHeader(
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color.White
+                        tint = NothingWhite
                     )
                 }
             }
@@ -95,14 +97,14 @@ fun BubbleHeader(
         ) {
             Text(
                 text = title,
-                color = Color.White,
+                color = NothingWhite,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
             if (subtitle.isNotEmpty()) {
                 Text(
                     text = subtitle,
-                    color = Color.Gray,
+                    color = NothingTextSecondary,
                     fontSize = 11.sp
                 )
             }
@@ -111,14 +113,14 @@ fun BubbleHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (step > 1) {
                 TextButton(onClick = onStartOver) {
-                    Text("Start over", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                    Text("Start over", color = NothingTextSecondary, fontSize = 11.sp)
                 }
             }
             IconButton(onClick = onClose) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Close",
-                    tint = Color.White
+                    tint = NothingWhite
                 )
             }
         }

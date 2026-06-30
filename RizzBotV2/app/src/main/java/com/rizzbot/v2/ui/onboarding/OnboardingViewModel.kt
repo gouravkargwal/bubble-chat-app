@@ -12,7 +12,6 @@ import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.HapticHelper
-import com.rizzbot.v2.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -27,19 +26,16 @@ import javax.inject.Inject
 
 data class OnboardingState(
     val currentStep: Int = 0,
-    val hasOverlayPermission: Boolean = false,
     val isAuthenticating: Boolean = false,
     val authError: String? = null,
     val onboardingDone: Boolean = false,
     val showPaywall: Boolean = false,
     val isNewUser: Boolean = false,
-    /** Selected onboarding vibe: flirty | playful | witty */
-    val onboardingVibe: String? = null,
     val userName: String? = null,
     val referralCode: String = "",
     val referralApplying: Boolean = false,
     val referralSuccess: String? = null,
-    val referralError: String? = null
+    val referralError: String? = null,
 )
 
 @HiltViewModel
@@ -48,7 +44,6 @@ class OnboardingViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val hostedRepository: HostedRepository,
     val googleSignInHelper: GoogleSignInHelper,
-    private val permissionHelper: PermissionHelper,
     private val analyticsHelper: AnalyticsHelper,
     private val hapticHelper: HapticHelper,
 ) : ViewModel() {
@@ -60,33 +55,25 @@ class OnboardingViewModel @Inject constructor(
 
     init {
         analyticsHelper.onboardingStarted()
-        refreshPermissions()
     }
 
-    fun refreshPermissions() {
-        _state.update { it.copy(hasOverlayPermission = permissionHelper.canDrawOverlays()) }
-    }
-
-    private fun advanceOnboardingStep() {
+    /**
+     * Advances the onboarding to the next step.
+     * Step mapping: 0 = Value Cards, 1 = Google Sign-In, 2 = Signup Bonus.
+     */
+    fun advanceOnboardingStep() {
         val next = _state.value.currentStep + 1
         _state.update { it.copy(currentStep = next) }
         analyticsHelper.onboardingStepCompleted(next)
     }
 
-    fun nextStep() {
-        hapticHelper.lightTap()
-        advanceOnboardingStep()
-    }
-
-    fun setOnboardingVibe(vibe: String) {
-        hapticHelper.lightTap()
-        _state.update { it.copy(onboardingVibe = vibe) }
-    }
-
-    fun completeVibeStep() {
-        hapticHelper.mediumTap()
-        _state.value.onboardingVibe?.let { analyticsHelper.onboardingVibeSelected(it) }
-        advanceOnboardingStep()
+    /**
+     * Skip value cards and go directly to sign-in.
+     * Used when a returning user needs to re-authenticate.
+     */
+    fun skipToSignIn() {
+        _state.update { it.copy(currentStep = 1) }
+        analyticsHelper.onboardingStepCompleted(1)
     }
 
     fun signInWithGoogle(activity: Activity) {
@@ -111,7 +98,7 @@ class OnboardingViewModel @Inject constructor(
         _state.update {
             it.copy(
                 isAuthenticating = false,
-                authError = "Sign-in requires an Activity context."
+                authError = "Sign-in requires an Activity context.",
             )
         }
     }
@@ -126,33 +113,19 @@ class OnboardingViewModel @Inject constructor(
             it.copy(
                 isAuthenticating = false,
                 authError = null,
-                userName = googleSignInHelper.getCurrentUserName()
+                userName = googleSignInHelper.getCurrentUserName(),
             )
         }
 
-        // Smart routing based on isNewUser
         if (result.isNewUser) {
-            // New user: proceed to Vibe Check (Step 1) — haptics already fired in handleSuccessfulSignIn
+            // New user: proceed to Signup Bonus (Step 2)
             _state.update { it.copy(isNewUser = true) }
             advanceOnboardingStep()
         } else {
-            // Returning user: skip Vibe Check and Demo
-            refreshPermissions()
-            val hasPermission = permissionHelper.canDrawOverlays()
-            if (hasPermission) {
-                // Already has permissions: go straight to Home
-                // Persist onboarding completion so MainActivity can skip onboarding on next app start.
-                settingsRepository.setOnboardingCompleted(true)
-                android.util.Log.d(
-                    "AuthDebug",
-                    "Persisted onboardingCompleted=true (returning user + overlay permission)"
-                )
-                analyticsHelper.onboardingCompleted()
-                _state.update { it.copy(onboardingDone = true) }
-            } else {
-                // Needs to re-grant permissions: go to TrustAndTechStep (Step 3)
-                _state.update { it.copy(currentStep = 3, isNewUser = false) }
-            }
+            // Returning user: complete onboarding, go straight to Home
+            settingsRepository.setOnboardingCompleted(true)
+            analyticsHelper.onboardingCompleted()
+            _state.update { it.copy(onboardingDone = true) }
         }
     }
 
@@ -168,7 +141,7 @@ class OnboardingViewModel @Inject constructor(
                 is GoogleSignInResult.Error -> _state.update {
                     it.copy(
                         isAuthenticating = false,
-                        authError = result.message
+                        authError = result.message,
                     )
                 }
             }
@@ -192,7 +165,7 @@ class OnboardingViewModel @Inject constructor(
                         it.copy(
                             referralApplying = false,
                             referralSuccess = "+$bonus bonus replies unlocked!",
-                            referralError = null
+                            referralError = null,
                         )
                     }
                 },
@@ -200,38 +173,38 @@ class OnboardingViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             referralApplying = false,
-                            referralError = error.message
+                            referralError = error.message,
                         )
                     }
-                }
+                },
             )
         }
     }
 
+    /**
+     * Completes the onboarding flow and navigates to the Home screen.
+     * Marks onboarding as complete and sets [onboardingDone] to trigger navigation.
+     */
     fun completeOnboarding() {
         viewModelScope.launch {
-            // For new users, show paywall instead of completing onboarding
-            if (_state.value.isNewUser) {
-                // New user: show paywall
-                _state.update { it.copy(showPaywall = true) }
-            } else {
-                // Returning user: complete onboarding
-                settingsRepository.setOnboardingCompleted(true)
-                analyticsHelper.onboardingCompleted()
-                _state.update { it.copy(onboardingDone = true) }
-            }
-        }
-    }
-    
-    fun onPaywallDismissed() {
-        viewModelScope.launch {
-            // After paywall is dismissed (purchased or skipped), complete onboarding
             settingsRepository.setOnboardingCompleted(true)
             analyticsHelper.onboardingCompleted()
-            _state.update { 
+            _state.update { it.copy(onboardingDone = true) }
+        }
+    }
+
+    /**
+     * Called when the paywall is dismissed (only relevant when triggered from outside onboarding,
+     * e.g. HomeScreen). Completes the onboarding if it was pending.
+     */
+    fun onPaywallDismissed() {
+        viewModelScope.launch {
+            settingsRepository.setOnboardingCompleted(true)
+            analyticsHelper.onboardingCompleted()
+            _state.update {
                 it.copy(
                     showPaywall = false,
-                    onboardingDone = true
+                    onboardingDone = true,
                 )
             }
         }

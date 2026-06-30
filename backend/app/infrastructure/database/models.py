@@ -43,17 +43,15 @@ class User(Base):
     )
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    tier: Mapped[str] = mapped_column(String(20), default="free")  # free, premium, pro
+    tier: Mapped[str] = mapped_column(
+        String(20), default="free"
+    )  # free, crush, match, rizz
     tier_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     tier_source: Mapped[str] = mapped_column(
         String(20), default="signup"
     )  # signup, trial, purchase, admin
-    # God Mode (24-hour referral reward) - stacks time, uses UTC
-    god_mode_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     # Referral
     referral_code: Mapped[str | None] = mapped_column(
         String(8), unique=True, nullable=True, index=True
@@ -98,33 +96,35 @@ class UserQuota(Base):
 
     CRITICAL: This table must NOT be wiped on account deletion so we can
     preserve historical usage limits even if the user nukes their profile.
+
+    Credits system:
+    - credits_remaining: current spendable credits in the active period.
+    - credits_period_limit: total credits granted for this period (set by billing).
+    - credits_reset_at: when the period resets (weekly or monthly).
+    - signup_bonus_granted: whether the one-time 15-credit free bonus was given.
+    - daily_free_credits_used: how many free daily credits used today (free tier only).
+    - daily_free_reset_at: when the daily free credit window resets.
     """
 
     __tablename__ = "user_quotas"
 
     # Primary key is the stable Google provider ID, NOT the temporary firebase_uid.
     google_provider_id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    # Simple integer counters — we do NOT derive limits from history tables.
-    # Chat (vision reply generations)
-    daily_usage_count: Mapped[int] = mapped_column(Integer, default=0)
-    weekly_usage_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Profile audits (per week)
-    weekly_audits_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Profile blueprints (per week)
-    weekly_blueprints_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Reset timestamps (UTC). When "now" passes these we reset and roll them forward.
-    daily_reset_at: Mapped[datetime | None] = mapped_column(
+
+    # --- Credits system (new) ---
+    credits_remaining: Mapped[int] = mapped_column(Integer, default=0)
+    credits_period_limit: Mapped[int] = mapped_column(Integer, default=0)
+    credits_reset_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    weekly_reset_at: Mapped[datetime | None] = mapped_column(
+    signup_bonus_granted: Mapped[bool] = mapped_column(Integer, default=False)
+    # Free tier daily credits tracking
+    daily_free_credits_used: Mapped[int] = mapped_column(Integer, default=0)
+    daily_free_reset_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    weekly_audits_reset_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    weekly_blueprints_reset_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    # Idempotency: last 5 correlation_ids that were charged — prevents double-charge on retry.
+    last_charged_keys: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Conversation(Base):
@@ -139,6 +139,21 @@ class Conversation(Base):
     tone_trend: Mapped[str] = mapped_column(String(20), default="stable")
     topics_worked: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
     topics_failed: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
+    # Phase 4: per-dimension tally observed across scans, e.g.
+    # {"warmth": {"warm": 3, "neutral": 1}, "playfulness": {...}, ...}. The stable
+    # (mode-smoothed) dimensions, the derived archetype, and confidence are all
+    # computed from this in build_conversation_context. Dimensions are the
+    # primitive; the archetype is always derived.
+    dimension_counts: Mapped[str] = mapped_column(Text, default="{}")  # JSON object
+    # Phase 5: per-strategy outcome stats, e.g.
+    # {"PUSH-PULL": {"shown": 5, "copied": 3}}. "shown" increments at generate
+    # time, "copied" when the user copies a reply with that strategy_label.
+    strategy_stats: Mapped[str] = mapped_column(Text, default="{}")  # JSON object
+    # Sticky curated-persona read from her photos (e.g. "rebel/edgy"). Captured
+    # at the opener (rich photos) and carried forward into later chat turns where
+    # photos aren't visible, so the coach's tone stays matched to her vibe.
+    # Written only when a scan returns a non-empty read (never degraded to empty).
+    photo_persona: Mapped[str] = mapped_column(String(64), default="")
     interaction_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_interaction_at: Mapped[datetime] = mapped_column(
@@ -175,6 +190,11 @@ class Interaction(Base):
     person_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     key_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_organic_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Verbatim turn transcript (compact JSON: [{"s":"them"|"user","t":"..."}]).
+    # Lets build_conversation_context replay the REAL back-and-forth instead of
+    # lossy 60-char summaries. Nullable: rows saved before this column existed
+    # fall back to the their_last_message paraphrase.
+    transcript_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Generated replies
     reply_0: Mapped[str] = mapped_column(Text)
     reply_1: Mapped[str] = mapped_column(Text)
@@ -251,6 +271,8 @@ class PendingResolution(Base):
     extracted_person_name: Mapped[str] = mapped_column(String(100))
     conflict_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     conflict_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Cached VisionNodeOutput JSON — avoids re-running the vision LLM on resolve.
+    vision_output_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -263,6 +285,112 @@ class PendingResolution(Base):
 
     __table_args__ = (
         Index("ix_pending_res_user_conv", "user_id", "suggested_conversation_id"),
+    )
+
+
+class ConversationMemory(Base):
+    """Atomic facts extracted per conversation for RAG memory retrieval.
+
+    One row per fact. Superseded rows are soft-deleted (superseded_at set)
+    when an NLI contradiction is detected against a newer fact.
+    """
+
+    __tablename__ = "conversation_memories"
+    __table_args__ = (Index("ix_conv_mem_user_conv", "user_id", "conversation_id"),)
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    fact_text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
+    # Importance scoring for RAG retrieval prioritization (1-5 scale)
+    # 5 = critical identity facts (marriage, religion, location)
+    # 4 = important preferences (diet, job, kids)
+    # 3 = opinions/goals
+    # 2 = general facts (default)
+    # 1 = minor details
+    importance_score: Mapped[int | None] = mapped_column(
+        Integer, default=2, nullable=True
+    )
+    # Categorization: identity, preference, opinion, factual, preference
+    fact_category: Mapped[str | None] = mapped_column(
+        String(50), default="factual", nullable=True
+    )
+    # Learned Sparse Retrieval: LLM-expanded synonyms and cross-lingual
+    # tokens that feed into the combined GIN full-text-search index.
+    lexical_expansion: Mapped[str | None] = mapped_column(
+        Text, default="", nullable=True
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ConversationMemoryEntity(Base):
+    """Graph RAG — entity nodes extracted from conversational facts.
+
+    Each row represents a concrete noun (person, profession, location, hobby,
+    organization, etc.) discovered by the LLM extraction layer.
+    """
+
+    __tablename__ = "conversation_memory_entities"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "entity_name",
+            name="unique_conversation_entity",
+        ),
+        Index("ix_graph_entities_lookup", "conversation_id", "entity_name"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    entity_name: Mapped[str] = mapped_column(String(100))
+    entity_type: Mapped[str] = mapped_column(String(50))  # person, profession, hobby, location, etc.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class ConversationMemoryEdge(Base):
+    """Graph RAG — directional edges between entity nodes.
+
+    Each row represents a relationship (WORKS_AS, PLAYS, LIVES_IN, etc.)
+    between two entities in the same conversation.
+    """
+
+    __tablename__ = "conversation_memory_edges"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "source_entity_id", "target_entity_id",
+            "relationship_type",
+            name="unique_conversation_edge",
+        ),
+        Index("ix_graph_edges_lookup", "conversation_id", "source_entity_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    source_entity_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversation_memory_entities.id", ondelete="CASCADE")
+    )
+    target_entity_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversation_memory_entities.id", ondelete="CASCADE")
+    )
+    relationship_type: Mapped[str] = mapped_column(String(50))  # WORKS_AS, PLAYS, LIVES_IN, etc.
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 
@@ -334,7 +462,7 @@ class Purchase(Base):
     expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    auto_renewing: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_renewing: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -375,7 +503,9 @@ class AuditJob(Base):
     # JSON-serialised AuditResponse on completion
     result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -403,7 +533,9 @@ class AuditedPhoto(Base):
     # Optional per-audit one-liner roast (not stored per-photo in JSON).
     roast_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Idempotency key: allows safe retries without double-charging Gemini API credits.
-    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -480,4 +612,6 @@ class BlueprintUniversalPrompt(Base):
     category: Mapped[str] = mapped_column(String(200))
     suggested_text: Mapped[str] = mapped_column(Text)
 
-    blueprint: Mapped[ProfileBlueprint] = relationship(back_populates="universal_prompts")
+    blueprint: Mapped[ProfileBlueprint] = relationship(
+        back_populates="universal_prompts"
+    )

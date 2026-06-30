@@ -14,17 +14,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rizzbot.v2.domain.model.SuggestedMatch
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 @Composable
 fun MergeConfirmationPanel(
     payload: SuggestedMatch,
@@ -32,20 +37,18 @@ fun MergeConfirmationPanel(
     onNo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    val contextBg = Color(0xFF252542)
     val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp),
+            .padding(NothingDimens.cardPadding),
         verticalArrangement = Arrangement.Top
     ) {
         Text(
-            text = "⚠️ New Chat Detected",
-            color = Color.White,
+            text = "New Chat Detected",
+            color = NothingWhite,
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp
         )
@@ -54,7 +57,7 @@ fun MergeConfirmationPanel(
 
         Text(
             text = "Is this the same ${payload.personName} you were talking to previously?",
-            color = Color(0xFFBDBDBD),
+            color = NothingTextSecondary,
             fontSize = 13.sp
         )
 
@@ -62,14 +65,15 @@ fun MergeConfirmationPanel(
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = contextBg),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            colors = CardDefaults.cardColors(containerColor = NothingSurface),
+            border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "🧠 ${payload.contextPreview.aiMemoryNote}",
-                        color = Color.White,
+                        text = payload.contextPreview.aiMemoryNote,
+                        color = NothingWhite,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp
                     )
@@ -79,13 +83,13 @@ fun MergeConfirmationPanel(
 
                 Text(
                     text = "Her last message:",
-                    color = Color(0xFFBDBDBD),
+                    color = NothingTextTertiary,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.sp
                 )
                 Text(
                     text = payload.contextPreview.herLastMessage,
-                    color = Color.White,
+                    color = NothingWhite,
                     fontSize = 13.sp,
                     lineHeight = 16.sp,
                     modifier = Modifier.padding(top = 4.dp)
@@ -95,13 +99,13 @@ fun MergeConfirmationPanel(
 
                 Text(
                     text = "Your last reply:",
-                    color = Color(0xFFBDBDBD),
+                    color = NothingTextTertiary,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.sp
                 )
                 Text(
                     text = payload.contextPreview.yourLastReply,
-                    color = Color.White,
+                    color = NothingWhite,
                     fontSize = 13.sp,
                     lineHeight = 16.sp,
                     modifier = Modifier.padding(top = 4.dp)
@@ -111,19 +115,18 @@ fun MergeConfirmationPanel(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = onYes,
-                modifier = Modifier
-                    .weight(1f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "Yes, Link Chats & Use Memory",
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+        Button(
+            onClick = onYes,
+            modifier = Modifier
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = NothingWhite)
+        ) {
+            Text(
+                text = "Yes, Link Chats & Use Memory",
+                color = NothingBlack,
+                fontWeight = FontWeight.SemiBold
+            )
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -131,14 +134,14 @@ fun MergeConfirmationPanel(
         OutlinedButton(
             onClick = onNo,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
         ) {
             Text(
                 text = "No, New Person",
-                color = accent,
+                color = NothingWhite,
                 fontWeight = FontWeight.SemiBold
             )
         }
     }
 }
-

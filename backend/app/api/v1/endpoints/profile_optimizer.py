@@ -19,7 +19,10 @@ from app.schemas.profile_blueprint import (
     ProfileBlueprintListResponse,
     ProfileBlueprintResponse,
 )
-from app.services.profile_optimizer_service import build_blueprint_response, generate_blueprint
+from app.services.profile_optimizer_service import (
+    build_blueprint_response,
+    generate_blueprint,
+)
 
 router = APIRouter(prefix="/profile-audit", tags=["profile-audit"])
 logger = structlog.get_logger()
@@ -48,39 +51,30 @@ async def optimize_profile(
 
     effective_tier = get_effective_tier(current_user)
     tier_config = TIER_CONFIG.get(effective_tier, TIER_CONFIG["free"])
-    blueprints_per_week = tier_config["limits"]["profile_blueprints_per_week"]
 
-    if blueprints_per_week == 0:
+    if not (current_user.google_provider_id or current_user.firebase_uid):
         raise HTTPException(
             status_code=403,
-            detail="Profile blueprints are not available on your current plan. Please upgrade.",
+            detail="A verified account is required to generate blueprints.",
         )
 
-    # Enforce quota for ALL users — not just those with a Google provider ID.
-    # Previously the google_provider_id guard silently let non-Google users bypass
-    # the weekly limit entirely. We now use firebase_uid as a fallback key so
-    # every authenticated user is rate-limited.
-    if blueprints_per_week > 0:
-        quota_key = current_user.google_provider_id or current_user.firebase_uid
-        if not quota_key:
-            raise HTTPException(
-                status_code=403,
-                detail="A verified account is required to generate blueprints.",
-            )
-        qm = QuotaManager(db)
+    # Blueprint is a Match+ feature (not available on Free or Crush).
+    if effective_tier in ("free", "crush"):
+        raise HTTPException(
+            status_code=403,
+            detail="Profile blueprint requires Match or Rizz. Upgrade to unlock.",
+        )
+
+    if current_user.google_provider_id:
         try:
-            await qm.check_and_increment_blueprints(
-                quota_key,
-                weekly_limit=blueprints_per_week,
+            await QuotaManager(db).check_only_credits(
+                current_user.google_provider_id,
+                action="profile_blueprint",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
             )
-        except QuotaExceededException:
-            raise HTTPException(
-                status_code=429,
-                detail=(
-                    f"Weekly blueprint limit reached ({blueprints_per_week}/week). "
-                    "Resets on Monday."
-                ),
-            )
+        except QuotaExceededException as exc:
+            raise HTTPException(status_code=429, detail=str(exc))
 
     try:
         blueprint = await generate_blueprint(
@@ -89,8 +83,18 @@ async def optimize_profile(
             lang=lang,
             idempotency_key=x_idempotency_key,
         )
-        # SUCCESS: commit blueprint + quota increment atomically.
+        # SUCCESS: commit blueprint + deduct credits.
         await db.commit()
+        if current_user.google_provider_id:
+            try:
+                await QuotaManager(db).check_and_spend(
+                    current_user.google_provider_id,
+                    action="profile_blueprint",
+                    tier=effective_tier,
+                    daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+                )
+            except QuotaExceededException:
+                pass  # Already checked — edge case on concurrent requests.
     except ValueError as exc:
         # Known, user-facing error (e.g. no photos, LLM hallucinated photo_id)
         # — rollback to refund quota.

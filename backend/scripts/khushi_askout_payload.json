@@ -1,0 +1,64 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {"sender": "user", "quoted_context": "", "actual_new_message": "Quality council of India so guys probably fail ur inspection on the first text"},
+      {"sender": "them", "quoted_context": "", "actual_new_message": "Haha nice one 😂"},
+      {"sender": "user", "quoted_context": "", "actual_new_message": "Toh I am passing inspection or already in reject pile"},
+      {"sender": "them", "quoted_context": "", "actual_new_message": "You definitely passed the quality check"},
+      {"sender": "them", "quoted_context": "", "actual_new_message": "Congratulations"}
+    ],
+    "visual_hooks": [],
+    "photo_persona": "",
+    "detected_dialect": "HINGLISH",
+    "their_tone": "playful",
+    "their_effort": "medium",
+    "conversation_temperature": "warm",
+    "archetype_reasoning": "She engaged warmly with the inspection joke, certified the user, and is clearly receptive. Banter girl energy — warm, playful, medium-high engagement.",
+    "warmth": "warm",
+    "playfulness": "playful",
+    "engagement": "medium",
+    "traditionalism": "modern",
+    "intent": "exploring",
+    "detected_archetype": "THE BANTER GIRL",
+    "top_hooks": ["Passed the quality check", "Congratulations", "QCI inspection metaphor"],
+    "key_detail": "She certified the user — warm and receptive, right moment to escalate.",
+    "person_name": "Khushi",
+    "stage": "early_talking",
+    "their_last_message": "She playfully confirmed the user passed her quality check and offered congratulations — warm signal.",
+    "user_last_move": "Toh I am passing inspection or already in reject pile — frame-flip that she responded to warmly.",
+    "inbound_image": "none",
+    "inbound_image_detail": "",
+    "durable_facts": ["Works at the Quality Council of India", "Studying Masters at Delhi University", "Interests: reading and music"]
+  },
+  "direction": "ask_out",
+  "person_name": "Khushi",
+  "core_lore": "Works as a Project Coordinator at the Quality Council of India\nStudying Masters at Delhi University\nInterests: reading and music\nAries\nNon-vegetarian\nSeeking a long-term relationship",
+  "past_memories": "",
+  "transcript_text": "user: Quality council of India so guys probably fail ur inspection on the first text\nthem: Haha nice one 😂\nuser: Toh I am passing inspection or already in reject pile\nthem: You definitely passed the quality check\nthem: Congratulations",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "Khushi",
+    "stage": "early_talking",
+    "tone_trend": "warming",
+    "topics_worked": ["QCI inspection joke"],
+    "topics_failed": [],
+    "interaction_count": 3,
+    "recent_summaries": [
+      "[opener] her: \"Khushi 23 Project Coordinator at Quality Council of India\" | you sent: \"quality council of india so guys probably fail ur inspection on the first text\"",
+      "[keep_playful] her: \"Haha nice one 😂\" | you sent: \"so do i pass inspection or am i on the reject pile\"",
+      "[tease] her: \"You definitely passed the quality check. Congratulations\""
+    ],
+    "recent_user_replies": [],
+    "last_ai_replies_shown": [
+      "ab certificate bhi milega ya bas verbal approval se kaam chalana padega",
+      "passed the check but i bet youre the type to audit my spotify playlists next",
+      "bas verbal approval hai ya certificate aur stamp bhi milega"
+    ],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "",
+    "preferred_strategies": []
+  },
+  "user_custom_hint": ""
+}

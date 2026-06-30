@@ -1,7 +1,7 @@
 # ── OS ──
 .DS_Store
 Thumbs.db
-
+n8n
 # ── IDE ──
 .idea/
 .vscode/

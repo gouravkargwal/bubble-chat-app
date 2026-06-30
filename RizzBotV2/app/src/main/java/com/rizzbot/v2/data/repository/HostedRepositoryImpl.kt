@@ -17,7 +17,6 @@ import com.rizzbot.v2.data.remote.dto.ResolveConversationRequest
 import com.rizzbot.v2.data.remote.dto.RequiresUserConfirmationResponse
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
 import com.rizzbot.v2.data.remote.dto.UsageResponse
-import com.rizzbot.v2.data.remote.dto.VerifyPurchaseRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.ReferralInfo
@@ -73,52 +72,18 @@ class HostedRepositoryImpl @Inject constructor(
         if (el is JsonPrimitive) el.content.toIntOrNull() ?: ifMissing else ifMissing
     } ?: ifMissing
 
-    /**
-     * Backend ([tier_config.profile_blueprints_per_week]): `0` = feature not on tier (403 on generate);
-     * positive = weekly cap. This differs from quotas where `0` may mean unlimited — normalize here.
-     */
-    private fun profileBlueprintsPerWeekFromMap(limits: Map<String, JsonElement>): Int {
-        val raw = limits["profile_blueprints_per_week"]
-            ?.let { el -> if (el is JsonPrimitive) el.content.toIntOrNull() else null }
-            ?: return TierQuota.NOT_ON_PLAN
-        return when {
-            raw <= 0 -> TierQuota.NOT_ON_PLAN
-            else -> raw
-        }
-    }
-
     private fun usageStateFromResponse(usage: UsageResponse): UsageState {
         val maxPhotosPerAudit = limitIntFromMap(usage.limits, "max_photos_per_audit", 3)
-        val profileAuditsPerWeek = limitIntFromMap(usage.limits, "profile_audits_per_week", 1)
-        val profileBlueprintsPerWeek = profileBlueprintsPerWeekFromMap(usage.limits)
         return UsageState(
-            dailyLimit = usage.dailyLimit,
-            dailyUsed = usage.dailyUsed,
-            weeklyUsed = usage.weeklyUsed,
-            monthlyUsed = usage.monthlyUsed,
-            profileAuditsPerWeek = profileAuditsPerWeek,
-            weeklyAuditsUsed = usage.weeklyAuditsUsed,
-            isPremium = usage.isPremium,
             tier = usage.tier,
-            bonusReplies = usage.bonusReplies,
+            creditsRemaining = usage.creditsRemaining,
+            creditsPeriodLimit = usage.creditsPeriodLimit,
+            billingPeriod = usage.billingPeriod,
+            tierExpiresAt = usage.tierExpiresAt,
             allowedDirections = usage.allowedDirections,
             customHintsEnabled = usage.customHints,
             maxScreenshots = usage.maxScreenshots,
-            premiumExpiresAt = usage.tierExpiresAt,
-            godModeExpiresAt = usage.godModeExpiresAt?.let { sec ->
-                try {
-                    java.time.Instant.ofEpochSecond(sec)
-                } catch (e: Exception) {
-                    android.util.Log.w("HostedRepo", "Failed to parse godModeExpiresAt: ${e.message}")
-                    null
-                }
-            },
-            totalRepliesGenerated = usage.totalRepliesGenerated,
-            totalRepliesCopied = usage.totalRepliesCopied,
             maxPhotosPerAudit = maxPhotosPerAudit,
-            profileBlueprintsPerWeek = profileBlueprintsPerWeek,
-            weeklyBlueprintsUsed = usage.weeklyBlueprintsUsed,
-            billingPeriod = usage.billingPeriod
         )
     }
 
@@ -135,8 +100,9 @@ class HostedRepositoryImpl @Inject constructor(
                 )
             )
 
+            // Deduct 1 credit locally for immediate UI feedback (backend authoritative on next refresh)
             _usageState.value = _usageState.value.copy(
-                dailyUsed = _usageState.value.dailyLimit - response.usageRemaining
+                creditsRemaining = (_usageState.value.creditsRemaining - 1).coerceAtLeast(0)
             )
 
             SuggestionResult.Success(
@@ -192,10 +158,9 @@ class HostedRepositoryImpl @Inject constructor(
                     "Access denied. Your tier may have changed. Please refresh.",
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
-                // 429 is *only* used by the backend for app-level daily quota
-                // (DB-based check before calling Gemini).
+                // 429 is used by the backend when credits are exhausted.
                 429 -> SuggestionResult.Error(
-                    "Daily limit reached. Upgrade for a higher reply allowance.",
+                    "Credits exhausted. Upgrade for more credits.",
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
                 401 -> SuggestionResult.Error(
@@ -243,8 +208,9 @@ class HostedRepositoryImpl @Inject constructor(
                 )
             )
 
+            // Deduct 1 credit locally for immediate UI feedback (backend authoritative on next refresh)
             _usageState.value = _usageState.value.copy(
-                dailyUsed = _usageState.value.dailyLimit - response.usageRemaining
+                creditsRemaining = (_usageState.value.creditsRemaining - 1).coerceAtLeast(0)
             )
 
             SuggestionResult.Success(
@@ -262,7 +228,7 @@ class HostedRepositoryImpl @Inject constructor(
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
                 429 -> SuggestionResult.Error(
-                    "Daily limit reached. Upgrade for a higher reply allowance.",
+                    "Credits exhausted. Upgrade for more credits.",
                     SuggestionResult.ErrorType.QUOTA_EXCEEDED
                 )
                 401 -> SuggestionResult.Error(
@@ -400,22 +366,6 @@ class HostedRepositoryImpl @Inject constructor(
     }
 
 
-    override suspend fun verifyPurchase(
-        purchaseToken: String,
-        productId: String,
-        orderId: String?
-    ): Boolean {
-        return try {
-            val response = hostedApi.verifyPurchase(
-                VerifyPurchaseRequest(purchaseToken, productId, orderId)
-            )
-            if (response.isValid) {
-                refreshUsage(force = true) // Force refresh after purchase
-            }
-            response.isValid
-        } catch (_: Exception) { false }
-    }
-
     override suspend fun getHistory(limit: Int, offset: Int): List<HistoryItemResponse> {
         return try {
             hostedApi.getHistory(limit, offset).items
@@ -471,8 +421,8 @@ class HostedRepositoryImpl @Inject constructor(
                 }
             } else {
                 val message = when (response.code()) {
-                    429 -> "You've used your weekly photo audit limit. It resets every Monday — come back then!"
-                    403 -> "Photo audits aren't available on your current plan. Please upgrade."
+                    429 -> "Not enough credits for a photo audit. Upgrade or wait for your next credit period."
+                    403 -> "Photo audits require a paid plan. Upgrade to Crush, Match, or Rizz."
                     else -> "Server error: ${response.code()}"
                 }
                 Result.failure(Exception(message))

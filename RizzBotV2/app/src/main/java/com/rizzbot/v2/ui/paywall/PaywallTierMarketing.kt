@@ -1,49 +1,58 @@
 package com.rizzbot.v2.ui.paywall
 
 /**
- * Paywall marketing copy and numeric limits. Keep in sync with
- * `backend/app/core/tier_config.py` → [TIER_CONFIG] for `pro` and `premium`.
+ * Paywall marketing copy. Keep in sync with
+ * `backend/app/core/tier_config.py` → BILLING_CREDITS / TIER_CONFIG.
  */
 internal object PaywallTierMarketing {
 
     fun headlineForAppTier(appTier: String): String =
         when (appTier) {
-            "pro" -> "Go beyond Pro"
-            "premium", "god_mode" -> "Manage your plan"
+            "crush" -> "Upgrade to Match or Rizz"
+            "match" -> "Upgrade to Rizz"
+            "rizz" -> "Manage your plan"
             else -> "Upgrade your wingman"
         }
 
     fun sublineForAppTier(appTier: String): String =
         when (appTier) {
-            "pro" ->
-                "You’re on Pro — Premium unlocks higher caps, more profile tools, and God-Mode Auditor."
-            "premium", "god_mode" ->
-                "You already have top-tier limits. Renew or switch billing below."
-            else ->
-                "Pro and Premium use the same app — pick the limits that fit how you chat."
+            "crush" -> "Crush unlocks 7 reply modes, custom hints, and photo audits. Match adds Ask Out + Get Number + blueprints."
+            "match" -> "Match unlocks all 9 reply modes, blueprints, and photo audits. Rizz gives you the most credits and max limits."
+            "rizz" -> "You're on the top tier. Every feature, unlimited potential."
+            else -> "Free gives you Openers, Quick Replies, Keep Playful, and Revive Chat. Upgrade for the full toolkit."
         }
 
     fun featureLines(selected: PaywallTier): List<String> =
         when (selected) {
-            PaywallTier.Pro -> proLines
-            PaywallTier.Premium -> premiumLines
+            PaywallTier.Crush -> crushLines
+            PaywallTier.Match -> matchLines
+            PaywallTier.Rizz -> rizzLines
         }
 
-    /** Mirrors TIER_CONFIG["pro"].limits + key features */
-    private val proLines = listOf(
-        "Up to 20 AI replies per day",
+    /** 60 credits / 7 days — ₹99/week */
+    private val crushLines = listOf(
+        "60 credits every week",
+        "All 7 reply modes — except Get Number & Ask Out",
+        "Custom hints & chemistry tracking",
+        "Photo audit — 5 credits per audit",
         "Up to 5 screenshots per reply",
-        "Up to 3 profile photo audits per week (6 photos each)",
-        "Up to 1 profile optimizer blueprint per week",
-        "Custom hints and expanded reply vibes",
     )
 
-    /** Mirrors TIER_CONFIG["premium"].limits + product extras */
-    private val premiumLines = listOf(
-        "Up to 50 AI replies per day",
-        "Up to 7 screenshots per reply",
-        "Up to 10 profile photo audits per week (10 photos each)",
-        "Up to 3 profile optimizer blueprints per week",
-        "Everything in Pro, plus higher caps & God-Mode Auditor",
+    /** 150 credits / 30 days — ₹179/month */
+    private val matchLines = listOf(
+        "150 credits every month",
+        "All 9 reply modes — including Get Number & Ask Out",
+        "Custom hints & chemistry tracking",
+        "Photo audit & profile blueprint",
+        "Up to 5 screenshots per reply",
+    )
+
+    /** 250 credits / 30 days — ₹299/month */
+    private val rizzLines = listOf(
+        "250 credits every month",
+        "All 9 reply modes — including Get Number & Ask Out",
+        "Custom hints & chemistry tracking",
+        "Photo audit & profile blueprint",
+        "Up to 7 screenshots per reply — max everything",
     )
 }

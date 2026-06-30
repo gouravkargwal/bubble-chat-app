@@ -6,6 +6,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -79,7 +85,7 @@ class MainActivity : ComponentActivity() {
             val navigateTo = pendingNavigation.value
             val shouldShowPaywall = showPaywallFromIntent.value
             val usage by hostedRepository.usageState.collectAsState()
-            val isGodMode = usage.isGodModeActive
+            val isPaidPlan = usage.isPaidPlan
 
             // Resolve onboarding/auth state before selecting a start destination.
             // This avoids rendering the onboarding screen on the first frame when DataStore emits `false` initially.
@@ -140,17 +146,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            RizzBotV2Theme(isGodMode = isGodMode) {
-                when (val state = bootState.value) {
-                    BootState.Refreshing -> {
-                        BrandedBootScreen()
-                    }
-                    is BootState.Ready -> {
-                    NavGraph(
-                        navController = navController,
-                        startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route,
-                        onboardingResumeForSignIn = onboardingResumeForSignIn
-                    )
+            RizzBotV2Theme(isPaidPlan = isPaidPlan) {
+                // Smooth crossfade between branded boot and the main nav graph
+                AnimatedContent(
+                    targetState = bootState.value,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(600, easing = FastOutSlowInEasing)) togetherWith
+                            fadeOut(animationSpec = tween(400, easing = FastOutSlowInEasing))
+                    },
+                    label = "boot_transition",
+                ) { state ->
+                    when (state) {
+                        BootState.Refreshing -> {
+                            AnimatedCookdSplash()
+                        }
+                        is BootState.Ready -> {
+                            NavGraph(
+                                navController = navController,
+                                startDestination = if (canSkipOnboarding) Screen.Home.route else Screen.Onboarding.route,
+                                onboardingResumeForSignIn = onboardingResumeForSignIn
+                            )
+                        }
                     }
                 }
             }

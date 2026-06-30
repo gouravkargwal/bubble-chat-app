@@ -28,16 +28,19 @@ class GeminiLangChainUsageCallback(BaseCallbackHandler):
         self.model = model
         self.prompt_tokens: int = 0
         self.candidates_tokens: int = 0
+        self.cached_tokens: int = 0
         self._seen: bool = False
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:  # noqa: ANN401
-        pt, ct = _extract_tokens_from_llm_result(response)
+        pt, ct, cached = _extract_tokens_from_llm_result(response)
         if pt or ct:
             self.prompt_tokens = pt
             self.candidates_tokens = ct
+            self.cached_tokens = cached
             self._seen = True
 
     def to_usage_row(self) -> dict:
+        """Generate structured usage row, forwarding cached tokens for accurate discounting."""
         if not self._seen or (self.prompt_tokens == 0 and self.candidates_tokens == 0):
             logger.warning(
                 "gemini_langchain_usage_missing",
@@ -49,12 +52,13 @@ class GeminiLangChainUsageCallback(BaseCallbackHandler):
             model=self.model,
             prompt_tokens=self.prompt_tokens,
             candidates_tokens=self.candidates_tokens,
+            cached_tokens=self.cached_tokens,  # 🎯 FIXED: Forwarding cached tokens to the pricing engine
         )
 
 
-def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int]:
-    """Normalize LangChain / Google GenAI token fields."""
-    pt, ct = 0, 0
+def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int, int]:
+    """Normalize LangChain / Google GenAI token fields. Returns (prompt, output, cached)."""
+    pt, ct, cached = 0, 0, 0
 
     for gen_list in response.generations:
         for gen in gen_list:
@@ -75,8 +79,17 @@ def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int]:
                     or um.get("candidates_token_count")
                     or 0
                 )
+                # Cached-prefix tokens (billed ~25%). Gemini surfaces these under
+                # input_token_details.cache_read (LangChain) or cached_content_token_count.
+                details = um.get("input_token_details")
+                cached = int(
+                    (details.get("cache_read") if isinstance(details, dict) else 0)
+                    or um.get("cached_content_token_count")
+                    or um.get("cache_read_input_tokens")
+                    or 0
+                )
                 if pt or ct:
-                    return pt, ct
+                    return pt, ct, cached
 
     if response.llm_output and isinstance(response.llm_output, dict):
         tu = response.llm_output.get("token_usage")
@@ -84,7 +97,7 @@ def _extract_tokens_from_llm_result(response: LLMResult) -> tuple[int, int]:
             pt = int(tu.get("prompt_tokens") or tu.get("input_tokens") or 0)
             ct = int(tu.get("completion_tokens") or tu.get("output_tokens") or 0)
 
-    return pt, ct
+    return pt, ct, cached
 
 
 def _is_capacity_error(exc: BaseException) -> bool:
@@ -98,6 +111,61 @@ def _is_capacity_error(exc: BaseException) -> bool:
             return True
         cur = getattr(cur, "__cause__", None) or getattr(cur, "__context__", None)
     return False
+
+
+def invoke_structured_groq(
+    *,
+    model: str,
+    temperature: float,
+    schema: type[BaseModel],
+    messages: list,
+    phase: str,
+) -> tuple[Any, dict]:
+    """
+    Structured-output call against Groq via its OpenAI-compatible endpoint
+    (langchain_openai.ChatOpenAI). Used to A/B a stronger writer on the generator
+    node ONLY. Returns (parsed_pydantic, usage_row) in the same shape as the Gemini
+    invoker. cost_usd is logged 0.0 — Gemini pricing does not apply to Groq.
+    """
+    from langchain_openai import ChatOpenAI
+
+    from agent.nodes_v2._shared import LLM_MAX_RETRIES, LLM_TIMEOUT_SECONDS
+
+    cb = GeminiLangChainUsageCallback(phase=phase, model=model)
+    llm = ChatOpenAI(
+        model=model,
+        temperature=temperature,
+        api_key=settings.groq_api_key,
+        base_url="https://api.groq.com/openai/v1",
+        timeout=LLM_TIMEOUT_SECONDS,
+        max_retries=LLM_MAX_RETRIES,
+    ).with_structured_output(schema, method="function_calling")
+
+    t0 = time.monotonic()
+    result = llm.invoke(messages, config={"callbacks": [cb]})
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    pt, ct = cb.prompt_tokens, cb.candidates_tokens
+    row = {
+        "phase": phase,
+        "model": model,
+        "prompt_tokens": pt,
+        "candidates_tokens": ct,
+        "cached_tokens": 0,
+        "total_tokens": pt + ct,
+        "cost_usd": 0.0,
+    }
+    logger.info(
+        "llm_lifecycle",
+        stage="structured_groq_complete",
+        phase=phase,
+        model=model,
+        temperature=temperature,
+        elapsed_ms=elapsed_ms,
+        prompt_tokens=pt,
+        candidates_tokens=ct,
+        total_tokens=pt + ct,
+    )
+    return result, row
 
 
 def invoke_structured_gemini(
@@ -123,7 +191,9 @@ def invoke_structured_gemini(
     last_exc: BaseException | None = None
     for attempt_model in models_to_try:
         cb = GeminiLangChainUsageCallback(phase=phase, model=attempt_model)
-        llm = build_llm(model=attempt_model, temperature=temperature, structured_output=schema)
+        llm = build_llm(
+            model=attempt_model, temperature=temperature, structured_output=schema
+        )
         t0 = time.monotonic()
         try:
             result = llm.invoke(messages, config={"callbacks": [cb]})
@@ -153,8 +223,8 @@ def invoke_structured_gemini(
             candidates_tokens=row.get("candidates_tokens"),
             total_tokens=row.get("total_tokens"),
             cost_usd=row.get("cost_usd"),
+            cached_tokens=cb.cached_tokens,
         )
         return result, row
 
-    # All attempts exhausted — re-raise last error
     raise last_exc  # type: ignore[misc]

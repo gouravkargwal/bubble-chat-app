@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.tier_config import BILLING_PERIOD_DAYS
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import User
 from app.services.billing import apply_plan_upgrade
@@ -98,41 +99,36 @@ async def revenuecat_webhook(
     def affects(entitlement_id: str) -> bool:
         return entitlement_id in affected_entitlements
 
-    # Determine new tier from entitlements (priority: premium > pro)
+    # Determine new tier from entitlements (priority: rizz > match > crush)
     new_tier: str | None = None
-    if affects("premium"):
-        new_tier = "premium"
-    elif affects("pro"):
-        new_tier = "pro"
+    if affects("rizz"):
+        new_tier = "rizz"
+    elif affects("match"):
+        new_tier = "match"
+    elif affects("crush"):
+        new_tier = "crush"
 
-    # RevenueCat sometimes sends `entitlement_ids: null` for certain payloads/environments.
-    # In that case, we can still infer the tier from the `product_id`.
     def infer_tier_from_product_id(pid: str | None) -> str | None:
         if not pid:
             return None
         val = pid.lower()
-        # Priority: premium should win over pro if both substrings ever appear.
-        if "premium" in val:
-            return "premium"
-        if "pro" in val:
-            return "pro"
+        if "rizz" in val:
+            return "rizz"
+        if "match" in val:
+            return "match"
+        if "crush" in val:
+            return "crush"
         return None
 
-    # Derive billing_period from product_id string
     product_id: str | None = event_data.get("product_id")
-    billing_period = "weekly"  # sensible default
-    if product_id:
-        pid = product_id.lower()
-        if "monthly" in pid:
-            billing_period = "monthly"
-        elif "yearly" in pid or "annual" in pid:
-            billing_period = "yearly"
-        elif "weekly" in pid:
-            billing_period = "weekly"
 
     # If entitlements were missing/empty, fall back to product_id inference.
     if new_tier is None:
         new_tier = infer_tier_from_product_id(product_id)
+
+    # Derive billing_period from tier (authoritative) — avoids fragile product_id string matching.
+    period_days = BILLING_PERIOD_DAYS.get(new_tier or "", 30)
+    billing_period = "weekly" if period_days == 7 else "monthly"
 
     # 1) INITIAL_PURCHASE / RENEWAL / PRODUCT_CHANGE → Clean Slate upgrade path
     # FIXED: Added PRODUCT_CHANGE so users who upgrade tiers actually get their new limits.
@@ -163,9 +159,11 @@ async def revenuecat_webhook(
     if event_type == "EXPIRATION":
         new_tier_exp: str | None = None
         expiring_tier = infer_tier_from_product_id(product_id)
-        if user.tier == "premium" and (affects("premium") or expiring_tier == "premium"):
+        if user.tier == "rizz" and (affects("rizz") or expiring_tier == "rizz"):
             new_tier_exp = "free"
-        elif user.tier == "pro" and (affects("pro") or expiring_tier == "pro"):
+        elif user.tier == "match" and (affects("match") or expiring_tier == "match"):
+            new_tier_exp = "free"
+        elif user.tier == "crush" and (affects("crush") or expiring_tier == "crush"):
             new_tier_exp = "free"
 
         if new_tier_exp is None:
@@ -201,24 +199,17 @@ async def revenuecat_webhook(
             quota = quota_result.scalar_one_or_none()
 
             if quota is not None:
-                free_cfg = TIER_CONFIG.get("free", TIER_CONFIG["free"])
-                free_daily_limit = int(
-                    free_cfg["limits"].get("chat_generations_per_day", 0)
+                # On expiry, clear the period credit pool — user drops to free tier.
+                logger.info(
+                    "revenuecat_expiration_credits_cleared",
+                    app_user_id=app_user_id,
+                    credits_cleared=quota.credits_remaining,
                 )
-
-                # Always realign reset windows from expiration time so the new
-                # free period starts cleanly.
-                quota.daily_reset_at = now + timedelta(days=1)
-                quota.weekly_reset_at = now + timedelta(weeks=1)
-
-                if free_daily_limit > 0 and quota.daily_usage_count > free_daily_limit:
-                    logger.info(
-                        "revenuecat_expiration_grace_reset",
-                        app_user_id=app_user_id,
-                        previous_daily_usage=quota.daily_usage_count,
-                        free_daily_limit=free_daily_limit,
-                    )
-                    quota.daily_usage_count = 0
+                quota.credits_remaining = 0
+                quota.credits_period_limit = 0
+                quota.credits_reset_at = None
+                quota.daily_free_credits_used = 0
+                quota.daily_free_reset_at = now + timedelta(days=1)
 
         await db.commit()
 

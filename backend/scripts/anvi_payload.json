@@ -1,0 +1,76 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {"sender": "them", "quoted_context": "", "actual_new_message": "Anvi 23\nHeaven on earth for me is\nशांत mountains,\nhomemade comfort\nfood, and those\nlate-night moments\nwhen I just sing my\nfeelings out 💛\nLanguages\nMOTHER TONGUE Hindi\nBasics\nSingle\nCapricorn\n5'1\"\nHindu\nBokaro, Jharkhand, IN\nHOME TOWN Ranchi\nNever\nNever\nNon-Vegetarian\nSometimes\nActive today\nMy Story\nAn ambivert who can\nbe quiet or the life of\nthe party—depends on\nthe vibe.\nI sing when I'm happy,\nstressed, or just bored\n🎶\nSoft heart, bold mind.\nInterests\nShopping\nInstruments\nTravel\nTrekking\nSinging\nTraits\nKind\nHelpful\nClumsy\nAdaptable\nFriendly\nPhilosophy\nPassive than\nAggressive\nRelationship goals\nLong-term relationship,\nopen to settling down"}
+    ],
+    "visual_hooks": [
+      "The mirror selfie in what looks like a busy public square with a 'Central Bank of India' sign in the background, making it look like she's just casually hanging out in the middle of a city center.",
+      "The black and white photo where she's looking back over her shoulder, giving off a very classic, slightly mysterious vibe compared to the rest of her profile.",
+      "The photo in the blue dress at what looks like an outdoor event or fair, standing out against the white tents in the background."
+    ],
+    "photo_persona": "girl-next-door",
+    "detected_dialect": "HINGLISH",
+    "their_tone": "Sincere, reflective, and balanced.",
+    "their_effort": "high",
+    "conversation_temperature": "warm",
+    "archetype_reasoning": "Anvi presents a balanced profile that blends traditional values with a modern, expressive personality. She is clearly looking for a serious connection while maintaining a playful, musical side to her character.",
+    "warmth": "warm",
+    "playfulness": "balanced",
+    "engagement": "high",
+    "traditionalism": "mixed",
+    "intent": "long_term",
+    "detected_archetype": "THE EAGER/DIRECT",
+    "top_hooks": [],
+    "key_detail": "She mentions she sings when she's happy, stressed, or just bored, which is a great opening to ask what her go-to 'stressed' song is.",
+    "person_name": "Anvi",
+    "stage": "opening",
+    "their_last_message": "Anvi is an ambivert who values comfort, music, and meaningful connections, looking for a long-term partner who appreciates both quiet moments and lively energy.",
+    "user_last_move": "",
+    "inbound_image": "none",
+    "inbound_image_detail": "",
+    "durable_facts": [
+      "From Bokaro, Jharkhand",
+      "Hometown is Ranchi",
+      "Enjoys singing, trekking, and travel",
+      "Identifies as an ambivert",
+      "Looking for a long-term relationship"
+    ]
+  },
+  "direction": "opener",
+  "person_name": "Anvi",
+  "core_lore": "From Ranchi, currently in Bokaro\nEnjoys singing as an emotional outlet\nDescribes herself as an ambivert\nNon-vegetarian\nInterested in trekking and travel\nCapricorn\n5'1\"\nEnjoys singing and playing instruments\nFrom Ranchi, Jharkhand",
+  "past_memories": "",
+  "transcript_text": "Anvi 23\nHeaven on earth for me is\nशांत mountains,\nhomemade comfort\nfood, and those\nlate-night moments\nwhen I just sing my\nfeelings out 💛\nLanguages\nMOTHER TONGUE Hindi\nBasics\nSingle\nCapricorn\n5'1\"\nHindu\nBokaro, Jharkhand, IN\nHOME TOWN Ranchi\nNever\nNever\nNon-Vegetarian\nSometimes\nActive today\nMy Story\nAn ambivert who can\nbe quiet or the life of\nthe party—depends on\nthe vibe.\nI sing when I'm happy,\nstressed, or just bored\n🎶\nSoft heart, bold mind.\nInterests\nShopping\nInstruments\nTravel\nTrekking\nSinging\nTraits\nKind\nHelpful\nClumsy\nAdaptable\nFriendly\nPhilosophy\nPassive than\nAggressive\nRelationship goals\nLong-term relationship,\nopen to settling down",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "Anvi",
+    "stage": "opening",
+    "tone_trend": "stable",
+    "topics_worked": ["She sings her feelings out when she's happy, stressed, or bored—I'd love to know what the 'stressed' playlist sounds like."],
+    "topics_failed": [],
+    "interaction_count": 1,
+    "recent_summaries": [
+      "[opener] her: \"Anvi is a thoughtful ambivert who values comfort, music, and meaningful connections, looking for a long-term partner who appreciates both her soft heart and bold mind.\" | you sent: \"so you sing when stressed—does that mean i need to pass a vibe check or earplugs check first\"",
+      "[opener] her: \"Anvi 23\nHeaven on earth for me is\nशांत mountains,\nhomemade comfort food, and those\nlate-night moments when I just sing my\nfeelings out 💛\nLanguages\nHindi\nBasics\nSingle\nCapricorn\n5'1\"\nHindu\nBokaro, Jharkhand, IN\nRanchi\nNever\nNever\nNon-Vegetarian\nSometimes\nActive today\nMy Story\nAn ambivert who can be quiet or the life of the party—depends on the vibe.\nI sing when I'm happy, stressed, or just bored 🎶\nSoft heart, bold mind.\nInterests\nShopping\nInstruments\nTravel\nTrekking\nSinging\nKind\nHelpful\nClumsy\nAdaptable\nFriendly\nPhilosophy\nPassive than\nAggressive\nRelationship goals\nLong-term relationship,\nopen to settling down\"",
+      "[opener] her: \"Anvi 23\nHeaven on earth for me is\nशांत mountains,\nhomemade comfort\nfood, and those\nlate-night moments\nwhen I just sing my\nfeelings out 💛\nLanguages\nMOTHER TONGUE Hindi\nBasics\nSingle\nCapricorn\n5'1\"\nHindu\nBokaro, Jharkhand, IN\nHOME TOWN Ranchi\nNever\nNever\nNon-Vegetarian\nSometimes\nActive today\nMy Story\nAn ambivert who can\nbe quiet or the life of\nthe party—depends on\nthe vibe.\nI sing when I'm happy,\nstressed, or just bored\n🎶\nSoft heart, bold mind.\nInterests\nShopping\nInstruments\nTravel\nTrekking\nSinging\nTraits\nKind\nHelpful\nClumsy\nAdaptable\nFriendly\nPhilosophy\nPassive than\nAggressive\nRelationship goals\nLong-term relationship,\nopen to settling down\""
+    ],
+    "recent_user_replies": [
+      "{\"text\": \"so you sing when stressed—does that mean i need to pass a vibe check or earplugs check first\", \"strategy_label\": \"FRAME CONTROL\", \"is_recommended\": true, \"coach_reasoning\": \"Sets a humorous 'you have to earn it' frame while acknowledging her unique quirk.\"}"
+    ],
+    "first_key_detail": "She sings her feelings out when she's happy, stressed, or bored—I'd love to know what the 'stressed' playlist sounds like.",
+    "first_their_last_message": "Anvi is a thoughtful ambivert who values comfort, music, and meaningful connections, looking for a long-term partner who appreciates both her soft heart and bold mind.",
+    "last_user_organic_texts": [],
+    "last_ai_replies_shown": [
+      "singing when bored is risky sab log sunke bhag toh nahi jaate",
+      "bet your stressed playlist is just full of sad bollywood songs on repeat",
+      "saw that saree photo clearly waiting for a dramatic slow motion bollywood exit"
+    ],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "",
+    "preferred_strategies": ["FRAME CONTROL"]
+  },
+  "user_custom_hint": "",
+  "opener_hook_priority": "text_first"
+}

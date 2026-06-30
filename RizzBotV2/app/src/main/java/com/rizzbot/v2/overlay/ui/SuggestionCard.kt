@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,15 +31,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-private val CardShape = RoundedCornerShape(16.dp)
+import com.rizzbot.v2.ui.theme.NeonRed
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingError
+import com.rizzbot.v2.ui.theme.NothingSuccess
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 @Composable
 fun SuggestionCard(
@@ -57,54 +60,36 @@ fun SuggestionCard(
     var copied by remember { mutableStateOf(false) }
     var rated by remember { mutableStateOf<Boolean?>(null) }
 
-    val accent = MaterialTheme.colorScheme.primary
-    val recommendedGlow = accent.copy(alpha = 0.22f)
-    val borderColor = if (isRecommended) accent.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.08f)
+    val borderColor = if (isRecommended) NothingWhite.copy(alpha = 0.85f) else NothingBorder
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .border(
                 BorderStroke(
-                    width = if (isRecommended) 1.5.dp else 1.dp,
+                    width = if (isRecommended) 1.5.dp else NothingDimens.borderThickness,
                     color = borderColor
                 ),
-                CardShape
+                RoundedCornerShape(NothingDimens.cardRadius)
             )
             .clickable {
                 onCopy()
                 copied = true
             },
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF252542)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(NothingDimens.cardRadius),
+        colors = CardDefaults.cardColors(containerColor = NothingSurface),
     ) {
         Column(
             modifier = Modifier
-                .drawBehind {
-                    drawLine(
-                        color = accent,
-                        start = Offset(0f, 0f),
-                        end = Offset(0f, size.height),
-                        strokeWidth = 3.dp.toPx()
-                    )
-
-                    if (isRecommended) {
-                        drawCircle(
-                            color = recommendedGlow,
-                            radius = size.height * 0.9f,
-                            center = Offset(size.width * 0.1f, size.height / 2f)
-                        )
-                    }
-                }
-                .padding(14.dp)
+                .padding(NothingDimens.cardPadding)
         ) {
             // Header: Wingman's Choice badge or original vibe label
             Text(
-                text = if (isRecommended) "✨ WINGMAN'S CHOICE" else label,
-                color = accent,
+                text = if (isRecommended) "WINGMAN'S CHOICE" else label,
+                color = if (isRecommended) NeonRed else NothingWhite,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp
+                fontSize = 11.sp,
+                letterSpacing = 0.8.sp,
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -114,30 +99,35 @@ fun SuggestionCard(
                 modifier = Modifier
                     .align(Alignment.Start)
                     .border(
-                        BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-                        shape = RoundedCornerShape(999.dp)
+                        BorderStroke(NothingDimens.borderThickness, NothingBorder),
+                        shape = RoundedCornerShape(NothingDimens.pillRadius)
                     )
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = strategyLabel,
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 10.sp
+                    color = NothingTextSecondary,
+                    fontSize = 10.sp,
                 )
             }
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            Text(reply, color = Color.White, fontSize = 14.sp)
+            Text(
+                reply,
+                color = NothingWhite,
+                fontSize = 14.sp,
+                lineHeight = 18.sp,
+            )
 
             // Coach tooltip / reasoning, only for Wingman's Choice
             if (isRecommended && !coachReasoning.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = coachReasoning,
-                    color = Color.LightGray.copy(alpha = 0.9f),
+                    color = NothingTextTertiary,
                     fontSize = 11.sp,
-                    fontStyle = FontStyle.Italic
+                    fontStyle = FontStyle.Italic,
                 )
             }
 
@@ -156,13 +146,13 @@ fun SuggestionCard(
                     Icon(
                         Icons.Default.ContentCopy,
                         contentDescription = "Copy",
-                        tint = if (copied) Color(0xFF4CAF50) else Color.Gray,
+                        tint = if (copied) NothingSuccess else NothingTextSecondary,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        if (copied) "Copied!" else "Copy",
-                        color = if (copied) Color(0xFF4CAF50) else Color.Gray,
+                        if (copied) "Copied" else "Copy",
+                        color = if (copied) NothingSuccess else NothingTextSecondary,
                         fontSize = 12.sp
                     )
                 }
@@ -181,7 +171,7 @@ fun SuggestionCard(
                         Icon(
                             Icons.Default.ThumbUp,
                             "Like",
-                            tint = if (rated == true) Color(0xFF4CAF50) else Color.Gray,
+                            tint = if (rated == true) NothingSuccess else NothingTextSecondary,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -197,7 +187,7 @@ fun SuggestionCard(
                         Icon(
                             Icons.Default.ThumbDown,
                             "Dislike",
-                            tint = if (rated == false) Color(0xFFEF5350) else Color.Gray,
+                            tint = if (rated == false) NothingError else NothingTextSecondary,
                             modifier = Modifier.size(16.dp)
                         )
                     }

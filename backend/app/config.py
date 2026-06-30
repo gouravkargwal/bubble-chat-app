@@ -39,13 +39,18 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_model: str = "qwen/qwen3.5-9b"
 
-    # Groq — used by prompt eval judge
+    # Groq — used by prompt eval judge AND (optionally) the v2 generator for A/B testing.
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
 
-    # Google Play Billing
-    google_play_service_account: str = ""
-    google_play_package_name: str = "com.cookd.app"
+    # Which provider writes the replies (generator node ONLY — vision/auditor stay on Gemini).
+    # "gemini" (default) or "groq". Flip GENERATOR_PROVIDER=groq in env to A/B a stronger
+    # writer model on the same profile without touching vision/auditor cost.
+    generator_provider: str = "gemini"
+
+    # Which system prompt logic to use for generating replies.
+    # "screenplay" (default, Netflix India Screenwriter roleplay) or "coach" (legacy Dating Coach rules).
+    prompt_mode: str = "screenplay"
 
     # RevenueCat
     revenuecat_webhook_secret: str = ""

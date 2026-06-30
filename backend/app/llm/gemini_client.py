@@ -1,5 +1,7 @@
 """Gemini vision client using REST API."""
 
+import json
+
 import httpx
 import structlog
 
@@ -205,6 +207,174 @@ class GeminiClient(LlmClient):
                 raise last_error or RuntimeError("Gemini request failed after all retries")
 
         raise last_error or RuntimeError("Gemini request failed after all retries")
+
+    async def generate_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: dict,
+        model: str | None = None,
+        temperature: float = 0.0,
+        max_output_tokens: int = 1024,
+        usage_sink: list[dict] | None = None,
+        usage_phase: str = "gemini_generate_structured",
+    ) -> dict:
+        """Structured JSON generation with a response schema.
+
+        Uses Gemini's ``responseMimeType: application/json`` mode to
+        enforce a JSON Schema at the API level.  Returns the parsed dict.
+        """
+        model = model or self.default_model
+
+        generation_config: dict = {
+            "temperature": temperature,
+            "maxOutputTokens": max_output_tokens,
+            "responseMimeType": "application/json",
+            "responseSchema": response_schema,
+        }
+
+        payload = {
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"parts": [{"text": user_prompt}]}],
+            "generationConfig": generation_config,
+            "safetySettings": [
+                {"category": c, "threshold": "BLOCK_NONE"}
+                for c in (
+                    "HARM_CATEGORY_HARASSMENT",
+                    "HARM_CATEGORY_HATE_SPEECH",
+                    "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "HARM_CATEGORY_DANGEROUS_CONTENT",
+                )
+            ],
+        }
+
+        primary_model = model
+        fallback_model = settings.gemini_fallback_model
+        models_to_try = [primary_model]
+        if fallback_model and fallback_model != primary_model:
+            models_to_try.append(fallback_model)
+
+        last_error: Exception | None = None
+        for model_attempt in models_to_try:
+            attempt_url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model_attempt}"
+                f":generateContent?key={self.api_key}"
+            )
+            for attempt in range(1, _RETRY_ATTEMPTS + 1):
+                try:
+                    response = await self._client.post(attempt_url, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+
+                    usage = data.get("usageMetadata") or {}
+                    if usage:
+                        row = usage_record(
+                            phase=usage_phase,
+                            model=model_attempt,
+                            prompt_tokens=usage.get("promptTokenCount"),
+                            candidates_tokens=usage.get("candidatesTokenCount"),
+                            total_tokens=usage.get("totalTokenCount"),
+                        )
+                        if usage_sink is not None:
+                            usage_sink.append(row)
+
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        raise ValueError("No candidates in structured response")
+
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+                    if not parts:
+                        raise ValueError("No parts in structured response")
+
+                    # Skip thinking parts (Gemini 2.5 Flash)
+                    text_chunks = []
+                    for part in parts:
+                        if part.get("thought"):
+                            continue
+                        chunk = part.get("text", "")
+                        if chunk:
+                            text_chunks.append(chunk)
+
+                    text = "".join(text_chunks)
+                    if not text and parts:
+                        text = parts[-1].get("text", "")
+
+                    if not text:
+                        raise ValueError("Empty text in structured response")
+
+                    parsed = json.loads(text)
+
+                    logger.info(
+                        "llm_lifecycle",
+                        stage="rest_gemini_structured",
+                        phase=usage_phase,
+                        model=model_attempt,
+                    )
+                    return parsed
+
+                except httpx.HTTPStatusError as e:
+                    last_error = e
+                    status = e.response.status_code
+                    logger.warning(
+                        "gemini_structured_http_error",
+                        status=status,
+                        attempt=attempt,
+                        model=model_attempt,
+                        body=e.response.text[:200],
+                    )
+                    if status == 401 or status == 403:
+                        raise ValueError("Invalid Gemini API key") from e
+                    if status in _FALLBACK_TRIGGER_STATUSES:
+                        if model_attempt != models_to_try[-1]:
+                            logger.warning(
+                                "gemini_fallback_triggered",
+                                primary_model=primary_model,
+                                fallback_model=fallback_model,
+                                phase=usage_phase,
+                                status=status,
+                            )
+                            break
+                        raise ValueError(
+                            f"Gemini capacity error (HTTP {status}) on all models"
+                        ) from e
+                    if status < 500:
+                        raise
+                    if attempt < _RETRY_ATTEMPTS:
+                        import asyncio
+
+                        await asyncio.sleep(_RETRY_DELAY * attempt)
+
+                except httpx.TimeoutException as e:
+                    last_error = e
+                    logger.warning(
+                        "gemini_structured_timeout", attempt=attempt, model=model_attempt
+                    )
+                    if attempt < _RETRY_ATTEMPTS:
+                        import asyncio
+
+                        await asyncio.sleep(_RETRY_DELAY * attempt)
+
+                except Exception as e:
+                    last_error = e
+                    logger.error(
+                        "gemini_structured_error",
+                        error=str(e),
+                        attempt=attempt,
+                        model=model_attempt,
+                    )
+                    if attempt < _RETRY_ATTEMPTS:
+                        import asyncio
+
+                        await asyncio.sleep(_RETRY_DELAY * attempt)
+            else:
+                raise last_error or RuntimeError(
+                    "Gemini structured request failed after all retries"
+                )
+
+        raise last_error or RuntimeError(
+            "Gemini structured request failed after all models"
+        )
 
     async def generate_content(
         self,

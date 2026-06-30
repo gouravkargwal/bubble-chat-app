@@ -3,47 +3,39 @@ package com.rizzbot.v2.overlay.ui
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
-import com.rizzbot.v2.ui.theme.GodModePrimary
-import com.rizzbot.v2.ui.theme.GodModePrimaryDark
-import com.rizzbot.v2.ui.theme.GodModeSecondary
-import com.rizzbot.v2.ui.theme.Pink
-import com.rizzbot.v2.ui.theme.PinkDark
-import com.rizzbot.v2.ui.theme.Purple
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingError
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTypography
+import com.rizzbot.v2.ui.theme.NothingWhite
 
-private val DarkOnGoldPrimary = Color(0xFF1C1508)
-
-private val OverlayPinkScheme = darkColorScheme(
-    primary = Pink,
-    onPrimary = Color.White,
-    secondary = Purple,
-    tertiary = PinkDark,
-    surface = Color.Transparent,
-    onSurface = Color.White,
-    background = Color.Transparent,
-    onBackground = Color.White,
-    error = Color(0xFFEF5350)
-)
-
-private val OverlayGodModeScheme = darkColorScheme(
-    primary = GodModePrimary,
-    onPrimary = DarkOnGoldPrimary,
-    secondary = GodModeSecondary,
-    tertiary = GodModePrimaryDark,
-    surface = Color.Transparent,
-    onSurface = Color.White,
-    background = Color.Transparent,
-    onBackground = Color.White,
-    error = Color(0xFFEF5350)
+private val OverlayColorScheme = darkColorScheme(
+    primary = NothingWhite,
+    onPrimary = NothingBlack,
+    secondary = NothingWhite,
+    tertiary = NothingTextSecondary,
+    surface = NothingSurface,
+    onSurface = NothingWhite,
+    surfaceVariant = NothingSurface,
+    onSurfaceVariant = NothingTextSecondary,
+    background = NothingBlack,
+    onBackground = NothingWhite,
+    error = NothingError,
+    onError = NothingWhite,
+    outline = NothingBorder,
+    outlineVariant = NothingBorder.copy(alpha = 0.5f),
 )
 
 @Composable
 fun OverlayTheme(
-    isGodMode: Boolean = false,
+    isPaidPlan: Boolean = false,
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = if (isGodMode) OverlayGodModeScheme else OverlayPinkScheme,
+        colorScheme = OverlayColorScheme,
+        typography = NothingTypography,
         content = content
     )
 }

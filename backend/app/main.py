@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
 
     await init_db()
+
     yield
 
 

@@ -40,17 +40,26 @@ from app.services.hybrid_stitch_pending import (
     has_pending_hybrid_resolution,
     store_pending_hybrid_resolution,
 )
-from app.services.memory_service import scrub_lore_from_contradictions
+from app.services.memory_service import (
+    scrub_lore_from_contradictions,
+    upsert_conversation_memory,
+)
 from app.services.quota_manager import QuotaExceededException, QuotaManager
 from agent.nodes_v2._lc_usage import invoke_structured_gemini
 from agent.nodes_v2._shared import (
     VISION_MODEL,
+    downscale_image_b64,
     encode_image_from_state,
     sanitize_llm_messages_for_logging,
     fetch_librarian_context_async,
 )
 from agent.nodes_v2._vision import VisionNodeOutput
+from agent.nodes_v2._personality import derive_archetype
 from agent.state import AgentState
+from app.prompts.vision_api import (
+    _multi_screenshot_user_hint,
+    build_vision_system_prompt,
+)
 from langchain_core.messages import HumanMessage, SystemMessage
 
 router = APIRouter()
@@ -86,184 +95,13 @@ def _is_provider_timeout(exc: BaseException) -> bool:
     return False
 
 
-# Vision system prompt: Steps 1–2 are shared; Step 3 branches on request direction (see
-# `build_vision_system_prompt`). Copied pattern supports the v2 endpoint vision call before
-# hybrid stitching.
+# Vision system prompts have been moved to app/prompts/vision_api.py
+# (build_vision_system_prompt and _multi_screenshot_user_hint are imported at the top).
+# Vision system prompts have been moved to app/prompts/vision_api.py
+# (build_vision_system_prompt and _multi_screenshot_user_hint are imported there).
 
-_VISION_SYSTEM_PROMPT_STEPS_1_2 = """
-You are a chat/profile screenshot analyzer. Process the image(s) strictly in 3 sequential steps. Output a complete JSON object.
-
-STEP 1: VALIDATION
-Determine if the image(s) are valid.
-* is_valid_chat: true ONLY IF the image(s) show a chat conversation OR dating app profile (same thread across multiple screenshots counts as one valid chat). Else false (e.g., random photos, menus).
-* bouncer_reason: Brief reason for your boolean decision.
-* Stop here and return empty arrays/null for all other fields if is_valid_chat is false.
-
-STEP 2: OCR EXTRACTION
-If valid, extract verbatim text. Do not translate/summarize. Ignore text input bars.
-* Dating Profiles (no chat bubbles): Extract all visible profile text into a single raw_ocr_text object: sender="them", actual_new_message=all extracted text joined by newlines, quoted_context=null, is_reply=false. Skip to Step 3.
-* Chat Conversations:
-    SENDER IDENTIFICATION — use the avatar as your primary anchor. Follow every step in order.
-
-    !! COLOR AND ALIGNMENT ARE UNRELIABLE — DO NOT USE THEM AS PRIMARY SIGNALS !!
-    Bubble color changes with themes and dark mode. Bubble alignment (left/right) varies by
-    app version and OS. Both have high error rates. IGNORE them as primary signals.
-    The PROFILE AVATAR is theme-independent and always correct — anchor everything on it.
-
-    Step A: DETECT THE APP — Write the app name into the `detected_app` field.
-    Identify the app from navigation chrome, icon shapes, button layout, or typography ONLY.
-
-    Step B: FIND THE AVATAR ANCHOR (do this before reading any bubbles)
-    Look for a small circular profile photo thumbnail in the chat thread.
-    In every dating/messaging app, this thumbnail belongs to the OTHER person ("them") —
-    you never see your own avatar floating next to your own messages.
-       → Every bubble that has this circular avatar directly adjacent to it = sender is "them".
-       → Every bubble that does NOT have this avatar next to it = sender is "user".
-    If no avatar is visible anywhere in the thread, fall back to Step C.
-
-    Step C: FALLBACK SIGNALS (use only if avatar is not visible)
-       Signal 1 — DELIVERY INDICATORS: "Sent", "Delivered", "Read", checkmarks (✓✓) appear
-           ONLY under the USER's messages. Strongest fallback signal.
-       Signal 2 — HEADER NAME: The name at the TOP of the screen is ALWAYS "them".
-           Their messages should be consistent with being from that named person.
-       Signal 3 — TEXT INPUT BAR: The compose box at the bottom belongs to the USER.
-           The side of screen the most recent non-input-bar bubbles are on tells you alignment.
-       Signal 4 — BUBBLE ALIGNMENT: RIGHT = user, LEFT = them in most LTR apps.
-           Use this LAST — it is the least reliable signal.
-
-    Step D: WRITE REASONING into `sender_signals_used`.
-    State which signal you used as your anchor (avatar preferred) and what you concluded.
-    Your reasoning MUST NOT mention any color word (purple, blue, gray, green, rose, dark, light,
-    colored, styled, accent, neutral, or any shade). If a color word appears in your reasoning,
-    DELETE it and rewrite using only the avatar, alignment, delivery indicator, or header name.
-
-       ✅ CORRECT: "Match's circular avatar appears next to bubbles on the left → those are 'them'.
-          Bubbles on the right without any avatar → 'user'. Header name confirms match identity."
-       ❌ WRONG (auto-fail): "The purple/colored bubbles belong to the match. The gray bubbles
-          are the user." — any sentence mentioning color must be deleted and rewritten.
-       ❌ ALSO WRONG: "Avatar next to the purple bubbles = them." — even mixing avatar + color
-          is banned. Say: "Avatar next to those bubbles = them." No color words at all.
-
-    Step E: FINAL ASSIGNMENT — Apply avatar-anchored labels consistently to ALL bubbles.
-    Every bubble adjacent to the match's avatar = "them". All others = "user".
-    NEVER infer sender from message content or conversational tone.
-
-    !! REPLY / QUOTED BUBBLES — COMMON MISTAKE ZONE !!
-    When someone replies to a specific message, their bubble shows a small faded preview of
-    the original message at the top, with their actual reply text below it. This creates a
-    bubble-within-a-bubble appearance. The rules are:
-
-       RULE 1 — The OUTER bubble's sender is determined by the avatar anchor (Step B), NOT by
-       whose text appears in the faded preview inside it.
-       Example: If the match (them) replies to YOUR message, their outer bubble will show YOUR
-       quoted text as a faded preview at the top, but the outer bubble sender is still "them".
-
-       RULE 2 — When the user's last action was sending a reply, the screenshot may show the
-       user's reply bubble sitting visually on top of or adjacent to the match's message.
-       The user's reply bubble sender = "user". The match's message below/behind it = "them".
-       Do not let the visual overlap confuse the sender assignment.
-
-       RULE 3 — The faded quoted preview text inside a bubble is NOT a separate bubble.
-       It belongs to quoted_context, not actual_new_message. Never create a separate raw_ocr_text
-       entry for a quoted preview — it is part of the parent bubble only.
-
-    Then read top-to-bottom. For each bubble, extract a raw_ocr_text object:
-    * sender: "user" or "them" per Steps A–E (structural signals only — never from text semantics or color).
-    * actual_new_message: The NEW text the person typed — the main bubble content BELOW any quoted preview. NEVER copy the quoted/reply preview text here.
-    * quoted_context: The faded/smaller reply-preview text ABOVE the main bubble (null if the bubble has no reply preview). On Instagram/WhatsApp, this is the small gray bar showing the original message being replied to.
-    * is_reply: true if quoted_context is not null.
-    CRITICAL RULE: actual_new_message and quoted_context must NEVER be identical. If they look the same, you are reading the quoted preview twice — re-examine the bubble to find the actual reply text below the preview. If you truly cannot find separate text, set quoted_context=null (it is likely not a reply).
-
-"""
-
-# STEP 3 when direction is not "opener" (chat / reply modes): strict thread semantics + profile fallback.
-_VISION_STEP_3_CHAT_MODE = """
-STEP 3: ANALYSIS (VISUAL GROUND TRUTH ONLY)
-Use only visible evidence. Never assume "them"'s questions/accusations are factual truths about the user.
-Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_new_message).
-
-Fields for BOTH modes:
-* visual_hooks: List 3-4 physical/environmental details from visible photos (empty list if no photos). On profiles, mine every photo across all screenshots (outfit, setting, props, vibe).
-* detected_dialect: ENGLISH, HINDI, or HINGLISH — match her dominant language/mix across the visible text. If a "MOTHER TONGUE: Hindi" field is visible, default to HINGLISH unless her written messages are clearly formal English.
-* person_name: Match's first name from UI header/profile (else "unknown").
-* stage: new_match / opening / early_talking / building_chemistry / deep_connection / relationship / stalled / argument (profiles without a thread are usually new_match or opening).
-
-IF CHAT CONVERSATION (real chat bubbles with user/them alignment):
-* Base key_detail, their_last_message, and their_tone STRICTLY on her absolute newest message at the bottom of the thread.
-* their_effort, conversation_temperature: From that latest message and immediate context.
-* archetype_reasoning: 2-3 sentences analyzing her latest message structure (word count, questions, emojis) to justify the archetype.
-* detected_archetype (Pick EXACTLY ONE): THE BANTER GIRL, THE INTELLECTUAL, THE WARM/STEADY, THE GUARDED/TESTER, THE EAGER/DIRECT, THE LOW-INVESTMENT.
-* top_hooks: Exactly THREE distinct hooks from this chat turn — different angles, not the same idea reworded.
-* key_detail: MUST equal top_hooks[0].
-* their_last_message: A short paraphrase of her latest message that preserves relational context. If her message is a direct reaction to something the user said or hinted at (a question, a word, a plan), explain WHAT she caught on to and HOW she is reacting — not just what she literally said. Example: instead of "She is asking why he wants to meet", write "She caught on that he was hinting at meeting in Gurgaon and is playfully calling him out on it." Only paraphrase in isolation if her message has no clear reaction target.
-
-IF DATING PROFILE (no chat thread — prompts, bio fragments, photo captions, Bumble/Hinge-style cards only):
-* top_hooks: Use an empty list [] (profile mode does not use chat turn hooks).
-* Do NOT anchor analysis on the last line of extracted text only. Treat the profile as a buffet: read ALL prompts, bios, and visible copy across every screenshot.
-* key_detail: Pick the SINGLE strongest opener hook anywhere on the profile — prioritize interesting, funny, controversial, story-driven, or emotionally vulnerable lines (e.g. a quirky prompt beat, trust issues, a bold rule). It may come from an early prompt, a photo caption, or the middle of the bio — not necessarily the last OCR line.
-* their_last_message: Summarize her overall profile vibe, energy, and what she signals she wants (playful, guarded, romantic, chaotic, etc.). This is NOT a paraphrase of one line; it is a holistic one- or two-sentence read so the reply model can choose among many angles.
-* their_tone: Infer from the dominant emotional signal across the whole profile (not from one trailing fragment).
-* their_effort: high if many prompts are filled with substance; medium/low if sparse or generic.
-* conversation_temperature: hot / warm / lukewarm / cold from overall flirtiness and openness across the profile.
-* archetype_reasoning: 2-3 sentences citing multiple profile elements (which prompts, what patterns). Do not reduce to "word count on last line."
-* detected_archetype: Same enum as chat; choose based on how she presents across prompts and bio as a whole (e.g. vulnerable bio + playful prompts → weigh the mix honestly).
-"""
-
-# STEP 3 when direction == "opener": profile-first; no chronological chat tail bias.
-_VISION_STEP_3_OPENER_PROFILE_BUFFET = """
-STEP 3: ANALYSIS (PROFILE BUFFET MODE)
-You are analyzing a dating profile to find the best possible conversation starters. There is no chronological "chat" happening yet. Treat the screenshots as a buffet of information.
-
-Use only visible evidence. Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_new_message) as in Step 2.
-
-* top_hooks: Use an empty list [] (opener/profile mode does not use chat turn hooks).
-* visual_hooks: Scan ALL screenshots. List 3-4 specific physical/environmental details (e.g., "red dress with balloons", "holding a matcha latte", "wearing large round glasses").
-* detected_dialect: ENGLISH, HINDI, or HINGLISH. Base this on the dominant mix across all visible profile text. EXCEPTION: if a "MOTHER TONGUE" field is visible and its value is Hindi, set detected_dialect to HINGLISH unless the person's own written responses (prompts, bio) are clearly formal English with zero Hindi influence — in that case use ENGLISH.
-* their_tone: The overall vibe of their profile prompts/bio.
-* their_effort: high / medium / low based on how much they wrote.
-* conversation_temperature: warm (default for profiles).
-* archetype_reasoning: 2-3 sentences analyzing multiple prompts, bio elements, and photo vibes to assign an archetype.
-* detected_archetype: Base this on the holistic tone of the profile.
-* key_detail: Scan ALL extracted text prompts and bios. Pick the single most interesting, controversial, or vulnerable hook found ANYWHERE in the profile. Do NOT default to the bottom-most text. Pick the one that makes for the best banter.
-* person_name: Match's first name from UI header/profile (else "unknown").
-* stage: "new_match" or "opening".
-* their_last_message: Do NOT paraphrase a single line. Instead, write a 1-2 sentence "Holistic Vibe Summary" of her entire profile (e.g., "She is a foodie who loves travel and is being very vulnerable about her trust issues.").
-"""
-
-
-def build_vision_system_prompt(direction: str) -> str:
-    """
-    Assemble the vision system prompt. Step 3 depends on UI direction: ``opener`` uses
-    profile-buffet rules; all other directions keep chat-oriented Step 3 (unchanged).
-    No user-controlled string interpolation — only a fixed branch on normalized direction.
-    """
-    d = (direction or "").strip().lower()
-    step3 = (
-        _VISION_STEP_3_OPENER_PROFILE_BUFFET
-        if d == "opener"
-        else _VISION_STEP_3_CHAT_MODE
-    )
-    return _VISION_SYSTEM_PROMPT_STEPS_1_2 + step3
-
-
-def _multi_screenshot_user_hint(image_count: int, *, is_opener: bool) -> str:
-    """Extra human-message text when multiple images are attached (no f-string user input)."""
-    if image_count <= 1:
-        return ""
-    n = image_count
-    if is_opener:
-        return (
-            f"\n\nMULTI-SCREENSHOT ({n} images): Same dating profile across scrolls or panels. "
-            "Merge every visible prompt, bio fragment, and photo into one buffet — do not treat "
-            "only the last image as the source of truth for hooks or vibe."
-        )
-    return (
-        f"\n\nMULTI-SCREENSHOT ({n} images): Chronological order — image 1 oldest, "
-        f"image {n} newest. Merge into one continuous transcript or profile view; "
-        "do not duplicate bubbles that appear across crops. "
-        "Latest speaker and their_last_message must match the NEWEST screenshot; "
-        "use earlier images only for context when the latest crop is incomplete."
-    )
+# These placeholders remain only for backward compatibility during transition.
+# The actual prompt logic is now in app/prompts/vision_api.py
 
 
 def _count_image_url_parts_in_human_content(content: list) -> int:
@@ -280,6 +118,7 @@ async def perform_full_vision_analysis(
     *,
     direction: str,
     screenshots_in_request: int | None = None,
+    user_id: str = "",
 ) -> VisionNodeOutput:
     """Run the full (main) Vision Node Gemini call once, returning parsed output.
 
@@ -299,6 +138,9 @@ async def perform_full_vision_analysis(
 
     content: list = []
     for b64 in images_base64:
+        b64 = downscale_image_b64(
+            b64
+        )  # cap long edge ~768px → fewer Gemini image tiles
         image_url = encode_image_from_state(cast(AgentState, {"image_bytes": b64}))
         content.append({"type": "image_url", "image_url": {"url": image_url}})
 
@@ -327,7 +169,7 @@ async def perform_full_vision_analysis(
         "llm_lifecycle",
         stage="vision_node_pre_llm",
         trace_id="",
-        user_id="",
+        user_id=user_id,
         conversation_id="",
         direction=vision_direction,
         vision_step3_mode="opener_profile_buffet" if is_opener else "chat",
@@ -337,12 +179,14 @@ async def perform_full_vision_analysis(
         past_memories_chars=0,
         ocr_hint_chars=0,
         images_attached_to_vision_llm=images_attached_to_vision_llm,
-        screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
+        screenshots_in_request=(
+            screenshots_in_request if screenshots_in_request is not None else n
+        ),
     )
     logger.info(
         "vision_node_llm_messages",
         trace_id="",
-        user_id="",
+        user_id=user_id,
         conversation_id="",
         direction=vision_direction,
         phase="v2_vision",
@@ -359,11 +203,17 @@ async def perform_full_vision_analysis(
             phase="v2_vision",
         )
         out = cast(VisionNodeOutput, result)
+        # Archetype is DERIVED from the constrained dimensions, never chosen by the
+        # LLM — this makes an invalid/hallucinated label structurally impossible and
+        # removes the taxonomy-maintenance problem. Kept for logging + Phase 4/5.
+        out.detected_archetype = derive_archetype(
+            out.warmth, out.playfulness, out.engagement, out.traditionalism, out.intent
+        )
         _vision_usage_row_var.set(usage_row)
         logger.info(
             "vision_node_llm_result",
             trace_id="",
-            user_id="",
+            user_id=user_id,
             conversation_id="",
             direction=vision_direction,
             out=out.model_dump(),
@@ -371,21 +221,25 @@ async def perform_full_vision_analysis(
             usage_prompt_tokens=usage_row.get("prompt_tokens", 0),
             usage_candidates_tokens=usage_row.get("candidates_tokens", 0),
             images_attached_to_vision_llm=images_attached_to_vision_llm,
-            screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
+            screenshots_in_request=(
+                screenshots_in_request if screenshots_in_request is not None else n
+            ),
         )
         return out
     except Exception as e:
         logger.error(
             "vision_node_llm_error",
             trace_id="",
-            user_id="",
+            user_id=user_id,
             conversation_id="",
             direction=vision_direction,
             error=str(e),
             error_type=type(e).__name__,
             elapsed_ms=int((time.monotonic() - t_start) * 1000),
             images_attached_to_vision_llm=images_attached_to_vision_llm,
-            screenshots_in_request=screenshots_in_request if screenshots_in_request is not None else n,
+            screenshots_in_request=(
+                screenshots_in_request if screenshots_in_request is not None else n
+            ),
         )
         raise
 
@@ -395,14 +249,10 @@ async def perform_full_vision_analysis(
 # ---------------------------------------------------------------------------
 
 
-def _run_v2_agent_sync(initial_state: dict) -> dict:
+async def _run_v2_agent(initial_state: dict) -> dict:
     from agent.graph_v2 import rizz_agent_v2
 
-    return rizz_agent_v2.invoke(initial_state)
-
-
-async def _run_v2_agent(initial_state: dict) -> dict:
-    return await asyncio.to_thread(_run_v2_agent_sync, initial_state)
+    return await rizz_agent_v2.ainvoke(initial_state)
 
 
 # ---------------------------------------------------------------------------
@@ -410,17 +260,16 @@ async def _run_v2_agent(initial_state: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@router.post(
-    "/vision/generate_v2", response_model=VisionResponse | RequiresUserConfirmation
-)
-async def generate_replies_v2(
+async def _run_generate_v2(
     request: VisionRequest,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> VisionResponse | RequiresUserConfirmation:
-    """
-    Analyze a chat screenshot and generate 4 reply suggestions using the 2-node agent.
-    Analyze a chat screenshot and generate 4 reply suggestions (v2 pipeline).
+    user: User,
+    db: AsyncSession,
+    *,
+    cached_vision_out: "VisionNodeOutput | None" = None,
+) -> "VisionResponse | RequiresUserConfirmation":
+    """Core implementation — shared by generate_replies_v2 and resolve_conversation.
+
+    Pass ``cached_vision_out`` from a PendingResolution to skip the vision LLM call.
     """
 
     # ------------------------------------------------------------------ #
@@ -475,26 +324,66 @@ async def generate_replies_v2(
     )
 
     # ------------------------------------------------------------------ #
-    # 5. Hybrid Stitch: resolve conversation_id before agent runs
+    # 5. Quota guard gate — check credits before any expensive calls
     # ------------------------------------------------------------------ #
-    try:
-        vision_out = await perform_full_vision_analysis(
-            images,
+    quota_manager: QuotaManager | None = None
+    credits_remaining: int = 0
+
+    if user.google_provider_id:
+        quota_manager = QuotaManager(db)
+        try:
+            await quota_manager.check_only_credits(
+                user.google_provider_id,
+                action="chat_generation",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+            )
+        except QuotaExceededException:
+            raise HTTPException(
+                status_code=429,
+                detail="Credits exhausted. Upgrade or wait for daily reset.",
+            )
+    else:
+        quota_manager = None
+
+    logger.info(
+        "llm_lifecycle",
+        stage="v2_quota_checked",
+        user_id=user.id,
+        google_quota_enforced=bool(quota_manager),
+    )
+
+    # ------------------------------------------------------------------ #
+    # 6. Hybrid Stitch: resolve conversation_id before agent runs
+    # ------------------------------------------------------------------ #
+    if cached_vision_out is not None:
+        vision_out = cached_vision_out
+        logger.info(
+            "llm_lifecycle",
+            stage="vision_node_cache_hit",
+            user_id=user.id,
             direction=request.direction.value,
-            screenshots_in_request=len(images),
         )
-    except Exception as e:
-        if _is_provider_timeout(e):
-            raise HTTPException(
-                status_code=504,
-                detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
-            ) from e
-        if _is_transient_provider_overload(e):
-            raise HTTPException(
-                status_code=503,
-                detail="Vision model is temporarily overloaded. Please retry in a few seconds.",
-            ) from e
-        raise
+    else:
+        try:
+            vision_out = await perform_full_vision_analysis(
+                images,
+                direction=request.direction.value,
+                screenshots_in_request=len(images),
+                user_id=user.id,
+            )
+        except Exception as e:
+            if _is_provider_timeout(e):
+                raise HTTPException(
+                    status_code=504,
+                    detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
+                ) from e
+            if _is_transient_provider_overload(e):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Vision model is temporarily overloaded. Please retry in a few seconds.",
+                ) from e
+            raise
 
     if not vision_out.is_valid_chat:
         raise HTTPException(400, vision_out.bouncer_reason)
@@ -523,7 +412,10 @@ async def generate_replies_v2(
         if outcome == "requires_user_confirmation" and payload:
             matched_id = matched_conversation_id or ""
 
-            # Concurrency lock check (DB-backed)
+            # Concurrency lock check (DB-backed) — if a pending row already exists
+            # for this (user, conversation), a previous 409 was never resolved.
+            # Auto-proceed as new_match to break the dismiss-retry loop instead of
+            # returning another 409 that the user will just dismiss again.
             if matched_id and await has_pending_hybrid_resolution(
                 db=db, user_id=user.id, suggested_conversation_id=matched_id
             ):
@@ -532,44 +424,55 @@ async def generate_replies_v2(
                     user_id=user.id,
                     locked_conversation_id=matched_id,
                 )
+                # A pending row already exists — user previously dismissed without
+                # resolving. Break the loop by auto-stitching to the matched convo
+                # rather than returning another 409 they'll dismiss again.
+                effective_conversation_id = matched_id
+                # Skip the 409 block entirely — fall through to normal generation
+                outcome = "auto_stitch"
+            else:
+                conflict_reason = "hybrid_stitch_ambiguity"
+                payload["detail"] = (
+                    f"409 requires user confirmation. reason={conflict_reason}"
+                )
 
-            conflict_reason = "hybrid_stitch_ambiguity"
-            payload["detail"] = (
-                f"409 requires user confirmation. reason={conflict_reason}"
-            )
+                suggested = payload.get("suggested_match", {})
+                logger.warning(
+                    "v2_hybrid_stitch_409",
+                    user_id=user.id,
+                    suggested_person_name=suggested.get("person_name"),
+                    suggested_conversation_id=suggested.get("conversation_id"),
+                    match_confidence=payload.get("match_confidence"),
+                )
 
-            suggested = payload.get("suggested_match", {})
-            logger.warning(
-                "v2_hybrid_stitch_409",
-                user_id=user.id,
-                suggested_person_name=suggested.get("person_name"),
-                suggested_conversation_id=suggested.get("conversation_id"),
-                match_confidence=payload.get("match_confidence"),
-            )
+                await store_pending_hybrid_resolution(
+                    db=db,
+                    user_id=user.id,
+                    suggested_conversation_id=matched_id,
+                    images=images,
+                    direction=request.direction.value,
+                    custom_hint=custom_hint,
+                    extracted_person_name=ocr_person_name,
+                    conflict_reason=conflict_reason,
+                    conflict_detail=payload.get("detail"),
+                    vision_out_json=vision_out.model_dump_json(),
+                )
+                logger.info(
+                    "llm_lifecycle",
+                    stage="v2_hybrid_stitch_requires_confirmation",
+                    user_id=user.id,
+                    outcome="requires_user_confirmation",
+                    ocr_person_name=ocr_person_name,
+                    suggested_conversation_id=matched_id,
+                )
+                return JSONResponse(status_code=409, content=payload)
 
-            await store_pending_hybrid_resolution(
-                db=db,
-                user_id=user.id,
-                suggested_conversation_id=matched_id,
-                images=images,
-                direction=request.direction.value,
-                custom_hint=custom_hint,
-                extracted_person_name=ocr_person_name,
-                conflict_reason=conflict_reason,
-                conflict_detail=payload.get("detail"),
+        if outcome == "auto_stitch" and (
+            matched_conversation_id or effective_conversation_id
+        ):
+            effective_conversation_id = (
+                effective_conversation_id or matched_conversation_id
             )
-            logger.info(
-                "llm_lifecycle",
-                stage="v2_hybrid_stitch_requires_confirmation",
-                user_id=user.id,
-                outcome="requires_user_confirmation",
-                ocr_person_name=ocr_person_name,
-                suggested_conversation_id=matched_id,
-            )
-            return JSONResponse(status_code=409, content=payload)
-
-        if outcome == "auto_stitch" and matched_conversation_id:
-            effective_conversation_id = matched_conversation_id
         elif outcome == "new_match":
             new_conversation_person_name = ocr_person_name
 
@@ -591,36 +494,6 @@ async def generate_replies_v2(
             outcome="skipped_client_conversation_id",
             effective_conversation_id=effective_conversation_id or "",
         )
-
-    # ------------------------------------------------------------------ #
-    # 6. Quota: check-only before running the expensive agent
-    # ------------------------------------------------------------------ #
-    daily_limit = tier_config["limits"]["chat_generations_per_day"]
-    effective_limit = daily_limit + user.bonus_replies
-    quota_manager: QuotaManager | None = None
-
-    if user.google_provider_id:
-        quota_manager = QuotaManager(db)
-        try:
-            await quota_manager.check_only(
-                user.google_provider_id,
-                daily_limit=effective_limit,
-                weekly_limit=None,
-            )
-        except QuotaExceededException:
-            raise HTTPException(
-                status_code=429,
-                detail="Daily limit reached. Upgrade to Premium for more replies.",
-            )
-
-    logger.info(
-        "llm_lifecycle",
-        stage="v2_quota_checked",
-        user_id=user.id,
-        google_quota_enforced=bool(quota_manager),
-        daily_limit=daily_limit,
-        effective_limit=effective_limit,
-    )
 
     # ------------------------------------------------------------------ #
     # 7. Voice DNA — load if tier supports it
@@ -690,16 +563,19 @@ async def generate_replies_v2(
     # Fetch librarian context after stitching resolved so conversation_id is final.
     ocr_hint_text = " ".join(extracted_texts[-2:]) if extracted_texts else ""
     core_lore = ""
-    past_memories = ""
+    tier_1_raw = ""
+    tier_2_summary = ""
     if effective_conversation_id:
         try:
             librarian = await fetch_librarian_context_async(
                 user_id=user.id,
                 conversation_id=str(effective_conversation_id),
                 current_text=ocr_hint_text,
+                precomputed_queries=vision_out.rag_search_queries or None,
             )
             core_lore = librarian.get("core_lore") or ""
-            past_memories = librarian.get("past_memories") or ""
+            tier_1_raw = librarian.get("tier_1_raw_exchanges") or ""
+            tier_2_summary = librarian.get("tier_2_summary") or ""
         except Exception as e:
             logger.warning(
                 "agent_v2_librarian_failed",
@@ -724,7 +600,8 @@ async def generate_replies_v2(
     # Inject the already-computed full Vision Node output + librarian context.
     initial_state["vision_out"] = vision_out.model_dump()
     initial_state["core_lore"] = core_lore
-    initial_state["past_memories"] = past_memories
+    initial_state["tier_1_raw_exchanges"] = tier_1_raw
+    initial_state["tier_2_summary"] = tier_2_summary
     if (usage_row := _vision_usage_row_var.get()) is not None:
         initial_state["gemini_usage_log"] = [usage_row]
 
@@ -740,10 +617,11 @@ async def generate_replies_v2(
     try:
         final_state = await _run_v2_agent(initial_state)
     except Exception as e:
+        # No refund needed — credits are deducted after success, not before.
         if _is_provider_timeout(e):
             raise HTTPException(
                 status_code=504,
-                detail="The AI took too long to read all the images. Try uploading fewer screenshots.",
+                detail="The AI took too long. Try uploading fewer screenshots.",
             ) from e
         if _is_transient_provider_overload(e):
             raise HTTPException(
@@ -821,6 +699,39 @@ async def generate_replies_v2(
             scrub_updated=bool(scrub_result.get("updated", False)),
             scrub_removed_lines=int(scrub_result.get("removed_lines", 0)),
         )
+
+    # Persist atomic facts extracted by vision_node into conversation_memories.
+    analysis = final_state.get("analysis")
+    if effective_conversation_id and analysis is not None:
+        from agent.state import AnalystOutput
+
+        if isinstance(analysis, dict):
+            analysis = AnalystOutput(**analysis)
+        facts: list[str] = []
+
+        # Long-term memory = ATOMIC DURABLE facts about her, extracted by the same
+        # vision call (no extra LLM call). These replace the old noisy mix of
+        # key_detail / visual_hooks / last-message paraphrase — those one-time hooks
+        # and photo descriptions still flow LIVE in the analysis every turn, and
+        # raw-message recall still lives in past_memories (the interactions table).
+        for df in getattr(analysis, "durable_facts", None) or []:
+            if df and str(df).strip():
+                facts.append(str(df).strip())
+
+        # The SUBJECT of an image she sent (her pet, a place) is lasting context;
+        # the transient "she sent a selfie" signal stays per-turn only.
+        if getattr(analysis, "inbound_image", "none") != "none":
+            img_detail = (getattr(analysis, "inbound_image_detail", "") or "").strip()
+            if img_detail:
+                facts.append(f"Shared a photo of {img_detail}")
+
+        for fact in facts:
+            await upsert_conversation_memory(
+                db,
+                user_id=user.id,
+                conversation_id=effective_conversation_id,
+                fact_text=fact,
+            )
     logger.info(
         "llm_lifecycle",
         stage="v2_agent_run_complete",
@@ -901,12 +812,22 @@ async def generate_replies_v2(
     )
 
     # ------------------------------------------------------------------ #
-    # 12. Increment quota now that we have a successful result
+    # 12. Deduct credits now — only after successful generation
     # ------------------------------------------------------------------ #
-    daily_used = 0
+    credits_remaining = 0
     if quota_manager and user.google_provider_id:
-        daily_used, _ = await quota_manager.increment(user.google_provider_id)
-        await db.commit()
+        try:
+            credits_remaining = await quota_manager.check_and_spend(
+                user.google_provider_id,
+                action="chat_generation",
+                tier=effective_tier,
+                daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+                idempotency_key=str(interaction.id),
+            )
+        except QuotaExceededException:
+            # Edge case: user hit limit between check and spend (concurrent request).
+            # Don't block — they already got the reply.
+            credits_remaining = 0
 
     # ------------------------------------------------------------------ #
     # 13. Build and return response
@@ -915,9 +836,7 @@ async def generate_replies_v2(
         parsed=parsed,
         interaction=interaction,
         convo=convo,
-        daily_limit=daily_limit,
-        effective_limit=effective_limit,
-        daily_used=daily_used,
+        credits_remaining=credits_remaining,
     )
     # Full response observability (what the client receives).
     logger.info(
@@ -947,4 +866,123 @@ async def generate_replies_v2(
         interaction_id=interaction.id,
         usage_remaining=response.usage_remaining,
     )
+
+    # ------------------------------------------------------------------ #
+    # Compact analysis row: one flat, structured event with everything
+    # needed to evaluate a request offline — no prompt-scrolling, no DB
+    # lookups. (Industry "one trace row per request" pattern.)
+    # ------------------------------------------------------------------ #
+    try:
+        # Read from the AGENT analysis (AnalystOutput) — it carries the full set
+        # of fields (dimensions, photo_persona, user_last_move, inbound_image...).
+        # The domain `parsed.analysis` (AnalysisResult) drops them, so don't use it here.
+        _a = final_state.get("analysis")
+        if isinstance(_a, dict):
+            try:
+                from agent.state import AnalystOutput as _AO
+
+                _a = _AO(**_a)
+            except Exception:
+                _a = None
+        if _a is None:
+            _a = parsed.analysis if parsed else None
+        _ctx = conversation_context
+        _usage = usage_log if isinstance(usage_log, list) else []
+        _replies_brief = [
+            {
+                "text": r.text,
+                "strategy_label": r.strategy_label,
+                "is_recommended": r.is_recommended,
+            }
+            for r in (response.replies or [])
+        ]
+        logger.info(
+            "v2_analysis",
+            trace_id=trace_id,
+            user_id=user.id,
+            interaction_id=interaction.id,
+            conversation_id=response.conversation_id,
+            direction=request.direction.value,
+            person_name=response.person_name,
+            stage=getattr(_a, "stage", "") if _a else "",
+            detected_archetype=getattr(_a, "detected_archetype", "") if _a else "",
+            detected_dialect=getattr(_a, "detected_dialect", "") if _a else "",
+            dimensions=(
+                {
+                    "warmth": getattr(_a, "warmth", ""),
+                    "playfulness": getattr(_a, "playfulness", ""),
+                    "engagement": getattr(_a, "engagement", ""),
+                    "traditionalism": getattr(_a, "traditionalism", ""),
+                    "intent": getattr(_a, "intent", ""),
+                }
+                if _a
+                else {}
+            ),
+            stable_dimensions=getattr(_ctx, "stable_dimensions", None),
+            stable_archetype=getattr(_ctx, "stable_archetype", None),
+            archetype_confidence=getattr(_ctx, "archetype_confidence", 0.0),
+            preferred_strategies=getattr(_ctx, "preferred_strategies", []) or [],
+            photo_persona=getattr(_a, "photo_persona", "") if _a else "",
+            user_last_move=getattr(_a, "user_last_move", "") if _a else "",
+            inbound_image=getattr(_a, "inbound_image", "none") if _a else "none",
+            inbound_image_detail=getattr(_a, "inbound_image_detail", "") if _a else "",
+            key_detail=getattr(_a, "key_detail", "") if _a else "",
+            recommended_strategy=next(
+                (r["strategy_label"] for r in _replies_brief if r["is_recommended"]), ""
+            ),
+            replies=_replies_brief,
+            auditor_passed=not bool(final_state.get("is_cringe", False)),
+            audit_status=(
+                "shipped_with_unresolved_issues"
+                if final_state.get("is_cringe", False)
+                else "passed"
+            ),
+            audit_issues=(
+                str(final_state.get("auditor_feedback") or "")
+                if final_state.get("is_cringe", False)
+                else ""
+            ),
+            revision_count=int(final_state.get("revision_count", 0) or 0),
+            generator_provider=settings.generator_provider,
+            generator_model=(
+                settings.groq_model
+                if settings.generator_provider.strip().lower() == "groq"
+                else settings.gemini_model
+            ),
+            gemini_call_count=gemini_call_count,
+            latency_ms=latency_ms,
+            total_tokens=sum(
+                int(u.get("total_tokens", 0) or 0)
+                for u in _usage
+                if isinstance(u, dict)
+            ),
+            cost_usd=round(
+                sum(
+                    float(u.get("cost_usd", 0) or 0)
+                    for u in _usage
+                    if isinstance(u, dict)
+                ),
+                6,
+            ),
+            contradiction_count=(
+                len(detected_contradictions)
+                if isinstance(detected_contradictions, list)
+                else 0
+            ),
+        )
+    except Exception:
+        logger.warning("v2_analysis_log_failed", trace_id=trace_id, exc_info=True)
+
     return response
+
+
+@router.post(
+    "/vision/generate_v2", response_model=VisionResponse | RequiresUserConfirmation
+)
+async def generate_replies_v2(
+    request: VisionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> VisionResponse | RequiresUserConfirmation:
+    """Analyze a chat screenshot and generate 4 reply suggestions (v2 pipeline)."""
+    return await _run_generate_v2(request, user, db)

@@ -27,8 +27,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 @Composable
 fun HistorySkeleton(modifier: Modifier = Modifier) {
@@ -44,21 +47,21 @@ fun HistorySkeleton(modifier: Modifier = Modifier) {
         label = "shimmer_alpha"
     )
 
-    val shimmerColor = Color.White.copy(alpha = alpha)
-    val cardBgColor = Color(0xFF1A1A2E)
+    val shimmerColor = NothingWhite.copy(alpha = alpha)
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(NothingDimens.screenPadding),
+        verticalArrangement = Arrangement.spacedBy(NothingDimens.sectionSpacing)
     ) {
         items(6) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = cardBgColor),
-                shape = RoundedCornerShape(16.dp)
+                colors = CardDefaults.cardColors(containerColor = NothingSurface),
+                shape = RoundedCornerShape(NothingDimens.cardRadius),
+                border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,

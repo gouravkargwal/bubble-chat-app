@@ -1,5 +1,5 @@
 """
-Gemini API cost from published list prices (USD per 1M tokens).
+Gemini API cost from published list prices (USD per 1M tokens) with Context Caching support.
 
 Source of truth: https://ai.google.dev/gemini-api/docs/pricing
 Update this table when Google changes rates or you add models.
@@ -63,12 +63,28 @@ def cost_usd_for_tokens(
     model: str,
     prompt_tokens: int,
     output_tokens: int,
+    cached_tokens: int = 0,
 ) -> float:
-    """Exact cost from token counts and the pricing table (paid tier assumptions)."""
+    """Exact cost from token counts, factoring in standard 90% prompt cache discounts."""
     pin, pout = resolve_rates_per_million_tokens(model)
-    return (max(0, prompt_tokens) / 1_000_000.0) * pin + (
-        max(0, output_tokens) / 1_000_000.0
-    ) * pout
+
+    # Context caching reads are priced at 10% of standard input rates across Gemini models
+    pcache = pin * 0.10
+
+    pt = max(0, prompt_tokens)
+    ct = max(0, cached_tokens)
+
+    # Safeguard to guarantee cached token count never overflows total input token count
+    if ct > pt:
+        ct = pt
+
+    new_input_tokens = pt - ct
+
+    input_cost = (new_input_tokens / 1_000_000.0) * pin
+    cached_cost = (ct / 1_000_000.0) * pcache
+    output_cost = (max(0, output_tokens) / 1_000_000.0) * pout
+
+    return input_cost + cached_cost + output_cost
 
 
 def usd_to_inr(usd: float, inr_per_usd: float = DEFAULT_INR_PER_USD) -> float:
@@ -81,12 +97,15 @@ def usage_record(
     model: str,
     prompt_tokens: int | None,
     candidates_tokens: int | None,
+    cached_tokens: int | None = 0,
     total_tokens: int | None = None,
     inr_per_usd: float = DEFAULT_INR_PER_USD,
 ) -> dict:
-    """Single structured usage row + computed cost."""
+    """Single structured usage row + computed cost with caching support."""
     pt = int(prompt_tokens or 0)
     ct = int(candidates_tokens or 0)
+    cached = int(cached_tokens or 0)
+
     if total_tokens is not None and pt == 0 and ct == 0 and total_tokens > 0:
         # Only total_tokens — cannot split input vs output cost from this field alone.
         logger.warning(
@@ -95,12 +114,14 @@ def usage_record(
             model=model,
             total_tokens=total_tokens,
         )
-    cost_usd = cost_usd_for_tokens(model, pt, ct)
+
+    cost_usd = cost_usd_for_tokens(model, pt, ct, cached)
     return {
         "phase": phase,
         "model": normalize_model_name(model),
         "prompt_tokens": pt,
         "candidates_tokens": ct,
+        "cached_tokens": cached,
         "total_tokens": pt + ct,
         "cost_usd": round(cost_usd, 8),
         "cost_inr": round(usd_to_inr(cost_usd, inr_per_usd), 6),
@@ -108,13 +129,16 @@ def usage_record(
 
 
 def sum_usage_records(rows: list[dict]) -> dict:
-    """Aggregate a list of usage_record dicts."""
+    """Aggregate a list of usage_record dicts, accumulating cached tokens."""
     pt = sum(int(r.get("prompt_tokens", 0) or 0) for r in rows)
     ct = sum(int(r.get("candidates_tokens", 0) or 0) for r in rows)
+    cached = sum(int(r.get("cached_tokens", 0) or 0) for r in rows)
     usd = sum(float(r.get("cost_usd", 0) or 0) for r in rows)
+
     return {
         "prompt_tokens": pt,
         "candidates_tokens": ct,
+        "cached_tokens": cached,
         "total_tokens": pt + ct,
         "cost_usd": round(usd, 8),
         "cost_inr": round(usd_to_inr(usd), 6),

@@ -53,10 +53,9 @@ data class ProfileAuditorState(
     val maxPhotosPerAudit: Int = 3,
     val showPaywall: Boolean = false,
     val tier: String = "free",
-    val weeklyAuditsUsed: Int = 0,
-    val profileAuditsPerWeek: Int = 1,
+    val creditsRemaining: Int = 0,
     val auditProgress: AuditProgress? = null, // Non-null while processing
-    /** After user taps Run audit (tier OK); picker + submit live here. */
+    /** After user taps Run audit (credits OK); picker + submit live here. */
     val auditSessionStarted: Boolean = false,
 )
 
@@ -80,8 +79,7 @@ class ProfileAuditorViewModel @Inject constructor(
                     selectedLanguage = lang,
                     maxPhotosPerAudit = usage.maxPhotosPerAudit,
                     tier = usage.tier,
-                    weeklyAuditsUsed = usage.weeklyAuditsUsed,
-                    profileAuditsPerWeek = usage.profileAuditsPerWeek
+                    creditsRemaining = usage.creditsRemaining,
                 )
             }.collect {}
         }
@@ -108,22 +106,14 @@ class ProfileAuditorViewModel @Inject constructor(
     }
 
     /**
-     * Weekly audit quota from usage API ([profileAuditsPerWeek] / [weeklyAuditsUsed]).
-     * [onBlocked] when not on plan, at cap, or paywall needed.
+     * Credits-based audit gate. Costs [TierQuota.CREDIT_COST_AUDIT] credits per audit.
+     * [onBlocked] when the user has insufficient credits (shows paywall).
      */
     fun tryBeginAuditSession(onBlocked: () -> Unit) {
         val s = _state.value
-        val limit = s.profileAuditsPerWeek
-        when {
-            TierQuota.isNotOnPlan(limit) -> {
-                onBlocked()
-                return
-            }
-            TierQuota.isUnlimited(limit) -> { /* ok */ }
-            s.weeklyAuditsUsed >= limit -> {
-                onBlocked()
-                return
-            }
+        if (s.creditsRemaining < TierQuota.CREDIT_COST_AUDIT) {
+            onBlocked()
+            return
         }
         _state.update { it.copy(auditSessionStarted = true, error = null) }
     }

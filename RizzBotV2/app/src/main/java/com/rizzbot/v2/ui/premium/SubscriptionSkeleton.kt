@@ -19,14 +19,18 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 @Composable
 fun SubscriptionSkeleton() {
-    val baseColor = Color(0xFF1A1A2E)
-    val highlightColor = Color(0xFF2A2A40)
+    val baseColor = NothingSurface
+    val highlightColor = NothingBorder
 
     val transition = rememberInfiniteTransition(label = "skeleton")
     val progress = transition.animateFloat(
@@ -40,13 +44,9 @@ fun SubscriptionSkeleton() {
     )
 
     val shimmerBrush = Brush.linearGradient(
-        colors = listOf(
-            baseColor,
-            highlightColor,
-            baseColor
-        ),
-        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-        end = androidx.compose.ui.geometry.Offset(400f * progress.value, 400f * progress.value)
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(0f, 0f),
+        end = Offset(400f * progress.value, 400f * progress.value)
     )
 
     Column(
@@ -54,12 +54,12 @@ fun SubscriptionSkeleton() {
     ) {
         // Fake plan card
         Card(
-            colors = CardDefaults.cardColors(containerColor = baseColor),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
+            colors = CardDefaults.cardColors(containerColor = NothingSurface),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
                 Box(
                     modifier = Modifier
                         .height(20.dp)
@@ -101,12 +101,12 @@ fun SubscriptionSkeleton() {
 
         // Second placeholder card
         Card(
-            colors = CardDefaults.cardColors(containerColor = baseColor),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
+            colors = CardDefaults.cardColors(containerColor = NothingSurface),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
                 Box(
                     modifier = Modifier
                         .height(18.dp)
@@ -129,4 +129,3 @@ fun SubscriptionSkeleton() {
         }
     }
 }
-

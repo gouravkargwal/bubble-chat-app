@@ -93,8 +93,9 @@ async def firebase_auth(
             await db.commit()
             await db.refresh(user)
         else:
-            # --- 4. Brand-new user ------------------------------------------
+            # --- 4. Brand-new user — start on rizz trial (3 days, 15 credits) ---
             is_new_user = True
+            now = datetime.now(timezone.utc)
             device_id = body.device_id or f"firebase:{firebase_uid}"
             user = User(
                 device_id=device_id,
@@ -103,21 +104,33 @@ async def firebase_auth(
                 display_name=display_name,
                 referral_code=generate_referral_code(),
                 google_provider_id=google_provider_id,
+                tier="rizz",
+                tier_expires_at=now + timedelta(days=3),
+                tier_source="trial",
             )
             db.add(user)
             await db.flush()  # get user.id
-
             await db.commit()
             await db.refresh(user)
 
-    # --- 5. Ensure UserQuota row exists for this google_provider_id ----------
+    # --- 5. Ensure UserQuota row exists and grant trial credits for new users ---
     if google_provider_id:
         quota_result = await db.execute(
             select(UserQuota).where(UserQuota.google_provider_id == google_provider_id)
         )
         quota = quota_result.scalar_one_or_none()
         if quota is None:
-            db.add(UserQuota(google_provider_id=google_provider_id))
+            # New user — grant 15 trial credits with 3-day expiry.
+            now = datetime.now(timezone.utc)
+            db.add(
+                UserQuota(
+                    google_provider_id=google_provider_id,
+                    credits_remaining=15,
+                    credits_period_limit=15,
+                    credits_reset_at=now + timedelta(days=3),
+                    signup_bonus_granted=True,
+                )
+            )
             await db.commit()
 
     token, expires_at = create_token(user.id, user.device_id)

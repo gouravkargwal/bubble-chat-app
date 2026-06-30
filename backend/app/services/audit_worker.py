@@ -28,13 +28,20 @@ from app.infrastructure.oci_storage import (
 )
 from app.llm.gemini_client import GeminiClient
 from app.models.profile_auditor import AuditResponse, PhotoFeedback, PhotoTier
-from app.services.profile_auditor_service import (
-    MAX_FILE_SIZE,
-    PROFILE_AUDIT_SCHEMA,
-    _score_to_tier,
-    build_profile_audit_system_prompt,
-    build_profile_audit_user_prompt,
-)
+from app.prompts.profile_auditor import PROFILE_AUDIT_SCHEMA, build_profile_audit_system_prompt, build_profile_audit_user_prompt
+from app.services.quota_manager import QuotaManager
+
+
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB per image safety limit
+
+
+def _score_to_tier(score: int) -> PhotoTier:
+    """Deterministic score to tier mapping. Keeps tier consistent across runs."""
+    if score >= 8:
+        return PhotoTier.GOD_TIER
+    if score >= 6:
+        return PhotoTier.FILLER
+    return PhotoTier.GRAVEYARD
 
 logger = structlog.get_logger(__name__)
 
@@ -77,7 +84,28 @@ async def _update_job(db: AsyncSession, job_id: str, **kwargs) -> None:
         await db.commit()
 
 
-async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
+async def _refund_audit_credits(
+    google_provider_id: str | None,
+    tier: str,
+) -> None:
+    """Refund profile_audit credits on worker failure."""
+    if not google_provider_id:
+        return
+    try:
+        async with async_session() as db:
+            await QuotaManager(db).refund(
+                google_provider_id, action="profile_audit", tier=tier
+            )
+    except Exception as e:
+        logger.error("audit_worker_refund_failed", error=str(e))
+
+
+async def process_audit_job(
+    job_id: str,
+    image_keys: list[str],
+    google_provider_id: str | None = None,
+    tier: str = "free",
+) -> None:
     """Process a queued audit job.  Called from BackgroundTasks.
 
     1. Read images from temp OCI storage
@@ -101,7 +129,8 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
             total = len(image_keys)
 
             await _update_job(
-                db, job_id,
+                db,
+                job_id,
                 status="processing",
                 progress_step="reading",
                 progress_current=0,
@@ -121,18 +150,21 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                 images_data.append((b64, raw, img_hash))
 
                 await _update_job(
-                    db, job_id,
+                    db,
+                    job_id,
                     progress_step="reading",
                     progress_current=i + 1,
                 )
 
             if not images_data:
                 await _update_job(
-                    db, job_id,
+                    db,
+                    job_id,
                     status="failed",
                     error="Failed to read any uploaded images.",
                 )
                 await _cleanup_temp_images(image_keys)
+                await _refund_audit_credits(google_provider_id, tier)
                 return
 
             image_hashes = [h for _, _, h in images_data]
@@ -147,7 +179,9 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
             for idx, img_hash in enumerate(image_hashes):
                 res = await db.execute(
                     select(AuditedPhoto)
-                    .where(AuditedPhoto.user_id == user_id, AuditedPhoto.hash == img_hash)
+                    .where(
+                        AuditedPhoto.user_id == user_id, AuditedPhoto.hash == img_hash
+                    )
                     .limit(1)
                 )
                 existing = res.scalar_one_or_none()
@@ -186,7 +220,8 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                     photos=cached_photos,
                 )
                 await _update_job(
-                    db, job_id,
+                    db,
+                    job_id,
                     status="completed",
                     progress_step="done",
                     progress_current=total,
@@ -197,7 +232,8 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
 
             # Step 4: Call Gemini
             await _update_job(
-                db, job_id,
+                db,
+                job_id,
                 progress_step="analyzing",
                 progress_current=0,
             )
@@ -239,7 +275,12 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                 )
             except Exception as e:
                 logger.error("audit_worker_gemini_failed", job_id=job_id, error=str(e))
-                await _update_job(db, job_id, status="failed", error="AI analysis failed. Please retry.")
+                await _update_job(
+                    db,
+                    job_id,
+                    status="failed",
+                    error="AI analysis failed. Please retry.",
+                )
                 await _cleanup_temp_images(image_keys)
                 return
 
@@ -251,7 +292,9 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                     photo.tier = _score_to_tier(photo.score)
             except (json.JSONDecodeError, ValidationError) as e:
                 logger.error("audit_worker_parse_failed", job_id=job_id, error=str(e))
-                await _update_job(db, job_id, status="failed", error="Failed to parse AI response.")
+                await _update_job(
+                    db, job_id, status="failed", error="Failed to parse AI response."
+                )
                 await _cleanup_temp_images(image_keys)
                 return
 
@@ -317,9 +360,13 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                             photo_idx += 1
                             continue
 
-                        filename = f"{photo_feedback.photo_id}_{int(time.time() * 1000)}.jpg"
+                        filename = (
+                            f"{photo_feedback.photo_id}_{int(time.time() * 1000)}.jpg"
+                        )
                         object_key = f"audits/{user_id}/{filename}"
-                        await oci_upload(object_key, raw_bytes, content_type="image/jpeg")
+                        await oci_upload(
+                            object_key, raw_bytes, content_type="image/jpeg"
+                        )
                         uploaded_permanent_keys.append(object_key)
 
                         photos_to_add.append(
@@ -338,20 +385,28 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                         photo_idx += 1
 
                         await _update_job(
-                            db, job_id,
+                            db,
+                            job_id,
                             progress_step="saving",
                             progress_current=idx + 1,
                         )
                     except (IndexError, ValueError) as e:
-                        logger.warning("audit_worker_save_skip", job_id=job_id, error=str(e))
+                        logger.warning(
+                            "audit_worker_save_skip", job_id=job_id, error=str(e)
+                        )
                         continue
             except Exception as e:
                 # OCI upload failed mid-loop — clean up already-uploaded permanent objects
-                logger.error("audit_worker_permanent_upload_failed", job_id=job_id, error=str(e))
+                logger.error(
+                    "audit_worker_permanent_upload_failed", job_id=job_id, error=str(e)
+                )
                 for key in uploaded_permanent_keys:
                     await oci_delete(key)
-                await _update_job(db, job_id, status="failed", error="Failed to save photos.")
+                await _update_job(
+                    db, job_id, status="failed", error="Failed to save photos."
+                )
                 await _cleanup_temp_images(image_keys)
+                await _refund_audit_credits(google_provider_id, tier)
                 return
 
             # Phase 2: Atomic DB commit — add all photo rows + mark job complete
@@ -377,10 +432,16 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
                     await oci_delete(key)
                 try:
                     async with async_session() as err_db:
-                        await _update_job(err_db, job_id, status="failed", error="Failed to save results.")
+                        await _update_job(
+                            err_db,
+                            job_id,
+                            status="failed",
+                            error="Failed to save results.",
+                        )
                 except Exception:
                     pass
                 await _cleanup_temp_images(image_keys)
+                await _refund_audit_credits(google_provider_id, tier)
                 return
 
             logger.info(
@@ -399,13 +460,17 @@ async def process_audit_job(job_id: str, image_keys: list[str]) -> None:
             try:
                 async with async_session() as err_db:
                     await _update_job(
-                        err_db, job_id,
+                        err_db,
+                        job_id,
                         status="failed",
                         error=_safe_error(e),
                     )
             except Exception as inner_e:
-                logger.error("audit_worker_fail_update_failed", job_id=job_id, error=str(inner_e))
+                logger.error(
+                    "audit_worker_fail_update_failed", job_id=job_id, error=str(inner_e)
+                )
             await _cleanup_temp_images(image_keys)
+            await _refund_audit_credits(google_provider_id, tier)
 
 
 async def _cleanup_temp_images(image_keys: list[str]) -> None:

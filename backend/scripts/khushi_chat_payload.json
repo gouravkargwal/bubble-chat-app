@@ -1,0 +1,53 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {"sender": "user", "quoted_context": "", "actual_new_message": "Quality council of India so guys probably fail ur inspection on the first text"},
+      {"sender": "them", "quoted_context": "", "actual_new_message": "Haha nice one 😂"}
+    ],
+    "visual_hooks": [],
+    "photo_persona": "",
+    "detected_dialect": "ENGLISH",
+    "their_tone": "playful",
+    "their_effort": "low",
+    "conversation_temperature": "warm",
+    "archetype_reasoning": "Her response is a short emoji laugh — friendly but low-effort acknowledgment of the user's joke. Receptive to banter but has not added a new hook.",
+    "warmth": "warm",
+    "playfulness": "playful",
+    "engagement": "low",
+    "traditionalism": "modern",
+    "intent": "exploring",
+    "detected_archetype": "THE LOW-INVESTMENT",
+    "top_hooks": ["Quality Council of India", "Inspection humor", "First text failure"],
+    "key_detail": "Quality Council of India",
+    "person_name": "Khushi",
+    "stage": "opening",
+    "their_last_message": "She is acknowledging the user's joke about the Quality Council of India with a lighthearted, friendly reaction.",
+    "user_last_move": "The user opened with a witty, observational joke about her workplace (guys failing her inspection on the first text).",
+    "inbound_image": "none",
+    "inbound_image_detail": "",
+    "durable_facts": ["Works at the Quality Council of India"]
+  },
+  "direction": "keep_playful",
+  "person_name": "Khushi",
+  "core_lore": "Works as a Project Coordinator at the Quality Council of India\nStudying at Delhi University\nAries\nNon-vegetarian\nSeeking a long-term relationship\nInterests: reading and music",
+  "past_memories": "",
+  "transcript_text": "user: Quality council of India so guys probably fail ur inspection on the first text\nthem: Haha nice one 😂",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "Khushi",
+    "stage": "early_talking",
+    "tone_trend": "stable",
+    "topics_worked": [],
+    "topics_failed": [],
+    "interaction_count": 1,
+    "recent_summaries": ["[opener] you sent: \"quality council of india so guys probably fail ur inspection on the first text\" | her: \"Haha nice one\""],
+    "recent_user_replies": [],
+    "last_ai_replies_shown": [],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "",
+    "preferred_strategies": []
+  },
+  "user_custom_hint": ""
+}

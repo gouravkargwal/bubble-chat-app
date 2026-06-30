@@ -29,6 +29,13 @@ class ScreenCaptureManager @Inject constructor(
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
 
+    /**
+     * Set by [com.rizzbot.v2.overlay.OverlayService] so [CaptureConsentActivity] is launched
+     * from a foreground-service context, bypassing Android 14+ background-activity-launch
+     * restrictions that block Application-context launches on some OEM devices.
+     */
+    var activityLauncher: ((Intent) -> Unit)? = null
+
     companion object {
         private var pendingConsentCallback: ((resultCode: Int, data: Intent?) -> Unit)? = null
 
@@ -47,7 +54,15 @@ class ScreenCaptureManager @Inject constructor(
         val intent = Intent(context, CaptureConsentActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+        // Prefer foreground-service launcher (set by OverlayService) to avoid BAL restrictions.
+        try {
+            (activityLauncher ?: { context.startActivity(it) }).invoke(intent)
+        } catch (e: Exception) {
+            // Launch failed (BAL block, no resolvable activity, etc.). Resume as cancelled so the
+            // caller surfaces an error instead of the coroutine hanging forever.
+            pendingConsentCallback = null
+            cont.resume(Pair(Activity.RESULT_CANCELED, null))
+        }
     }
 
     suspend fun captureScreenshot(resultCode: Int, data: Intent?): Bitmap {

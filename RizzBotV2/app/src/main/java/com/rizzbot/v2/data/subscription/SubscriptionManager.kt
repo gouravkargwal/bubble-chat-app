@@ -58,7 +58,8 @@ class SubscriptionManager @Inject constructor() {
 
     /**
      * Fetch CustomerInfo from RevenueCat and update local tier state.
-     * Returns "premium", "pro", or "free" based on active entitlements.
+     * Returns "rizz", "match", "crush", or "free" based on active entitlements.
+     * Priority: rizz > match > crush > free.
      */
     suspend fun updateUserTier(): Result<String> {
         return try {
@@ -79,8 +80,9 @@ class SubscriptionManager @Inject constructor() {
                 )
             }
             val tier = when {
-                customerInfo.entitlements["premium"]?.isActive == true -> "premium"
-                customerInfo.entitlements["pro"]?.isActive == true -> "pro"
+                customerInfo.entitlements["rizz"]?.isActive == true -> "rizz"
+                customerInfo.entitlements["match"]?.isActive == true -> "match"
+                customerInfo.entitlements["crush"]?.isActive == true -> "crush"
                 else -> "free"
             }
             _userTier.value = tier

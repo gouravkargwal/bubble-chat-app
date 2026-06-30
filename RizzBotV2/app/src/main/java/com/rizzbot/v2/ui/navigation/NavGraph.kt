@@ -16,6 +16,7 @@ import com.rizzbot.v2.ui.profile.ProfileOptimizerScreen
 import com.rizzbot.v2.ui.profile.ProfileStrategyScreen
 import com.rizzbot.v2.ui.paywall.PaywallScreen
 import com.rizzbot.v2.ui.settings.SettingsScreen
+import com.rizzbot.v2.ui.smartreply.SmartReplyScreen
 import com.rizzbot.v2.ui.stats.StatsScreen
 
 @Composable
@@ -45,9 +46,6 @@ fun NavGraph(
                         // Don't pop onboarding yet - user will come back after paywall
                     }
                 },
-                onTryDemo = {
-                    navController.navigate(Screen.Demo.route)
-                },
                 onOpenTerms = { navController.navigate(Screen.LegalTerms.route) },
                 onOpenPrivacy = { navController.navigate(Screen.LegalPrivacy.route) }
             )
@@ -60,6 +58,7 @@ fun NavGraph(
                 onNavigateToProfileAuditor = { navController.navigate(Screen.ProfileAuditor.route) },
                 onNavigateToProfileOptimizer = { navController.navigate(Screen.ProfileOptimization.route) },
                 onNavigateToProfileStrategy = { navController.navigate(Screen.ProfileStrategy.route) },
+                onNavigateToSmartReply = { navController.navigate(Screen.SmartReply.route) },
                 onShowPaywall = { navController.navigate(Screen.Premium.route) }
             )
         }
@@ -175,6 +174,12 @@ fun NavGraph(
         composable(Screen.ProfileStrategy.route) {
             ProfileStrategyScreen(
                 onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.SmartReply.route) {
+            SmartReplyScreen(
+                onBack = { navController.popBackStack() },
+                onShowPaywall = { navController.navigate(Screen.Premium.route) }
             )
         }
     }

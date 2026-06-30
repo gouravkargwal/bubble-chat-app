@@ -22,13 +22,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingWhite
 
 @Composable
 fun HomeSkeleton() {
-    val baseColor = Color(0xFF1A1A2E)
-    val highlightColor = Color(0xFF2A2A40)
+    val baseColor = NothingSurface
+    val highlightColor = NothingBorder
 
     val transition = rememberInfiniteTransition(label = "homeSkeleton")
     val progress = transition.animateFloat(
@@ -50,11 +53,12 @@ fun HomeSkeleton() {
     Column(modifier = Modifier.fillMaxWidth()) {
         // Usage quota skeleton
         Card(
-            colors = CardDefaults.cardColors(containerColor = baseColor),
-            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = NothingSurface),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
                 Box(
                     modifier = Modifier
                         .height(18.dp)
@@ -77,11 +81,12 @@ fun HomeSkeleton() {
 
         // Recent replies skeleton
         Card(
-            colors = CardDefaults.cardColors(containerColor = baseColor),
-            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = NothingSurface),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            border = androidx.compose.foundation.BorderStroke(NothingDimens.borderThickness, NothingBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
                 Box(
                     modifier = Modifier
                         .height(18.dp)
@@ -115,4 +120,3 @@ fun HomeSkeleton() {
         }
     }
 }
-

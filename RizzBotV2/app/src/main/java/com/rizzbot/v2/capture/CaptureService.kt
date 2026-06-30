@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.rizzbot.v2.R
 
@@ -18,15 +19,23 @@ class CaptureService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                buildNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, buildNotification())
+        try {
+            createNotificationChannel()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, buildNotification())
+            }
+        } catch (e: Exception) {
+            // startForeground can throw (FGS-not-allowed, missing notification permission, etc.).
+            // Stop cleanly instead of crashing the process; the capture will fail gracefully and
+            // surface an error rather than taking the app down.
+            Log.e("CaptureService", "Failed to start foreground; stopping", e)
+            stopSelf()
         }
     }
 
@@ -48,7 +57,7 @@ class CaptureService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Capturing screenshot")
             .setContentText("Cookd is taking a screenshot...")
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(com.rizzbot.v2.R.drawable.ic_notification)
             .setOngoing(true)
             .build()
     }

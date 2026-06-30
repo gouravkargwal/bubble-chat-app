@@ -103,28 +103,21 @@ class RatingTrackRequest(BaseModel):
 
 # Usage
 class UsageResponse(BaseModel):
-    daily_limit: int  # 0 = unlimited
-    daily_used: int
-    weekly_used: int = 0  # Usage in current week
-    monthly_used: int = 0  # Usage in current month
-    weekly_audits_used: int = 0  # Profile audits used this week
-    weekly_blueprints_used: int = 0  # Profile blueprints generated this week
-    is_premium: bool
-    tier: str = "free"
-    allowed_directions: list[str] = []
-    max_screenshots: int = 1
-    custom_hints: bool = False
+    # Credits system
+    credits_remaining: int = 0  # Current spendable credits
+    credits_period_limit: int = 0  # Total credits for this period (0 = free/daily)
+    billing_period: str = "daily"  # "daily", "weekly", "monthly"
+    # Tier info
+    tier: str = "free"  # free, crush, match, rizz
+    is_premium: bool = False
     tier_expires_at: int | None = None
-    god_mode_expires_at: int | None = None  # UTC timestamp for 24-hour referral reward
-    bonus_replies: int = 0
-    total_replies_generated: int = 0  # Total interactions created by this user
-    total_replies_copied: int = 0  # Total interactions where user copied a reply
-    # New tier config structure
-    limits: dict[str, int] = {}
-    features: dict[str, bool | list[str]] = {}
-    billing_period: str = (
-        "daily"  # "daily", "weekly", or "monthly" - extracted from product_id
-    )
+    # Feature gates
+    allowed_directions: list[str] = []
+    max_screenshots: int = 2
+    custom_hints: bool = False
+    # Full config for client-side feature gating
+    limits: dict = {}
+    features: dict = {}
 
 
 # Conversations
@@ -163,17 +156,6 @@ class ApplyReferralResponse(BaseModel):
 
 
 # Billing
-class VerifyPurchaseRequest(BaseModel):
-    purchase_token: str
-    product_id: str
-    order_id: str | None = None
-
-
-class VerifyPurchaseResponse(BaseModel):
-    is_valid: bool
-    premium_until: int | None = None  # unix timestamp
-
-
 class BillingStatusResponse(BaseModel):
     is_premium: bool
     tier: str = "free"
@@ -248,6 +230,8 @@ class AuditJobStatusResponse(BaseModel):
     status: str  # pending, processing, completed, failed
     progress_current: int = 0
     progress_total: int = 0
-    progress_step: str = "uploading"  # uploading, reading, dedup_check, analyzing, saving, done
+    progress_step: str = (
+        "uploading"  # uploading, reading, dedup_check, analyzing, saving, done
+    )
     error: str | None = None
     result: AuditResponse | None = None

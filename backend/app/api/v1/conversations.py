@@ -19,10 +19,11 @@ from app.models.enums import ConversationDirection
 from app.services.hybrid_stitch_pending import (
     pop_pending_hybrid_resolution,
     parse_pending_images,
+    parse_pending_vision_out,
     store_pending_hybrid_resolution,
 )
 
-from app.api.v1.vision_v2 import generate_replies_v2 as vision_generate_replies
+from app.api.v1.vision_v2 import _run_generate_v2 as vision_generate_replies
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -193,6 +194,7 @@ async def resolve_conversation(
         )
 
     images = parse_pending_images(pending)
+    cached_vision_out = parse_pending_vision_out(pending)
 
     vision_request = VisionRequest(
         images=images,
@@ -209,13 +211,15 @@ async def resolve_conversation(
         conflict_reason=pending.conflict_reason,
         conflict_detail=pending.conflict_detail,
         is_match=request.is_match,
+        vision_cache_hit=cached_vision_out is not None,
     )
 
     try:
         vision_response = await vision_generate_replies(
-            request=vision_request,
-            user=user,
-            db=db,
+            vision_request,
+            user,
+            db,
+            cached_vision_out=cached_vision_out,
         )
     except HTTPException as e:
         if (
@@ -260,6 +264,4 @@ async def resolve_conversation(
 
     # FastAPI expects a plain JSON-serializable dict for the declared return type.
     # `vision_response` is a Pydantic model (VisionResponse), so return its dump.
-    if hasattr(vision_response, "model_dump"):
-        return vision_response.model_dump()
-    return vision_response.dict()
+    return vision_response.model_dump() if hasattr(vision_response, "model_dump") else dict(vision_response)

@@ -52,7 +52,7 @@ android {
                 "app_public_link",
                 "https://play.google.com/store/apps/details?id=com.cookd.mobile"
             )
-            buildConfigField("String", "BACKEND_URL", "\"https://nonconscientious-annette-saddeningly.ngrok-free.dev/\"")
+            buildConfigField("String", "BACKEND_URL", "\"${project.findProperty("BACKEND_URL") ?: "https://nonconscientious-annette-saddeningly.ngrok-free.dev/"}\"")
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"226210127602-dc2jh362c0a2bcc2trdbd1da6qqnogvc.apps.googleusercontent.com\"")
             buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"goog_qbaXLjSzKcIbBbYlEjNfLQzSoWn\"")
         }
@@ -126,6 +126,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons)
     implementation(libs.compose.animation)
+    implementation(libs.compose.foundation)
     implementation("androidx.compose.animation:animation-graphics:1.7.6")
     debugImplementation(libs.compose.ui.tooling)
 

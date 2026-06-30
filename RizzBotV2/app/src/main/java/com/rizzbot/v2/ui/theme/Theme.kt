@@ -5,47 +5,35 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.graphics.Color
 
-val LocalAppGodMode = compositionLocalOf { false }
+val LocalAppIsPaidPlan = compositionLocalOf { false }
 
-private val DarkOnGoldPrimary = Color(0xFF1C1508)
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Pink,
-    onPrimary = TextWhite,
-    secondary = Purple,
-    tertiary = PinkDark,
-    surface = CardBg,
-    onSurface = TextWhite,
-    background = DarkBg,
-    onBackground = TextWhite,
-    error = ErrorRed,
-    onError = TextWhite
-)
-
-private val GodModeColorScheme = darkColorScheme(
-    primary = GodModePrimary,
-    onPrimary = DarkOnGoldPrimary,
-    secondary = GodModeSecondary,
-    tertiary = GodModePrimaryDark,
-    surface = CardBg,
-    onSurface = TextWhite,
-    background = DarkBg,
-    onBackground = TextWhite,
-    error = ErrorRed,
-    onError = TextWhite
+private val NothingColorScheme = darkColorScheme(
+    primary = NothingWhite,
+    onPrimary = NothingBlack,
+    secondary = NothingWhite,
+    tertiary = NothingTextSecondary,
+    surface = NothingSurface,
+    onSurface = NothingWhite,
+    surfaceVariant = NothingSurface,
+    onSurfaceVariant = NothingTextSecondary,
+    background = NothingBlack,
+    onBackground = NothingWhite,
+    error = NothingError,
+    onError = NothingWhite,
+    outline = NothingBorder,
+    outlineVariant = NothingBorder.copy(alpha = 0.5f),
 )
 
 @Composable
 fun RizzBotV2Theme(
-    isGodMode: Boolean = false,
+    isPaidPlan: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    CompositionLocalProvider(LocalAppGodMode provides isGodMode) {
+    CompositionLocalProvider(LocalAppIsPaidPlan provides isPaidPlan) {
         MaterialTheme(
-            colorScheme = if (isGodMode) GodModeColorScheme else DarkColorScheme,
-            typography = CookdTypography,
+            colorScheme = NothingColorScheme,
+            typography = NothingTypography,
             content = content
         )
     }

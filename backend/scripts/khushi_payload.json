@@ -1,0 +1,53 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {"sender": "them", "quoted_context": "", "actual_new_message": "Khushi 23\nProject Coordinator at Quality council of India\nDelhi University, 2026\nLanguages\nHindi\nEnglish\nBasics\nSingle\nAries\n5'0\"\nHindu\nDelhi, Delhi, IN\nNever\nNever\nNon-Vegetarian\nSometimes\nActive today\nWork & Education\nMasters\nDelhi University, 2026\nProject Coordinator at Quality council of India\nInterests\nReading\nMusic\nTraits\nIndependent\nResponsible\nCheerful\nKind\nOptimistic\nRelationship goals\nLong-term relationship"}
+    ],
+    "visual_hooks": ["wearing round-framed glasses", "wearing a pink saree", "long dark hair", "outdoor setting with bamboo fencing"],
+    "photo_persona": "girl-next-door",
+    "detected_dialect": "ENGLISH",
+    "their_tone": "earnest and traditional",
+    "their_effort": "medium",
+    "conversation_temperature": "warm",
+    "archetype_reasoning": "Grounded, traditional profile focused on career and clear relationship goals. Earnest and straightforward, no playful banter, high openness to a serious connection.",
+    "warmth": "neutral",
+    "playfulness": "earnest",
+    "engagement": "medium",
+    "traditionalism": "traditional",
+    "intent": "long_term",
+    "detected_archetype": "THE TRADITIONAL ROMANTIC",
+    "top_hooks": [],
+    "key_detail": "She is a Project Coordinator at the Quality Council of India and pursuing her Masters at Delhi University.",
+    "person_name": "Khushi",
+    "stage": "new_match",
+    "their_last_message": "Khushi is a 23-year-old Project Coordinator at the Quality Council of India in Delhi who values traditional traits and seeks a long-term relationship.",
+    "user_last_move": "",
+    "inbound_image": "none",
+    "inbound_image_detail": "",
+    "durable_facts": ["Works as a Project Coordinator at the Quality Council of India", "Studying Masters at Delhi University", "Aries", "Non-vegetarian", "Interests: reading and music"]
+  },
+  "direction": "opener",
+  "person_name": "Khushi",
+  "core_lore": "",
+  "past_memories": "",
+  "transcript_text": "Khushi 23\nProject Coordinator at Quality council of India\nDelhi University, 2026\nInterests: Reading, Music\nTraits: Independent, Responsible, Cheerful, Kind, Optimistic\nRelationship goals: Long-term relationship",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "Khushi",
+    "stage": "new_match",
+    "tone_trend": "stable",
+    "topics_worked": [],
+    "topics_failed": [],
+    "interaction_count": 0,
+    "recent_summaries": [],
+    "recent_user_replies": [],
+    "last_ai_replies_shown": [],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "girl-next-door",
+    "preferred_strategies": []
+  },
+  "user_custom_hint": "",
+  "opener_hook_priority": "text_first"
+}

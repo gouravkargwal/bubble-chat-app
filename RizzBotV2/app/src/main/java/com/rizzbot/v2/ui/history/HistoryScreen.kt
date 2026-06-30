@@ -1,9 +1,9 @@
 package com.rizzbot.v2.ui.history
 
 import android.content.Intent
-import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,8 +21,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -36,6 +34,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +43,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rizzbot.v2.data.remote.dto.HistoryItemResponse
+import com.rizzbot.v2.ui.theme.NeonRed
+import com.rizzbot.v2.ui.theme.NothingBlack
+import com.rizzbot.v2.ui.theme.NothingBorder
+import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingSurface
+import com.rizzbot.v2.ui.theme.NothingError
+import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingTextTertiary
+import com.rizzbot.v2.ui.theme.NothingWhite
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,7 +71,6 @@ fun HistoryScreen(
     val context = LocalContext.current
     val listState = rememberLazyListState()
 
-    // Detect scroll near bottom and load more
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { lastVisibleIndex ->
@@ -78,27 +85,27 @@ fun HistoryScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Reply History", fontWeight = FontWeight.Bold)
+                        Text("Reply History", fontWeight = FontWeight.Bold, color = NothingWhite)
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "From screenshots & overlay",
-                            color = Color(0xFF9E9EAE),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal
+                            color = NothingTextSecondary,
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = NothingWhite)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0F0F1A),
-                    titleContentColor = Color.White
+                    containerColor = NothingBlack,
+                    titleContentColor = NothingWhite
                 )
             )
         },
-        containerColor = Color(0xFF0F0F1A)
+        containerColor = NothingBlack
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isPullRefreshing,
@@ -109,13 +116,11 @@ fun HistoryScreen(
                     modifier = Modifier.align(Alignment.TopCenter),
                     isRefreshing = isPullRefreshing,
                     state = pullRefreshState,
-                    containerColor = Color(0xFF1A1A2E),
-                    color = MaterialTheme.colorScheme.primary,
+                    containerColor = NothingSurface,
+                    color = NothingWhite,
                 )
             },
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
+            modifier = Modifier.padding(padding).fillMaxSize(),
         ) {
         if (isLoading && history.isEmpty()) {
             HistorySkeleton(modifier = Modifier.fillMaxSize())
@@ -125,17 +130,18 @@ fun HistoryScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("\uD83D\uDCDD", fontSize = 48.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("No reply history yet", color = Color.Gray)
-                    Text("Your generated replies will appear here", color = Color.Gray, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Text("\uD83D\uDCDD", fontSize = 56.sp)
+                    Spacer(modifier = Modifier.height(NothingDimens.elementGap))
+                    Text("No reply history yet", color = NothingWhite, style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(NothingDimens.textGap))
+                    Text("Your generated replies will appear here", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                    Spacer(modifier = Modifier.height(NothingDimens.sectionSpacing))
                     Button(
                         onClick = onBack,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(12.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = NothingWhite),
+                        shape = RoundedCornerShape(NothingDimens.pillRadius)
                     ) {
-                        Text("Back to home", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("Back to home", color = NothingBlack, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -143,8 +149,8 @@ fun HistoryScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(horizontal = NothingDimens.screenPadding, vertical = NothingDimens.screenPadding),
+                verticalArrangement = Arrangement.spacedBy(NothingDimens.sectionSpacing)
             ) {
                 items(history, key = { it.id }) { entry ->
                     val dismissState = rememberSwipeToDismissBoxState(
@@ -160,49 +166,41 @@ fun HistoryScreen(
                         state = dismissState,
                         backgroundContent = {
                             val color by animateColorAsState(
-                                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) Color(0xFFEF5350)
+                                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) NothingError
                                 else Color.Transparent, label = "bg"
                             )
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(color, RoundedCornerShape(16.dp))
-                                    .padding(end = 20.dp),
+                                    .background(color, RoundedCornerShape(NothingDimens.cardRadius))
+                                    .padding(end = NothingDimens.screenPadding),
                                 contentAlignment = Alignment.CenterEnd
                             ) {
-                                Icon(Icons.Default.Delete, "Delete", tint = Color.White)
+                                Icon(Icons.Default.Delete, "Delete", tint = NothingWhite)
                             }
                         },
                         enableDismissFromStartToEnd = false
                     ) {
-                        HistoryCard(
-                            entry = entry,
-                            onCopyReply = { reply, isHighValue ->
-                                viewModel.copyReply(reply)
-                                if (isHighValue) {
-                                    viewModel.incrementHighValueCopyCount { count ->
-                                        if (count == 2) {
-                                            launchInAppReview(context)
-                                        }
-                                    }
+                        HistoryCard(entry = entry, onCopyReply = { reply, isHighValue ->
+                            viewModel.copyReply(reply)
+                            if (isHighValue) {
+                                viewModel.incrementHighValueCopyCount { count ->
+                                    if (count == 2) launchInAppReview(context)
                                 }
                             }
-                        )
+                        })
                     }
                 }
 
-                // Loading indicator at bottom when loading more
                 if (isLoadingMore) {
                     item {
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(NothingDimens.cardPadding),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(24.dp),
-                                color = Color.White
+                                color = NothingWhite
                             )
                         }
                     }
@@ -220,17 +218,17 @@ private fun HistoryCard(
 ) {
     val context = LocalContext.current
     val dateFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
-    val vibeLabels = listOf("🔥 Flirty", "😏 Witty", "✨ Smooth", "💪 Bold")
     var expanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded },
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
-        shape = RoundedCornerShape(16.dp)
+        colors = CardDefaults.cardColors(containerColor = NothingSurface),
+        shape = RoundedCornerShape(NothingDimens.cardRadius),
+        border = BorderStroke(NothingDimens.borderThickness, NothingBorder)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -238,39 +236,37 @@ private fun HistoryCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     if (!entry.personName.isNullOrBlank()) {
-                        Text(entry.personName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.personName, color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         "${entry.direction}${entry.customHint?.let { " \u2022 $it" } ?: ""}",
-                        color = MaterialTheme.colorScheme.primary, fontSize = 12.sp
+                        color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                Text(dateFormat.format(Date(entry.createdAt * 1000)), color = Color.Gray, fontSize = 11.sp)
+                Text(dateFormat.format(Date(entry.createdAt * 1000)), color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(NothingDimens.elementGap))
 
             if (!entry.userOrganicText.isNullOrBlank()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     contentAlignment = Alignment.CenterEnd
                 ) {
                     Surface(
-                        color = Color(0xFF252542),
-                        shape = RoundedCornerShape(12.dp)
+                        color = NothingBorder,
+                        shape = RoundedCornerShape(NothingDimens.cardRadius)
                     ) {
                         Text(
                             text = "You: ${entry.userOrganicText}",
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            color = NothingWhite,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = NothingDimens.elementGap, vertical = 8.dp)
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(NothingDimens.textGap))
             }
 
             val replies = entry.replies
@@ -279,55 +275,42 @@ private fun HistoryCard(
             displayReplies.forEachIndexed { index, reply ->
                 if (reply.text.isNotBlank()) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         Text(
-                            vibeLabels.getOrElse(index) { "💬" },
-                            fontSize = 11.sp,
-                            modifier = Modifier.width(80.dp)
+                            "Vibe ${index + 1}",
+                            color = NothingTextTertiary,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.width(60.dp)
                         )
                         Text(
                             reply.text,
-                            color = Color.White,
-                            fontSize = 13.sp,
+                            color = NothingWhite,
+                            style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f),
                             maxLines = if (expanded) Int.MAX_VALUE else 2,
                             overflow = TextOverflow.Ellipsis
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val isHighValue = entry.direction in listOf("Opener", "Ask Out", "Tease")
                             IconButton(
-                                onClick = { onCopyReply(reply.text, isHighValue) },
+                                onClick = { onCopyReply(reply.text, entry.direction in listOf("Opener", "Ask Out", "Tease")) },
                                 modifier = Modifier.size(28.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.ContentCopy,
-                                    "Copy",
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                Icon(Icons.Default.ContentCopy, "Copy", tint = NothingTextSecondary, modifier = Modifier.size(14.dp))
                             }
                             IconButton(
                                 onClick = {
-                                        val shareText = "${reply.text}\n\n— Generated by Cookd App \uD83D\uDD25"
+                                    val shareText = "${reply.text}\n\n\u2014 Generated by Cookd"
                                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
                                         putExtra(Intent.EXTRA_TEXT, shareText)
                                     }
-                                    val shareIntent = Intent.createChooser(sendIntent, null)
-                                    context.startActivity(shareIntent)
+                                    context.startActivity(Intent.createChooser(sendIntent, null))
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.Share,
-                                    "Share",
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                Icon(Icons.Default.Share, "Share", tint = NothingTextSecondary, modifier = Modifier.size(14.dp))
                             }
                         }
                     }
@@ -337,9 +320,9 @@ private fun HistoryCard(
             if (!expanded && replies.size > 1) {
                 Text(
                     "Tap to see all ${replies.size} replies",
-                    color = Color.Gray,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 4.dp)
+                    color = NothingTextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = NothingDimens.textGap)
                 )
             }
         }

@@ -36,9 +36,6 @@ interface HostedRepository {
     suspend fun getReferralInfo(): ReferralInfo?
     suspend fun applyReferralCode(code: String): Result<ApplyReferralResponse>
 
-    // Billing
-    suspend fun verifyPurchase(purchaseToken: String, productId: String, orderId: String?): Boolean
-
     // Profile Auditor (async job-based)
     suspend fun submitAuditJob(
         compressedPhotos: List<ByteArray>,

@@ -1,5 +1,6 @@
 package com.rizzbot.v2.capture
 
+import android.app.Activity
 import android.graphics.Bitmap
 import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.SuggestionResult
@@ -42,7 +43,19 @@ class ScreenCaptureOrchestrator @Inject constructor(
 
     fun canAddMore(maxScreenshots: Int): Boolean = previewBitmaps.size < maxScreenshots
 
-    suspend fun captureScreenshot() {
+    /**
+     * Capture a screenshot.
+     *
+     * @param onConsentGranted invoked AFTER screen-capture consent is granted but BEFORE the frame
+     * is grabbed. Callers use this to hide the bubble overlay so it isn't in the screenshot.
+     *
+     * IMPORTANT: the overlay window must stay visible while [ScreenCaptureManager.requestConsent]
+     * launches the consent activity — Android's background-activity-launch allowlist only permits
+     * the launch when the app has a visible window. Hiding the overlay before consent (the old
+     * behavior) caused a silent BAL_BLOCK on Android 14+ whenever the bubble was over another app,
+     * so the consent dialog never appeared. Hence the hide happens in [onConsentGranted], not before.
+     */
+    suspend fun captureScreenshot(onConsentGranted: suspend () -> Unit = {}) {
         if (isOnCooldown) return
 
         val maxScreenshots = getMaxScreenshots()
@@ -67,6 +80,10 @@ class ScreenCaptureOrchestrator @Inject constructor(
 
         try {
             val (resultCode, data) = screenCaptureManager.requestConsent()
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                // Consent granted: now safe to hide the overlay for the frame grab.
+                onConsentGranted()
+            }
             hapticHelper.mediumTap()
             val bitmap = screenCaptureManager.captureScreenshot(resultCode, data)
             analyticsHelper.screenshotCaptured()
@@ -189,6 +206,31 @@ class ScreenCaptureOrchestrator @Inject constructor(
         synchronized(previewBitmaps) {
             previewBitmaps.clear()
         }
+        _result.value = SuggestionResult.Idle
+    }
+
+    /**
+     * Import externally provided base64-encoded images (e.g., Gallery picks) into the internal
+     * screenshot buffers so the user can preview them before generating.
+     */
+    fun importExternalImages(imagesBase64: List<String>) {
+        if (imagesBase64.isEmpty()) return
+
+        clearScreenshot()
+
+        for (b64 in imagesBase64) {
+            try {
+                val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap != null) {
+                    base64Screenshots.add(b64)
+                    previewBitmaps.add(bitmap)
+                }
+            } catch (_: Exception) {
+                // Skip malformed images
+            }
+        }
+
         _result.value = SuggestionResult.Idle
     }
 

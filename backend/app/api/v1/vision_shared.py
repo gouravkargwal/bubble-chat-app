@@ -44,8 +44,8 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 # Composite score thresholds (0-1 scale)
-_AUTO_STITCH_THRESHOLD = 0.75       # High confidence → auto-link
-_CONFIRMATION_THRESHOLD = 0.40      # Medium confidence → ask user
+_AUTO_STITCH_THRESHOLD = 0.75  # High confidence → auto-link
+_CONFIRMATION_THRESHOLD = 0.60  # Medium confidence → ask user (raised from 0.40 — 0.51 coin-flip match Jhanvi/Manvi was causing false 409s)
 # Below _CONFIRMATION_THRESHOLD → new_match
 
 # Composite score weights (must sum to 1.0)
@@ -70,6 +70,7 @@ _WS_RE = re.compile(r"\s+")
 # Text / name utilities
 # ---------------------------------------------------------------------------
 
+
 def normalize_name(name: str) -> str:
     name = (name or "").strip().lower()
     name = _NON_WORD_RE.sub("", name)
@@ -89,7 +90,7 @@ def name_similarity(a: str, b: str) -> float:
     seq_ratio = difflib.SequenceMatcher(None, a_n, b_n).ratio()
 
     def trigrams(s: str) -> set[str]:
-        return {s[i: i + 3] for i in range(len(s) - 2)} if len(s) >= 3 else set()
+        return {s[i : i + 3] for i in range(len(s) - 2)} if len(s) >= 3 else set()
 
     ta, tb = trigrams(a_n), trigrams(b_n)
     jacc = (len(ta & tb) / len(ta | tb)) if ta and tb else 0.0
@@ -150,13 +151,16 @@ def format_relative_time(dt: datetime | None) -> str:
 # Composite scoring helpers
 # ---------------------------------------------------------------------------
 
+
 def _recency_score(last_interaction_at: datetime | None) -> float:
     """Exponential decay: 1.0 for just now, 0.5 at half-life, approaches 0."""
     if not last_interaction_at:
         return 0.0
     if last_interaction_at.tzinfo is None:
         last_interaction_at = last_interaction_at.replace(tzinfo=timezone.utc)
-    hours_ago = max(0, (datetime.now(timezone.utc) - last_interaction_at).total_seconds() / 3600)
+    hours_ago = max(
+        0, (datetime.now(timezone.utc) - last_interaction_at).total_seconds() / 3600
+    )
     return math.exp(-0.693 * hours_ago / _RECENCY_HALF_LIFE_HOURS)  # ln(2) ≈ 0.693
 
 
@@ -208,9 +212,7 @@ async def _embedding_content_score(
 
     # Quick lexical check: if any OCR text overlaps stored text, high confidence
     has_lexical_overlap = any(
-        text_overlap(ext, stored)
-        for ext in extracted_texts
-        for stored in stored_texts
+        text_overlap(ext, stored) for ext in extracted_texts for stored in stored_texts
     )
     if has_lexical_overlap:
         return 1.0  # Direct text match = strongest possible content signal
@@ -227,15 +229,13 @@ async def _embedding_content_score(
             return 0.0
 
         # Use pgvector cosine distance against this conversation's interactions
-        vector_sql = text(
-            """
+        vector_sql = text("""
             SELECT MIN(i.embedding <=> :query_embedding) AS best_distance
             FROM interactions AS i
             WHERE i.user_id = :user_id
               AND i.conversation_id = :conversation_id
               AND i.embedding IS NOT NULL
-            """
-        )
+            """)
         # asyncpg requires pgvector params as a string "[x, y, ...]", not a Python list
         embedding_str = f"[{','.join(str(x) for x in query_embedding)}]"
         # Use scalar() so the result is fully consumed; .mappings().first() can leave an
@@ -265,9 +265,8 @@ async def _embedding_content_score(
 # Alias management
 # ---------------------------------------------------------------------------
 
-async def lookup_alias(
-    *, db: AsyncSession, user_id: str, ocr_name: str
-) -> str | None:
+
+async def lookup_alias(*, db: AsyncSession, user_id: str, ocr_name: str) -> str | None:
     """Check if this OCR name has been previously confirmed as an alias for a conversation."""
     normalized = normalize_name(ocr_name)
     if not normalized or normalized == "unknown":
@@ -305,18 +304,21 @@ async def save_alias(
         existing.conversation_id = conversation_id
         existing.source = source
     else:
-        db.add(PersonAlias(
-            user_id=user_id,
-            alias_name=normalized,
-            conversation_id=conversation_id,
-            source=source,
-        ))
+        db.add(
+            PersonAlias(
+                user_id=user_id,
+                alias_name=normalized,
+                conversation_id=conversation_id,
+                source=source,
+            )
+        )
     await db.commit()
 
 
 # ---------------------------------------------------------------------------
 # Main stitch resolution — composite scoring engine
 # ---------------------------------------------------------------------------
+
 
 async def resolve_hybrid_stitch_conversation_id(
     *,
@@ -339,7 +341,14 @@ async def resolve_hybrid_stitch_conversation_id(
     # ---------------------------------------------------------------
     # Step 1: Alias lookup (instant match from prior confirmations)
     # ---------------------------------------------------------------
-    alias_convo_id = await lookup_alias(db=db, user_id=user_id, ocr_name=ocr_person_name)
+    # Single-char / two-char names (e.g. "P", "D") are too ambiguous to alias —
+    # multiple matches can share the same initial. Skip alias for these.
+    _name_too_short = len((ocr_person_name or "").strip()) <= 2
+    alias_convo_id = (
+        None
+        if _name_too_short
+        else await lookup_alias(db=db, user_id=user_id, ocr_name=ocr_person_name)
+    )
     if alias_convo_id:
         # Verify the conversation still exists
         convo_result = await db.execute(
@@ -381,9 +390,7 @@ async def resolve_hybrid_stitch_conversation_id(
             continue  # Not even close — skip entirely
 
         # Content score (embedding + lexical) — most expensive, only for name candidates
-        cs = await _embedding_content_score(
-            extracted_texts, convo.id, user_id, db
-        )
+        cs = await _embedding_content_score(extracted_texts, convo.id, user_id, db)
 
         # Recency score
         rs = _recency_score(convo.last_interaction_at)
@@ -401,6 +408,18 @@ async def resolve_hybrid_stitch_conversation_id(
         return "new_match", None, None
 
     if best_composite >= _AUTO_STITCH_THRESHOLD:
+        # Short/ambiguous names (≤2 chars like "P", "D") are too common to
+        # auto-stitch safely — a new match with the same initial would merge
+        # into the wrong conversation. Always ask the user to confirm.
+        if len((ocr_person_name or "").strip()) <= 2:
+            return (
+                "requires_user_confirmation",
+                best_convo.id,
+                {
+                    "reason": "hybrid_stitch_ambiguity",
+                    "detail": f"Name '{ocr_person_name}' is too short to auto-stitch safely — could be a different person.",
+                },
+            )
         # Save the alias for future instant lookups
         await save_alias(
             db=db,
@@ -438,7 +457,11 @@ async def resolve_hybrid_stitch_conversation_id(
             if isinstance(reply_val, str) and reply_val.strip():
                 try:
                     loaded = json.loads(reply_val)
-                    your_last_reply = str(loaded["text"]) if isinstance(loaded, dict) and "text" in loaded else reply_val
+                    your_last_reply = (
+                        str(loaded["text"])
+                        if isinstance(loaded, dict) and "text" in loaded
+                        else reply_val
+                    )
                 except (json.JSONDecodeError, TypeError):
                     your_last_reply = reply_val
         if not ai_memory_note and it.key_detail:
@@ -447,7 +470,9 @@ async def resolve_hybrid_stitch_conversation_id(
             break
 
     last_active_dt = (
-        recent_interactions[0].created_at if recent_interactions else best_convo.created_at
+        recent_interactions[0].created_at
+        if recent_interactions
+        else best_convo.created_at
     )
 
     payload = {
@@ -472,6 +497,7 @@ async def resolve_hybrid_stitch_conversation_id(
 # Interaction persistence
 # ---------------------------------------------------------------------------
 
+
 def dump_reply_option(opt: Any) -> str:
     if opt is None:
         return ""
@@ -488,7 +514,14 @@ def dump_reply_option(opt: Any) -> str:
     except Exception as e:
         logger.warning("reply_option_serialize_failed", error=str(e))
         # Wrap in JSON so downstream json.loads() doesn't break
-        return json.dumps({"text": str(opt.text), "strategy_label": "", "is_recommended": False, "coach_reasoning": ""})
+        return json.dumps(
+            {
+                "text": str(opt.text),
+                "strategy_label": "",
+                "is_recommended": False,
+                "coach_reasoning": "",
+            }
+        )
 
 
 def clamp_str(value: str | None, max_len: int = 255, label: str = "") -> str | None:
@@ -544,6 +577,130 @@ async def persist_interaction(
 
     reply_options = list(parsed.replies[:4]) + [None] * (4 - len(parsed.replies[:4]))
 
+    # Phase 4 + 5: update conversation-level learning stats at generate time.
+    # Archetype is observed on every scan (copy-independent); strategy "shown"
+    # counts every option we surface. The matching "copied" increment happens in
+    # the /track/copy handler. Never let a stats failure block persistence.
+    try:
+        # Tally each personality DIMENSION observed this scan (copy-independent).
+        # The archetype is derived from the smoothed dimensions later — we never
+        # tally the derived label, so a single noisy scan can't flip the tone.
+        dims = {
+            "warmth": getattr(parsed.analysis, "warmth", ""),
+            "playfulness": getattr(parsed.analysis, "playfulness", ""),
+            "engagement": getattr(parsed.analysis, "engagement", ""),
+            "traditionalism": getattr(parsed.analysis, "traditionalism", ""),
+            "intent": getattr(parsed.analysis, "intent", ""),
+        }
+        dim_counts = json.loads(convo.dimension_counts or "{}")
+        if not isinstance(dim_counts, dict):
+            dim_counts = {}
+        for dim_name, value in dims.items():
+            value = (value or "").strip().lower()
+            if not value:
+                continue
+            bucket = dim_counts.get(dim_name) or {}
+            bucket[value] = int(bucket.get(value, 0)) + 1
+            dim_counts[dim_name] = bucket
+        convo.dimension_counts = json.dumps(dim_counts)
+
+        # Sticky photo_persona: capture from rich (opener/profile) scans, never
+        # degrade. Chat turns return empty → the good opener read survives.
+        scan_persona = (getattr(parsed.analysis, "photo_persona", "") or "").strip()
+        if scan_persona:
+            convo.photo_persona = scan_persona[:64]
+
+        stats = json.loads(convo.strategy_stats or "{}")
+        if not isinstance(stats, dict):
+            stats = {}
+
+        def _entry(label: str) -> dict:
+            e = stats.get(label) or {}
+            return {
+                "shown": int(e.get("shown", 0)),
+                "copied": int(e.get("copied", 0)),
+                "landed": int(e.get("landed", 0)),
+                "flopped": int(e.get("flopped", 0)),
+            }
+
+        # (a) "shown" — every option surfaced this turn.
+        for opt in reply_options:
+            if opt is None:
+                continue
+            label = (getattr(opt, "strategy_label", "") or "").strip().upper()
+            if not label:
+                continue
+            entry = _entry(label)
+            entry["shown"] += 1
+            stats[label] = entry
+
+        # (b) Conversion delta — attribute her engagement change to the strategy
+        #     the user actually SENT last turn. We compare her engagement in the
+        #     previous scan (before she received that reply) to this scan (her
+        #     response to it). Up = the strategy landed, down = it flopped.
+        def _engagement(temp: str | None, effort: str | None) -> int:
+            t = {"hot": 4, "warm": 3, "lukewarm": 2, "cold": 1}.get(
+                (temp or "").strip().lower(), 2
+            )
+            ef = {"high": 3, "medium": 2, "low": 1}.get(
+                (effort or "").strip().lower(), 2
+            )
+            return t + ef
+
+        prior_result = await db.execute(
+            select(Interaction)
+            .where(Interaction.conversation_id == convo.id)
+            .order_by(Interaction.created_at.desc())
+            .limit(1)
+        )
+        prior = prior_result.scalar_one_or_none()
+        if prior is not None and prior.copied_index is not None:
+            sent_raw = getattr(prior, f"reply_{prior.copied_index}", None)
+            sent_label = ""
+            if sent_raw:
+                try:
+                    loaded = json.loads(sent_raw)
+                    if isinstance(loaded, dict):
+                        sent_label = (
+                            (loaded.get("strategy_label") or "").strip().upper()
+                        )
+                except (json.JSONDecodeError, TypeError):
+                    sent_label = ""
+            if sent_label:
+                delta = _engagement(
+                    parsed.analysis.conversation_temperature,
+                    parsed.analysis.their_effort,
+                ) - _engagement(prior.conversation_temperature, prior.their_effort)
+                entry = _entry(sent_label)
+                if delta > 0:
+                    entry["landed"] += 1
+                elif delta < 0:
+                    entry["flopped"] += 1
+                stats[sent_label] = entry
+
+        convo.strategy_stats = json.dumps(stats)
+    except Exception:
+        pass
+
+    # Persist the verbatim turn transcript (her words + the user's sent bubbles) so
+    # build_conversation_context can replay the REAL thread instead of lossy summaries.
+    transcript_json_value: str | None = None
+    try:
+        pairs: list[dict] = []
+        for msg in parsed.visual_transcript or []:
+            text = (getattr(msg, "actual_new_message", "") or "").strip()
+            if not text:
+                continue
+            is_user = (
+                getattr(msg, "side", "").lower() == "right"
+                or getattr(msg, "sender", "").lower() == "user"
+            )
+            pairs.append({"s": "user" if is_user else "them", "t": text})
+        if pairs:
+            transcript_json_value = json.dumps(pairs, ensure_ascii=False)
+    except Exception:
+        transcript_json_value = None
+
     interaction = Interaction(
         conversation_id=convo.id,
         user_id=user.id,
@@ -552,11 +709,14 @@ async def persist_interaction(
         their_last_message=parsed.analysis.their_last_message,
         their_tone=clamp_str(parsed.analysis.their_tone, label="analysis_tone"),
         their_effort=clamp_str(parsed.analysis.their_effort, label="analysis_effort"),
-        conversation_temperature=clamp_str(parsed.analysis.conversation_temperature, label="analysis_temperature"),
+        conversation_temperature=clamp_str(
+            parsed.analysis.conversation_temperature, label="analysis_temperature"
+        ),
         detected_stage=clamp_str(parsed.analysis.stage, label="analysis_stage"),
         person_name=parsed.analysis.person_name,
         key_detail=parsed.analysis.key_detail,
         user_organic_text=user_organic_text,
+        transcript_json=transcript_json_value,
         reply_0=dump_reply_option(reply_options[0]),
         reply_1=dump_reply_option(reply_options[1]),
         reply_2=dump_reply_option(reply_options[2]),
@@ -577,6 +737,7 @@ async def persist_interaction(
 # Voice DNA: echo filter + organic text update
 # ---------------------------------------------------------------------------
 
+
 async def extract_organic_text(
     *,
     db: AsyncSession,
@@ -592,7 +753,10 @@ async def extract_organic_text(
     user_organic_text: str | None = None
     if parsed.visual_transcript:
         for msg in reversed(parsed.visual_transcript):
-            if getattr(msg, "side", "").lower() == "right" or getattr(msg, "sender", "").lower() == "user":
+            if (
+                getattr(msg, "side", "").lower() == "right"
+                or getattr(msg, "sender", "").lower() == "user"
+            ):
                 user_organic_text = msg.actual_new_message
                 break
 
@@ -656,14 +820,13 @@ async def update_voice_dna(
 # Response builder
 # ---------------------------------------------------------------------------
 
+
 def build_vision_response(
     *,
     parsed: ParsedLlmResponse,
     interaction: Interaction,
     convo: Conversation,
-    daily_limit: int,
-    effective_limit: int,
-    daily_used: int,
+    credits_remaining: int,
 ) -> VisionResponse:
     reply_payloads = [
         ReplyOptionPayload(
@@ -675,8 +838,6 @@ def build_vision_response(
         for r in parsed.replies[:4]
     ]
 
-    remaining = max(0, effective_limit - daily_used) if daily_limit > 0 else 9999
-
     return VisionResponse(
         replies=reply_payloads,
         person_name=(
@@ -686,6 +847,6 @@ def build_vision_response(
         ),
         stage=parsed.analysis.stage,
         interaction_id=interaction.id,
-        usage_remaining=remaining,
+        usage_remaining=credits_remaining,
         conversation_id=convo.id,
     )

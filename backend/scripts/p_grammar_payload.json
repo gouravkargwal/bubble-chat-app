@@ -1,0 +1,57 @@
+{
+  "analysis": {
+    "visual_transcript": [
+      {"sender": "user", "quoted_context": "", "actual_new_message": "achha toh main entertain karunga aur tum sirf bak bak fair deal hai kya"},
+      {"sender": "them", "quoted_context": "", "actual_new_message": "last me question mark missing hai kya"}
+    ],
+    "visual_hooks": [],
+    "photo_persona": "",
+    "detected_dialect": "HINGLISH",
+    "their_tone": "playful",
+    "their_effort": "high",
+    "conversation_temperature": "warm",
+    "archetype_reasoning": "She's nitpicking his grammar playfully — fully engaged, teasing back, paying close attention to his messages.",
+    "warmth": "warm",
+    "playfulness": "playful",
+    "engagement": "high",
+    "traditionalism": "modern",
+    "intent": "exploring",
+    "detected_archetype": "THE BANTER GIRL",
+    "top_hooks": ["grammar police", "missing question mark", "fair deal bak bak"],
+    "key_detail": "She is playfully pointing out that he forgot a question mark — engaging, teasing, fully in the banter.",
+    "person_name": "P",
+    "stage": "early_talking",
+    "their_last_message": "She's teasing him about missing a question mark — grammar police mode, fully engaged.",
+    "user_last_move": "User proposed a mock-deal: I entertain, you do bak bak — she responded with grammar police.",
+    "inbound_image": "none",
+    "inbound_image_detail": "",
+    "durable_facts": ["Prefers calls and face-to-face meetings over texting", "Dislikes lengthy typing", "Self-described bak bak person"]
+  },
+  "direction": "keep_playful",
+  "person_name": "P",
+  "core_lore": "From Bhubaneswar\nSpeaks Oriya, English, and Hindi\nNon-vegetarian\n5'6\" tall\nCapricorn\nPrefers voice calls or in-person meetings over texting\nDislikes lengthy typing",
+  "past_memories": "",
+  "transcript_text": "last me question mark missing hai kya",
+  "voice_dna_dict": {},
+  "conversation_context_dict": {
+    "person_name": "P",
+    "stage": "early_talking",
+    "tone_trend": "warming",
+    "topics_worked": ["bak bak talkative nature", "calls vs texting", "boring challenge"],
+    "topics_failed": [],
+    "interaction_count": 3,
+    "recent_summaries": [
+      "[opener] you sent: \"bet you turn every ten min chat into an hour marathon yaar\"",
+      "[keep_playful] her: \"Nainn!! Thts only in case of call Or meeting face to face\"",
+      "[keep_playful] her: \"Boring tbhi hoga if saamne wala bore karega to\" | you sent: \"achha toh main entertain karunga aur tum sirf bak bak fair deal hai kya\""
+    ],
+    "recent_user_replies": [],
+    "last_ai_replies_shown": [],
+    "stable_archetype": null,
+    "archetype_confidence": 0.0,
+    "stable_dimensions": null,
+    "photo_persona": "",
+    "preferred_strategies": ["PUSH-PULL"]
+  },
+  "user_custom_hint": ""
+}

@@ -45,6 +45,7 @@ async def store_pending_hybrid_resolution(
     extracted_person_name: str,
     conflict_reason: str | None = None,
     conflict_detail: str | None = None,
+    vision_out_json: str | None = None,
 ) -> PendingResolution:
     """Store (or overwrite) ambiguity context for this (user, conversation)."""
     # Upsert: expire any existing unresolved row for this key
@@ -69,6 +70,7 @@ async def store_pending_hybrid_resolution(
         extracted_person_name=extracted_person_name,
         conflict_reason=conflict_reason,
         conflict_detail=conflict_detail,
+        vision_output_json=vision_out_json,
     )
     db.add(row)
     await db.commit()
@@ -145,3 +147,18 @@ def parse_pending_images(row: PendingResolution) -> list[str]:
         return json.loads(row.images)
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+def parse_pending_vision_out(row: PendingResolution):
+    """Deserialize the cached VisionNodeOutput from a PendingResolution row.
+
+    Returns a VisionNodeOutput instance or None if not cached / parse fails.
+    Import is deferred to avoid a circular import with vision_v2.
+    """
+    if not row.vision_output_json:
+        return None
+    try:
+        from agent.nodes_v2._vision import VisionNodeOutput
+        return VisionNodeOutput.model_validate_json(row.vision_output_json)
+    except Exception:
+        return None

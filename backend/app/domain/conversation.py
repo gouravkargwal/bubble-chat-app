@@ -57,11 +57,35 @@ async def update_conversation_from_analysis(
     analysis: AnalysisResult,
     copied_index: int | None,
     db: AsyncSession,
+    copied_strategy_label: str | None = None,
 ) -> None:
-    """Update conversation context after an interaction."""
+    """Update conversation context after an interaction.
+
+    Called from the /track/copy handler, so `copied_index` reflects the reply
+    the user actually sent. `copied_strategy_label` is that reply's strategy, used
+    to learn the user's selection preference (Phase 5 copy-rate signal).
+    """
     # Update stage (clamp to DB column limit String(30))
     if analysis.stage and analysis.stage != "unknown":
         conversation.stage = analysis.stage[:30]
+
+    # Phase 5: record the copied reply's strategy as a selection win.
+    if copied_strategy_label:
+        try:
+            stats = json.loads(conversation.strategy_stats or "{}")
+            if not isinstance(stats, dict):
+                stats = {}
+            entry = stats.get(copied_strategy_label) or {}
+            entry = {
+                "shown": int(entry.get("shown", 0)),
+                "copied": int(entry.get("copied", 0)) + 1,
+                "landed": int(entry.get("landed", 0)),
+                "flopped": int(entry.get("flopped", 0)),
+            }
+            stats[copied_strategy_label] = entry
+            conversation.strategy_stats = json.dumps(stats)
+        except Exception:
+            pass
 
     # Update person name if better detected
     if analysis.person_name and analysis.person_name != "unknown":
@@ -112,6 +136,141 @@ async def update_conversation_from_analysis(
     await db.commit()
 
 
+_DIMENSION_KEYS = ("warmth", "playfulness", "engagement", "traditionalism", "intent")
+_DIMENSION_DEFAULTS = {
+    "warmth": "neutral",
+    "playfulness": "balanced",
+    "engagement": "medium",
+    "traditionalism": "mixed",
+    "intent": "open",
+}
+
+
+def _derive_stable_dimensions(
+    raw_counts: str | None,
+) -> tuple[dict[str, str] | None, str | None, float]:
+    """Phase 4: mode-smooth each personality dimension across scans.
+
+    Dimensions are the primitive; the archetype is derived from the smoothed
+    dimensions (never tallied directly). Returns (stable_dims, archetype,
+    confidence). All None/0.0 until at least 3 scans exist, so a single noisy
+    early scan never locks in a read. Confidence = mean per-dimension agreement.
+    """
+    try:
+        counts = json.loads(raw_counts or "{}")
+        if not isinstance(counts, dict) or not counts:
+            return None, None, 0.0
+        # total scans = the largest per-dimension count sum (dims tallied together)
+        total = max(
+            (sum(int(v) for v in (counts.get(k) or {}).values()) for k in _DIMENSION_KEYS),
+            default=0,
+        )
+        if total < 3:
+            return None, None, 0.0
+
+        stable: dict[str, str] = {}
+        fractions: list[float] = []
+        for k in _DIMENSION_KEYS:
+            bucket = counts.get(k) or {}
+            if not isinstance(bucket, dict) or not bucket:
+                continue
+            value, top = max(bucket.items(), key=lambda kv: int(kv[1]))
+            stable[k] = str(value)
+            dim_total = sum(int(v) for v in bucket.values())
+            if dim_total:
+                fractions.append(int(top) / dim_total)
+        if not stable:
+            return None, None, 0.0
+
+        confidence = round(sum(fractions) / len(fractions), 3) if fractions else 0.0
+        from agent.nodes_v2._personality import derive_archetype
+        archetype = derive_archetype(
+            stable.get("warmth", _DIMENSION_DEFAULTS["warmth"]),
+            stable.get("playfulness", _DIMENSION_DEFAULTS["playfulness"]),
+            stable.get("engagement", _DIMENSION_DEFAULTS["engagement"]),
+            stable.get("traditionalism", _DIMENSION_DEFAULTS["traditionalism"]),
+            stable.get("intent", _DIMENSION_DEFAULTS["intent"]),
+        )
+        return stable, archetype, confidence
+    except Exception:
+        return None, None, 0.0
+
+
+def _derive_preferred_strategies(raw_stats: str | None) -> list[str]:
+    """Phase 5: rank strategies by a blend of copy-rate and conversion-rate.
+
+    score = 0.5 * copy_rate + 0.5 * conversion_rate
+      copy_rate       = copied / shown
+      conversion_rate = landed / (landed + flopped)   [falls back to copy_rate
+                        until at least 2 conversion observations exist]
+    Only strategies shown >= 2 times qualify; only those with score > 0 are
+    returned (a strategy that's never copied and never landed is not "preferred").
+    """
+    try:
+        stats = json.loads(raw_stats or "{}")
+        if not isinstance(stats, dict) or not stats:
+            return []
+        ranked: list[tuple[float, str]] = []
+        for label, e in stats.items():
+            if not isinstance(e, dict):
+                continue
+            shown = int(e.get("shown", 0))
+            if shown < 2:
+                continue
+            copied = int(e.get("copied", 0))
+            landed = int(e.get("landed", 0))
+            flopped = int(e.get("flopped", 0))
+            copy_rate = copied / shown if shown else 0.0
+            conv_obs = landed + flopped
+            if conv_obs >= 2:
+                conversion_rate = landed / conv_obs
+                score = 0.5 * copy_rate + 0.5 * conversion_rate
+            else:
+                score = copy_rate
+            if score > 0:
+                ranked.append((score, str(label)))
+        ranked.sort(key=lambda t: t[0], reverse=True)
+        return [label for _, label in ranked[:3]]
+    except Exception:
+        return []
+
+
+def _reply_option_text(raw: str | None) -> str:
+    """Unwrap a stored reply (JSON {"text": ...} or a plain string) to its text."""
+    if not raw:
+        return ""
+    try:
+        loaded = json.loads(raw)
+        if isinstance(loaded, dict) and "text" in loaded:
+            return str(loaded["text"])
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return str(raw)
+
+
+def _her_last_verbatim(interaction: Interaction) -> str:
+    """Her newest verbatim message that turn, from the persisted turn transcript.
+
+    Falls back to the stored paraphrase for rows saved before transcript_json existed.
+    """
+    raw = getattr(interaction, "transcript_json", None)
+    if raw:
+        try:
+            pairs = json.loads(raw)
+            them = [
+                str(p.get("t", "")).strip()
+                for p in pairs
+                if isinstance(p, dict)
+                and p.get("s") == "them"
+                and str(p.get("t", "")).strip()
+            ]
+            if them:
+                return them[-1]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return (getattr(interaction, "their_last_message", "") or "").strip()
+
+
 async def build_conversation_context(
     conversation: Conversation,
     db: AsyncSession,
@@ -119,6 +278,14 @@ async def build_conversation_context(
     """Build a ConversationContext domain object for prompt injection."""
     topics_worked = json.loads(conversation.topics_worked or "[]")
     topics_failed = json.loads(conversation.topics_failed or "[]")
+
+    # Phase 4 + 5: derive learned signals from accumulated stats.
+    stable_dimensions, stable_archetype, archetype_confidence = _derive_stable_dimensions(
+        getattr(conversation, "dimension_counts", None)
+    )
+    preferred_strategies = _derive_preferred_strategies(
+        getattr(conversation, "strategy_stats", None)
+    )
 
     # Long-term memory: anchor to the very first interaction of this conversation.
     first_key_detail: str | None = None
@@ -151,9 +318,17 @@ async def build_conversation_context(
     last_user_organic_texts: list[str] = []
     last_ai_replies_shown: list[str] = []
 
-    # Build summaries from oldest → newest so the history reads chronologically.
+    # Build a VERBATIM recent thread (oldest → newest) so the generator reads the
+    # real back-and-forth — her actual words + exactly what the user sent — instead
+    # of lossy 60-char snippets. Her words come from the persisted turn transcript
+    # (transcript_json); rows saved before it fall back to the paraphrase.
+    prev_her = ""
     for interaction in reversed(recent_interactions):
-        summary = f"[{interaction.direction}] "
+        parts: list[str] = []
+        her = _her_last_verbatim(interaction)
+        if her and her != prev_her:
+            parts.append(f'her: "{her}"')
+            prev_her = her
         if interaction.copied_index is not None:
             copied_reply = getattr(
                 interaction, f"reply_{interaction.copied_index}", None
@@ -161,16 +336,13 @@ async def build_conversation_context(
             if copied_reply:
                 # Track the exact replies the user actually sent for freshness routing.
                 recent_user_replies.append(copied_reply)
-                summary += (
-                    f'Sent: "{copied_reply[:60]}..."'
-                    if len(copied_reply) > 60
-                    else f'Sent: "{copied_reply}"'
-                )
-            else:
-                summary += "Copied a reply"
-        else:
-            summary += "Didn't use any suggestion"
-        summaries.append(summary)
+                sent_text = _reply_option_text(copied_reply)
+                if sent_text:
+                    parts.append(f'you sent: "{sent_text}"')
+        if parts:
+            summaries.append(f"[{interaction.direction}] " + " | ".join(parts))
+        elif interaction.copied_index is None:
+            summaries.append(f"[{interaction.direction}] you didn't send any suggestion")
 
     # Topic exhaustion inputs: last 3 organic texts and last 3 reply options shown.
     # We walk the most recent interactions (limited to 5) from newest to oldest.
@@ -213,4 +385,9 @@ async def build_conversation_context(
         first_their_last_message=first_their_last_message,
         last_user_organic_texts=last_user_organic_texts[:3],
         last_ai_replies_shown=last_ai_replies_shown[:3],
+        stable_archetype=stable_archetype,
+        archetype_confidence=archetype_confidence,
+        stable_dimensions=stable_dimensions,
+        photo_persona=getattr(conversation, "photo_persona", "") or "",
+        preferred_strategies=preferred_strategies,
     )

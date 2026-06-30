@@ -48,7 +48,8 @@ def _state_snapshot(state: AgentState) -> dict:
         "reply_count": reply_count,
         "has_auditor_feedback": bool(state.get("auditor_feedback", "")),
         "core_lore_chars": len(state.get("core_lore", "") or ""),
-        "past_memories_chars": len(state.get("past_memories", "") or ""),
+        "tier_1_raw_exchanges_chars": len(state.get("tier_1_raw_exchanges", "") or ""),
+        "tier_2_summary_chars": len(state.get("tier_2_summary", "") or ""),
     }
 
 
@@ -95,6 +96,9 @@ def check_audit(state: AgentState) -> str:
         return "end"
 
     if revision_count >= 2:
+        # We've hit the rewrite cap and the re-audit still flagged issues. We ship
+        # anyway (bounded latency/cost), but report the HONEST verdict so telemetry
+        # doesn't claim a pass that didn't happen.
         logger.info(
             "llm_lifecycle",
             stage="graph_route_after_auditor",
@@ -104,8 +108,8 @@ def check_audit(state: AgentState) -> str:
             conversation_id=state.get("conversation_id", "") or "",
             direction=state.get("direction", ""),
             revision_count=revision_count,
-            auditor_approved=True,
-            note="max_rewrites_cap",
+            auditor_approved=False,
+            note="shipped_with_unresolved_issues",
             state_snapshot=_state_snapshot(state),
         )
         return "end"
