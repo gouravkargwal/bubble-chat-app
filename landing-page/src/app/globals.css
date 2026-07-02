@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/* ── Nothing OS / Teenage Engineering-inspired Design System ── */
+/* Strict dark mode: pitch black background, pure white text.   */
+/* Exactly one accent color (vibrant neon red) used strictly    */
+/* for primary actions. No drop shadows. Hard, crisp 1px        */
+/* borders. Monospaced labels. Bold geometric titles.           */
+
+@theme inline {
+  /* ── Core Palette ── */
+  --color-nothing-black: #000000;
+  --color-nothing-white: #ffffff;
+  --color-neon-red: #ff003c;
+  --color-nothing-surface: #050505;
+  --color-nothing-border: rgba(255, 255, 255, 0.1);
+  --color-nothing-text-secondary: rgba(255, 255, 255, 0.45);
+  --color-nothing-text-tertiary: rgba(255, 255, 255, 0.3);
+  --color-nothing-success: #00ff66;
+  --color-nothing-error: #ff3355;
+
+  /* ── Typography ── */
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+
+  /* ── Spacing Tokens ── */
+  --spacing-screen: 24px;
+  --spacing-section: 28px;
+  --spacing-card: 16px;
+
+  /* ── Border Radius ── */
+  --radius-card: 12px;
+  --radius-pill: 9999px;
+  --radius-sm: 4px;
+
+  /* ── Animations ── */
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* ── Base Styles ── */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #000000;
+  color: #ffffff;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Selection ── */
+::selection {
+  background-color: rgba(255, 0, 60, 0.3);
+  color: #ffffff;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Custom Utility Classes ── */
+
+/* Hard border utility (replaces shadows) */
+.border-hard {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Neon red glow for CTAs */
+@keyframes neon-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 0, 60, 0.15),
+                0 0 40px rgba(255, 0, 60, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 0, 60, 0.25),
+                0 0 60px rgba(255, 0, 60, 0.1);
+  }
+}
+
+.animate-neon-pulse {
+  animation: neon-pulse 3s ease-in-out infinite;
+}
+
+/* Status indicator blink */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+.animate-blink {
+  animation: blink 1.5s step-end infinite;
+}
+
+/* Terminal cursor blink */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-cursor {
+  animation: cursor-blink 1s step-end infinite;
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s var(--ease-out-expo) forwards;
+}
+
+/* Staggered fade-in delays */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
