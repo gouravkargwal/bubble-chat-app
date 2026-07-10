@@ -13,6 +13,7 @@ from app.api.v1.referral import router as referral_router
 from app.api.v1.routers.profile_auditor_routes import (
     router as profile_auditor_router,
 )
+from app.api.v1.telemetry import router as telemetry_router
 from app.api.v1.track import router as track_router
 from app.api.v1.usage import router as usage_router
 from app.api.v1.users import router as users_router
@@ -25,6 +26,7 @@ v1_router.include_router(vision_v2_router, tags=["vision"])
 v1_router.include_router(profile_auditor_router)
 v1_router.include_router(profile_optimizer_router)
 v1_router.include_router(track_router, tags=["track"])
+v1_router.include_router(telemetry_router, tags=["telemetry"])
 v1_router.include_router(usage_router, tags=["usage"])
 v1_router.include_router(history_router, tags=["history"])
 v1_router.include_router(conversations_router, tags=["conversations"])

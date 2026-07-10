@@ -88,6 +88,20 @@ data class TrackRatingRequest(
     @SerialName("is_positive") val isPositive: Boolean
 )
 
+// ── Telemetry ──
+
+@Serializable
+data class ClientErrorRequest(
+    @SerialName("error_type") val errorType: String,
+    val message: String,
+    val screen: String? = null,
+    val severity: String = "warning",
+    @SerialName("app_version") val appVersion: String? = null,
+    @SerialName("os_version") val osVersion: String? = null,
+    @SerialName("device_model") val deviceModel: String? = null,
+    @SerialName("stack_trace") val stackTrace: String? = null
+)
+
 // ── Usage ──
 
 @Serializable

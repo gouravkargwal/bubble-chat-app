@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "title": "Infrastructure & Errors",
+  "description": "Saturation signals and error taxonomy. Track DB pool pressure, worker backlogs, and errors broken down by source layer (api, llm, db, auth, agent, infra) and severity.",
+  "role": "admin",
+  "panels": [
+    {
+      "id": "Panel_ID_infra_1",
+      "type": "gauge",
+      "title": "DB Connections in Use",
+      "description": "",
+      "config": {"show_legends": false, "unit": "conn"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "rizzbot_db_connections_in_use",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_db_connections_in_use", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "DB Connections"}
+        }
+      ],
+      "layout": {"x": 0, "y": 0, "w": 3, "h": 3, "i": 1}
+    },
+    {
+      "id": "Panel_ID_infra_2",
+      "type": "gauge",
+      "title": "Active Audit Workers",
+      "description": "",
+      "config": {"show_legends": false, "unit": "workers"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "rizzbot_active_audit_workers",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_active_audit_workers", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "Active Workers"}
+        }
+      ],
+      "layout": {"x": 3, "y": 0, "w": 3, "h": 3, "i": 2}
+    },
+    {
+      "id": "Panel_ID_infra_3",
+      "type": "bar",
+      "title": "Errors by Layer",
+      "description": "",
+      "config": {"show_legends": true, "unit": "eps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_error_total[5m])) by (layer)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_error_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{layer}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 3, "w": 6, "h": 4, "i": 3}
+    },
+    {
+      "id": "Panel_ID_infra_4",
+      "type": "bar",
+      "title": "Errors by Severity",
+      "description": "",
+      "config": {"show_legends": true, "unit": "eps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_error_total[5m])) by (severity)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_error_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{severity}"}
+        }
+      ],
+      "layout": {"x": 6, "y": 3, "w": 6, "h": 4, "i": 4}
+    }
+  ]
+}

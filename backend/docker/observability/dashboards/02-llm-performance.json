@@ -1,0 +1,111 @@
+{
+  "version": 2,
+  "title": "LLM Performance",
+  "description": "AI model health and cost centre. Tracks call volume, latency distributions, token consumption, per-model cost, and fallback activations (429/503 capacity events).",
+  "role": "admin",
+  "panels": [
+    {
+      "id": "Panel_ID_llm_1",
+      "type": "line",
+      "title": "LLM Call Rate by Model & Operation",
+      "description": "",
+      "config": {"show_legends": true, "unit": "rps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_llm_calls_total[1m])) by (model, operation)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_calls_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{model} {operation}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 0, "w": 6, "h": 4, "i": 1}
+    },
+    {
+      "id": "Panel_ID_llm_2",
+      "type": "line",
+      "title": "LLM Latency p50 / p95 / p99 (s)",
+      "description": "",
+      "config": {"show_legends": true, "unit": "s"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "histogram_quantile(0.50, sum(rate(rizzbot_llm_latency_seconds_bucket[5m])) by (le, model))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_latency_seconds", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "p50 {model}"}
+        },
+        {
+          "query": "histogram_quantile(0.95, sum(rate(rizzbot_llm_latency_seconds_bucket[5m])) by (le, model))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_latency_seconds", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "p95 {model}"}
+        },
+        {
+          "query": "histogram_quantile(0.99, sum(rate(rizzbot_llm_latency_seconds_bucket[5m])) by (le, model))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_latency_seconds", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "p99 {model}"}
+        }
+      ],
+      "layout": {"x": 6, "y": 0, "w": 6, "h": 4, "i": 2}
+    },
+    {
+      "id": "Panel_ID_llm_3",
+      "type": "area-stacked",
+      "title": "Token Consumption (input vs output)",
+      "description": "",
+      "config": {"show_legends": true, "unit": "tokens/s"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_llm_tokens_total{token_type=\"input\"}[5m])) by (model)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_tokens_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "input {model}"}
+        },
+        {
+          "query": "sum(rate(rizzbot_llm_tokens_total{token_type=\"output\"}[5m])) by (model)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_tokens_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "output {model}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 4, "w": 6, "h": 4, "i": 3}
+    },
+    {
+      "id": "Panel_ID_llm_4",
+      "type": "bar",
+      "title": "Cost per Model ($USD)",
+      "description": "",
+      "config": {"show_legends": true, "unit": "$"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(increase(rizzbot_llm_cost_total[1h])) by (model)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_cost_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{model}"}
+        }
+      ],
+      "layout": {"x": 6, "y": 4, "w": 4, "h": 4, "i": 4}
+    },
+    {
+      "id": "Panel_ID_llm_5",
+      "type": "metric",
+      "title": "Fallback Activations",
+      "description": "",
+      "config": {"show_legends": false, "unit": "count"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(increase(rizzbot_llm_fallback_total[1h]))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_llm_fallback_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "Fallbacks"}
+        }
+      ],
+      "layout": {"x": 10, "y": 4, "w": 2, "h": 4, "i": 5}
+    }
+  ]
+}

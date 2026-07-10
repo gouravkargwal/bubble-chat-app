@@ -1,15 +1,16 @@
-# Variable substitution (${VAR}) only reads the default `.env` file in this directory — not `.env.prod`.
-# Services below use `env_file: .env.prod` for runtime env; Grafana's password is read the same way
-# (set GF_SECURITY_ADMIN_PASSWORD in .env.prod — no ${...} here, so `compose build` works without --env-file).
+# ─── Production ────────────────────────────────────────────────────────────
+# Variable substitution (${VAR}) only reads the default `.env` file in this
+# directory — not `.env.prod`. Services below use `env_file: .env.prod` for
+# runtime env (set OPENOBSERVER_API_KEY + ZO_ROOT_USER_* in .env.prod).
 #
-# If you still use ${VAR} elsewhere, run: docker compose --env-file .env.prod -f docker-compose.prod.yml <cmd>
+# If you still use ${VAR} elsewhere, run:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml <cmd>
+# ───────────────────────────────────────────────────────────────────────────
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    env_file: .env.prod # <--- Read everything from here!
-    # Host can connect with psql/DBeaver/etc. via localhost:5432 (same pattern as Loki/Grafana on 127.0.0.1).
-    # Use "5432:5432" instead if you need LAN/internet access (lock down with firewall + strong passwords).
+    env_file: .env.prod
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -25,21 +26,37 @@ services:
       - default
       - milk_bridge
 
+  # ── Init: auto-create dashboards on first start ───────────────────────
+  # Runs setup_dashboards.py once when OpenObserver is ready.
+  # Retries up to 3 times if OO is still starting, then stops.
+  init-dashboards:
+    build: .
+    command: python docker/observability/setup_dashboards.py
+    env_file: .env.prod
+    depends_on:
+      openobserver:
+        condition: service_started
+    restart: on-failure:3
+    networks:
+      - default
+      - milk_bridge
+
   api:
     build: .
     command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --workers 4 --timeout-keep-alive 30
     env_file: .env.prod
-    # oci/ is listed in .dockerignore so API keys are never baked into the image — mount from host.
     volumes:
       - ./oci:/app/oci:ro
     depends_on:
       postgres:
         condition: service_healthy
-    labels:
-      logging: promtail
+      openobserver:
+        condition: service_started
+      init-dashboards:
+        condition: service_completed_successfully
     networks:
-      - default # Needed to talk to Postgres
-      - milk_bridge # Needed to talk to the existing milk network
+      - default
+      - milk_bridge
     healthcheck:
       test:
         [
@@ -53,64 +70,43 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Logs → Loki (Promtail tails Docker logs for containers labeled logging=promtail)
-  loki:
-    # 3.5.0 logs noisy false-positive "negative structured metadata bytes received".
-    # Use patched 3.5.1+.
-    image: grafana/loki:3.5.1
-    # Named volumes are root-owned; default Loki user cannot mkdir ruler paths under /tmp/loki.
-    user: "0:0"
-    volumes:
-      - ./docker/loki-config.yaml:/etc/loki/local-config.yaml
-      - loki_data:/tmp/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    ports:
-      - "127.0.0.1:3110:3100"
-    restart: unless-stopped
-    networks:
-      - default
-
-  promtail:
-    image: grafana/promtail:3.5.1
-    volumes:
-      - ./docker/promtail-config.yaml:/etc/promtail/config.yml
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - promtail_positions:/tmp
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      loki:
-        condition: service_started
-    restart: unless-stopped
-    networks:
-      - default
-
-  grafana:
-    image: grafana/grafana:11.3.0
+  # OpenObserver (unified observability: logs, metrics, traces)
+  # Access at http://localhost:5001
+  # ── Production configuration ────────────────────────────────────────────
+  #   Database: Uses Postgres for metadata (set ZO_POSTGRES_DSN in .env.prod).
+  #             Falls back to SQLite if ZO_POSTGRES_DSN is unset.
+  #   Auth:     ZO_ROOT_USER_EMAIL + ZO_ROOT_USER_PASSWORD create the admin
+  #             account on first startup. After that, create API keys in the UI
+  #             at Settings → API Keys and set OPENOBSERVER_API_KEY in .env.prod.
+  #   Storage:  Observability data stored internally (columnar), not in SQLite
+  #             or Postgres. Only metadata (users, dashboards, streams) goes
+  #             to the configured database.
+  # ─────────────────────────────────────────────────────────────────────────
+  openobserver:
+    image: public.ecr.aws/zinclabs/openobserve:latest
     env_file: .env.prod
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
+      - ZO_ROOT_USER_EMAIL=${ZO_ROOT_USER_EMAIL}
+      - ZO_ROOT_USER_PASSWORD=${ZO_ROOT_USER_PASSWORD}
+      - ZO_POSTGRES_DSN=${ZO_POSTGRES_DSN}
+      - ZO_DATA_DIR=/data
+      - ZO_HTTP_PORT=5001
     volumes:
-      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
-      - grafana_data:/var/lib/grafana
+      - ./docker/openobserver/config.yaml:/config.yaml
+      - openobserver_data:/data
     ports:
-      - "127.0.0.1:3333:3000"
+      - "127.0.0.1:5001:5001"
     depends_on:
-      loki:
-        condition: service_started
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      default:
-      milk_bridge:
-        # Same network as Nginx Proxy Manager — without this, NPM gets 502 (no route to Grafana).
-        aliases:
-          - bubble-grafana
+      - default
+      - milk_bridge
 
 volumes:
   pgdata_prod:
-  loki_data:
-  grafana_data:
-  promtail_positions:
+  openobserver_data:
 
 networks:
   milk_bridge:

@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.infrastructure.metrics import blueprint_generations_total
 from app.infrastructure.oci_storage import get_signed_url as oci_get_signed_url
 from app.infrastructure.database.models import (
     AuditedPhoto,
@@ -185,6 +186,7 @@ async def generate_blueprint(
                 idempotency_key=idempotency_key,
                 blueprint_id=existing.id,
             )
+            blueprint_generations_total.labels(status="idempotent").inc()
             return await build_blueprint_response(existing)
 
     # --- Input validation ---------------------------------------------------
@@ -243,6 +245,7 @@ async def generate_blueprint(
         parsed = json.loads(raw)
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("profile_blueprint_gemini_failed", error=str(exc))
+        blueprint_generations_total.labels(status="error").inc()
         raise ValueError("Failed to generate profile blueprint") from exc
 
     try:
@@ -317,6 +320,7 @@ async def generate_blueprint(
     # We do NOT commit here — the caller controls the transaction so quota
     # and blueprint creation succeed or fail atomically.
     await db.flush()
+    blueprint_generations_total.labels(status="success").inc()
     # Server-generated columns (e.g. created_at) are not present on the instance
     # until refreshed; accessing them triggers implicit IO and MissingGreenlet
     # under AsyncSession.

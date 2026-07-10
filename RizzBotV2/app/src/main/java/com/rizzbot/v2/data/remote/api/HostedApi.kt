@@ -7,6 +7,7 @@ import com.rizzbot.v2.data.remote.dto.AuditJobStatusResponse
 import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.data.remote.dto.AuthResponse
 import com.rizzbot.v2.data.remote.dto.BillingStatusResponse
+import com.rizzbot.v2.data.remote.dto.ClientErrorRequest
 import com.rizzbot.v2.data.remote.dto.ConversationListResponse
 import com.rizzbot.v2.data.remote.dto.FirebaseAuthRequest
 import com.rizzbot.v2.data.remote.dto.HistoryListResponse
@@ -48,6 +49,10 @@ interface HostedApi {
 
     @POST("api/v1/track/rating")
     suspend fun trackRating(@Body request: TrackRatingRequest)
+
+    // Telemetry
+    @POST("api/v1/telemetry/client-error")
+    suspend fun reportClientError(@Body request: ClientErrorRequest)
 
     // Usage
     @GET("api/v1/usage")

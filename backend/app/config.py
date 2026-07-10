@@ -86,6 +86,34 @@ class Settings(BaseSettings):
     # Voice DNA (screenshot calibration + style learning). Off until re-enabled in product.
     voice_dna_enabled: bool = False
 
+    # OpenObserver (unified observability: logs, metrics, traces)
+    openobserver_endpoint: str = "http://localhost:5001"
+    openobserver_api_key: str = ""
+    openobserver_service_name: str = "rizzbot-api"
+    zo_org: str = "default"
+    otlp_enabled: bool = True
+    otlp_sample_rate: float = 0.1  # 10% sampling to control cost at scale
+    # Root creds fall back to Basic auth for OTLP ingestion when no
+    # per-org API key has been created yet in Settings -> API Keys.
+    zo_root_user_email: str = ""
+    zo_root_user_password: str = ""
+
+    @property
+    def openobserver_auth_header(self) -> str:
+        """Full `Authorization` header value for OTLP export.
+
+        Prefers a per-org API key (Bearer); falls back to root user
+        Basic auth so logs/traces/metrics flow before an API key exists.
+        """
+        if self.openobserver_api_key:
+            return f"Bearer {self.openobserver_api_key}"
+        if self.zo_root_user_email and self.zo_root_user_password:
+            import base64
+
+            creds = f"{self.zo_root_user_email}:{self.zo_root_user_password}"
+            return f"Basic {base64.b64encode(creds.encode()).decode()}"
+        return ""
+
     def validate_production(self) -> None:
         """Fail fast if critical secrets are not configured in production."""
         if self.environment != "development":

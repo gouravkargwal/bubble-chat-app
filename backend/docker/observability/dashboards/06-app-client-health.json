@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "title": "App Client Health",
+  "description": "Errors reported by the mobile app (Android), forwarded through the backend telemetry endpoint. Crashlytics remains the source of truth for full crash reports; this tracks API-facing client errors alongside backend errors.",
+  "role": "admin",
+  "panels": [
+    {
+      "id": "Panel_ID_app_1",
+      "type": "line",
+      "title": "Client Error Rate",
+      "description": "",
+      "config": {"show_legends": true, "unit": "eps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_error_total{layer=\"mobile\"}[5m])) by (error_type)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_error_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{error_type}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 0, "w": 8, "h": 4, "i": 1}
+    },
+    {
+      "id": "Panel_ID_app_2",
+      "type": "metric",
+      "title": "Client Errors (1h)",
+      "description": "",
+      "config": {"show_legends": false, "unit": "count"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(increase(rizzbot_error_total{layer=\"mobile\"}[1h]))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_error_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "Client Errors"}
+        }
+      ],
+      "layout": {"x": 8, "y": 0, "w": 4, "h": 4, "i": 2}
+    },
+    {
+      "id": "Panel_ID_app_3",
+      "type": "bar",
+      "title": "Errors by Severity",
+      "description": "",
+      "config": {"show_legends": true, "unit": "eps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_error_total{layer=\"mobile\"}[5m])) by (severity)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_error_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{severity}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 4, "w": 6, "h": 4, "i": 3}
+    },
+    {
+      "id": "Panel_ID_app_4",
+      "type": "table",
+      "title": "Recent Client Errors",
+      "description": "",
+      "config": {"show_legends": false, "unit": ""},
+      "queryType": "sql",
+      "queries": [
+        {
+          "query": "SELECT _timestamp, error_type, message, screen, severity, app_version, os_version, device_model, correlation_id FROM \"default\" WHERE body = 'client_error' ORDER BY _timestamp DESC LIMIT 20",
+          "customQuery": true,
+          "fields": {"stream": "default", "stream_type": "logs", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": ""}
+        }
+      ],
+      "layout": {"x": 6, "y": 4, "w": 6, "h": 4, "i": 4}
+    }
+  ]
+}

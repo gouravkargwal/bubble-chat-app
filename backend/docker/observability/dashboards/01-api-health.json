@@ -1,0 +1,94 @@
+{
+  "version": 2,
+  "title": "API Health (RED)",
+  "description": "Rate, Errors, Duration for every HTTP endpoint. Tracks request throughput, error spikes (4xx user errors, 5xx server failures), and latency distributions so you catch regressions before users complain.",
+  "role": "admin",
+  "panels": [
+    {
+      "id": "Panel_ID_api_1",
+      "type": "line",
+      "title": "Request Rate (rps)",
+      "description": "",
+      "config": {"show_legends": true, "unit": "rps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_http_requests_total[1m])) by (path, method)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_http_requests_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{method} {path}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 0, "w": 6, "h": 4, "i": 1}
+    },
+    {
+      "id": "Panel_ID_api_2",
+      "type": "bar",
+      "title": "Error Rate (4xx vs 5xx)",
+      "description": "",
+      "config": {"show_legends": true, "unit": "eps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_http_requests_total{status=~\"4..\"}[1m])) by (path)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_http_requests_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "4xx {path}"}
+        },
+        {
+          "query": "sum(rate(rizzbot_http_requests_total{status=~\"5..\"}[1m])) by (path)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_http_requests_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "5xx {path}"}
+        }
+      ],
+      "layout": {"x": 6, "y": 0, "w": 6, "h": 4, "i": 2}
+    },
+    {
+      "id": "Panel_ID_api_3",
+      "type": "line",
+      "title": "Latency p50 / p95 / p99 (s)",
+      "description": "",
+      "config": {"show_legends": true, "unit": "s"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "histogram_quantile(0.50, sum(rate(rizzbot_http_request_duration_seconds_bucket[5m])) by (le, path))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_http_request_duration_seconds", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "p50 {path}"}
+        },
+        {
+          "query": "histogram_quantile(0.95, sum(rate(rizzbot_http_request_duration_seconds_bucket[5m])) by (le, path))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_http_request_duration_seconds", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "p95 {path}"}
+        },
+        {
+          "query": "histogram_quantile(0.99, sum(rate(rizzbot_http_request_duration_seconds_bucket[5m])) by (le, path))",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_http_request_duration_seconds", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "p99 {path}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 4, "w": 8, "h": 4, "i": 3}
+    },
+    {
+      "id": "Panel_ID_api_4",
+      "type": "gauge",
+      "title": "Health Check Status",
+      "description": "",
+      "config": {"show_legends": false, "unit": "req"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "rizzbot_http_requests_total{path=\"/health\",status=\"200\"} offset 1m",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_http_requests_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "/health 200"}
+        }
+      ],
+      "layout": {"x": 8, "y": 4, "w": 4, "h": 4, "i": 4}
+    }
+  ]
+}

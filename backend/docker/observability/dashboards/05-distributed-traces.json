@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "title": "Distributed Traces",
+  "description": "End-to-end trace analysis for latency debugging. Trace volume, duration distributions, slowest traces, and error traces. Hover any trace_id to jump to the full waterfall in the Traces tab.",
+  "role": "admin",
+  "panels": [
+    {
+      "id": "Panel_ID_trace_1",
+      "type": "bar",
+      "title": "Trace Volume Over Time",
+      "description": "",
+      "config": {"show_legends": false, "unit": "spans"},
+      "queryType": "sql",
+      "queries": [
+        {
+          "query": "SELECT histogram(_timestamp) AS zo_sql_key, count(*) AS \"count\" FROM \"default\" GROUP BY zo_sql_key ORDER BY zo_sql_key",
+          "customQuery": true,
+          "fields": {"stream": "default", "stream_type": "traces", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": ""}
+        }
+      ],
+      "layout": {"x": 0, "y": 0, "w": 12, "h": 4, "i": 1}
+    },
+    {
+      "id": "Panel_ID_trace_2",
+      "type": "line",
+      "title": "Trace Duration p50 / p95 / p99 (µs)",
+      "description": "",
+      "config": {"show_legends": true, "unit": "µs"},
+      "queryType": "sql",
+      "queries": [
+        {
+          "query": "SELECT histogram(_timestamp) AS zo_sql_key, approx_percentile_cont(duration, 0.50) AS p50, approx_percentile_cont(duration, 0.95) AS p95, approx_percentile_cont(duration, 0.99) AS p99 FROM \"default\" GROUP BY zo_sql_key ORDER BY zo_sql_key",
+          "customQuery": true,
+          "fields": {"stream": "default", "stream_type": "traces", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": ""}
+        }
+      ],
+      "layout": {"x": 0, "y": 4, "w": 6, "h": 4, "i": 2}
+    },
+    {
+      "id": "Panel_ID_trace_3",
+      "type": "table",
+      "title": "Slowest Traces",
+      "description": "",
+      "config": {"show_legends": false, "unit": "µs"},
+      "queryType": "sql",
+      "queries": [
+        {
+          "query": "SELECT trace_id, operation_name, duration, http_method, http_status_code FROM \"default\" ORDER BY duration DESC LIMIT 20",
+          "customQuery": true,
+          "fields": {"stream": "default", "stream_type": "traces", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": ""}
+        }
+      ],
+      "layout": {"x": 6, "y": 4, "w": 6, "h": 4, "i": 3}
+    },
+    {
+      "id": "Panel_ID_trace_4",
+      "type": "table",
+      "title": "Error Traces (recent)",
+      "description": "",
+      "config": {"show_legends": false, "unit": "µs"},
+      "queryType": "sql",
+      "queries": [
+        {
+          "query": "SELECT trace_id, operation_name, duration, http_status_code, status_message FROM \"default\" WHERE CAST(http_status_code AS INT) >= 400 ORDER BY _timestamp DESC LIMIT 20",
+          "customQuery": true,
+          "fields": {"stream": "default", "stream_type": "traces", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": ""}
+        }
+      ],
+      "layout": {"x": 0, "y": 8, "w": 12, "h": 4, "i": 4}
+    }
+  ]
+}

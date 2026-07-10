@@ -14,6 +14,7 @@ import com.revenuecat.purchases.interfaces.ReceiveCustomerInfoCallback
 import com.revenuecat.purchases.interfaces.ReceiveOfferingsCallback
 import com.rizzbot.v2.data.auth.AuthManager
 import com.rizzbot.v2.data.subscription.SubscriptionManager
+import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.HapticHelper
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
@@ -46,6 +47,7 @@ data class PaywallState(
     val activeProductId: String? = null,
     val purchaseError: String? = null,
     val purchaseSuccess: Boolean = false,
+    val isPurchasing: Boolean = false,
     val isRefreshingAfterPurchase: Boolean = false,
     val readyToNavigate: Boolean = false
 )
@@ -56,7 +58,12 @@ class PaywallViewModel @Inject constructor(
     private val hostedRepository: HostedRepository,
     private val hapticHelper: HapticHelper,
     private val authManager: AuthManager,
+    private val analyticsHelper: AnalyticsHelper,
 ) : ViewModel() {
+
+    init {
+        analyticsHelper.screenViewed("Paywall")
+    }
 
     private val _state = MutableStateFlow(PaywallState())
     val state: StateFlow<PaywallState> = _state.asStateFlow()
@@ -223,8 +230,11 @@ class PaywallViewModel @Inject constructor(
         packageToBuy: Package,
         onSuccess: () -> Unit = {}
     ) {
-        _state.update { it.copy(purchaseError = null, purchaseSuccess = false) }
-        
+        // Prevent double-tap launching two billing flows at once — that races two
+        // ProxyBillingActivity instances and can crash with a null PendingIntent.
+        if (_state.value.isPurchasing) return
+        _state.update { it.copy(purchaseError = null, purchaseSuccess = false, isPurchasing = true) }
+
         // For now, use the standard purchase flow. RevenueCat + Google Play will handle
         // subscription replacement with their default proration behavior when upgrading.
         val purchaseParams = PurchaseParams.Builder(activity, packageToBuy).build()
@@ -238,7 +248,7 @@ class PaywallViewModel @Inject constructor(
                     // Show success screen immediately — no network wait for the user
                     hapticHelper.successTap()
                     applyRcCustomerInfo(customerInfo)
-                    _state.update { it.copy(purchaseError = null, purchaseSuccess = true) }
+                    _state.update { it.copy(purchaseError = null, purchaseSuccess = true, isPurchasing = false) }
 
                     // Sync backend + RevenueCat in background
                     viewModelScope.launch {
@@ -259,11 +269,16 @@ class PaywallViewModel @Inject constructor(
                     }
                     if (!userCancelled) {
                         Log.e("PaywallViewModel", "Purchase failed: ${error.message}")
+                        analyticsHelper.recordNonFatal(
+                            RuntimeException("Purchase failed: ${error.message}"),
+                            context = "paywall_purchase_error package=${packageToBuy.identifier}"
+                        )
                     }
                     _state.update {
                         it.copy(
                             purchaseError = errorMessage,
-                            purchaseSuccess = false
+                            purchaseSuccess = false,
+                            isPurchasing = false
                         )
                     }
                 }

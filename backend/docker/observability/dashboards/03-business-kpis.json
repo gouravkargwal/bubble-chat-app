@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "title": "Business KPIs",
+  "description": "Core product metrics for RizzBot. Audit job throughput, blueprint generation rates, cache efficiency, and tier allocation distribution.",
+  "role": "admin",
+  "panels": [
+    {
+      "id": "Panel_ID_kpi_1",
+      "type": "bar",
+      "title": "Audit Jobs by Status",
+      "description": "",
+      "config": {"show_legends": true, "unit": "rps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_audit_jobs_total[5m])) by (status)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_audit_jobs_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{status}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 0, "w": 4, "h": 4, "i": 1}
+    },
+    {
+      "id": "Panel_ID_kpi_2",
+      "type": "bar",
+      "title": "Blueprint Generations",
+      "description": "",
+      "config": {"show_legends": true, "unit": "rps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_blueprint_generations_total[5m])) by (status)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_blueprint_generations_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{status}"}
+        }
+      ],
+      "layout": {"x": 4, "y": 0, "w": 4, "h": 4, "i": 2}
+    },
+    {
+      "id": "Panel_ID_kpi_3",
+      "type": "gauge",
+      "title": "Cache Hit Ratio",
+      "description": "",
+      "config": {"show_legends": false, "unit": "%"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_cache_hits_total[5m])) / (sum(rate(rizzbot_cache_hits_total[5m])) + sum(rate(rizzbot_cache_misses_total[5m]))) * 100",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_cache_hits_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "Cache Hit %"}
+        }
+      ],
+      "layout": {"x": 8, "y": 0, "w": 4, "h": 4, "i": 3}
+    },
+    {
+      "id": "Panel_ID_kpi_4",
+      "type": "pie",
+      "title": "Tier Allocations",
+      "description": "",
+      "config": {"show_legends": true, "unit": "rps"},
+      "queryType": "promql",
+      "queries": [
+        {
+          "query": "sum(rate(rizzbot_tier_allocations_total[5m])) by (user_tier, allocated_model)",
+          "customQuery": true,
+          "fields": {"stream": "rizzbot_tier_allocations_total", "stream_type": "metrics", "x": [], "y": [], "filter": []},
+          "config": {"promql_legend": "{user_tier} / {allocated_model}"}
+        }
+      ],
+      "layout": {"x": 0, "y": 4, "w": 6, "h": 4, "i": 4}
+    }
+  ]
+}

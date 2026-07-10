@@ -101,6 +101,18 @@ class RatingTrackRequest(BaseModel):
     is_positive: bool
 
 
+# Client telemetry
+class ClientErrorRequest(BaseModel):
+    error_type: str
+    message: str
+    screen: str | None = None
+    severity: Literal["warning", "critical"] = "warning"
+    app_version: str | None = None
+    os_version: str | None = None
+    device_model: str | None = None
+    stack_trace: str | None = None
+
+
 # Usage
 class UsageResponse(BaseModel):
     # Credits system

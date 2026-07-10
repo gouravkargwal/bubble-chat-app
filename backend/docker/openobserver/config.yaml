@@ -1,0 +1,33 @@
+# OpenObserver configuration
+# Single binary for logs, metrics, and traces.
+# This file sets defaults. Override via environment variables in production.
+
+server:
+  http_listen_port: 5001
+  grpc_listen_port: 5002
+
+# OTLP endpoints for various signals
+otlp:
+  # Traces endpoint - receives OpenTelemetry traces
+  traces_path: /v1/otlp/traces
+  # Metrics endpoint - receives OpenTelemetry metrics
+  metrics_path: /v1/otlp/metrics
+  # Logs endpoint - receives OpenTelemetry logs
+  logs_path: /v1/otlp/logs
+
+# Storage configuration
+storage:
+  # Database for metadata (users, dashboards, stream schemas, saved searches).
+  #   Dev:  SQLite  (default) — no external dependencies, data in /data/openobserver.db
+  #   Prod: Postgres — set ZO_POSTGRES_DSN env var to override this path.
+  #         Example: ZO_POSTGRES_DSN=postgres://cookd:cookd@postgres:5432/openobserver
+  sqlite_path: /data/openobserver.db
+  # Data retention in days for observability data (logs, traces, metrics)
+  retention_days: 30
+
+# Security
+auth:
+  # Header name for API key authentication (used for OTLP ingestion).
+  # The API key value is set via ZO_ROOT_USER_EMAIL / ZO_ROOT_USER_PASSWORD
+  # on first startup, then created in Settings → API Keys.
+  api_key_header: "Authorization"

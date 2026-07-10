@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.infrastructure.database.engine import async_session
 from app.infrastructure.database.models import AuditedPhoto, AuditJob
+from app.infrastructure.metrics import audit_jobs_total, active_audit_workers
 from app.infrastructure.oci_storage import (
     get_bytes as oci_get_bytes,
     upload as oci_upload,
@@ -28,9 +29,12 @@ from app.infrastructure.oci_storage import (
 )
 from app.llm.gemini_client import GeminiClient
 from app.models.profile_auditor import AuditResponse, PhotoFeedback, PhotoTier
-from app.prompts.profile_auditor import PROFILE_AUDIT_SCHEMA, build_profile_audit_system_prompt, build_profile_audit_user_prompt
+from app.prompts.profile_auditor import (
+    PROFILE_AUDIT_SCHEMA,
+    build_profile_audit_system_prompt,
+    build_profile_audit_user_prompt,
+)
 from app.services.quota_manager import QuotaManager
-
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB per image safety limit
 
@@ -42,6 +46,7 @@ def _score_to_tier(score: int) -> PhotoTier:
     if score >= 6:
         return PhotoTier.FILLER
     return PhotoTier.GRAVEYARD
+
 
 logger = structlog.get_logger(__name__)
 
@@ -115,8 +120,14 @@ async def process_audit_job(
     5. Update AuditJob with result JSON
     6. Clean up temp images
     """
-    async with async_session() as db:
+    active_audit_workers.inc()
+    try:
         try:
+            audit_jobs_total.labels(status="started").inc()
+        except Exception:
+            pass
+
+        async with async_session() as db:
             # Load the job
             result = await db.execute(select(AuditJob).where(AuditJob.id == job_id))
             job = result.scalar_one_or_none()
@@ -227,6 +238,7 @@ async def process_audit_job(
                     progress_current=total,
                     result_json=response.model_dump_json(),
                 )
+                audit_jobs_total.labels(status="cached").inc()
                 await _cleanup_temp_images(image_keys)
                 return
 
@@ -450,27 +462,29 @@ async def process_audit_job(
                 total=final_response.total_analyzed,
                 passed=final_response.passed_count,
             )
+            audit_jobs_total.labels(status="success").inc()
 
             # Cleanup temp images
             await _cleanup_temp_images(image_keys)
-
-        except Exception as e:
-            # Log full error server-side, persist only a short safe string in DB
-            logger.error("audit_worker_unexpected_error", job_id=job_id, error=str(e))
-            try:
-                async with async_session() as err_db:
-                    await _update_job(
-                        err_db,
-                        job_id,
-                        status="failed",
-                        error=_safe_error(e),
-                    )
-            except Exception as inner_e:
-                logger.error(
-                    "audit_worker_fail_update_failed", job_id=job_id, error=str(inner_e)
+    except Exception as e:
+        # Log full error server-side, persist only a short safe string in DB
+        logger.error("audit_worker_unexpected_error", job_id=job_id, error=str(e))
+        try:
+            async with async_session() as err_db:
+                await _update_job(
+                    err_db,
+                    job_id,
+                    status="failed",
+                    error=_safe_error(e),
                 )
-            await _cleanup_temp_images(image_keys)
-            await _refund_audit_credits(google_provider_id, tier)
+        except Exception as inner_e:
+            logger.error(
+                "audit_worker_fail_update_failed", job_id=job_id, error=str(inner_e)
+            )
+        await _cleanup_temp_images(image_keys)
+        await _refund_audit_credits(google_provider_id, tier)
+    finally:
+        active_audit_workers.dec()
 
 
 async def _cleanup_temp_images(image_keys: list[str]) -> None:

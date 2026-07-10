@@ -102,8 +102,11 @@ fun PaywallScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = NothingWhite, disabledContainerColor = NothingSurface),
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
                                 shape = RoundedCornerShape(NothingDimens.pillRadius),
-                                enabled = !isCurrentTier
-                            ) { Text(if (isCurrentTier) "Current plan" else "Subscribe", color = NothingBlack, fontWeight = FontWeight.SemiBold) }
+                                enabled = !isCurrentTier && !state.isPurchasing
+                            ) {
+                                if (state.isPurchasing) CircularProgressIndicator(color = NothingBlack, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                                else Text(if (isCurrentTier) "Current plan" else "Subscribe", color = NothingBlack, fontWeight = FontWeight.SemiBold)
+                            }
                         }
                         TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Not now", color = NothingTextSecondary) }
                     }

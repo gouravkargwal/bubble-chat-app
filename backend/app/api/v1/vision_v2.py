@@ -33,6 +33,11 @@ from app.config import settings
 from app.core.tier_config import TIER_CONFIG, voice_dna_feature_active
 from app.domain.conversation import build_conversation_context
 from app.domain.tiers import get_effective_tier
+from app.infrastructure.metrics import (
+    cache_hits_total,
+    cache_misses_total,
+    tier_allocations_total,
+)
 from app.domain.voice_dna import to_domain as voice_to_domain
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Conversation, User, UserVoiceDNA
@@ -358,6 +363,7 @@ async def _run_generate_v2(
     # ------------------------------------------------------------------ #
     if cached_vision_out is not None:
         vision_out = cached_vision_out
+        cache_hits_total.labels(layer="vision_node").inc()
         logger.info(
             "llm_lifecycle",
             stage="vision_node_cache_hit",
@@ -365,6 +371,7 @@ async def _run_generate_v2(
             direction=request.direction.value,
         )
     else:
+        cache_misses_total.labels(layer="vision_node").inc()
         try:
             vision_out = await perform_full_vision_analysis(
                 images,
@@ -888,6 +895,14 @@ async def _run_generate_v2(
             _a = parsed.analysis if parsed else None
         _ctx = conversation_context
         _usage = usage_log if isinstance(usage_log, list) else []
+        generator_model = (
+            settings.groq_model
+            if settings.generator_provider.strip().lower() == "groq"
+            else settings.gemini_model
+        )
+        tier_allocations_total.labels(
+            user_tier=str(effective_tier), allocated_model=generator_model
+        ).inc()
         _replies_brief = [
             {
                 "text": r.text,
@@ -944,11 +959,7 @@ async def _run_generate_v2(
             ),
             revision_count=int(final_state.get("revision_count", 0) or 0),
             generator_provider=settings.generator_provider,
-            generator_model=(
-                settings.groq_model
-                if settings.generator_provider.strip().lower() == "groq"
-                else settings.gemini_model
-            ),
+            generator_model=generator_model,
             gemini_call_count=gemini_call_count,
             latency_ms=latency_ms,
             total_tokens=sum(

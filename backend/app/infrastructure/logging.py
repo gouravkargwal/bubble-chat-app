@@ -3,6 +3,7 @@ import sys
 from typing import Any
 
 import structlog
+from opentelemetry import trace
 
 
 _NAME_TO_LEVEL = {
@@ -88,6 +89,22 @@ def setup_logging(level: str = "INFO", *, json_logs: bool = True) -> None:
         event_dict.setdefault("environment", app_settings.environment)
         return event_dict
 
+    def _add_otel_trace_context(
+        logger: Any, method_name: str, event_dict: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Inject the current OpenTelemetry trace_id and span_id into every log event.
+
+        This enables log-to-trace correlation in OpenObserver: you can click from
+        a log line to its corresponding trace waterfall.
+        """
+        span = trace.get_current_span()
+        if span is not None:
+            ctx = span.get_span_context()
+            if ctx.is_valid:
+                event_dict["trace_id"] = format(ctx.trace_id, "032x")
+                event_dict["span_id"] = format(ctx.span_id, "016x")
+        return event_dict
+
     timestamper = structlog.processors.TimeStamper(fmt="iso")
 
     foreign_pre_chain = [
@@ -97,6 +114,7 @@ def setup_logging(level: str = "INFO", *, json_logs: bool = True) -> None:
         structlog.stdlib.PositionalArgumentsFormatter(),
         timestamper,
         _add_service_fields,
+        _add_otel_trace_context,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         _sentry_processor,

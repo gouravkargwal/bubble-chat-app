@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
@@ -19,6 +20,14 @@ from pyinstrument import Profiler
 from app.config import settings
 from app.infrastructure.database.engine import init_db
 from app.infrastructure.logging import setup_logging
+from app.infrastructure.metrics import (
+    setup_metrics,
+    error_total,
+    http_requests_total,
+    http_request_duration_seconds,
+)
+from app.infrastructure.tracing import setup_tracing, shutdown_tracing
+from app.infrastructure.otel_logging import setup_otel_logging
 
 # Infrastructure-level rate limiter (IP-based, complements application-level quotas)
 limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
@@ -37,6 +46,7 @@ def _detail_for_log(detail: Any, *, max_len: int = 4000) -> Any:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    # Sentry initialization (kept for error alerting)
     if settings.sentry_dsn:
         import sentry_sdk
 
@@ -47,11 +57,49 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             release="rizzbot-backend@2.0.0",
         )
 
+    # OpenTelemetry — initialise exporters for OpenObserver
+    if settings.otlp_enabled:
+        # OpenObserve OTLP/HTTP ingestion is org-scoped: /api/{org}/v1/{signal}
+        base_url = f"{settings.openobserver_endpoint.rstrip('/')}/api/{settings.zo_org}"
+        traces_endpoint = f"{base_url}/v1/traces"
+        logs_endpoint = f"{base_url}/v1/logs"
+
+        try:
+            auth_header = settings.openobserver_auth_header
+            setup_tracing(
+                app,
+                service_name=settings.openobserver_service_name,
+                otlp_endpoint=traces_endpoint,
+                console_export=not settings.log_json,
+                auth_header=auth_header,
+                sample_rate=settings.otlp_sample_rate,
+            )
+            setup_otel_logging(
+                endpoint=logs_endpoint,
+                auth_header=auth_header,
+                service_name=settings.openobserver_service_name,
+                console_export=not settings.log_json,
+            )
+            from app.infrastructure.metrics import setup_otel_metrics
+
+            setup_otel_metrics(
+                endpoint=f"{base_url}/v1/metrics",
+                auth_header=auth_header,
+                service_name=settings.openobserver_service_name,
+            )
+        except Exception:
+            logger = structlog.get_logger()
+            logger.exception("openobserver_init_failed_nonfatal")
+
     await init_db()
 
     yield
 
+    # Shutdown: flush remaining spans, flush metrics
+    from app.infrastructure.metrics import shutdown_otel_metrics
 
+    shutdown_tracing()
+    shutdown_otel_metrics()
 
 
 def create_app() -> FastAPI:
@@ -62,6 +110,9 @@ def create_app() -> FastAPI:
         version="2.0.0",
         lifespan=lifespan,
     )
+
+    # Prometheus metrics — exposes /metrics endpoint and instruments HTTP RED metrics
+    setup_metrics(app)
 
     # Infrastructure-level rate limiting (IP-based, defense-in-depth)
     app.state.limiter = limiter
@@ -87,6 +138,12 @@ def create_app() -> FastAPI:
             log.warning("http_exception", **kw)
         else:
             log.info("http_exception", **kw)
+        if status >= 400:
+            error_total.labels(
+                layer="api",
+                severity="critical" if status >= 500 else "warning",
+                error_type=type(exc).__name__,
+            ).inc()
         return JSONResponse(status_code=status, content={"detail": exc.detail})
 
     @app.exception_handler(RequestValidationError)
@@ -138,12 +195,35 @@ def create_app() -> FastAPI:
 
         return response
 
-    # Correlation ID: header passthrough (gateway / client) or new UUID; bound to structlog
-    # for the whole request so JSON logs shipped to Loki share one correlation_id per lifecycle.
+    # RED metrics: request rate/errors/duration per (method, path, status)
+    @app.middleware("http")
+    async def record_red_metrics(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+        start = time.monotonic()
+        response: Response = await call_next(request)
+        duration = time.monotonic() - start
+        labels = {
+            "method": request.method,
+            "path": request.url.path,
+            "status": str(response.status_code),
+        }
+        http_requests_total.labels(**labels).inc()
+        http_request_duration_seconds.labels(**labels).observe(duration)
+        return response
+
+    # Correlation ID: prefer the W3C traceparent's trace-id (so logs and OTel
+    # traces share one ID and can be pivoted between in OpenObserve), then
+    # X-Correlation-ID/X-Request-ID passthrough, then a new UUID.
     @app.middleware("http")
     async def add_correlation_id(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+        traceparent = request.headers.get("traceparent", "")
+        trace_id_from_traceparent = ""
+        parts = traceparent.split("-")
+        if len(parts) == 4 and len(parts[1]) == 32:
+            trace_id_from_traceparent = parts[1]
+
         incoming = (
-            request.headers.get("X-Correlation-ID")
+            trace_id_from_traceparent
+            or request.headers.get("X-Correlation-ID")
             or request.headers.get("X-Request-ID")
             or ""
         ).strip()
@@ -181,6 +261,9 @@ def create_app() -> FastAPI:
             path=request.url.path,
             correlation_id=correlation_id,
         )
+        error_total.labels(
+            layer="api", severity="critical", error_type=type(exc).__name__
+        ).inc()
 
         # Forward to Sentry if initialised
         try:
