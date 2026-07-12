@@ -21,7 +21,7 @@ const PLANS = [
     currency: "₹",
     period: "/week",
     description: "For when you need a quick, short-term edge.",
-    credits: "60 credits",
+    credits: "50 credits",
     signupCredits: "",
     label: "WEEKLY PASS",
     highlighted: false,
@@ -39,7 +39,7 @@ const PLANS = [
   {
     id: "match",
     name: "Match Pro",
-    price: "179",
+    price: "249",
     currency: "₹",
     period: "/month",
     description: "The standard blueprint for dating control.",
@@ -159,7 +159,7 @@ export function Pricing() {
           outright or pay as you go.
         </p>
         <p className="mt-2 text-xs font-mono text-nothing-text-tertiary tracking-wider">
-          ₹99/wk &bull; ₹179/mo (Save 55%) &bull;{" "}
+          ₹99/wk &bull; ₹249/mo (Save 67%) &bull;{" "}
           <span className="text-neon-red">₹999 Lifetime (Best Value)</span>
         </p>
       </AnimatedSection>
@@ -301,11 +301,11 @@ export function Pricing() {
                       className="mb-4 rounded-lg border border-nothing-border bg-nothing-surface/50 px-3 py-2.5 text-center"
                     >
                       <p className="text-[10px] font-mono text-nothing-text-secondary tracking-wider leading-relaxed">
-                        Match Pro is ₹179/mo ={" "}
-                        <span className="text-nothing-white">₹2,148/yr</span>
+                        Match Pro is ₹249/mo ={" "}
+                        <span className="text-nothing-white">₹2,988/yr</span>
                         <br />
                         <span className="text-neon-red">
-                          You save ₹1,149 in Year 1 alone with LTD
+                          You save ₹1,989 in Year 1 alone with LTD
                         </span>
                       </p>
                     </motion.div>
