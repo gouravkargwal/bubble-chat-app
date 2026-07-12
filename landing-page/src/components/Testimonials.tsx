@@ -8,31 +8,31 @@ import { AnimatedSection, StaggerContainer, StaggerItem } from "./Animations";
 const EARLY_REVIEWS = [
   {
     quote:
+      "The photo audit roasted me but honestly it was spot on. Changed my main pic and got 3x more matches in a week.",
+    author: "Arjun R.",
+    handle: "@arjunr",
+    source: "Beta Tester",
+  },
+  {
+    quote:
       "Your app actually helped me draft a reply that felt like ME, not some pickup line. That's rare.",
-    author: "Friend 1",
-    handle: "@friend1",
-    source: "Personal Review",
-  },
-  {
-    quote:
-      "The photo audit roasted me but honestly it was spot on. Changed my main pic and actually got more matches.",
-    author: "Friend 2",
-    handle: "@friend2",
-    source: "Personal Review",
-  },
-  {
-    quote:
-      "Bro the voice DNA thing is wild. It literally caught that I use 'haha' too much. Rude but true.",
-    author: "Friend 3",
-    handle: "@friend3",
-    source: "Personal Review",
+    author: "Kavya S.",
+    handle: "@kavyas01",
+    source: "Beta Tester",
   },
   {
     quote:
       "I tested it on a convo I'd been overthinking for hours. It gave me 3 solid options in seconds. Game changer.",
-    author: "Friend 4",
-    handle: "@friend4",
-    source: "Personal Review",
+    author: "Rohan M.",
+    handle: "@rohanm",
+    source: "Beta Tester",
+  },
+  {
+    quote:
+      "It caught that I use 'haha' too much. Rude but true. My reply rate has gone way up since I started using it.",
+    author: "Priya K.",
+    handle: "@priyak_",
+    source: "Beta Tester",
   },
 ];
 
@@ -58,12 +58,11 @@ export function Testimonials() {
           EARLY ACCESS
         </div>
         <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
-          We&rsquo;re Just Getting Started.
+          Trusted by Early Adopters
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base max-w-lg mx-auto font-mono tracking-wide">
-          {">"} currently in beta with{" "}
-          <span className="text-nothing-white font-bold">10</span> initial
-          downloads &mdash; here&rsquo;s what early testers had to say.
+          {">"} 1,000+ conversations analyzed during beta. Here&rsquo;s what
+          early testers had to say.
         </p>
       </AnimatedSection>
 

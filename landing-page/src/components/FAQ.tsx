@@ -20,7 +20,7 @@ const FAQS = [
   },
   {
     q: "Is there a free plan?",
-    a: "Yes! Every user gets 2 free credits per day (up to 60 per month) plus 10 bonus credits on signup. No credit card needed. It's enough to try it out and see the difference.",
+    a: "Yes! Every user gets 2 free conversations per day (up to 60 per month) plus 10 bonus conversations on signup. No credit card needed. It's enough to try it out and see the difference.",
   },
   {
     q: "How accurate is the AI?",

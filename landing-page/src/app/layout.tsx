@@ -9,13 +9,15 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Cookd — AI Dating Coach: Never Lose The Conversation Again",
+  title:
+    "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
   description:
-    "Get AI-powered opening lines & reply strategies based on real-time chat analysis. Stop guessing. Start connecting. Download on Google Play.",
+    "AI dating coach that analyzes your chats and crafts winning replies in real-time. Get better responses on Hinge, Bumble, Tinder & more. Download on Google Play.",
   openGraph: {
-    title: "Cookd — AI Dating Coach: Never Lose The Conversation Again",
+    title:
+      "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
     description:
-      "Get AI-powered opening lines & reply strategies based on real-time chat analysis. Stop guessing. Start connecting.",
+      "AI dating coach that analyzes your chats and crafts winning replies in real-time. Get better responses on Hinge, Bumble, Tinder & more.",
     siteName: "Cookd",
     type: "website",
     url: "https://cookd.app",
@@ -31,11 +33,15 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cookd — AI Dating Coach: Never Lose The Conversation Again",
+    title:
+      "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
     description:
-      "AI-powered dating coach that analyzes chats and crafts winning responses in real-time. Download on Google Play.",
+      "AI dating coach that analyzes chats and crafts winning replies in real-time. Get better responses on Hinge, Bumble, Tinder & more. Download on Google Play.",
     images: ["https://cookd.app/og-image.png"],
     site: "@cookd_app",
+  },
+  icons: {
+    icon: "/logo.svg",
   },
   robots: {
     index: true,

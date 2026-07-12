@@ -1,7 +1,12 @@
 "use client";
 
 import React, { ReactNode, useRef } from "react";
-import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  useReducedMotion,
+} from "framer-motion";
 
 // ── Scroll-triggered reveal wrapper ──
 // Apple-style: elements fade up with a gentle spring as they enter the viewport
@@ -171,42 +176,6 @@ export function StaggerItem({
   );
 }
 
-// ── Floating animation for decorative elements ──
-// Gentle floating movement, like Apple's product page hero elements
-
-interface FloatAnimationProps {
-  children: ReactNode;
-  amplitude?: number;
-  duration?: number;
-  delay?: number;
-  className?: string;
-}
-
-export function FloatAnimation({
-  children,
-  amplitude = 10,
-  duration = 4,
-  delay = 0,
-  className = "",
-}: FloatAnimationProps) {
-  return (
-    <motion.div
-      animate={{
-        y: [-amplitude, amplitude, -amplitude],
-      }}
-      transition={{
-        duration,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay,
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
 // ── Scale-on-hover wrapper for interactive elements ──
 // Apple-style subtle scale on hover
 
@@ -226,66 +195,6 @@ export function ScaleHover({
       whileHover={{ scale }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 400, damping: 20 }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-// ── Text character reveal (Apple-style hero text) ──
-
-interface TextRevealProps {
-  text: string;
-  className?: string;
-  delay?: number;
-}
-
-export function TextReveal({ text, className = "", delay = 0 }: TextRevealProps) {
-  return (
-    <span className={className}>
-      {text.split("").map((char, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0, y: 40, rotateX: -40 }}
-          animate={{ opacity: 1, y: 0, rotateX: 0 }}
-          transition={{
-            duration: 0.5,
-            delay: delay + i * 0.025,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          style={{ display: "inline-block", whiteSpace: "pre" }}
-        >
-          {char}
-        </motion.span>
-      ))}
-    </span>
-  );
-}
-
-// ── Fade-in when in view (simpler alternative) ──
-
-interface FadeInProps {
-  children: ReactNode;
-  className?: string;
-  delay?: number;
-  duration?: number;
-  once?: boolean;
-}
-
-export function FadeIn({
-  children,
-  className = "",
-  delay = 0,
-  duration = 0.6,
-  once = true,
-}: FadeInProps) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ once, margin: "-60px" }}
-      transition={{ duration, delay, ease: [0.16, 1, 0.3, 1] }}
       className={className}
     >
       {children}

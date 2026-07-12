@@ -40,7 +40,11 @@ export function CTA() {
             >
               <motion.div
                 animate={{ opacity: [1, 0.2, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               >
                 <StatusDot active />
               </motion.div>
@@ -53,7 +57,12 @@ export function CTA() {
               initial={{ scale: 0 }}
               whileInView={{ scale: 1 }}
               viewport={{ once: true }}
-              transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.1 }}
+              transition={{
+                type: "spring",
+                stiffness: 200,
+                damping: 15,
+                delay: 0.1,
+              }}
             >
               <Logo size={64} />
             </motion.div>
@@ -64,11 +73,15 @@ export function CTA() {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              transition={{
+                duration: 0.6,
+                delay: 0.2,
+                ease: [0.16, 1, 0.3, 1],
+              }}
             >
-              Ready to Stop
+              Get Your First Reply
               <br />
-              <span className="text-neon-red">Overthinking</span> Every Message?
+              <span className="text-neon-red">in 3 Seconds</span>
             </motion.h2>
 
             <motion.p
@@ -76,7 +89,11 @@ export function CTA() {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              transition={{
+                duration: 0.6,
+                delay: 0.3,
+                ease: [0.16, 1, 0.3, 1],
+              }}
             >
               Get started free — no credit card required.
             </motion.p>
@@ -87,24 +104,38 @@ export function CTA() {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              transition={{
+                duration: 0.6,
+                delay: 0.4,
+                ease: [0.16, 1, 0.3, 1],
+              }}
             >
               <span className="text-xs font-mono text-nothing-text-tertiary tracking-wider">
                 REFER & EARN
               </span>
               <div className="flex items-center gap-4 text-xs font-mono tracking-wider">
                 <span className="text-nothing-text-secondary">
-                  You get <span className="text-nothing-success font-bold">10 credits</span>
+                  You get{" "}
+                  <span className="text-nothing-success font-bold">
+                    10 conversations
+                  </span>
                 </span>
                 <motion.span
                   className="text-nothing-text-tertiary"
                   animate={{ x: [0, 3, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                  transition={{
+                    duration: 1.5,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
                 >
                   →
                 </motion.span>
                 <span className="text-nothing-text-secondary">
-                  Friend gets <span className="text-nothing-success font-bold">5 credits</span>
+                  Friend gets{" "}
+                  <span className="text-nothing-success font-bold">
+                    5 conversations
+                  </span>
                 </span>
               </div>
             </motion.div>
@@ -115,7 +146,11 @@ export function CTA() {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              transition={{
+                duration: 0.6,
+                delay: 0.5,
+                ease: [0.16, 1, 0.3, 1],
+              }}
             >
               <ScaleHover scale={1.05}>
                 <motion.a
@@ -130,11 +165,25 @@ export function CTA() {
                       "0 0 20px rgba(255,0,60,0.15), 0 0 40px rgba(255,0,60,0.05)",
                     ],
                   }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
                   whileHover={{ boxShadow: "0 0 40px rgba(255,0,60,0.35)" }}
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5" />
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
+                    />
                   </svg>
                   <span>Get on Google Play</span>
                   <motion.svg
@@ -144,9 +193,17 @@ export function CTA() {
                     stroke="currentColor"
                     strokeWidth={2.5}
                     animate={{ x: [0, 3, 0] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 5l7 7-7 7"
+                    />
                   </motion.svg>
                 </motion.a>
               </ScaleHover>

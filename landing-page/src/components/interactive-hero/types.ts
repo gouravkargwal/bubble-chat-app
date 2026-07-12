@@ -18,12 +18,6 @@ export interface VibeOption {
   shortcut: string;
 }
 
-export interface GeneratedReply {
-  id: string;
-  text: string;
-  style: string;
-}
-
 // ── Shared Easing ──
 export const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -40,12 +34,6 @@ export const slideUp: Variants = {
     y: -16,
     transition: { duration: 0.3, ease: EASE_OUT },
   },
-};
-
-export const fadeIn: Variants = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1, transition: { duration: 0.4, ease: EASE_OUT } },
-  exit: { opacity: 0, transition: { duration: 0.25 } },
 };
 
 // ── Constants ──
@@ -70,24 +58,6 @@ export const VIBE_OPTIONS: VibeOption[] = [
     label: "Keep It Playful",
     description: "Light, flirty energy that keeps the spark alive.",
     shortcut: "CTRL+3",
-  },
-];
-
-export const MOCK_REPLIES: GeneratedReply[] = [
-  {
-    id: "r1",
-    text: "Haha you're literally impossible to resist, you know that? \u{1F60F}",
-    style: "Playful Tease",
-  },
-  {
-    id: "r2",
-    text: "Okay but real talk \u2014 you just made my whole day. Don't ask how.",
-    style: "Warm & Genuine",
-  },
-  {
-    id: "r3",
-    text: "I'm convinced you're running a charm offensive and I'm not even mad.",
-    style: "Keep It Playful",
   },
 ];
 
