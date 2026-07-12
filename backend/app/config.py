@@ -55,6 +55,22 @@ class Settings(BaseSettings):
     # RevenueCat
     revenuecat_webhook_secret: str = ""
 
+    # PayU (LTD payments — Indian payment gateway)
+    payu_merchant_key: str = ""
+    payu_merchant_salt: str = ""
+    # PayU test environment: "test" or "live"
+    payu_mode: str = "test"
+    # PayU base URLs — changed in 2024, refer to PayU docs for your region
+    # Test: https://test.payu.in, Live: https://secure.payu.in
+    payu_base_url: str = "https://test.payu.in"
+    # Where PayU redirects after payment (your domain)
+    payu_redirect_base: str = "http://localhost:3000"
+    # Sender email for LTD code emails (SendGrid / SMTP)
+    ltd_email_from: str = "hello@cookd.app"
+    # SendPulse API credentials for transactional emails
+    sendpulse_client_id: str = ""
+    sendpulse_client_secret: str = ""
+
     # Signup trial — promo code auto-applied to new users (empty = no trial)
     signup_promo_code: str = "WELCOME"
 

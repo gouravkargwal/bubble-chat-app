@@ -29,6 +29,9 @@ async def add_security_headers(request: Request, call_next) -> Response:  # type
     # /metrics page (inline JS charts) and pyinstrument profiling HTML.
     # If neither is needed, tighten to:
     #   script-src 'self'; style-src 'self' 'unsafe-inline'
+    #
+    # PayU domains are allowed in form-action so the hidden POST form
+    # on the LTD checkout page can submit to PayU.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
@@ -37,7 +40,7 @@ async def add_security_headers(request: Request, call_next) -> Response:  # type
         "font-src 'self' data:; "
         "object-src 'none'; "
         "base-uri 'self'; "
-        "form-action 'self'"
+        "form-action 'self' https://test.payu.in https://secure.payu.in"
     )
 
     # ── X-Content-Type-Options ───────────────────────────────────────────
@@ -55,10 +58,7 @@ async def add_security_headers(request: Request, call_next) -> Response:  # type
     # ── Permissions-Policy ───────────────────────────────────────────────
     # Restricts which browser APIs the page can use (camera, mic, etc.).
     response.headers["Permissions-Policy"] = (
-        "camera=(), "
-        "microphone=(), "
-        "geolocation=(), "
-        "interest-cohort=()"
+        "camera=(), " "microphone=(), " "geolocation=(), " "interest-cohort=()"
     )
 
     # ── Strict-Transport-Security (HSTS) ────────────────────────────────

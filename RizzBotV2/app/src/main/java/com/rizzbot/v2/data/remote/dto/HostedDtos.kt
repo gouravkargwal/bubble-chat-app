@@ -110,6 +110,7 @@ data class UsageResponse(
     @SerialName("credits_period_limit") val creditsPeriodLimit: Int = 0,
     @SerialName("billing_period") val billingPeriod: String = "monthly",
     val tier: String = "free",
+    @SerialName("is_ltd") val isLtd: Boolean = false,
     @SerialName("tier_expires_at") val tierExpiresAt: Long? = null,
     @SerialName("allowed_directions") val allowedDirections: List<String> = emptyList(),
     @SerialName("max_screenshots") val maxScreenshots: Int = 2,
@@ -169,6 +170,47 @@ data class BillingStatusResponse(
     @SerialName("product_id") val productId: String? = null,
     @SerialName("expires_at") val expiresAt: Long? = null,
     @SerialName("auto_renewing") val autoRenewing: Boolean = false
+)
+
+// ── LTD (Lifetime Deal) ──
+
+@Serializable
+data class RedeemLTDCodeRequest(
+    val code: String
+)
+
+@Serializable
+data class RedeemLTDCodeResponse(
+    val status: String,
+    val tier: String = "match",
+    val message: String = ""
+)
+
+@Serializable
+data class LtdBannerConfigResponse(
+    val enabled: Boolean = true,
+    val price: Int = 999,
+    val currency: String = "₹",
+    @SerialName("compare_at") val compareAt: Int = 4799,
+    val sticky: String = "Pays for itself in 4 months",
+    val badge: String = "LIMITED OFFER",
+    @SerialName("badge_icon") val badgeIcon: String = "🔥",
+    val title: String = "Lifetime Access",
+    @SerialName("spots_remaining") val spotsRemaining: Int = 658,
+    @SerialName("total_spots") val totalSpots: Int = 1000,
+    @SerialName("scarcity_label") val scarcityLabel: String = "licenses claimed",
+    val directions: Int = 9,
+    @SerialName("no_expiry") val noExpiry: Boolean = true,
+    @SerialName("benefit_directions_label") val benefitDirectionsLabel: String = "directions",
+    @SerialName("benefit_no_expiry_label") val benefitNoExpiryLabel: String = "no expiry",
+    @SerialName("benefit_no_expiry_value") val benefitNoExpiryValue: String = "∞",
+    @SerialName("cta_text") val ctaText: String = "Claim Your Lifetime License",
+    @SerialName("redeem_title") val redeemTitle: String = "Already have a code?",
+    @SerialName("redeem_placeholder") val redeemPlaceholder: String = "LTD-XXXXXXXX",
+    @SerialName("redeem_cta_text") val redeemCtaText: String = "Redeem",
+    @SerialName("landing_url") val landingUrl: String = "https://cookd.app/#pricing",
+    @SerialName("hide_if_ltd_active") val hideIfLtdActive: Boolean = true,
+    @SerialName("cache_max_age_seconds") val cacheMaxAgeSeconds: Int = 21600,
 )
 
 // ── History ──

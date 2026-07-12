@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { SITE, APP_URLS } from "./constants";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
@@ -9,35 +10,29 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title:
-    "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
-  description:
-    "AI dating coach that analyzes your chats and crafts winning replies in real-time. Get better responses on Hinge, Bumble, Tinder & more. Download on Google Play.",
+  title: SITE.title,
+  description: SITE.description,
   openGraph: {
-    title:
-      "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
-    description:
-      "AI dating coach that analyzes your chats and crafts winning replies in real-time. Get better responses on Hinge, Bumble, Tinder & more.",
-    siteName: "Cookd",
+    title: SITE.title,
+    description: SITE.description,
+    siteName: SITE.name,
     type: "website",
-    url: "https://cookd.app",
+    url: APP_URLS.website,
     locale: "en_US",
     images: [
       {
-        url: "https://cookd.app/og-image.png",
+        url: APP_URLS.ogImage,
         width: 1200,
         height: 630,
-        alt: "Cookd — AI Dating Coach",
+        alt: `${SITE.name} — ${SITE.tagline}`,
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title:
-      "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
-    description:
-      "AI dating coach that analyzes chats and crafts winning replies in real-time. Get better responses on Hinge, Bumble, Tinder & more. Download on Google Play.",
-    images: ["https://cookd.app/og-image.png"],
+    title: SITE.title,
+    description: SITE.description,
+    images: [APP_URLS.ogImage],
     site: "@cookd_app",
   },
   icons: {
@@ -48,7 +43,7 @@ export const metadata: Metadata = {
     follow: true,
   },
   verification: {
-    google: "YOUR_GOOGLE_VERIFICATION_CODE", // Replace with actual verification code
+    google: "YOUR_GOOGLE_VERIFICATION_CODE",
   },
 };
 

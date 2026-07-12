@@ -1,7 +1,11 @@
 package com.rizzbot.v2.ui.onboarding
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,13 +16,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,11 +37,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.sp
+import com.rizzbot.v2.ui.theme.NeonRed
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingDimens
@@ -43,9 +53,10 @@ import com.rizzbot.v2.ui.theme.NothingSurface
 import com.rizzbot.v2.ui.theme.NothingTextSecondary
 import com.rizzbot.v2.ui.theme.NothingTextTertiary
 import com.rizzbot.v2.ui.theme.NothingWhite
+import com.rizzbot.v2.util.Constants
 
-/** Matches backend FREE_SIGNUP_CREDITS in tier_config.py — 10 one-time signup bonus credits. */
-private val freeCreditsCount = 10
+/** Matches backend FREE_SIGNUP_CREDITS in tier_config.py — 15 one-time signup bonus credits (updated Jan 2025). */
+private val freeCreditsCount = Constants.SIGNUP_BONUS_CREDITS
 
 /**
  * Signup bonus screen shown to new users after Google Sign-In.
@@ -64,6 +75,8 @@ fun OnboardingSignupBonusStep(
     onStart: () -> Unit,
     userName: String?,
 ) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -261,6 +274,36 @@ fun OnboardingSignupBonusStep(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // ── LTD upsell banner (compact neon red) ──
+        Card(
+            colors = CardDefaults.cardColors(containerColor = NothingBlack),
+            shape = RoundedCornerShape(NothingDimens.cardRadius),
+            border = BorderStroke(1.dp, NeonRed),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.LTD_LANDING_URL)))
+                    }
+                    .padding(horizontal = NothingDimens.cardPadding, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(NeonRed),
+                    contentAlignment = Alignment.Center,
+                ) { Text("🔥", fontSize = 16.sp) }
+                Spacer(modifier = Modifier.width(NothingDimens.elementGap))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Lifetime Access — ₹999", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    Text("Pay once. Unlimited. No expiry.", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = NothingTextTertiary, modifier = Modifier.size(18.dp))
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))

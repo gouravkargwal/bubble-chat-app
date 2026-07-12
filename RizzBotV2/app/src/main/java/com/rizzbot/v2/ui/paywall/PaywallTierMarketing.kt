@@ -10,6 +10,7 @@ internal object PaywallTierMarketing {
         when (appTier) {
             "crush" -> "Upgrade to Match"
             "match" -> "Manage your plan"
+            "rizz" -> "Manage your plan"
             else -> "Upgrade your wingman"
         }
 
@@ -21,13 +22,15 @@ internal object PaywallTierMarketing {
         when (appTier) {
             "crush" -> "Crush unlocks 7 reply modes, custom hints, and photo audits. Match adds Ask Out + Get Number + blueprints."
             "match" -> "Match unlocks all 9 reply modes, blueprints, and photo audits."
+            "rizz" -> "Rizz gives you 300 credits/month, priority server, and early access to new features."
             else -> "Free gives you Openers, Quick Replies, Keep Playful, and Revive Chat. Upgrade for the full toolkit."
         }
 
-    fun featureLines(selected: PaywallTier): List<String> =
+    fun featureLines(selected: PaywallTier, isLtd: Boolean = false): List<String> =
         when (selected) {
             PaywallTier.Crush -> crushLines
-            PaywallTier.Match -> matchLines
+            PaywallTier.Match -> if (isLtd) matchLtdLines else matchLines
+            PaywallTier.Rizz -> rizzLines
         }
 
     /** 50 credits / 7 days — ₹99/week */
@@ -39,12 +42,31 @@ internal object PaywallTierMarketing {
         "Up to 5 screenshots per reply",
     )
 
-    /** 150 credits / 30 days — ₹179/month */
+    /** 150 credits / 30 days — ₹249/month */
     private val matchLines = listOf(
         "150 credits every month",
         "All 9 reply modes — including Get Number & Ask Out",
         "Custom hints & chemistry tracking",
         "Photo audit & profile blueprint",
         "Up to 5 screenshots per reply",
+    )
+
+    /** Unlimited — Lifetime Deal variant */
+    private val matchLtdLines = listOf(
+        "Unlimited every month",
+        "All 9 reply modes — including Get Number & Ask Out",
+        "Custom hints & chemistry tracking",
+        "Photo audit & profile blueprint",
+        "Up to 5 screenshots per reply",
+    )
+
+    /** 300 credits / 30 days — ₹499/month */
+    private val rizzLines = listOf(
+        "300 credits every month — double Match",
+        "All 9 reply modes — including Get Number & Ask Out",
+        "Priority server — faster replies",
+        "Early access to new features",
+        "Custom hints & chemistry tracking",
+        "Photo audit & profile blueprint",
     )
 }

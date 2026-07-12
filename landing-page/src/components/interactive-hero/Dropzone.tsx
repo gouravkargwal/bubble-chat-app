@@ -52,9 +52,9 @@ export function Dropzone({ onImageSelected }: DropzoneProps) {
       {/* Heading */}
       <div className="text-center max-w-3xl">
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-nothing-white leading-[1.05]">
-          Ever been <span className="text-neon-red">left on read</span> when you
-          knew you had{" "}
-          <span className="text-nothing-white/70">the perfect follow-up</span>?
+          Turn every <span className="text-neon-red">left on read</span> into a
+          reply that{" "}
+          <span className="text-nothing-white/70">actually lands</span>.
         </h1>
         <p className="mt-5 text-base sm:text-lg text-nothing-text-secondary leading-relaxed max-w-2xl mx-auto">
           Upload a chat screenshot. Pick a direction. Let AI craft replies that
@@ -172,8 +172,8 @@ export function Dropzone({ onImageSelected }: DropzoneProps) {
         transition={{ delay: 1.3, duration: 0.5 }}
         className="mt-6 text-[10px] font-mono text-nothing-text-tertiary tracking-wider text-center"
       >
-        Built by real people for real conversations &mdash; currently in beta
-        with early testers
+        Built by real people for real conversations &mdash; trusted by early
+        adopters
       </motion.p>
     </motion.div>
   );

@@ -34,7 +34,9 @@ data class HomeState(
     val roastLanguage: String = "English",
     val latestBlueprintTheme: String? = null,
     val latestBlueprintSlotCount: Int = 0,
-    val latestBlueprintDate: String? = null
+    val latestBlueprintDate: String? = null,
+    // LTD banner (server-controlled)
+    val ltdBannerConfig: com.rizzbot.v2.ui.components.LtdBannerConfig = com.rizzbot.v2.ui.components.LtdBannerConfig(),
 )
 
 @HiltViewModel
@@ -88,7 +90,7 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect usage state from backend
+        // Collect usage state from backend (includes isLtd — no separate /ltd/status call needed)
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
                 _state.update {
@@ -151,6 +153,12 @@ class HomeViewModel @Inject constructor(
                     }
                 }
             } catch (_: Exception) { }
+        }
+
+        // Fetch LTD banner config (isLtd comes from usage — no separate /ltd/status call)
+        viewModelScope.launch {
+            val config = hostedRepository.getLtdBannerConfig()
+            _state.update { it.copy(ltdBannerConfig = config) }
         }
     }
 

@@ -142,6 +142,7 @@ class AnalyticsHelper @Inject constructor(
     fun settingsLanguageChanged(language: String) = logEvent("settings_language_changed", mapOf("language" to language))
     fun settingsSignOut() = logEvent("settings_sign_out")
     fun settingsReferralApplied() = logEvent("settings_referral_applied")
+    fun settingsLtdRedeemed() = logEvent("settings_ltd_redeemed")
     fun settingsDeleteData() = logEvent("settings_delete_data")
 
     // History

@@ -32,7 +32,15 @@ data class SettingsState(
     val referralCodeInput: String = "",
     val referralApplyResult: String? = null,
     val isApplyingReferral: Boolean = false,
-    val roastLanguage: String = "English"
+    val roastLanguage: String = "English",
+    // LTD redeem
+    val ltdCodeInput: String = "",
+    val ltdRedeemResult: String? = null,
+    val isRedeemingLTD: Boolean = false,
+    // LTD status + banner config (isLtd comes from usage — no separate /ltd/status call)
+    val isLtd: Boolean = false,
+    val usageLoaded: Boolean = false,
+    val ltdBannerConfig: com.rizzbot.v2.ui.components.LtdBannerConfig = com.rizzbot.v2.ui.components.LtdBannerConfig(),
 ) {
     val isPaidPlan: Boolean get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH
     val isOnTrial: Boolean
@@ -63,6 +71,9 @@ class SettingsViewModel @Inject constructor(
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+    private val _isPullRefreshing = MutableStateFlow(false)
+    val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
+
     private fun applyUsageSnapshot(usage: UsageState) {
         _state.update {
             it.copy(
@@ -71,6 +82,7 @@ class SettingsViewModel @Inject constructor(
                 creditsPeriodLimit = usage.creditsPeriodLimit,
                 billingPeriod = usage.billingPeriod,
                 tierExpiresAt = usage.tierExpiresAt,
+                isLtd = usage.isLtd,
             )
         }
     }
@@ -87,12 +99,21 @@ class SettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             hostedRepository.refreshUsage(force = true)
-            hostedRepository.usageState.collect { usage -> applyUsageSnapshot(usage) }
+            hostedRepository.usageState.collect { usage ->
+                applyUsageSnapshot(usage)
+                _state.update { it.copy(isLtd = usage.isLtd, usageLoaded = true) }
+            }
         }
 
         viewModelScope.launch {
             val info = hostedRepository.getReferralInfo()
             _state.update { it.copy(referral = info) }
+        }
+
+        // Fetch LTD banner config (isLtd comes from usage — no separate /ltd/status call)
+        viewModelScope.launch {
+            val config = hostedRepository.getLtdBannerConfig()
+            _state.update { it.copy(ltdBannerConfig = config) }
         }
 
         viewModelScope.launch {
@@ -108,11 +129,24 @@ class SettingsViewModel @Inject constructor(
         }
         applyUsageSnapshot(hostedRepository.usageState.value)
         val info = withContext(Dispatchers.IO) { hostedRepository.getReferralInfo() }
-        _state.update { it.copy(referral = info) }
+        val config = withContext(Dispatchers.IO) { hostedRepository.getLtdBannerConfig() }
+        _state.update {
+            it.copy(
+                referral = info,
+                ltdBannerConfig = config,
+            )
+        }
     }
 
     fun refresh() {
-        viewModelScope.launch { refreshComplete() }
+        viewModelScope.launch {
+            _isPullRefreshing.value = true
+            try {
+                refreshComplete()
+            } finally {
+                _isPullRefreshing.value = false
+            }
+        }
     }
 
     fun onReferralCodeChanged(code: String) {
@@ -144,6 +178,41 @@ class SettingsViewModel @Inject constructor(
                         it.copy(
                             isApplyingReferral = false,
                             referralApplyResult = e.message
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onLTDCodeChanged(code: String) {
+        _state.update { it.copy(ltdCodeInput = code, ltdRedeemResult = null) }
+    }
+
+    fun redeemLTDCode() {
+        val code = _state.value.ltdCodeInput.trim()
+        if (code.isEmpty()) return
+
+        viewModelScope.launch {
+            _state.update { it.copy(isRedeemingLTD = true, ltdRedeemResult = null) }
+            val result = hostedRepository.redeemLTDCode(code)
+            result.fold(
+                onSuccess = { message ->
+                    analyticsHelper.settingsLtdRedeemed()
+                    refreshComplete()
+                    _state.update {
+                        it.copy(
+                            isRedeemingLTD = false,
+                            ltdRedeemResult = message,
+                            ltdCodeInput = "",
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _state.update {
+                        it.copy(
+                            isRedeemingLTD = false,
+                            ltdRedeemResult = e.message,
                         )
                     }
                 }

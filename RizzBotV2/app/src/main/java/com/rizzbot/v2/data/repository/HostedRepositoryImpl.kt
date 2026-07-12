@@ -80,6 +80,7 @@ class HostedRepositoryImpl @Inject constructor(
             creditsPeriodLimit = usage.creditsPeriodLimit,
             billingPeriod = usage.billingPeriod,
             tierExpiresAt = usage.tierExpiresAt,
+            isLtd = usage.isLtd,
             allowedDirections = usage.allowedDirections,
             customHintsEnabled = usage.customHints,
             maxScreenshots = usage.maxScreenshots,
@@ -533,6 +534,57 @@ class HostedRepositoryImpl @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+    override suspend fun getLtdBannerConfig(): com.rizzbot.v2.ui.components.LtdBannerConfig {
+        return try {
+            val dto = hostedApi.getLtdBannerConfig()
+            com.rizzbot.v2.ui.components.LtdBannerConfig(
+                enabled = dto.enabled,
+                price = dto.price,
+                currency = dto.currency,
+                compareAt = dto.compareAt,
+                sticky = dto.sticky,
+                badge = dto.badge,
+                badgeIcon = dto.badgeIcon,
+                title = dto.title,
+                spotsRemaining = dto.spotsRemaining,
+                totalSpots = dto.totalSpots,
+                scarcityLabel = dto.scarcityLabel,
+                directions = dto.directions,
+                noExpiry = dto.noExpiry,
+                benefitDirectionsLabel = dto.benefitDirectionsLabel,
+                benefitNoExpiryLabel = dto.benefitNoExpiryLabel,
+                benefitNoExpiryValue = dto.benefitNoExpiryValue,
+                ctaText = dto.ctaText,
+                redeemTitle = dto.redeemTitle,
+                redeemPlaceholder = dto.redeemPlaceholder,
+                redeemCtaText = dto.redeemCtaText,
+                landingUrl = dto.landingUrl,
+                hideIfLtdActive = dto.hideIfLtdActive,
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "getLtdBannerConfig failed: ${e.message}")
+            com.rizzbot.v2.ui.components.LtdBannerConfig() // fall back to defaults
+        }
+    }
+
+    override suspend fun redeemLTDCode(code: String): Result<String> {
+        return try {
+            val response = hostedApi.redeemLTDCode(
+                com.rizzbot.v2.data.remote.dto.RedeemLTDCodeRequest(code)
+            )
+            // Force refresh usage after tier change
+            refreshUsage(force = true)
+            Result.success(response.message)
+        } catch (e: retrofit2.HttpException) {
+            val msg = when (e.code()) {
+                400 -> "Invalid or already used redemption code"
+                else -> "Something went wrong. Please try again."
+            }
+            Result.failure(Exception(msg))
+        } catch (e: Exception) {
+            Result.failure(Exception("Network error. Try again."))
         }
     }
 

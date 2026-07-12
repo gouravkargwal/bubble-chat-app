@@ -36,20 +36,39 @@ FREE_DAILY_CREDITS = 1
 # Credits and billing period per paid plan.
 BILLING_CREDITS = {
     "crush": 50,  # ₹99/week
-    "match": 150,  # ₹179/month
+    "match": 150,  # ₹249/month
+    "rizz": 300,  # ₹499/month
 }
 
 BILLING_PERIOD_DAYS = {
     "crush": 7,
     "match": 30,
+    "rizz": 30,
 }
 
 # LTD Configuration (Lifetime Deal)
 LTD_CONFIG = {
     "price": 999,  # ₹999 one-time
+    "compare_at": 4799,  # Original price for strikethrough anchoring
     "mapped_tier": "match",  # LTD maps to match tier
-    "refill_credits": 150,  # Credits per refill
+    "refill_credits": 300,  # Credits per refill (matches FUP threshold; no genuine user hits this)
     "refill_days": 30,  # Refill cycle
+    "badge": "LIMITED OFFER",
+    "badge_icon": "🔥",  # Emoji / icon prefix for the badge
+    "title": "Lifetime Access",  # Card heading
+    "sticky": "Pays for itself in 4 months",
+    "scarcity_label": "licenses claimed",  # Label after "{claimed} of {total}"
+    "benefit_credits_label": "credits/mo",
+    "benefit_directions_label": "directions",
+    "benefit_no_expiry_label": "no expiry",
+    "benefit_no_expiry_value": "∞",
+    "cta_text": "Claim Your Lifetime License",
+    "redeem_title": "Already have a code?",
+    "redeem_placeholder": "LTD-XXXXXXXX",
+    "redeem_cta_text": "Redeem",
+    "landing_url": "",  # Override for in-app banner link (empty = use PAYU_REDIRECT_BASE)
+    "total_spots": 1000,  # Scarcity: total number of launch licenses
+    "claimed_spots": 342,  # Scarcity: how many have been claimed
 }
 
 TIER_CONFIG = {
@@ -106,6 +125,34 @@ TIER_CONFIG = {
         "limits": {
             "daily_credits": 0,
             "period_credits": BILLING_CREDITS["match"],
+            "max_screenshots_per_request": 5,
+            "max_photos_per_audit": 6,
+            "max_context_messages": 25,
+            "max_custom_hint_chars": 300,
+        },
+        "features": {
+            "voice_dna_enabled": False,
+            "custom_hints_enabled": True,
+            "include_coach_reasoning": True,
+            "advanced_languages_enabled": True,
+            "chemistry_tracking_enabled": True,
+            "allowed_ui_directions": [
+                ConversationDirection.OPENER.value,
+                ConversationDirection.QUICK_REPLY.value,
+                ConversationDirection.KEEP_PLAYFUL.value,
+                ConversationDirection.CHANGE_TOPIC.value,
+                ConversationDirection.TEASE.value,
+                ConversationDirection.REVIVE_CHAT.value,
+                ConversationDirection.GET_NUMBER.value,
+                ConversationDirection.ASK_OUT.value,
+                ConversationDirection.DE_ESCALATE.value,
+            ],
+        },
+    },
+    "rizz": {
+        "limits": {
+            "daily_credits": 0,
+            "period_credits": BILLING_CREDITS["rizz"],
             "max_screenshots_per_request": 5,
             "max_photos_per_audit": 6,
             "max_context_messages": 25,

@@ -123,6 +123,8 @@ class UsageResponse(BaseModel):
     tier: str = "free"  # free, crush, match
     is_premium: bool = False
     tier_expires_at: int | None = None
+    # LTD indicator (no separate /ltd/status call needed)
+    is_ltd: bool = False
     # Feature gates
     allowed_directions: list[str] = []
     max_screenshots: int = 2

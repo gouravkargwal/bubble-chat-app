@@ -146,7 +146,8 @@ fun PaywallScreen(
                                 Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     AnimatedContent(targetState = state.selectedTier, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) }, label = "features") { tier ->
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            PaywallTierMarketing.featureLines(tier).forEach { line ->
+                                            val isLtdForSelected = viewModel.usageState.value.isLtd && tier == PaywallTier.Match
+                                            PaywallTierMarketing.featureLines(tier, isLtd = isLtdForSelected).forEach { line ->
                                                 Row(verticalAlignment = Alignment.Top) {
                                                     Icon(Icons.Default.Check, contentDescription = null, tint = NothingWhite, modifier = Modifier.size(18.dp))
                                                     Spacer(modifier = Modifier.width(NothingDimens.elementGap))
@@ -163,7 +164,7 @@ fun PaywallScreen(
                             Spacer(modifier = Modifier.height(NothingDimens.textGap))
 
                             AnimatedContent(targetState = state.selectedTier, transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(240)) }, label = "packages") { tier ->
-                                val packages = when (tier) { PaywallTier.Crush -> state.crushPackages; PaywallTier.Match -> state.matchPackages }
+                                val packages = when (tier) { PaywallTier.Crush -> state.crushPackages; PaywallTier.Match -> state.matchPackages; PaywallTier.Rizz -> state.rizzPackages }
                                 Column(verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap), modifier = Modifier.fillMaxWidth()) {
                                     packages.forEach { packageItem ->
                                         PackageCard(packageItem = packageItem, isSelected = state.selectedPackage?.identifier == packageItem.identifier, isDisabled = state.activeTier == tier, onClick = { viewModel.selectPackage(packageItem) })

@@ -9,20 +9,18 @@ import {
   StaggerItem,
   ScaleHover,
 } from "./Animations";
-
-const TOTAL_SPOTS = 140;
-const CLAIMED_BASE = 67;
+import { LtdCheckoutModal } from "./LtdCheckoutModal";
+import { APP_URLS, PRICING, API_URLS } from "@/app/constants";
 
 const PLANS = [
   {
     id: "crush",
     name: "Crush Pass",
-    price: "99",
-    currency: "₹",
-    period: "/week",
+    price: String(PRICING.plans.crush.price),
+    currency: PRICING.plans.crush.currency,
+    period: PRICING.plans.crush.period,
     description: "For when you need a quick, short-term edge.",
-    credits: "~7 conversations / week",
-    signupCredits: "",
+    credits: `${PRICING.plans.crush.credits} conversations / week`,
     label: "WEEKLY PASS",
     highlighted: false,
     features: [
@@ -39,13 +37,12 @@ const PLANS = [
   {
     id: "match",
     name: "Match Pro",
-    price: "249",
-    currency: "₹",
-    period: "/month",
+    price: String(PRICING.plans.match.price),
+    currency: PRICING.plans.match.currency,
+    period: PRICING.plans.match.period,
     description: "The standard blueprint for dating control.",
-    credits: "~25 conversations / month",
-    signupCredits: "",
-    label: "MOST FLEXIBLE",
+    credits: `${PRICING.plans.match.credits} conversations / month`,
+    label: "MOST POPULAR ⭐",
     highlighted: false,
     features: [
       { text: "All 9 conversation directions", included: true },
@@ -61,13 +58,13 @@ const PLANS = [
   {
     id: "launch",
     name: "Launch LTD",
-    price: "999",
-    currency: "₹",
-    period: "/forever",
-    description: "Pay once, own the ecosystem forever. No subscription loops.",
-    credits: "Unlimited conversations",
-    signupCredits: "",
-    label: "🚨 LAUNCH EXCLUSIVE",
+    price: String(PRICING.plans.ltd.price),
+    currency: PRICING.plans.ltd.currency,
+    period: PRICING.plans.ltd.period,
+    description:
+      "Pay once, own it forever. Unlimited conversations. No subscription loops.",
+    credits: "Unlimited",
+    label: "FOUNDER'S EDITION",
     highlighted: true,
     features: [
       { text: "All 9 conversation directions", included: true },
@@ -120,17 +117,33 @@ function MinusIcon() {
 }
 
 export function Pricing() {
-  const [spotsLeft, setSpotsLeft] = useState(TOTAL_SPOTS - CLAIMED_BASE);
+  const [ltdConfig, setLtdConfig] = useState<{
+    spotsRemaining: number;
+    totalSpots: number;
+  } | null>(null);
+  const [showLtdModal, setShowLtdModal] = useState(false);
 
+  // Fetch real scarcity count from backend
   useEffect(() => {
-    if (spotsLeft <= 0) return;
-    const interval = setInterval(() => {
-      if (Math.random() < 0.15) {
-        setSpotsLeft((prev) => Math.max(0, prev - 1));
-      }
-    }, 45000);
-    return () => clearInterval(interval);
-  }, [spotsLeft]);
+    fetch(API_URLS.ltdBannerConfig)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.enabled && data.spots_remaining !== undefined) {
+          setLtdConfig({
+            spotsRemaining: data.spots_remaining,
+            totalSpots: data.total_spots,
+          });
+        }
+      })
+      .catch(() => {
+        // Fallback to hardcoded PRICING.ltdSpots on error
+      });
+  }, []);
+
+  const spotsLeft =
+    ltdConfig?.spotsRemaining ??
+    PRICING.ltdSpots.total - PRICING.ltdSpots.claimed;
+  const totalSpots = ltdConfig?.totalSpots ?? PRICING.ltdSpots.total;
 
   return (
     <section
@@ -159,9 +172,12 @@ export function Pricing() {
           outright or pay as you go.
         </p>
         <p className="mt-2 text-xs font-mono text-nothing-text-tertiary tracking-wider">
+          Start free — no credit card needed
+        </p>
+        <p className="mt-2 text-xs font-mono text-nothing-text-tertiary tracking-wider">
           ₹249/mo &bull;{" "}
           <span className="text-neon-red">
-            ₹999 Lifetime — Save 67% vs annual
+            ₹999 Lifetime = 4 months of Match Pro
           </span>
         </p>
       </AnimatedSection>
@@ -236,10 +252,8 @@ export function Pricing() {
                 <div
                   className={`relative flex flex-col p-6 sm:p-8 transition-all duration-300 rounded-xl ${
                     plan.highlighted
-                      ? "bg-nothing-black lg:-my-8 lg:py-12 border-2 border-neon-red z-20 shadow-2xl"
-                      : plan.label === "WEEKLY PASS"
-                      ? "bg-nothing-black/40 border border-nothing-border/30 opacity-70 hover:opacity-100 hover:bg-nothing-surface z-10"
-                      : "bg-nothing-black border border-nothing-border hover:bg-nothing-surface z-10"
+                      ? "bg-nothing-black lg:-my-8 lg:py-12 border-2 border-neon-red z-20"
+                      : "bg-nothing-black border border-nothing-border hover:border-neon-red/30 hover:bg-nothing-surface z-10"
                   }`}
                 >
                   <span
@@ -318,40 +332,66 @@ export function Pricing() {
                         }}
                       />
                       <span className="text-[10px] font-mono text-neon-red tracking-wider font-bold">
-                        {spotsLeft} of {TOTAL_SPOTS} launch licenses remaining
+                        {spotsLeft} of {totalSpots} founder licenses remaining
                       </span>
                     </motion.div>
                   )}
 
-                  <motion.a
-                    href="https://play.google.com/store/apps/details?id=com.cookd.mobile"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
-                      plan.highlighted
-                        ? "bg-neon-red text-nothing-white hover:shadow-[0_0_20px_rgba(255,0,60,0.4)] hover:bg-red-600"
-                        : "border border-nothing-border text-nothing-text-secondary hover:bg-nothing-white/5 hover:text-nothing-white"
-                    }`}
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.97 }}
-                  >
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
+                  {plan.id === "launch" ? (
+                    <motion.button
+                      onClick={() => setShowLtdModal(true)}
+                      className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
+                        plan.highlighted
+                          ? "bg-neon-red text-nothing-white hover:bg-red-600"
+                          : "border border-nothing-border text-nothing-text-secondary hover:bg-nothing-white/5 hover:text-nothing-white"
+                      }`}
+                      whileHover={{ scale: 1.04 }}
+                      whileTap={{ scale: 0.97 }}
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
-                      />
-                    </svg>
-                    {plan.id === "launch"
-                      ? "Claim Lifetime License"
-                      : "Download App"}
-                  </motion.a>
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
+                        />
+                      </svg>
+                      Claim Lifetime License
+                    </motion.button>
+                  ) : (
+                    <motion.a
+                      href={APP_URLS.googlePlay}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
+                        plan.highlighted
+                          ? "bg-neon-red text-nothing-white hover:bg-red-600"
+                          : "border border-nothing-border text-nothing-text-secondary hover:bg-nothing-white/5 hover:text-nothing-white"
+                      }`}
+                      whileHover={{ scale: 1.04 }}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
+                        />
+                      </svg>
+                      Download App
+                    </motion.a>
+                  )}
 
                   {plan.highlighted && (
                     <motion.div
@@ -361,12 +401,15 @@ export function Pricing() {
                       className="mb-4 rounded-lg border border-nothing-border bg-nothing-surface/50 px-3 py-2.5 text-center"
                     >
                       <p className="text-[10px] font-mono text-nothing-text-secondary tracking-wider leading-relaxed">
-                        Match Pro is ₹249/mo ={" "}
+                        ₹249/mo × 12 ={" "}
                         <span className="text-nothing-white">₹2,988/yr</span>
                         <br />
                         <span className="text-neon-red">
-                          You save ₹1,989 in Year 1 alone with LTD
+                          ₹999 LTD pays for itself in 4 months
                         </span>
+                      </p>
+                      <p className="mt-2 text-[9px] font-mono text-nothing-text-tertiary tracking-wider">
+                        * Fair usage policy applies. See Terms of Service.
                       </p>
                     </motion.div>
                   )}
@@ -406,6 +449,12 @@ export function Pricing() {
           ))}
         </div>
       </StaggerContainer>
+
+      {/* LTD checkout modal */}
+      <LtdCheckoutModal
+        isOpen={showLtdModal}
+        onClose={() => setShowLtdModal(false)}
+      />
     </section>
   );
 }

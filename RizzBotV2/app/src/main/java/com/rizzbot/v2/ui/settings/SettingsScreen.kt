@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,13 +28,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.rizzbot.v2.domain.model.TierQuota
+import com.rizzbot.v2.ui.components.LtdBannerCard
+import com.rizzbot.v2.ui.components.LtdBannerSkeleton
+import com.rizzbot.v2.ui.components.PlanCardSkeleton
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingDimens
 import com.rizzbot.v2.ui.theme.NothingError
+import com.rizzbot.v2.ui.theme.NothingSuccess
 import com.rizzbot.v2.ui.theme.NothingSurface
 import com.rizzbot.v2.ui.theme.NothingTextSecondary
 import com.rizzbot.v2.ui.theme.NothingTextTertiary
@@ -47,6 +57,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val isPullRefreshing by viewModel.isPullRefreshing.collectAsState()
+    val pullRefreshState = rememberPullToRefreshState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showSignOutDialog by remember { mutableStateOf(false) }
@@ -126,71 +138,91 @@ fun SettingsScreen(
         },
         containerColor = NothingBlack
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(NothingDimens.screenPadding)
         ) {
-            Text("ACCOUNT", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(NothingDimens.elementGap))
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = NothingSurface),
-                shape = RoundedCornerShape(NothingDimens.cardRadius),
-                border = BorderStroke(NothingDimens.borderThickness, NothingBorder)
+            PullToRefreshBox(
+                isRefreshing = isPullRefreshing,
+                onRefresh = { viewModel.refresh() },
+                state = pullRefreshState,
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        isRefreshing = isPullRefreshing,
+                        state = pullRefreshState,
+                        containerColor = NothingSurface,
+                        color = NothingWhite,
+                    )
+                },
+                modifier = Modifier.fillMaxSize(),
             ) {
-                Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = null, tint = NothingWhite, modifier = Modifier.size(36.dp))
-                        Spacer(modifier = Modifier.width(NothingDimens.elementGap))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(state.userName ?: "User", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                            state.userEmail?.let {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(it, color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(color = NothingBorder, modifier = Modifier.padding(vertical = NothingDimens.elementGap))
-
-                    val isPaidPlan = state.tier in listOf(TierQuota.PLAN_CRUSH, TierQuota.PLAN_MATCH)
-                    PlanStatusCard(
-                        tier = state.tier,
-                        isPaidPlan = isPaidPlan,
-                        isOnTrial = state.isOnTrial,
-                        trialDaysRemaining = state.trialDaysRemaining,
-                        creditsRemaining = state.creditsRemaining,
-                        creditsPeriodLimit = state.creditsPeriodLimit,
-                        billingPeriod = state.billingPeriod,
-                        onUpgradeClick = onPremium,
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(NothingDimens.screenPadding)
+                ) {
+            // ── LTD BANNER (each card loads independently, same usageLoaded flag) ──
+            if (!state.isLtd) {
+                Text("LIFETIME DEAL", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(NothingDimens.elementGap))
+                if (state.usageLoaded) {
+                    LtdBannerCard(
+                        config = state.ltdBannerConfig,
+                        showRedeem = true,
+                        ltdCodeInput = state.ltdCodeInput,
+                        onLTDCodeChanged = { viewModel.onLTDCodeChanged(it) },
+                        onRedeemClick = { viewModel.redeemLTDCode() },
+                        isRedeemingLTD = state.isRedeemingLTD,
+                        ltdRedeemResult = state.ltdRedeemResult,
                     )
-
-                    if (isPaidPlan) {
-                        Spacer(modifier = Modifier.height(NothingDimens.elementGap))
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = NothingSurface),
-                            shape = RoundedCornerShape(NothingDimens.cardRadius),
-                            border = BorderStroke(NothingDimens.borderThickness, NothingBorder)
-                        ) {
-                            Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
-                                Text("Active Perks", color = NothingWhite, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
-                                Spacer(modifier = Modifier.height(NothingDimens.textGap))
-                                Text("${state.creditsRemaining} credits remaining", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(color = NothingBorder, modifier = Modifier.padding(vertical = NothingDimens.elementGap))
-                    UsageLimitsDisplay(
-                        tier = state.tier,
-                        creditsRemaining = state.creditsRemaining,
-                        creditsPeriodLimit = state.creditsPeriodLimit,
-                        billingPeriod = state.billingPeriod,
-                    )
+                } else {
+                    LtdBannerSkeleton()
                 }
+                Spacer(Modifier.height(NothingDimens.sectionSpacing))
+            }
+
+            // ── ACCOUNT + PLAN CARD ──
+            Text("ACCOUNT", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(NothingDimens.elementGap))
+
+            if (state.usageLoaded) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = NothingSurface),
+                    shape = RoundedCornerShape(NothingDimens.cardRadius),
+                    border = BorderStroke(NothingDimens.borderThickness, NothingBorder)
+                ) {
+                    Column(Modifier.padding(NothingDimens.cardPadding)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AccountCircle, contentDescription = null, tint = NothingWhite, modifier = Modifier.size(36.dp))
+                            Spacer(Modifier.width(NothingDimens.elementGap))
+                            Column(Modifier.weight(1f)) {
+                                Text(state.userName ?: "User", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                                state.userEmail?.let {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(it, color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = NothingBorder, modifier = Modifier.padding(vertical = NothingDimens.elementGap))
+
+                        CompactPlanCard(
+                            tier = state.tier,
+                            isOnTrial = state.isOnTrial,
+                            trialDaysRemaining = state.trialDaysRemaining,
+                            creditsRemaining = state.creditsRemaining,
+                            creditsPeriodLimit = state.creditsPeriodLimit,
+                            billingPeriod = state.billingPeriod,
+                            onUpgradeClick = onPremium,
+                            isLtd = state.isLtd,
+                        )
+                    }
+                }
+            } else {
+                PlanCardSkeleton()
             }
 
             Spacer(modifier = Modifier.height(NothingDimens.sectionSpacing))
@@ -213,7 +245,7 @@ fun SettingsScreen(
                                 clipboard.setPrimaryClip(ClipData.newPlainText("Referral Code", referral.referralCode))
                             }) { Icon(Icons.Default.ContentCopy, "Copy", tint = NothingTextSecondary) }
                             IconButton(onClick = {
-                                val shareText = "Use my code ${referral.referralCode} to join me on Cookd! 🚀\n\n${context.getString(R.string.app_public_link)}"
+                                val shareText = "Use my code ${referral.referralCode} to join me on Cookd! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile"
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
                                     putExtra(Intent.EXTRA_TEXT, shareText)
@@ -267,7 +299,7 @@ fun SettingsScreen(
                     SettingsRow(icon = Icons.Default.Email, label = "Email Support", onClick = {})
                     HorizontalDivider(color = NothingBorder)
                     SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {
-                        val shareText = "Check out Cookd — AI replies for dating apps! 🚀\n\n${context.getString(R.string.app_public_link)}"
+                        val shareText = "Check out Cookd — AI replies for dating apps! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile"
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, shareText)
@@ -297,85 +329,117 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(NothingDimens.sectionSpacing))
             Text("v2.0.0", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-        }
-    }
-}
-
-@Composable
-private fun UsageLimitsDisplay(tier: String, creditsRemaining: Int, creditsPeriodLimit: Int, billingPeriod: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
-        // Header row
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text("Credits Remaining", color = NothingWhite, style = MaterialTheme.typography.titleSmall)
-                when (tier) {
-                    TierQuota.PLAN_FREE -> Text(
-                        "Signup bonus + ${TierQuota.FREE_DAILY_CREDITS}/day free",
-                        color = NothingTextTertiary,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                    else -> Text(
-                        "per ${TierQuota.billingPeriodNoun(billingPeriod)}",
-                        color = NothingTextTertiary,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
             }
-            Text("$creditsRemaining", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
         }
-
-        // Paid tier: show progress bar against period limit.
-        if (tier != TierQuota.PLAN_FREE && creditsPeriodLimit > 0) {
-            val creditsUsed = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
-            val progress = (creditsUsed.toFloat() / creditsPeriodLimit).coerceIn(0f, 1f)
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                color = if (progress >= 1f) NothingError else NothingWhite,
-                trackColor = NothingBorder
-            )
-            Text(
-                "Resets each ${TierQuota.billingPeriodNoun(billingPeriod)}.",
-                color = NothingTextTertiary,
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
+    }
     }
 }
 
 @Composable
-private fun PlanStatusCard(
+private fun CompactPlanCard(
     tier: String,
-    isPaidPlan: Boolean,
     isOnTrial: Boolean = false,
     trialDaysRemaining: Int = 0,
     creditsRemaining: Int,
     creditsPeriodLimit: Int,
     billingPeriod: String,
     onUpgradeClick: () -> Unit,
+    isLtd: Boolean = false,
 ) {
+    val isPaidPlan = tier in listOf(TierQuota.PLAN_CRUSH, TierQuota.PLAN_MATCH)
+
     Card(
         colors = CardDefaults.cardColors(containerColor = NothingSurface),
         shape = RoundedCornerShape(NothingDimens.cardRadius),
         border = BorderStroke(NothingDimens.borderThickness, NothingBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+        Column(modifier = Modifier.padding(NothingDimens.cardPadding)) {
+            // Plan name row
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = NothingWhite, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(NothingDimens.elementGap))
                 Column(modifier = Modifier.weight(1f)) {
                     val planName = when {
+                        isLtd -> "Match Plan \u221E (Lifetime)"
                         isOnTrial -> "Free Trial Active"
-                        tier == TierQuota.PLAN_MATCH -> "Match Plan Active"
                         tier == TierQuota.PLAN_CRUSH -> "Crush Plan Active"
+                        tier == TierQuota.PLAN_MATCH -> "Match Plan Active"
+                        tier == TierQuota.PLAN_RIZZ -> "Rizz Plan Active"
                         else -> "Basic (Free)"
                     }
                     Text(planName, color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                    Text("$creditsRemaining credits remaining", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                    if (isLtd) {
+                        Text("Pay once, own forever \u2728", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                    } else if (isOnTrial) {
+                        Text("$trialDaysRemaining days left", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                if (isLtd) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("∞", color = NothingSuccess, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text("unlimited", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
+                    }
+                } else {
+                    Text("$creditsRemaining", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 }
             }
-            if (!isPaidPlan || isOnTrial) {
+
+            if (isLtd) {
+                // LTD: clean unlimited summary — no numbers, no progress bar
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(NothingBorder.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("∞", color = NothingSuccess, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text("conversations", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("9", color = NothingWhite, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text("directions", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("∞", color = NothingSuccess, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text("no expiry", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            } else {
+                // Credit description
+                Text(
+                    when {
+                        isPaidPlan -> "per ${TierQuota.billingPeriodNoun(billingPeriod)}"
+                        else -> "Signup bonus + ${TierQuota.FREE_DAILY_CREDITS}/day free"
+                    },
+                    color = NothingTextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+
+                // Progress bar for paid plans
+                if (isPaidPlan && creditsPeriodLimit > 0) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val creditsUsed = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
+                    val progress = (creditsUsed.toFloat() / creditsPeriodLimit).coerceIn(0f, 1f)
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                        color = if (progress >= 0.8f) NothingError else NothingWhite,
+                        trackColor = NothingBorder,
+                    )
+                    val resetText = TierQuota.billingPeriodNoun(billingPeriod)
+                    Text(
+                        "${creditsUsed}/${creditsPeriodLimit} used • resets $resetText",
+                        color = NothingTextTertiary,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+
+            // Upgrade CTA — hidden for LTD users who already have the top tier
+            if (!isLtd && (!isPaidPlan || isOnTrial)) {
+                Spacer(modifier = Modifier.height(NothingDimens.elementGap))
                 Button(
                     onClick = onUpgradeClick,
                     modifier = Modifier.fillMaxWidth(),
@@ -386,7 +450,6 @@ private fun PlanStatusCard(
         }
     }
 }
-
 @Composable
 private fun SettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, textColor: Color = NothingWhite) {
     Row(

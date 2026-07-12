@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { StatusDot } from "@/components/Logo";
+import { EMAILS } from "@/app/constants";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -67,7 +68,7 @@ const sections = [
   },
   {
     title: "11. Contact",
-    content: "For privacy questions, contact: tickets@cookd.p.tawk.email",
+    content: `For privacy questions, contact: ${EMAILS.privacy}`,
   },
 ];
 

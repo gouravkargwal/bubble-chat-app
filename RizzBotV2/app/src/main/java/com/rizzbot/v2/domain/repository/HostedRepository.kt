@@ -48,4 +48,8 @@ interface HostedRepository {
     suspend fun getProfileAuditHistory(limit: Int = 20, offset: Int = 0): List<com.rizzbot.v2.data.remote.dto.AuditedPhotoItemDto>
     suspend fun deleteProfileAuditPhoto(photoId: String): Result<Unit>
     suspend fun deleteAllUserData(): Result<Unit>
+
+    // LTD (Lifetime Deal)
+    suspend fun getLtdBannerConfig(): com.rizzbot.v2.ui.components.LtdBannerConfig
+    suspend fun redeemLTDCode(code: String): Result<String>
 }

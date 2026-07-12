@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-TIER_HIERARCHY = {"free": 0, "crush": 1, "match": 2}
+TIER_HIERARCHY = {"free": 0, "crush": 1, "match": 2, "rizz": 3}
 
 
 def get_effective_tier(user) -> str:

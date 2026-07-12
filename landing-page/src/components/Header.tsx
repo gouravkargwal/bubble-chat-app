@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Logo, StatusDot } from "./Logo";
+import { APP_URLS } from "@/app/constants";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
@@ -60,7 +61,7 @@ export function Header() {
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-4">
           <a
-            href="https://play.google.com/store/apps/details?id=com.cookd.mobile"
+            href={APP_URLS.googlePlay}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-full border border-nothing-border px-4 py-2 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5"

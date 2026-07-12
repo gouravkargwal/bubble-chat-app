@@ -668,3 +668,43 @@ class BlueprintUniversalPrompt(Base):
     blueprint: Mapped[ProfileBlueprint] = relationship(
         back_populates="universal_prompts"
     )
+
+
+class LTDRedemptionCode(Base):
+    """One-time redemption codes for Lifetime Deal purchases via PayU.
+
+    Flow:
+      1. User buys ₹999 LTD on web → PayU sends success redirect.
+      2. Backend verifies PayU hash, generates 8-char code, stores here.
+      3. Email sent to user with the code.
+      4. User enters code in Android app → POST /billing/ltd/redeem.
+      5. Code marked used, user gets lifetime "match" tier.
+    """
+
+    __tablename__ = "ltd_redemption_codes"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    code: Mapped[str] = mapped_column(
+        String(12), unique=True, index=True, nullable=False
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # PayU txnid (unique transaction ID from payment)
+    txn_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    # PayU mihpayid (gateway reference ID)
+    mihpayid: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Payment metadata
+    amount: Mapped[str] = mapped_column(String(20), default="999")
+    payment_gateway: Mapped[str] = mapped_column(String(20), default="payu")
+    # Redemption state
+    is_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    used_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True, index=True
+    )
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

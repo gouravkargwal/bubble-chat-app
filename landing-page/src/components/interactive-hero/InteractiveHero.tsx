@@ -14,7 +14,8 @@ import { VibeCheck } from "./VibeCheck";
 import { Gate } from "./Gate";
 import { ProcessingState } from "./ProcessingState";
 import { Reveal } from "./Reveal";
-import { type ComponentState, API_BASE, EASE_OUT } from "./types";
+import { type ComponentState, type ReplyItem, EASE_OUT } from "./types";
+import { APP_URLS, API_URLS } from "@/app/constants";
 
 /* ───────────────────────────────────────────
    Interactive Lead Magnet Hero
@@ -22,22 +23,20 @@ import { type ComponentState, API_BASE, EASE_OUT } from "./types";
      idle → vibe_check → gate → processing → reveal
    ─────────────────────────────────────────── */
 
-interface ApiReply {
-  id: string;
-  style: string;
-  text: string;
-}
-
 interface ApiResponse {
   status: "success" | "rate_limited" | "failed";
   cached?: boolean;
-  replies?: ApiReply[];
+  replies?: ReplyItem[];
   detail?: string;
   retry_after_seconds?: number;
   app_url?: string;
 }
 
-export function InteractiveHero() {
+interface InteractiveHeroProps {
+  onRepliesReady?: (replies: ReplyItem[]) => void;
+}
+
+export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
   // ── State machine ──
   const [state, setState] = useState<ComponentState>("idle");
 
@@ -91,7 +90,7 @@ export function InteractiveHero() {
       abortRef.current = abortController;
 
       try {
-        const response = await fetch(`${API_BASE}/lead-magnet/generate`, {
+        const response = await fetch(API_URLS.leadMagnet, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -112,9 +111,12 @@ export function InteractiveHero() {
           return;
         }
 
-        // Success — transition to reveal
+        // Success — pass replies up to page.tsx for the AppMockup
         setApiResponse(data);
         setState("reveal");
+        if (onRepliesReady && data.replies) {
+          onRepliesReady(data.replies);
+        }
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") return;
         setApiError("Network error. Please try again.");
@@ -232,16 +234,10 @@ export function InteractiveHero() {
             )}
 
             {state === "gate" && !isRateLimited && (
-              <Gate
-                key="gate"
-                onSubmit={onGateSubmit}
-                error={apiError}
-              />
+              <Gate key="gate" onSubmit={onGateSubmit} error={apiError} />
             )}
 
-            {state === "processing" && (
-              <ProcessingState key="processing" />
-            )}
+            {state === "processing" && <ProcessingState key="processing" />}
 
             {/* Show rate-limited state before reveal */}
             {state === "gate" && isRateLimited && (
@@ -249,10 +245,7 @@ export function InteractiveHero() {
                 key="rate_limited"
                 replies={[]}
                 isRateLimited={true}
-                appUrl={
-                  apiResponse?.app_url ||
-                  "https://play.google.com/store/apps/details?id=com.cookd.mobile"
-                }
+                appUrl={apiResponse?.app_url || APP_URLS.googlePlay}
                 onReset={onReset}
               />
             )}

@@ -153,27 +153,62 @@ def create_app() -> FastAPI:
         )
         return JSONResponse(status_code=422, content={"detail": errors})
 
-    # Security headers — CSP, XSS protection, clickjacking prevention, etc.
-    # Uses @app.middleware("http") pattern (same as correlation-id / RED metrics)
-    # imported from a separate module for clean separation.
-    app.middleware("http")(add_security_headers)
+    # ── CORS + Security headers ──
+    # NOTE: Starlette's CORSMiddleware (ASGI-level) breaks with BaseHTTPMiddleware.
+    # Instead we use a single @app.middleware("http") that runs LAST on the response
+    # chain and adds both ACAO + security headers.  This avoids the known
+    # BaseHTTPMiddleware + CORSMiddleware incompatibility.
+    @app.middleware("http")
+    async def cors_and_security_headers(request: Request, call_next) -> Response:
+        response: Response = await call_next(request)
 
-    # CORS — must restrict origins in production; wildcard disables credentials
-    is_wildcard = settings.cors_origins == ["*"]
-    if is_wildcard and settings.environment != "development":
-        logger = structlog.get_logger()
-        logger.warning(
-            "cors_origins_wildcard_in_production",
-            message="CORS is set to ['*'] in a non-development environment. "
-            "Set CORS_ORIGINS to specific domains for production security.",
+        # ── CORS (add ACAO to every response) ──
+        origin = request.headers.get("origin", "")
+        allowed = settings.cors_origins
+        if "*" in allowed:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+        elif origin in allowed:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, PUT, DELETE, OPTIONS"
+            )
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization"
+            )
+
+        # Handle OPTIONS preflight immediately
+        if request.method == "OPTIONS":
+            return Response(status_code=200, headers=dict(response.headers))
+
+        # ── Security headers ──
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self' https://test.payu.in https://secure.payu.in"
         )
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=not is_wildcard,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+        )
+        if settings.environment != "development":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+            )
+        if not request.url.path.startswith("/static/"):
+            response.headers.setdefault(
+                "Cache-Control", "no-store, no-cache, must-revalidate"
+            )
+
+        return response
 
     # Payload size limit for public endpoints (prevent OOM on large uploads)
     @app.middleware("http")
@@ -292,7 +327,7 @@ def create_app() -> FastAPI:
     # Public (no-auth) lead-magnet router
     from app.api.v1.public import router as public_router
 
-    app.include_router(public_router, prefix="/api/public")
+    app.include_router(public_router, prefix="/api/v1/public")
 
     # Static files (for profile audit images, etc.)
     static_dir = Path("static")

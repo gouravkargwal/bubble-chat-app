@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
 import { motion } from "framer-motion";
 import { StatusDot, Logo } from "./Logo";
 import { AnimatedSection, ScaleHover } from "./Animations";
+import { APP_URLS } from "@/app/constants";
 
 export function CTA() {
   return (
@@ -154,7 +154,7 @@ export function CTA() {
             >
               <ScaleHover scale={1.05}>
                 <motion.a
-                  href="https://play.google.com/store/apps/details?id=com.cookd.mobile"
+                  href={APP_URLS.googlePlay}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group inline-flex items-center gap-2 rounded-full bg-neon-red px-8 py-3.5 text-sm font-bold text-nothing-white transition-all duration-300"

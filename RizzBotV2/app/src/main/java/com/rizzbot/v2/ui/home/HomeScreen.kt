@@ -3,7 +3,6 @@ package com.rizzbot.v2.ui.home
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -35,16 +34,17 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.rizzbot.v2.domain.model.TierQuota
-import com.rizzbot.v2.ui.theme.NeonRed
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingDimens
+import com.rizzbot.v2.ui.theme.NothingError
 import com.rizzbot.v2.ui.theme.NothingSurface
 import com.rizzbot.v2.ui.theme.NothingTextSecondary
+import com.rizzbot.v2.ui.theme.NothingSuccess
 import com.rizzbot.v2.ui.theme.NothingTextTertiary
 import com.rizzbot.v2.ui.theme.NothingWhite
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToSettings: () -> Unit,
@@ -139,6 +139,7 @@ fun HomeScreen(
                         creditsRemaining = state.usage.creditsRemaining,
                         creditsPeriodLimit = state.usage.creditsPeriodLimit,
                         billingPeriod = state.usage.billingPeriod,
+                        isLtd = state.usage.isLtd,
                     )
                     HeroCard(
                         isEnabled = state.isServiceEnabled,
@@ -187,6 +188,7 @@ private fun SmartReplyEntryCard(
     creditsRemaining: Int,
     creditsPeriodLimit: Int,
     billingPeriod: String = "daily",
+    isLtd: Boolean = false,
 ) {
     Card(
         modifier = Modifier
@@ -231,22 +233,39 @@ private fun SmartReplyEntryCard(
                 )
             }
             Spacer(modifier = Modifier.width(NothingDimens.elementGap))
-            // Credit badge — shows fraction for paid, total for free
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = if (tier == TierQuota.PLAN_FREE)
-                        "$creditsRemaining cr"
-                    else
-                        "$creditsRemaining / $creditsPeriodLimit",
-                    color = if (creditsRemaining <= 0) NothingError else NothingTextSecondary,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-                if (tier != TierQuota.PLAN_FREE && creditsPeriodLimit > 0) {
+            // Credit badge — unlimited for LTD, fraction for paid, total for free
+            if (isLtd) {
+                // Clean unlimited badge — no numbers, no progress
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = TierQuota.billingPeriodNoun(billingPeriod),
+                        text = "∞",
+                        color = NothingSuccess,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "unlimited",
                         color = NothingTextTertiary,
                         style = MaterialTheme.typography.labelSmall,
                     )
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = if (tier == TierQuota.PLAN_FREE)
+                            "$creditsRemaining cr"
+                        else
+                            "$creditsRemaining / $creditsPeriodLimit",
+                        color = if (creditsRemaining <= 0) NothingError else NothingTextSecondary,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                    if (tier != TierQuota.PLAN_FREE && creditsPeriodLimit > 0) {
+                        Text(
+                            text = TierQuota.billingPeriodNoun(billingPeriod),
+                            color = NothingTextTertiary,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -649,3 +668,4 @@ private fun OverlayPermissionDialog(
         }
     }
 }
+

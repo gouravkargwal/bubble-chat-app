@@ -35,12 +35,13 @@ import javax.inject.Inject
 private val ENTITLEMENT_TIER_MAP: Map<String, PaywallTier> = mapOf(
     "match" to PaywallTier.Match,
     "crush" to PaywallTier.Crush,
+    "rizz" to PaywallTier.Rizz,
     "ltd" to PaywallTier.Match,
     "lifetime" to PaywallTier.Match,
     "match_ltd" to PaywallTier.Match,
 )
 
-private val TIER_PRIORITY: List<PaywallTier> = listOf(PaywallTier.Match, PaywallTier.Crush)
+private val TIER_PRIORITY: List<PaywallTier> = listOf(PaywallTier.Rizz, PaywallTier.Match, PaywallTier.Crush)
 
 sealed class PaywallUiState {
     data object Loading : PaywallUiState()
@@ -49,13 +50,14 @@ sealed class PaywallUiState {
 }
 
 enum class PaywallTier {
-    Crush, Match
+    Crush, Match, Rizz
 }
 
 data class PaywallState(
     val uiState: PaywallUiState = PaywallUiState.Loading,
     val crushPackages: List<Package> = emptyList(),
     val matchPackages: List<Package> = emptyList(),
+    val rizzPackages: List<Package> = emptyList(),
     val selectedTier: PaywallTier = PaywallTier.Match,
     val selectedPackage: Package? = null,
     val activeTier: PaywallTier? = null,
@@ -121,7 +123,7 @@ class PaywallViewModel @Inject constructor(
         val activeTier = resolveActiveTier(customerInfo)
         val activeProductId = if (activeTier != null) {
             val entitlementKey = ENTITLEMENT_TIER_MAP.entries.firstOrNull { it.value == activeTier }?.key
-            customerInfo.entitlements[entitlementKey]?.productIdentifier
+            if (entitlementKey != null) customerInfo.entitlements[entitlementKey]?.productIdentifier else null
         } else null
 
         _state.update { it.copy(activeTier = activeTier, activeProductId = activeProductId) }
@@ -161,33 +163,34 @@ class PaywallViewModel @Inject constructor(
                     }
 
                     // Match packages by RevenueCat package identifiers (configured in RC dashboard).
-                    // Package identifiers are set in the RC dashboard per offering.
-                    // Convention: $rc_weekly (Crush), $rc_monthly (Match), plus custom identifiers.
                     val crushPackages = defaultOffering.availablePackages.filter { pkg ->
                         pkg.identifier.contains("weekly", ignoreCase = true) ||
                         pkg.identifier.contains("crush", ignoreCase = true)
                     }
                     val matchPackages = defaultOffering.availablePackages.filter { pkg ->
-                        pkg.identifier.contains("monthly", ignoreCase = true) &&
-                        !pkg.identifier.contains("crush", ignoreCase = true) ||
+                        (pkg.identifier.contains("monthly", ignoreCase = true) &&
+                            !pkg.identifier.contains("crush", ignoreCase = true) &&
+                            !pkg.identifier.contains("rizz", ignoreCase = true)) ||
                         pkg.identifier.contains("match", ignoreCase = true)
                     }
+                    val rizzPackages = defaultOffering.availablePackages.filter { pkg ->
+                        pkg.identifier.contains("rizz", ignoreCase = true) ||
+                        pkg.identifier.contains("premium", ignoreCase = true)
+                    }
 
-                    // Default to Match Monthly (⭐ recommended)
-                    val defaultSelected = matchPackages.firstOrNull() ?: crushPackages.firstOrNull()
+                    val defaultSelected = matchPackages.firstOrNull() ?: rizzPackages.firstOrNull() ?: crushPackages.firstOrNull()
 
-                    if (crushPackages.isEmpty() && matchPackages.isEmpty()) {
+                    if (crushPackages.isEmpty() && matchPackages.isEmpty() && rizzPackages.isEmpty()) {
                         _state.update {
-                            it.copy(
-                                uiState = PaywallUiState.Error("No packages found in default offering")
-                            )
+                            it.copy(uiState = PaywallUiState.Error("No packages found in default offering"))
                         }
                     } else {
                         _state.update {
                             it.copy(
-                                uiState = PaywallUiState.Success(crushPackages + matchPackages),
+                                uiState = PaywallUiState.Success(crushPackages + matchPackages + rizzPackages),
                                 crushPackages = crushPackages,
                                 matchPackages = matchPackages,
+                                rizzPackages = rizzPackages,
                                 selectedTier = PaywallTier.Match,
                                 selectedPackage = defaultSelected
                             )
@@ -212,6 +215,7 @@ class PaywallViewModel @Inject constructor(
             val packages = when (tier) {
                 PaywallTier.Crush -> it.crushPackages
                 PaywallTier.Match -> it.matchPackages
+                PaywallTier.Rizz -> it.rizzPackages
             }
             val defaultPackage = packages.firstOrNull { 
                 it.identifier.contains("monthly", ignoreCase = true) 

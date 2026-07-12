@@ -24,7 +24,7 @@ const FAQS = [
   },
   {
     q: "How accurate is the AI?",
-    a: "Our AI is powered by Google Gemini Pro and has been trained on thousands of successful dating conversations. It picks up on subtle cues like tone, engagement level, and personality signals that most people miss. Users report a 2-3x improvement in reply rates.",
+    a: "Our AI has been trained on thousands of successful dating conversations. It picks up on subtle cues like tone, engagement level, and personality signals that most people miss. Users report a 2-3x improvement in reply rates.",
   },
   {
     q: "Can I cancel my subscription anytime?",

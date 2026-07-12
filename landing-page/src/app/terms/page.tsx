@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { StatusDot } from "@/components/Logo";
+import { EMAILS, PRICING } from "@/app/constants";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -17,19 +18,17 @@ const sections = [
   },
   {
     title: "2. Fair Usage Policy (Lifetime Deal)",
-    content:
-      "The Launch LTD (\u201C\u20B9999 Lifetime Deal\u201D) is a one-time purchase product designed for personal, non-commercial use. To prevent server abuse, automated scraping, and commercial resale, the following caps are enforced on all LTD accounts:",
+    content: `The Launch LTD (\u201C${PRICING.plans.ltd.currency}${PRICING.plans.ltd.price} Lifetime Deal\u201D) is a one-time purchase product designed for personal, non-commercial use. LTD accounts are unlimited for genuine personal use. To prevent server abuse, automated scraping, and commercial resale, a fair usage threshold applies:`,
     bullets: [
-      "150 unique AI-generated replies per calendar month. Once exhausted, generations resume at the start of the next month.",
+      "LTD accounts are intended for personal dating chat assistance — unlimited conversations per month for real, individual use.",
+      "If usage exceeds 300 AI-generated replies per month for 3 consecutive months while exhibiting patterns consistent with automated or commercial use (e.g., bulk processing, scripted requests, reselling outputs), we may reach out to discuss a suitable plan.",
       "Maximum of 5 context screenshots processed per active generation thread. Each new thread resets this counter.",
-      "Unused quota does not roll over to the next month.",
-      "These limits are subject to review and may be adjusted at our discretion. You will be notified of any material changes.",
+      "These thresholds are subject to review and may be adjusted at our discretion. You will be notified of any material changes.",
     ],
   },
   {
     title: "3. Subscription Plans (Crush Pass & Match Pro)",
-    content:
-      "Crush Pass (\u20B999/week) and Match Pro (\u20B9179/month) are recurring subscription plans. Subscriptions auto-renew unless cancelled at least 24 hours before the renewal date. Cancellations take effect at the end of the current billing period. No partial refunds are provided for unused portions of a billing cycle.",
+    content: `Crush Pass (${PRICING.plans.crush.currency}${PRICING.plans.crush.price}${PRICING.plans.crush.period}) and Match Pro (${PRICING.plans.match.currency}${PRICING.plans.match.price}${PRICING.plans.match.period}) are recurring subscription plans. Subscriptions auto-renew unless cancelled at least 24 hours before the renewal date. Cancellations take effect at the end of the current billing period. No partial refunds are provided for unused portions of a billing cycle.`,
   },
   {
     title: "4. Credits & Usage Limits",
@@ -63,8 +62,7 @@ const sections = [
   },
   {
     title: "10. Refund Policy",
-    content:
-      "Lifetime Deal purchases are final and non-refundable, except where required by applicable consumer law. Subscription plan refunds are handled on a case-by-case basis within 7 days of purchase. To request a refund, contact support@cookd.app with your order ID and reason.",
+    content: `Lifetime Deal purchases are final and non-refundable, except where required by applicable consumer law. Subscription plan refunds are handled on a case-by-case basis within 7 days of purchase. To request a refund, contact ${EMAILS.support} with your order ID and reason.`,
   },
   {
     title: "11. Termination",
@@ -83,8 +81,7 @@ const sections = [
   },
   {
     title: "14. Contact",
-    content:
-      "For questions about these terms, your account, or the Fair Usage Policy, reach out to support@cookd.app. We aim to respond within 48 hours.",
+    content: `For questions about these terms, your account, or the Fair Usage Policy, reach out to ${EMAILS.support}. We aim to respond within 48 hours.`,
   },
 ];
 

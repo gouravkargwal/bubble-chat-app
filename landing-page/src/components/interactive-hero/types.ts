@@ -2,6 +2,13 @@
 
 import type { Variants } from "framer-motion";
 
+// ── Shared types ──
+export interface ReplyItem {
+  id: string;
+  style: string;
+  text: string;
+}
+
 // ── State Machine ──
 export type ComponentState =
   | "idle"
@@ -71,4 +78,6 @@ export const TERMINAL_LINES = [
 ];
 
 // ── API ──
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "/api/public";
+// NOTE: Use API_URLS.leadMagnet from @/app/constants instead.
+// This file kept for type definitions only.
+export const API_BASE = "";

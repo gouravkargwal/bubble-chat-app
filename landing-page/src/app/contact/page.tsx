@@ -6,6 +6,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { StatusDot } from "@/components/Logo";
 import { AnimatedSection, ScaleHover } from "@/components/Animations";
+import { EMAILS } from "@/app/constants";
 
 const FAQ_ITEMS = [
   {
@@ -89,7 +90,7 @@ export default function ContactPage() {
     try {
       // For MVP: sends via mailto fallback + logs to console
       // Replace this with your preferred form backend when ready
-      const mailtoLink = `mailto:hello@cookd.app?subject=${encodeURIComponent(
+      const mailtoLink = `mailto:${EMAILS.hello}?subject=${encodeURIComponent(
         formData.subject || "Contact from Cookd"
       )}&body=${encodeURIComponent(
         `Name: ${formData.name}\nEmail: ${formData.email}\n\n${formData.message}`
@@ -150,7 +151,11 @@ export default function ContactPage() {
             <motion.h1
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] as const }}
+              transition={{
+                duration: 0.7,
+                delay: 0.1,
+                ease: [0.16, 1, 0.3, 1] as const,
+              }}
               className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-[1.05] tracking-tight"
             >
               Got a Question?{" "}
@@ -162,7 +167,11 @@ export default function ContactPage() {
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] as const }}
+              transition={{
+                duration: 0.6,
+                delay: 0.25,
+                ease: [0.16, 1, 0.3, 1] as const,
+              }}
               className="mx-auto mt-4 max-w-xl text-sm sm:text-base leading-relaxed text-nothing-text-secondary"
             >
               Have feedback, a bug report, or just want to say hi? Drop us a
@@ -373,8 +382,8 @@ export default function ContactPage() {
                             animate={{ opacity: 1, y: 0 }}
                             className="text-xs text-nothing-error text-center"
                           >
-                            Something went wrong. Please email us directly at
-                            hello@cookd.app
+                            Something went wrong. Please email us directly at{" "}
+                            {EMAILS.hello}
                           </motion.p>
                         )}
                       </motion.form>
@@ -401,7 +410,7 @@ export default function ContactPage() {
                   </h3>
                   <div className="space-y-4">
                     <a
-                      href="mailto:hello@cookd.app"
+                      href={`mailto:${EMAILS.hello}`}
                       className="flex items-center gap-3 group"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-nothing-border bg-nothing-black group-hover:border-nothing-text-secondary transition-colors duration-200">
@@ -424,7 +433,7 @@ export default function ContactPage() {
                           EMAIL
                         </p>
                         <p className="text-sm text-nothing-white group-hover:text-neon-red transition-colors duration-200">
-                          hello@cookd.app
+                          {EMAILS.hello}
                         </p>
                       </div>
                     </a>
@@ -527,7 +536,12 @@ export default function ContactPage() {
 
               <div className="space-y-3">
                 {FAQ_ITEMS.map((item, i) => (
-                  <FAQItem key={i} question={item.q} answer={item.a} index={i} />
+                  <FAQItem
+                    key={i}
+                    question={item.q}
+                    answer={item.a}
+                    index={i}
+                  />
                 ))}
               </div>
             </AnimatedSection>
@@ -555,14 +569,20 @@ function FAQItem({
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.5, delay: index * 0.1, ease: [0.16, 1, 0.3, 1] as const }}
+      transition={{
+        duration: 0.5,
+        delay: index * 0.1,
+        ease: [0.16, 1, 0.3, 1] as const,
+      }}
       className="rounded-xl border border-nothing-border bg-nothing-surface overflow-hidden"
     >
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors duration-200 hover:bg-nothing-white/[0.02]"
       >
-        <span className="text-sm font-medium text-nothing-white">{question}</span>
+        <span className="text-sm font-medium text-nothing-white">
+          {question}
+        </span>
         <motion.svg
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as const }}
@@ -572,7 +592,11 @@ function FAQItem({
           stroke="currentColor"
           strokeWidth={2}
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M19 9l-7 7-7-7"
+          />
         </motion.svg>
       </button>
       <AnimatePresence initial={false}>

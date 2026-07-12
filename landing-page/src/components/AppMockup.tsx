@@ -4,10 +4,16 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { StatusDot } from "./Logo";
 import { AnimatedSection } from "./Animations";
+import { UpsellBlock } from "./interactive-hero/Reveal";
 
 type AppState = "bubble" | "loading" | "expanded";
 
-const REPLIES = [
+interface AppMockupProps {
+  replies?: { id: string; style: string; text: string }[];
+  onReset?: () => void;
+}
+
+const DEMO_REPLIES = [
   {
     label: "Flirty",
     text: "There's a trail that ends at this cute cafe... but I'd need someone cute to go with \ud83d\ude0f",
@@ -40,7 +46,13 @@ const REPLIES = [
 ];
 
 // ── Dot matrix ring ──
-function DotMatrixRing({ size = 56, pulse = false }: { size?: number; pulse?: boolean }) {
+function DotMatrixRing({
+  size = 56,
+  pulse = false,
+}: {
+  size?: number;
+  pulse?: boolean;
+}) {
   const cx = size / 2;
   const cy = size / 2;
   const dotRadius = size * 0.022;
@@ -70,12 +82,17 @@ function DotMatrixRing({ size = 56, pulse = false }: { size?: number; pulse?: bo
               }
             : undefined
         }
-      />,
+      />
     );
   }
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0">
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="absolute inset-0"
+    >
       <circle cx={cx} cy={cy} r={ringRadius + dotRadius} fill="none" />
       {dots}
     </svg>
@@ -85,7 +102,13 @@ function DotMatrixRing({ size = 56, pulse = false }: { size?: number; pulse?: bo
 // ── Cookd "C" Logo ──
 function CLogo({ size = 30 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 108 108"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <circle cx="54" cy="54" r="28" fill="white" />
       <path
         d="M63.73,45.51 A12,12 0 1,0 63.73,62.49 L61.31,60.07 A8.6,8.6 0 1,1 61.31,47.93 Z"
@@ -100,7 +123,9 @@ function CLogo({ size = 30 }: { size?: number }) {
 function StrategyBadge({ text }: { text: string }) {
   return (
     <div className="inline-flex rounded-full border border-nothing-border px-2 py-0.5">
-      <span className="text-[9px] font-mono text-nothing-text-secondary tracking-wider">[ {text} ]</span>
+      <span className="text-[9px] font-mono text-nothing-text-secondary tracking-wider">
+        [ {text} ]
+      </span>
     </div>
   );
 }
@@ -118,23 +143,43 @@ function ShimmerSkeletonCard() {
         <motion.div
           className="h-3 w-full rounded bg-nothing-white/10"
           animate={{ opacity: [0.2, 0.6, 0.2] }}
-          transition={{ duration: 1, repeat: Infinity, ease: "easeInOut", delay: 0.1 }}
+          transition={{
+            duration: 1,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.1,
+          }}
         />
         <motion.div
           className="h-3 w-2/3 rounded bg-nothing-white/10"
           animate={{ opacity: [0.2, 0.6, 0.2] }}
-          transition={{ duration: 1, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+          transition={{
+            duration: 1,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.2,
+          }}
         />
         <div className="flex justify-between pt-2">
           <motion.div
             className="h-3 w-1/5 rounded bg-nothing-white/10"
             animate={{ opacity: [0.2, 0.6, 0.2] }}
-            transition={{ duration: 1, repeat: Infinity, ease: "easeInOut", delay: 0.15 }}
+            transition={{
+              duration: 1,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 0.15,
+            }}
           />
           <motion.div
             className="h-5 w-1/5 rounded bg-nothing-white/10"
             animate={{ opacity: [0.2, 0.6, 0.2] }}
-            transition={{ duration: 1, repeat: Infinity, ease: "easeInOut", delay: 0.25 }}
+            transition={{
+              duration: 1,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: 0.25,
+            }}
           />
         </div>
       </div>
@@ -195,7 +240,9 @@ function SuggestionCard({
     <motion.div
       className="rounded-xl border overflow-hidden"
       style={{
-        borderColor: recommended ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.1)",
+        borderColor: recommended
+          ? "rgba(255,255,255,0.85)"
+          : "rgba(255,255,255,0.1)",
         borderWidth: recommended ? 1.5 : 1,
         background: "rgba(18,18,18,0.95)",
       }}
@@ -225,7 +272,11 @@ function SuggestionCard({
               className="text-[9px] font-bold text-nothing-success"
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: staggerDelay + 0.2, duration: 0.3, type: "spring" }}
+              transition={{
+                delay: staggerDelay + 0.2,
+                duration: 0.3,
+                type: "spring",
+              }}
             >
               ★ BEST
             </motion.span>
@@ -276,24 +327,45 @@ function SuggestionCard({
             style={{ color: copied ? "#00FF66" : "rgba(255,255,255,0.45)" }}
             whileTap={{ scale: 0.92 }}
           >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg
+              className="h-3.5 w-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
               />
             </svg>
-            <span className="text-[10px] font-medium">{copied ? "Copied!" : "Copy"}</span>
+            <span className="text-[10px] font-medium">
+              {copied ? "Copied!" : "Copy"}
+            </span>
           </motion.button>
 
           <div className="flex items-center gap-1">
             <motion.button
               onClick={() => setLiked(true)}
               className="p-1 transition-colors duration-200"
-              style={{ color: liked === true ? "#00FF66" : liked === false ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.45)" }}
+              style={{
+                color:
+                  liked === true
+                    ? "#00FF66"
+                    : liked === false
+                    ? "rgba(255,255,255,0.45)"
+                    : "rgba(255,255,255,0.45)",
+              }}
               whileTap={{ scale: 0.85 }}
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -304,10 +376,23 @@ function SuggestionCard({
             <motion.button
               onClick={() => setLiked(false)}
               className="p-1 transition-colors duration-200"
-              style={{ color: liked === false ? "#FF003C" : liked === true ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.45)" }}
+              style={{
+                color:
+                  liked === false
+                    ? "#FF003C"
+                    : liked === true
+                    ? "rgba(255,255,255,0.45)"
+                    : "rgba(255,255,255,0.45)",
+              }}
               whileTap={{ scale: 0.85 }}
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -323,9 +408,25 @@ function SuggestionCard({
 }
 
 // ── Main Interactive AppMockup ──
-export function AppMockup() {
+export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
   const [state, setState] = React.useState<AppState>("bubble");
   const [progress, setProgress] = React.useState(0);
+  const hasRealReplies = userReplies && userReplies.length > 0;
+
+  // Use user's real replies or fall back to demo
+  const displayReplies = React.useMemo(() => {
+    if (hasRealReplies) {
+      return userReplies.map((r, i) => ({
+        label: r.style,
+        text: r.text,
+        strategy: r.style.toUpperCase().replace(/\s+/g, "_"),
+        recommended: i === 0,
+        reasoning:
+          i === 0 ? "This reply matches the conversation context." : null,
+      }));
+    }
+    return DEMO_REPLIES;
+  }, [userReplies, hasRealReplies]);
 
   // Auto-advance state machine
   React.useEffect(() => {
@@ -388,8 +489,8 @@ export function AppMockup() {
             {state === "bubble"
               ? "TAP THE BUBBLE"
               : state === "loading"
-                ? "ANALYZING..."
-                : "READY TO COPY"}
+              ? "ANALYZING..."
+              : "READY TO COPY"}
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
             See It in <span className="text-neon-red">Action</span>
@@ -398,8 +499,8 @@ export function AppMockup() {
             {state === "bubble"
               ? "A floating bubble sits on your chat screen. Tap it to generate replies."
               : state === "loading"
-                ? "Cookd analyzes the conversation and crafts your options..."
-                : "Four distinct vibes. One perfect reply."}
+              ? "Cookd analyzes the conversation and crafts your options..."
+              : "Four distinct vibes. One perfect reply."}
           </p>
         </AnimatedSection>
 
@@ -416,11 +517,20 @@ export function AppMockup() {
                 {/* Screen */}
                 <div className="rounded-[1.25rem] bg-[#0a0a0a] overflow-hidden min-h-[580px] relative">
                   {/* ── Chat screen ── */}
-                  <div className="p-3" style={{ paddingBottom: state === "expanded" ? "340px" : "40px" }}>
+                  <div
+                    className="p-3"
+                    style={{
+                      paddingBottom: state === "expanded" ? "340px" : "40px",
+                    }}
+                  >
                     {/* Chat header */}
                     <div className="text-center pb-2 mb-2 border-b border-nothing-border/50">
-                      <p className="text-[11px] font-bold text-nothing-white tracking-wide">PRIYA</p>
-                      <p className="text-[8px] font-mono text-nothing-text-tertiary tracking-wider">ONLINE</p>
+                      <p className="text-[11px] font-bold text-nothing-white tracking-wide">
+                        PRIYA
+                      </p>
+                      <p className="text-[8px] font-mono text-nothing-text-tertiary tracking-wider">
+                        ONLINE
+                      </p>
                     </div>
 
                     {/* Messages */}
@@ -429,17 +539,26 @@ export function AppMockup() {
                         className="flex justify-start"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                        transition={{
+                          delay: 0.2,
+                          duration: 0.4,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
                       >
                         <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-nothing-surface border border-nothing-border px-2.5 py-1.5 text-[10px] leading-relaxed text-nothing-text-secondary">
-                          Hey! I saw you&apos;re into hiking too. What&apos;s your favourite trail?
+                          Hey! I saw you&apos;re into hiking too. What&apos;s
+                          your favourite trail?
                         </div>
                       </motion.div>
                       <motion.div
                         className="flex justify-end"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                        transition={{
+                          delay: 0.5,
+                          duration: 0.4,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
                       >
                         <div className="max-w-[85%] rounded-xl rounded-br-sm bg-neon-red/20 border border-neon-red/30 px-2.5 py-1.5 text-[10px] leading-relaxed text-nothing-white">
                           The one that leads to good coffee afterwards ☕
@@ -449,7 +568,11 @@ export function AppMockup() {
                         className="flex justify-start"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.8, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                        transition={{
+                          delay: 0.8,
+                          duration: 0.4,
+                          ease: [0.16, 1, 0.3, 1],
+                        }}
                       >
                         <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-nothing-surface border border-nothing-border px-2.5 py-1.5 text-[10px] leading-relaxed text-nothing-text-secondary">
                           Haha priorities! Where do you usually go?
@@ -469,7 +592,11 @@ export function AppMockup() {
                         exit={{ opacity: 0, scale: 0.92, x: 20 }}
                         transition={{
                           opacity: { duration: 0.34 },
-                          scale: { type: "spring", damping: 18, stiffness: 200 },
+                          scale: {
+                            type: "spring",
+                            damping: 18,
+                            stiffness: 200,
+                          },
                           x: { duration: 0.4, ease: [0.16, 1, 0.3, 1] },
                         }}
                         onClick={() => {
@@ -500,7 +627,11 @@ export function AppMockup() {
                                   "0 0 0 16px rgba(255,255,255,0)",
                                 ],
                               }}
-                              transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+                              transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeOut",
+                              }}
                             />
                           )}
 
@@ -516,7 +647,11 @@ export function AppMockup() {
                             }
                             transition={
                               state === "loading"
-                                ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" }
+                                ? {
+                                    duration: 0.8,
+                                    repeat: Infinity,
+                                    ease: "easeInOut",
+                                  }
                                 : {}
                             }
                           >
@@ -536,12 +671,19 @@ export function AppMockup() {
                               }
                               transition={
                                 state === "loading"
-                                  ? { duration: 0.8, repeat: Infinity, ease: "easeInOut" }
+                                  ? {
+                                      duration: 0.8,
+                                      repeat: Infinity,
+                                      ease: "easeInOut",
+                                    }
                                   : {}
                               }
                             />
                             <div className="absolute inset-0 rounded-full bg-nothing-black/80 border-2 border-nothing-white" />
-                            <DotMatrixRing size={56} pulse={state === "loading"} />
+                            <DotMatrixRing
+                              size={56}
+                              pulse={state === "loading"}
+                            />
                             <div className="absolute inset-0 flex items-center justify-center">
                               <CLogo size={28} />
                             </div>
@@ -552,7 +694,10 @@ export function AppMockup() {
                             <motion.div
                               className="absolute -top-8 right-0 whitespace-nowrap"
                               initial={{ opacity: 0, y: 4 }}
-                              animate={{ opacity: [0, 1, 1, 0], y: [4, 0, 0, -4] }}
+                              animate={{
+                                opacity: [0, 1, 1, 0],
+                                y: [4, 0, 0, -4],
+                              }}
                               transition={{
                                 duration: 3,
                                 repeat: Infinity,
@@ -594,10 +739,15 @@ export function AppMockup() {
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1, duration: 0.3 }}
                             >
-                              Cooking up replies              <motion.span
-                animate={{ opacity: [1, 0.2, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              >
+                              Cooking up replies{" "}
+                              <motion.span
+                                animate={{ opacity: [1, 0.2, 1] }}
+                                transition={{
+                                  duration: 1.5,
+                                  repeat: Infinity,
+                                  ease: "easeInOut",
+                                }}
+                              >
                                 ...
                               </motion.span>
                             </motion.p>
@@ -611,7 +761,10 @@ export function AppMockup() {
                                 key={i}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.2 + i * 0.1, duration: 0.3 }}
+                                transition={{
+                                  delay: 0.2 + i * 0.1,
+                                  duration: 0.3,
+                                }}
                               >
                                 <ShimmerSkeletonCard />
                               </motion.div>
@@ -625,9 +778,9 @@ export function AppMockup() {
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.5, duration: 0.3 }}
                           >
-                            {progress === 0 && "Analyzing her vibe..."}
-                            {progress === 1 && "Cloning your style..."}
-                            {progress === 2 && "Crafting replies..."}
+                            {progress === 0 && "Analyzing the vibe..."}
+                            {progress === 1 && "Finding your voice..."}
+                            {progress === 2 && "Crafting options..."}
                             {progress >= 3 && "Almost done"}
                           </motion.p>
                         </div>
@@ -653,7 +806,7 @@ export function AppMockup() {
                         <div className="px-3 pb-3 max-h-[340px] overflow-y-auto">
                           {/* Cards */}
                           <div className="space-y-2">
-                            {REPLIES.map((reply, i) => (
+                            {displayReplies.map((reply, i) => (
                               <SuggestionCard
                                 key={i}
                                 label={reply.label}
@@ -662,7 +815,7 @@ export function AppMockup() {
                                 recommended={reply.recommended}
                                 reasoning={reply.reasoning}
                                 index={i}
-                            />
+                              />
                             ))}
                           </div>
 
@@ -681,24 +834,54 @@ export function AppMockup() {
                               className="flex w-full items-center justify-center gap-2 rounded-full bg-nothing-white py-2.5 text-[11px] font-bold text-nothing-black transition-all duration-200 hover:bg-nothing-white/90"
                               whileTap={{ scale: 0.97 }}
                             >
-                              <motion.svg
+                              <svg
                                 className="h-3.5 w-3.5"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
                                 strokeWidth={2.5}
-                                animate={{ rotate: 360 }}
-                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                               >
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
                                   d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                                 />
-                              </motion.svg>
+                              </svg>
                               Regenerate
                             </motion.button>
                           </motion.div>
+
+                          {/* Upsell block for users who came from the funnel */}
+                          {hasRealReplies && (
+                            <motion.div
+                              className="mt-4"
+                              initial={{ opacity: 0, y: 16 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{
+                                delay: 0.8,
+                                duration: 0.5,
+                                ease: [0.16, 1, 0.3, 1],
+                              }}
+                            >
+                              <UpsellBlock />
+                            </motion.div>
+                          )}
+
+                          {onReset && (
+                            <motion.div
+                              className="mt-3 text-center"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: 1.2, duration: 0.4 }}
+                            >
+                              <button
+                                onClick={onReset}
+                                className="text-[10px] font-mono text-nothing-text-tertiary underline underline-offset-4 hover:text-nothing-text-secondary transition-colors"
+                              >
+                                TRY AGAIN WITH A NEW SCREENSHOT
+                              </button>
+                            </motion.div>
+                          )}
                         </div>
                       </motion.div>
                     )}
@@ -723,7 +906,11 @@ export function AppMockup() {
                     initial={{ opacity: 0, x: 30 }}
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
-                    transition={{ delay: i * 0.15, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{
+                      delay: i * 0.15,
+                      duration: 0.6,
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
                     animate={{
                       borderColor: isActive
                         ? "rgba(255,255,255,0.25)"
@@ -740,7 +927,9 @@ export function AppMockup() {
                     >
                       <span
                         className={`text-xs font-mono font-bold transition-colors duration-500 ${
-                          isActive ? "text-neon-red" : "text-nothing-text-secondary"
+                          isActive
+                            ? "text-neon-red"
+                            : "text-nothing-text-secondary"
                         }`}
                       >
                         {item.num}
@@ -749,12 +938,16 @@ export function AppMockup() {
                     <div>
                       <h4
                         className={`text-sm font-bold mb-1 transition-colors duration-500 ${
-                          isActive ? "text-nothing-white" : "text-nothing-text-secondary"
+                          isActive
+                            ? "text-nothing-white"
+                            : "text-nothing-text-secondary"
                         }`}
                       >
                         {item.title}
                       </h4>
-                      <p className="text-xs text-nothing-text-tertiary leading-relaxed">{item.desc}</p>
+                      <p className="text-xs text-nothing-text-tertiary leading-relaxed">
+                        {item.desc}
+                      </p>
                     </div>
                   </motion.div>
                 );

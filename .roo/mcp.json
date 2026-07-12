@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "codegraphcontext": {
-      "command": "codegraphcontext",
-      "args": ["mcp", "run"]
+      "command": "python",
+      "args": ["-m", "codegraphcontext", "mcp", "start"]
     }
   }
 }

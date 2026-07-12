@@ -1,5 +1,6 @@
 import React from "react";
 import { Logo } from "./Logo";
+import { EMAILS, SOCIAL_LINKS } from "@/app/constants";
 
 const FOOTER_LINKS = {
   Product: [
@@ -7,17 +8,17 @@ const FOOTER_LINKS = {
     { label: "How It Works", href: "#how-it-works" },
     { label: "Pricing", href: "#pricing" },
     { label: "FAQ", href: "#faq" },
-    { label: "Contact", href: "mailto:support@cookd.app" },
+    { label: "Contact", href: `mailto:${EMAILS.support}` },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms of Service", href: "/terms" },
   ],
   Connect: [
-    { label: "Twitter / X", href: "https://x.com/cookd_app" },
-    { label: "Instagram", href: "https://instagram.com/cookd.app" },
-    { label: "TikTok", href: "https://tiktok.com/@cookd.app" },
-    { label: "Discord", href: "https://discord.gg/cookd" },
+    { label: "Twitter / X", href: SOCIAL_LINKS.twitter },
+    { label: "Instagram", href: SOCIAL_LINKS.instagram },
+    { label: "TikTok", href: SOCIAL_LINKS.tiktok },
+    { label: "Discord", href: SOCIAL_LINKS.discord },
   ],
 };
 

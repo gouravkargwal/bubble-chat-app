@@ -8,25 +8,41 @@ import { AnimatedSection } from "./Animations";
 const STEPS = [
   {
     number: "01",
-    title: "Connect Your Chat",
+    title: "Upload Your Chat",
     description:
-      "Share a screenshot or paste the conversation. Our AI instantly analyzes the tone, engagement level, and her personality signals.",
+      "Share a screenshot of your conversation. Our AI instantly reads the tone, engagement level, and personality signals.",
     detail: "Takes ~3 seconds",
     label: "INPUT",
   },
   {
     number: "02",
-    title: "AI Analyzes & Scores",
+    title: "Pick Your Direction",
     description:
-      "Our engine runs pattern recognition against thousands of successful interactions. It scores each possible approach for win probability.",
+      "Choose a vibe — Opener, Tease, or Keep It Playful. Each direction tunes the AI to match your goal.",
+    detail: "3 directions available",
+    label: "VIBE",
+  },
+  {
+    number: "03",
+    title: "Unlock Your Replies",
+    description:
+      "Enter your email to unlock full, personalized responses. No blur. No limits.",
+    detail: "Free to try",
+    label: "UNLOCK",
+  },
+  {
+    number: "04",
+    title: "AI Generates",
+    description:
+      "Our engine runs pattern recognition against thousands of successful interactions. Replies appear in seconds.",
     detail: "95% accuracy rate",
     label: "PROCESS",
   },
   {
-    number: "03",
-    title: "Get Your Winning Line",
+    number: "05",
+    title: "Copy & Send",
     description:
-      "Receive a tailored, high-impact response with an explanation of why it works. Use it as-is or make it your own.",
+      "View your tailored replies with coach reasoning. Copy the best one, paste it, and watch the conversation turn.",
     detail: "Delivered in real-time",
     label: "OUTPUT",
   },
@@ -34,7 +50,10 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="relative px-6 py-24 sm:py-32 overflow-hidden">
+    <section
+      id="how-it-works"
+      className="relative px-6 py-24 sm:py-32 overflow-hidden"
+    >
       {/* Background accent line */}
       <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-nothing-border to-transparent hidden lg:block" />
 
@@ -45,11 +64,11 @@ export function HowItWorks() {
           WORKFLOW
         </div>
         <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
-          Three Steps to{" "}
+          Five Steps to{" "}
           <span className="text-neon-red">Conversation Mastery</span>
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
-          From confusion to confidence in under 10 seconds.
+          From screenshot to perfect reply in under 30 seconds.
         </p>
       </AnimatedSection>
 
@@ -87,7 +106,11 @@ export function HowItWorks() {
                 <motion.div
                   className="absolute inset-0 rounded-full border border-neon-red/30"
                   animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0, 0.3] }}
-                  transition={{ duration: 2.5, repeat: Infinity, delay: i * 0.8 }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    delay: i * 0.8,
+                  }}
                 />
               </div>
 
@@ -120,7 +143,11 @@ export function HowItWorks() {
                     stroke="currentColor"
                     strokeWidth={2}
                     animate={{ rotate: [0, 360] }}
-                    transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                    transition={{
+                      duration: 20,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
                   >
                     <path
                       strokeLinecap="round"
