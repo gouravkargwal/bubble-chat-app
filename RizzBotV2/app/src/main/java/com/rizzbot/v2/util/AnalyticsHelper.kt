@@ -127,4 +127,32 @@ class AnalyticsHelper @Inject constructor(
     fun quotaExhausted() = logEvent("quota_exhausted")
     fun premiumViewed() = logEvent("premium_viewed")
     fun authCompleted() = logEvent("auth_completed")
+
+    // Profile Audit
+    fun profileAuditStarted(photoCount: Int) = logEvent("profile_audit_started", mapOf("photo_count" to photoCount))
+    fun profileAuditCompleted(score: Int) = logEvent("profile_audit_completed", mapOf("score" to score))
+    fun profileAuditFailed(reason: String) = logEvent("profile_audit_failed", mapOf("reason" to reason))
+
+    // Profile Blueprint
+    fun blueprintStarted() = logEvent("blueprint_started")
+    fun blueprintCompleted() = logEvent("blueprint_completed")
+    fun blueprintFailed(reason: String) = logEvent("blueprint_failed", mapOf("reason" to reason))
+
+    // Settings
+    fun settingsLanguageChanged(language: String) = logEvent("settings_language_changed", mapOf("language" to language))
+    fun settingsSignOut() = logEvent("settings_sign_out")
+    fun settingsReferralApplied() = logEvent("settings_referral_applied")
+    fun settingsDeleteData() = logEvent("settings_delete_data")
+
+    // History
+    fun historyEntryCopied() = logEvent("history_entry_copied")
+    fun historyEntryDeleted() = logEvent("history_entry_deleted")
+
+    // Stats
+    fun statsRefreshed() = logEvent("stats_refreshed")
+
+    // Sync Person
+    fun syncPersonStarted() = logEvent("sync_person_started")
+    fun syncPersonCompleted() = logEvent("sync_person_completed")
+    fun syncPersonFailed(reason: String) = logEvent("sync_person_failed", mapOf("reason" to reason))
 }

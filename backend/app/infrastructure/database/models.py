@@ -101,7 +101,7 @@ class UserQuota(Base):
     - credits_remaining: current spendable credits in the active period.
     - credits_period_limit: total credits granted for this period (set by billing).
     - credits_reset_at: when the period resets (weekly or monthly).
-    - signup_bonus_granted: whether the one-time 15-credit free bonus was given.
+    - signup_bonus_granted: whether the one-time 10-credit free bonus was given.
     - daily_free_credits_used: how many free daily credits used today (free tier only).
     - daily_free_reset_at: when the daily free credit window resets.
     """
@@ -125,6 +125,10 @@ class UserQuota(Base):
     )
     # Idempotency: last 5 correlation_ids that were charged — prevents double-charge on retry.
     last_charged_keys: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Lifetime Deal: perpetual refill cycle instead of fixed expiry.
+    is_ltd: Mapped[bool] = mapped_column(Boolean, default=False)
+    ltd_refill_credits: Mapped[int] = mapped_column(Integer, default=0)
+    ltd_refill_days: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Conversation(Base):
@@ -302,7 +306,9 @@ class ConversationMemory(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
-    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversations.id"), index=True
+    )
     fact_text: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
     # Importance scoring for RAG retrieval prioritization (1-5 scale)
@@ -341,7 +347,8 @@ class ConversationMemoryEntity(Base):
     __tablename__ = "conversation_memory_entities"
     __table_args__ = (
         UniqueConstraint(
-            "conversation_id", "entity_name",
+            "conversation_id",
+            "entity_name",
             name="unique_conversation_entity",
         ),
         Index("ix_graph_entities_lookup", "conversation_id", "entity_name"),
@@ -351,9 +358,13 @@ class ConversationMemoryEntity(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
-    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversations.id"), index=True
+    )
     entity_name: Mapped[str] = mapped_column(String(100))
-    entity_type: Mapped[str] = mapped_column(String(50))  # person, profession, hobby, location, etc.
+    entity_type: Mapped[str] = mapped_column(
+        String(50)
+    )  # person, profession, hobby, location, etc.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -369,7 +380,9 @@ class ConversationMemoryEdge(Base):
     __tablename__ = "conversation_memory_edges"
     __table_args__ = (
         UniqueConstraint(
-            "conversation_id", "source_entity_id", "target_entity_id",
+            "conversation_id",
+            "source_entity_id",
+            "target_entity_id",
             "relationship_type",
             name="unique_conversation_edge",
         ),
@@ -380,17 +393,57 @@ class ConversationMemoryEdge(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
-    conversation_id: Mapped[str] = mapped_column(String(36), ForeignKey("conversations.id"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("conversations.id"), index=True
+    )
     source_entity_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("conversation_memory_entities.id", ondelete="CASCADE")
     )
     target_entity_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("conversation_memory_entities.id", ondelete="CASCADE")
     )
-    relationship_type: Mapped[str] = mapped_column(String(50))  # WORKS_AS, PLAYS, LIVES_IN, etc.
+    relationship_type: Mapped[str] = mapped_column(
+        String(50)
+    )  # WORKS_AS, PLAYS, LIVES_IN, etc.
     weight: Mapped[float] = mapped_column(Float, default=1.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class LeadMagnetLead(Base):
+    """Lead capture for the public lead-magnet demo.
+
+    Each row captures one user who uploaded a screenshot, their email,
+    and the generation status. Rate limiting is enforced per IP address
+    with a configurable reset window.
+    """
+
+    __tablename__ = "lead_magnet_leads"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    ip_address: Mapped[str] = mapped_column(String(45), index=True)  # IPv6 max 45 chars
+    email: Mapped[str] = mapped_column(String(320))
+    direction: Mapped[str] = mapped_column(String(30))
+    custom_hint: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    image_hash: Mapped[str] = mapped_column(String(64))  # SHA-256 hex digest
+    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    bot_score: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending | success | failed | rate_limited
+    replies_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    rate_limit_reset_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 

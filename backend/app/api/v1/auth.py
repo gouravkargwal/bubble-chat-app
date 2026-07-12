@@ -93,7 +93,7 @@ async def firebase_auth(
             await db.commit()
             await db.refresh(user)
         else:
-            # --- 4. Brand-new user — start on rizz trial (3 days, 15 credits) ---
+            # --- 4. Brand-new user — start on match trial (3 days, 15 credits) ---
             is_new_user = True
             now = datetime.now(timezone.utc)
             device_id = body.device_id or f"firebase:{firebase_uid}"
@@ -104,7 +104,7 @@ async def firebase_auth(
                 display_name=display_name,
                 referral_code=generate_referral_code(),
                 google_provider_id=google_provider_id,
-                tier="rizz",
+                tier="match",
                 tier_expires_at=now + timedelta(days=3),
                 tier_source="trial",
             )

@@ -31,7 +31,7 @@ export function Hero() {
   const headlineWords = ["Never", "Lose", "The", "Conversation", "Again."];
 
   return (
-    <section className="relative flex min-h-screen flex-col items-center justify-center px-6 pt-24 pb-16 overflow-hidden">
+    <section className="relative flex min-h-screen flex-col items-center justify-center px-6 pt-32 pb-16 overflow-hidden">
       {/* Subtle grid background with parallax */}
       <ParallaxLayer
         speed={0.15}
@@ -127,9 +127,8 @@ export function Hero() {
           animate="visible"
           className="mx-auto mt-6 max-w-2xl text-base sm:text-lg leading-relaxed text-nothing-text-secondary"
         >
-          Cookd analyzes your real-time chats and crafts personalized,
-          high-impact opening lines and responses based on her personality. Stop
-          guessing — start winning.
+          Analyzes your chats and crafts winning responses in real-time. Stop
+          guessing. Start connecting.
         </motion.p>
 
         {/* CTA — Primary action: redirect to Google Play */}
@@ -146,8 +145,18 @@ export function Hero() {
               rel="noopener noreferrer"
               className="group inline-flex items-center gap-2 rounded-full bg-neon-red px-8 py-3.5 text-sm font-bold text-nothing-white transition-all duration-300 hover:shadow-[0_0_30px_rgba(255,0,60,0.25)]"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5" />
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
+                />
               </svg>
               <span>Get on Google Play</span>
               <motion.svg
@@ -157,9 +166,17 @@ export function Hero() {
                 stroke="currentColor"
                 strokeWidth={2.5}
                 animate={{ x: [0, 3, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 5l7 7-7 7"
+                />
               </motion.svg>
             </a>
           </ScaleHover>

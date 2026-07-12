@@ -156,7 +156,7 @@ fun SettingsScreen(
 
                     HorizontalDivider(color = NothingBorder, modifier = Modifier.padding(vertical = NothingDimens.elementGap))
 
-                    val isPaidPlan = state.tier in listOf(TierQuota.PLAN_CRUSH, TierQuota.PLAN_MATCH, TierQuota.PLAN_RIZZ)
+                    val isPaidPlan = state.tier in listOf(TierQuota.PLAN_CRUSH, TierQuota.PLAN_MATCH)
                     PlanStatusCard(
                         tier = state.tier,
                         isPaidPlan = isPaidPlan,
@@ -185,6 +185,7 @@ fun SettingsScreen(
 
                     HorizontalDivider(color = NothingBorder, modifier = Modifier.padding(vertical = NothingDimens.elementGap))
                     UsageLimitsDisplay(
+                        tier = state.tier,
                         creditsRemaining = state.creditsRemaining,
                         creditsPeriodLimit = state.creditsPeriodLimit,
                         billingPeriod = state.billingPeriod,
@@ -212,9 +213,10 @@ fun SettingsScreen(
                                 clipboard.setPrimaryClip(ClipData.newPlainText("Referral Code", referral.referralCode))
                             }) { Icon(Icons.Default.ContentCopy, "Copy", tint = NothingTextSecondary) }
                             IconButton(onClick = {
+                                val shareText = "Use my code ${referral.referralCode} to join me on Cookd! 🚀\n\n${context.getString(R.string.app_public_link)}"
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, "Use my code ${referral.referralCode}")
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
                                 }
                                 context.startActivity(Intent.createChooser(intent, "Share Code"))
                             }) { Icon(Icons.Default.Share, "Share", tint = NothingTextSecondary) }
@@ -264,7 +266,14 @@ fun SettingsScreen(
                 Column {
                     SettingsRow(icon = Icons.Default.Email, label = "Email Support", onClick = {})
                     HorizontalDivider(color = NothingBorder)
-                    SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {})
+                    SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {
+                        val shareText = "Check out Cookd — AI replies for dating apps! 🚀\n\n${context.getString(R.string.app_public_link)}"
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share Cookd"))
+                    })
                     HorizontalDivider(color = NothingBorder)
                     SettingsRow(icon = Icons.Default.Article, label = "Terms of Service", onClick = onOpenTerms)
                     HorizontalDivider(color = NothingBorder)
@@ -293,22 +302,43 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun UsageLimitsDisplay(creditsRemaining: Int, creditsPeriodLimit: Int, billingPeriod: String) {
+private fun UsageLimitsDisplay(tier: String, creditsRemaining: Int, creditsPeriodLimit: Int, billingPeriod: String) {
     Column(verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap)) {
+        // Header row
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Credits Remaining", color = NothingWhite, style = MaterialTheme.typography.titleSmall)
-            Text("$creditsRemaining of $creditsPeriodLimit", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+            Column {
+                Text("Credits Remaining", color = NothingWhite, style = MaterialTheme.typography.titleSmall)
+                when (tier) {
+                    TierQuota.PLAN_FREE -> Text(
+                        "Signup bonus + ${TierQuota.FREE_DAILY_CREDITS}/day free",
+                        color = NothingTextTertiary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    else -> Text(
+                        "per ${TierQuota.billingPeriodNoun(billingPeriod)}",
+                        color = NothingTextTertiary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+            Text("$creditsRemaining", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
         }
-        val creditsUsed = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
-        val progress = (creditsUsed.toFloat() / creditsPeriodLimit).coerceIn(0f, 1f)
-        if (creditsPeriodLimit > 0) {
+
+        // Paid tier: show progress bar against period limit.
+        if (tier != TierQuota.PLAN_FREE && creditsPeriodLimit > 0) {
+            val creditsUsed = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
+            val progress = (creditsUsed.toFloat() / creditsPeriodLimit).coerceIn(0f, 1f)
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
                 color = if (progress >= 1f) NothingError else NothingWhite,
                 trackColor = NothingBorder
             )
-            Text("Resets each billing period.", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
+            Text(
+                "Resets each ${TierQuota.billingPeriodNoun(billingPeriod)}.",
+                color = NothingTextTertiary,
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }
@@ -337,7 +367,6 @@ private fun PlanStatusCard(
                 Column(modifier = Modifier.weight(1f)) {
                     val planName = when {
                         isOnTrial -> "Free Trial Active"
-                        tier == TierQuota.PLAN_RIZZ -> "Rizz Plan Active"
                         tier == TierQuota.PLAN_MATCH -> "Match Plan Active"
                         tier == TierQuota.PLAN_CRUSH -> "Crush Plan Active"
                         else -> "Basic (Free)"

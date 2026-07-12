@@ -4,7 +4,7 @@ data class UsageState(
     val tier: String = TierQuota.PLAN_FREE,
     val creditsRemaining: Int = 0,
     val creditsPeriodLimit: Int = 0,
-    val billingPeriod: String = "monthly",
+    val billingPeriod: String = "daily",
     val tierExpiresAt: Long? = null,
     val allowedDirections: List<String> = listOf("opener", "quick_reply", "keep_playful", "revive_chat"),
     val customHintsEnabled: Boolean = false,
@@ -12,10 +12,20 @@ data class UsageState(
     val maxPhotosPerAudit: Int = 3,
 ) {
     val isPaidPlan: Boolean
-        get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH || tier == TierQuota.PLAN_RIZZ
+        get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH
 
+    /** For free tier: credits include signup bonus (10) + daily free (2/day, max 8 accumulation).
+     *  For paid tier: just the period pool credits. */
     val canGenerate: Boolean
         get() = creditsRemaining > 0
+
+    /** For free users: returns the daily free credits component (2/day max). */
+    val dailyFreeCredits: Int
+        get() = if (tier == TierQuota.PLAN_FREE) TierQuota.FREE_DAILY_CREDITS else 0
+
+    /** For free users: returns true when signup bonus is likely exhausted (remaining <= daily cap). */
+    val isOnDailyCreditsOnly: Boolean
+        get() = tier == TierQuota.PLAN_FREE && creditsRemaining <= TierQuota.FREE_DAILY_CREDITS
 
     val trialDaysRemaining: Int
         get() {
@@ -26,12 +36,5 @@ data class UsageState(
         }
 
     val isOnTrial: Boolean
-        get() = tier == TierQuota.PLAN_RIZZ && trialDaysRemaining in 0..3 && creditsPeriodLimit == 15
+        get() = tier == TierQuota.PLAN_MATCH && trialDaysRemaining in 0..3 && creditsPeriodLimit == 15
 }
-
-data class ReferralInfo(
-    val referralCode: String = "",
-    val totalReferrals: Int = 0,
-    val bonusRepliesEarned: Int = 0,
-    val maxReferrals: Int = 10
-)

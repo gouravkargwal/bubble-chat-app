@@ -20,12 +20,15 @@ object TierQuota {
     const val PLAN_FREE: String = "free"
     const val PLAN_CRUSH: String = "crush"
     const val PLAN_MATCH: String = "match"
-    const val PLAN_RIZZ: String = "rizz"
+
+    // Free tier daily credits
+    const val FREE_DAILY_CREDITS: Int = 2
+    const val FREE_DAILY_ACCUMULATE_MAX: Int = 8
 
     // Credit cost per feature
     const val CREDIT_COST_CHAT: Int = 1
-    const val CREDIT_COST_AUDIT: Int = 5
-    const val CREDIT_COST_BLUEPRINT: Int = 8
+    const val CREDIT_COST_AUDIT: Int = 8
+    const val CREDIT_COST_BLUEPRINT: Int = 12
 
     // Referral credit rewards
     const val REFERRER_CREDITS: Int = 10

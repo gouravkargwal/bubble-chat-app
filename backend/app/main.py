@@ -1,36 +1,34 @@
 import json
 import time
 import uuid
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+import structlog
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-import structlog
 from pyinstrument import Profiler
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.infrastructure.database.engine import init_db
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.metrics import (
-    setup_metrics,
     error_total,
-    http_requests_total,
     http_request_duration_seconds,
+    http_requests_total,
+    setup_metrics,
 )
-from app.infrastructure.tracing import setup_tracing, shutdown_tracing
 from app.infrastructure.otel_logging import setup_otel_logging
-
-# Infrastructure-level rate limiter (IP-based, complements application-level quotas)
-limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+from app.infrastructure.ratelimit import limiter
+from app.infrastructure.security_headers import add_security_headers
+from app.infrastructure.tracing import setup_tracing, shutdown_tracing
 
 
 def _detail_for_log(detail: Any, *, max_len: int = 4000) -> Any:
@@ -46,18 +44,7 @@ def _detail_for_log(detail: Any, *, max_len: int = 4000) -> Any:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    # Sentry initialization (kept for error alerting)
-    if settings.sentry_dsn:
-        import sentry_sdk
-
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn,
-            traces_sample_rate=settings.sentry_traces_sample_rate,
-            environment=settings.environment,
-            release="rizzbot-backend@2.0.0",
-        )
-
-    # OpenTelemetry — initialise exporters for OpenObserver
+    # OpenTelemetry — initialise exporters for OpenObserver (replaces Sentry)
     if settings.otlp_enabled:
         # OpenObserve OTLP/HTTP ingestion is org-scoped: /api/{org}/v1/{signal}
         base_url = f"{settings.openobserver_endpoint.rstrip('/')}/api/{settings.zo_org}"
@@ -104,6 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 def create_app() -> FastAPI:
     setup_logging(settings.log_level, json_logs=settings.log_json)
+    max_payload_bytes = settings.lead_magnet_max_payload_mb * 1024 * 1024
 
     app = FastAPI(
         title="RizzBot API",
@@ -165,8 +153,20 @@ def create_app() -> FastAPI:
         )
         return JSONResponse(status_code=422, content={"detail": errors})
 
-    # CORS — never combine wildcard origins with credentials
+    # Security headers — CSP, XSS protection, clickjacking prevention, etc.
+    # Uses @app.middleware("http") pattern (same as correlation-id / RED metrics)
+    # imported from a separate module for clean separation.
+    app.middleware("http")(add_security_headers)
+
+    # CORS — must restrict origins in production; wildcard disables credentials
     is_wildcard = settings.cors_origins == ["*"]
+    if is_wildcard and settings.environment != "development":
+        logger = structlog.get_logger()
+        logger.warning(
+            "cors_origins_wildcard_in_production",
+            message="CORS is set to ['*'] in a non-development environment. "
+            "Set CORS_ORIGINS to specific domains for production security.",
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -174,6 +174,20 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Payload size limit for public endpoints (prevent OOM on large uploads)
+    @app.middleware("http")
+    async def limit_payload_size(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+        if request.url.path.startswith("/api/public"):
+            content_length = request.headers.get("content-length")
+            if content_length and int(content_length) > max_payload_bytes:
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "detail": f"File too large. Max {settings.lead_magnet_max_payload_mb} MB."
+                    },
+                )
+        return await call_next(request)
 
     # Profiling middleware (limited to the vision generate endpoint)
     @app.middleware("http")
@@ -265,14 +279,6 @@ def create_app() -> FastAPI:
             layer="api", severity="critical", error_type=type(exc).__name__
         ).inc()
 
-        # Forward to Sentry if initialised
-        try:
-            import sentry_sdk
-
-            sentry_sdk.capture_exception(exc)
-        except ImportError:
-            pass
-
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal server error"},
@@ -283,6 +289,11 @@ def create_app() -> FastAPI:
 
     app.include_router(v1_router, prefix="/api/v1")
 
+    # Public (no-auth) lead-magnet router
+    from app.api.v1.public import router as public_router
+
+    app.include_router(public_router, prefix="/api/public")
+
     # Static files (for profile audit images, etc.)
     static_dir = Path("static")
     static_dir.mkdir(parents=True, exist_ok=True)
@@ -292,6 +303,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         """Health check with database connectivity verification."""
         from sqlalchemy import text
+
         from app.infrastructure.database.engine import get_db
 
         try:

@@ -8,17 +8,19 @@ internal object PaywallTierMarketing {
 
     fun headlineForAppTier(appTier: String): String =
         when (appTier) {
-            "crush" -> "Upgrade to Match or Rizz"
-            "match" -> "Upgrade to Rizz"
-            "rizz" -> "Manage your plan"
+            "crush" -> "Upgrade to Match"
+            "match" -> "Manage your plan"
             else -> "Upgrade your wingman"
         }
+
+    /** Is the given app tier an LTD (Lifetime Deal) purchase? */
+    fun isLtdTier(appTier: String): Boolean =
+        appTier == "match_ltd"
 
     fun sublineForAppTier(appTier: String): String =
         when (appTier) {
             "crush" -> "Crush unlocks 7 reply modes, custom hints, and photo audits. Match adds Ask Out + Get Number + blueprints."
-            "match" -> "Match unlocks all 9 reply modes, blueprints, and photo audits. Rizz gives you the most credits and max limits."
-            "rizz" -> "You're on the top tier. Every feature, unlimited potential."
+            "match" -> "Match unlocks all 9 reply modes, blueprints, and photo audits."
             else -> "Free gives you Openers, Quick Replies, Keep Playful, and Revive Chat. Upgrade for the full toolkit."
         }
 
@@ -26,15 +28,14 @@ internal object PaywallTierMarketing {
         when (selected) {
             PaywallTier.Crush -> crushLines
             PaywallTier.Match -> matchLines
-            PaywallTier.Rizz -> rizzLines
         }
 
-    /** 60 credits / 7 days — ₹99/week */
+    /** 50 credits / 7 days — ₹99/week */
     private val crushLines = listOf(
-        "60 credits every week",
+        "50 credits every week",
         "All 7 reply modes — except Get Number & Ask Out",
         "Custom hints & chemistry tracking",
-        "Photo audit — 5 credits per audit",
+        "Photo audit — 8 credits per audit",
         "Up to 5 screenshots per reply",
     )
 
@@ -45,14 +46,5 @@ internal object PaywallTierMarketing {
         "Custom hints & chemistry tracking",
         "Photo audit & profile blueprint",
         "Up to 5 screenshots per reply",
-    )
-
-    /** 250 credits / 30 days — ₹299/month */
-    private val rizzLines = listOf(
-        "250 credits every month",
-        "All 9 reply modes — including Get Number & Ask Out",
-        "Custom hints & chemistry tracking",
-        "Photo audit & profile blueprint",
-        "Up to 7 screenshots per reply — max everything",
     )
 }

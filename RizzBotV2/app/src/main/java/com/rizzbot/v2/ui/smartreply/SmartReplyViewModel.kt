@@ -12,6 +12,7 @@ import com.rizzbot.v2.domain.model.DirectionWithHint
 import com.rizzbot.v2.domain.model.SuggestionResult
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
+import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.ClipboardHelper
 import com.rizzbot.v2.util.HapticHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -61,6 +62,7 @@ class SmartReplyViewModel @Inject constructor(
     private val imageCompressor: ImageCompressor,
     private val hapticHelper: HapticHelper,
     private val clipboardHelper: ClipboardHelper,
+    private val analyticsHelper: AnalyticsHelper,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SmartReplyState())
@@ -70,6 +72,8 @@ class SmartReplyViewModel @Inject constructor(
         get() = _state.value.usage.maxScreenshots.coerceIn(1, 10)
 
     init {
+        analyticsHelper.screenViewed("SmartReply")
+
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
                 _state.update { current ->
@@ -241,6 +245,7 @@ class SmartReplyViewModel @Inject constructor(
     fun onCopyReply(reply: String, index: Int, interactionId: String) {
         clipboardHelper.copyToClipboard(reply)
         hapticHelper.lightTap()
+        analyticsHelper.replyCopied(index)
         viewModelScope.launch {
             if (interactionId.isNotEmpty()) {
                 try {
@@ -254,6 +259,7 @@ class SmartReplyViewModel @Inject constructor(
      * Rate a reply.
      */
     fun onRateReply(index: Int, positive: Boolean, text: String, interactionId: String) {
+        analyticsHelper.replyRated(index, positive)
         viewModelScope.launch {
             if (interactionId.isNotEmpty()) {
                 try {

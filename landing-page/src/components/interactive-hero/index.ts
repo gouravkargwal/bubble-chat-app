@@ -1,0 +1,1 @@
+export { InteractiveHero } from "./InteractiveHero";

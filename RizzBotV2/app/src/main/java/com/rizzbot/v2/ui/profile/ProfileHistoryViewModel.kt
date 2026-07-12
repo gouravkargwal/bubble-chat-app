@@ -3,6 +3,7 @@ package com.rizzbot.v2.ui.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.domain.repository.HostedRepository
+import com.rizzbot.v2.util.AnalyticsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,6 +14,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileHistoryViewModel @Inject constructor(
     private val repository: HostedRepository,
+    private val analyticsHelper: AnalyticsHelper,
 ) : ViewModel() {
 
     private val _audits = MutableStateFlow<List<HistoryItem>>(emptyList())
@@ -28,6 +30,7 @@ class ProfileHistoryViewModel @Inject constructor(
     private val pageSize = 20
 
     init {
+        analyticsHelper.screenViewed("ProfileHistory")
         fetchNextPage()
     }
 
@@ -102,6 +105,7 @@ class ProfileHistoryViewModel @Inject constructor(
     }
 
     fun deletePhoto(photoId: String) {
+        analyticsHelper.logEvent("profile_history_photo_deleted", mapOf("photo_id" to photoId))
         viewModelScope.launch {
             val result = repository.deleteProfileAuditPhoto(photoId)
             result.fold(

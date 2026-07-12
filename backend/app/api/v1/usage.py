@@ -6,10 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user
 from app.api.v1.schemas.schemas import UsageResponse
-from app.core.tier_config import TIER_CONFIG, BILLING_CREDITS
+from app.core.tier_config import TIER_CONFIG
 from app.domain.tiers import get_effective_tier
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import Purchase, User, UserQuota
+from app.infrastructure.database.models import Purchase, User
 from app.services.quota_manager import QuotaManager
 
 router = APIRouter()
@@ -27,23 +27,15 @@ async def get_usage(
     credits_remaining = 0
     credits_period_limit = 0
     if user.google_provider_id:
-        quota_result = await db.execute(
-            select(UserQuota).where(UserQuota.google_provider_id == user.google_provider_id)
-        )
-        quota = quota_result.scalar_one_or_none()
-
         qm = QuotaManager(db)
         credits_remaining = await qm.get_credits_remaining(
             user.google_provider_id, effective_tier
         )
 
-        # Period limit — read from quota table (source of truth), not BILLING_CREDITS.
-        if effective_tier == "free":
-            credits_period_limit = tier_config["limits"].get("daily_credits", 2)
-        elif quota is not None:
-            credits_period_limit = quota.credits_period_limit
-        else:
-            credits_period_limit = BILLING_CREDITS.get(effective_tier, 0)
+        # Period limit — use QuotaManager so free users see signup bonus + daily combined.
+        credits_period_limit = await qm.get_credits_period_limit(
+            user.google_provider_id, effective_tier
+        )
 
     # Billing period from active purchase.
     billing_period = "daily"
@@ -59,7 +51,7 @@ async def get_usage(
             pid = purchase.product_id.lower()
             if "crush" in pid or "weekly" in pid:
                 billing_period = "weekly"
-            elif "match" in pid or "rizz" in pid or "monthly" in pid:
+            elif "match" in pid or "monthly" in pid:
                 billing_period = "monthly"
 
     return UsageResponse(

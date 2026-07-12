@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.data.remote.api.HostedApi
 import com.rizzbot.v2.domain.repository.SettingsRepository
+import com.rizzbot.v2.util.AnalyticsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +30,8 @@ sealed class BlueprintHistoryState {
 @HiltViewModel
 class ProfileOptimizerViewModel @Inject constructor(
     private val api: HostedApi,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<OptimizerState>(OptimizerState.Idle)
@@ -43,6 +45,8 @@ class ProfileOptimizerViewModel @Inject constructor(
     val selectedLanguage: StateFlow<String> = _roastLanguage.asStateFlow()
 
     init {
+        analyticsHelper.screenViewed("ProfileOptimizer")
+
         viewModelScope.launch {
             settingsRepository.roastLanguage.collect { lang ->
                 _roastLanguage.value = lang
@@ -60,6 +64,7 @@ class ProfileOptimizerViewModel @Inject constructor(
         // Avoid spamming calls if one is already in progress
         if (_state.value is OptimizerState.Loading) return
 
+        analyticsHelper.blueprintStarted()
         _state.value = OptimizerState.Loading
 
         viewModelScope.launch {
@@ -78,9 +83,11 @@ class ProfileOptimizerViewModel @Inject constructor(
                             "ProfileOptimizerVM",
                             "optimizeProfile: slots=${body.slots.size}, overallTheme=${body.overallTheme.take(80)}"
                         )
+                        analyticsHelper.blueprintCompleted()
                         _state.value = OptimizerState.Success(body.toUi())
                     } else {
                         Log.w("ProfileOptimizerVM", "optimizeProfile: empty body from server")
+                        analyticsHelper.blueprintFailed("empty_response")
                         _state.value = OptimizerState.Error("Empty response from server")
                     }
                 } else {
@@ -96,10 +103,12 @@ class ProfileOptimizerViewModel @Inject constructor(
                         "ProfileOptimizerVM",
                         "optimizeProfile: server error code=$code, message=$message"
                     )
+                    analyticsHelper.blueprintFailed("http_$code")
                     _state.value = OptimizerState.Error(message)
                 }
             } catch (e: Exception) {
                 Log.e("ProfileOptimizerVM", "optimizeProfile: network or parsing error", e)
+                analyticsHelper.blueprintFailed(e.message ?: "network_error")
                 _state.value = OptimizerState.Error(
                     e.message ?: "Network error. Please check your connection."
                 )

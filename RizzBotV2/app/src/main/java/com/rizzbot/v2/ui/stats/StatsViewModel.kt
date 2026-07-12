@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.domain.model.UserPreferences
 import com.rizzbot.v2.domain.repository.HostedRepository
+import com.rizzbot.v2.util.AnalyticsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -21,7 +22,8 @@ data class StatsState(
 
 @HiltViewModel
 class StatsViewModel @Inject constructor(
-    private val hostedRepository: HostedRepository
+    private val hostedRepository: HostedRepository,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StatsState())
@@ -31,6 +33,8 @@ class StatsViewModel @Inject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     init {
+        analyticsHelper.screenViewed("Stats")
+
         // Collect tier from backend usage state
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
@@ -68,6 +72,7 @@ class StatsViewModel @Inject constructor(
     }
 
     fun refresh() {
+        analyticsHelper.statsRefreshed()
         viewModelScope.launch {
             _isRefreshing.value = true
             try {

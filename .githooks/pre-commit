@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────────────
+# Pre-commit hook: block accidental commits of environment files
+# that contain live secrets.
+#
+# This runs before every commit and rejects any staged .env* files
+# (except .env.example which is the template).
+#
+# Install:
+#   git config core.hooksPath .githooks
+#   (or copy to .git/hooks/pre-commit)
+# ──────────────────────────────────────────────────────────────────────────
+
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# ── Blocked patterns ──────────────────────────────────────────────────────
+# Any staged file matching these patterns will block the commit.
+BLOCKED_PATTERNS=(
+  ".env"              # catches .env, .env.dev, .env.prod, .env.staging, etc.
+)
+
+# Exclusions — files that are allowed (the template only)
+ALLOWED=(
+  ".env.example"
+)
+
+# ── Check staged files ────────────────────────────────────────────────────
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+BLOCKED=0
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+
+  # Check against allowed list
+  for allowed in "${ALLOWED[@]}"; do
+    if [ "$file" = "$allowed" ] || [[ "$file" == *"/$allowed" ]]; then
+      continue 2  # skip to next file (this one is allowed)
+    fi
+  done
+
+  # Check against blocked patterns
+  for pattern in "${BLOCKED_PATTERNS[@]}"; do
+    basename=$(basename "$file")
+    if [ "$basename" = "$pattern" ] || [[ "$basename" == "$pattern"* ]]; then
+      echo -e "${RED}⛔ BLOCKED: '$file' appears to be an environment file with secrets.${NC}"
+      echo -e "${YELLOW}   Environment files (*.env, *.env.dev, *.env.prod, etc.) must NEVER be committed.${NC}"
+      echo -e "${YELLOW}   Use .env.example as the template for documentation.${NC}"
+      echo ""
+      BLOCKED=1
+      break
+    fi
+  done
+done <<< "$STAGED"
+
+if [ "$BLOCKED" -eq 1 ]; then
+  echo -e "${RED}Commit rejected. Remove the blocked file(s) from staging:${NC}"
+  echo "  git rm --cached <file>    # if it was previously tracked"
+  echo "  git reset HEAD -- <file>  # if it's a new file"
+  echo ""
+  echo -e "${YELLOW}If you really need to commit an env-like file, use --no-verify:${NC}"
+  echo "  git commit --no-verify"
+  echo -e "${YELLOW}(But seriously, don't.)${NC}"
+  exit 1
+fi
+
+# ── Optional: scan for high-entropy secrets (API keys, tokens) ───────────
+# Uses a basic regex check for common secret patterns in staged files
+# that aren't in the allowlist.
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  # Skip binary files and non-text files
+  if ! git show ":$file" 2>/dev/null | head -5 | grep -q . 2>/dev/null; then
+    continue
+  fi
+
+  # Skip .env.example (the template)
+  basename=$(basename "$file")
+  [ "$basename" = ".env.example" ] && continue
+
+  # Scan for potential secrets — single git show call for performance & consistency
+  matches=$(git show ":$file" 2>/dev/null | grep -Eno '(API_KEY|SECRET|PASSWORD|TOKEN)=[^=]+' 2>/dev/null || true)
+  if [ -n "$matches" ]; then
+    echo -e "${YELLOW}⚠️  WARNING: '$file' contains potential secrets:${NC}"
+    echo "$matches" | while IFS= read -r line; do
+      echo "     $line"
+    done
+    echo -e "${YELLOW}   Double-check this file before committing.${NC}"
+  fi
+done <<< "$STAGED"
+
+exit 0

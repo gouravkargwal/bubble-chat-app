@@ -58,10 +58,6 @@ class Settings(BaseSettings):
     # Signup trial — promo code auto-applied to new users (empty = no trial)
     signup_promo_code: str = "WELCOME"
 
-    # Sentry
-    sentry_dsn: str = ""
-    sentry_traces_sample_rate: float = 0.1
-
     # OCI Object Storage (Always Free tier: 20 GB standard)
     # IMPORTANT: Create a lifecycle rule in OCI Console to auto-delete objects
     # with prefix "temp-audits/" after 1 day. This cleans up orphans from
@@ -85,6 +81,13 @@ class Settings(BaseSettings):
 
     # Voice DNA (screenshot calibration + style learning). Off until re-enabled in product.
     voice_dna_enabled: bool = False
+
+    # Lead magnet — public demo API
+    lead_magnet_webhook_url: str = ""
+    lead_magnet_app_url: str = (
+        "https://play.google.com/store/apps/details?id=com.cookd.mobile"
+    )
+    lead_magnet_max_payload_mb: int = 5
 
     # OpenObserver (unified observability: logs, metrics, traces)
     openobserver_endpoint: str = "http://localhost:5001"

@@ -10,6 +10,7 @@ import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
 import com.rizzbot.v2.overlay.OverlayService
+import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.HapticHelper
 import com.rizzbot.v2.util.PermissionHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,6 +46,7 @@ class HomeViewModel @Inject constructor(
     private val bubbleManager: dagger.Lazy<com.rizzbot.v2.overlay.manager.BubbleManager>,
     private val hostedApi: HostedApi,
     private val hapticHelper: HapticHelper,
+    private val analyticsHelper: AnalyticsHelper,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
@@ -54,6 +56,8 @@ class HomeViewModel @Inject constructor(
     val isPullRefreshing: StateFlow<Boolean> = _isPullRefreshing.asStateFlow()
 
     init {
+        analyticsHelper.screenViewed("Home")
+
         viewModelScope.launch {
             combine(
                 settingsRepository.serviceEnabled,

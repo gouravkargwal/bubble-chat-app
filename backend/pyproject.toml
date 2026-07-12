@@ -15,7 +15,8 @@ dependencies = [
     "python-jose[cryptography]>=3.3",
     "slowapi>=0.1.9",
     "structlog>=24.0",
-    "sentry-sdk[fastapi]>=2.0",
+    # Observability via OpenObserver (OTLP). Sentry is NOT used.
+# See app/infrastructure/tracing.py and otel_logging.py.
     "firebase-admin>=6.0",
     "google-auth>=2.0",
     "pyinstrument>=4.6",
@@ -28,6 +29,9 @@ dependencies = [
     "flashrank>=0.2",  # CPU-only cross-encoder reranker for RAG (no GPU needed)
     "numpy>=1.24.0",   # Added for ultra-fast vectorized matrix math in MMR reranking
     "tiktoken>=0.7.0",   # accurate token counting for Hindi/Hinglish token budgets
+    "crawlerdetect>=0.3",
+    "disposable-email-domains>=0.0.218",
+    "dnspython>=2.6.0",  # MX record validation for email domains
     "prometheus-client>=0.21.0",
     "prometheus-fastapi-instrumentator>=7.0.0",
     "opentelemetry-sdk>=1.28.0",

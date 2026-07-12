@@ -163,7 +163,7 @@ fun PaywallScreen(
                             Spacer(modifier = Modifier.height(NothingDimens.textGap))
 
                             AnimatedContent(targetState = state.selectedTier, transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(240)) }, label = "packages") { tier ->
-                                val packages = when (tier) { PaywallTier.Crush -> state.crushPackages; PaywallTier.Match -> state.matchPackages; PaywallTier.Rizz -> state.rizzPackages }
+                                val packages = when (tier) { PaywallTier.Crush -> state.crushPackages; PaywallTier.Match -> state.matchPackages }
                                 Column(verticalArrangement = Arrangement.spacedBy(NothingDimens.elementGap), modifier = Modifier.fillMaxWidth()) {
                                     packages.forEach { packageItem ->
                                         PackageCard(packageItem = packageItem, isSelected = state.selectedPackage?.identifier == packageItem.identifier, isDisabled = state.activeTier == tier, onClick = { viewModel.selectPackage(packageItem) })

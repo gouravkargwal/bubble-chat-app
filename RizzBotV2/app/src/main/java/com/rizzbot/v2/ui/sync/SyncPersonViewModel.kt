@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.rizzbot.v2.capture.ImageCompressor
 import com.rizzbot.v2.domain.model.PersonProfileResult
 import com.rizzbot.v2.domain.usecase.SyncPersonProfileUseCase
+import com.rizzbot.v2.util.AnalyticsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -20,7 +21,8 @@ data class SyncPersonState(
 @HiltViewModel
 class SyncPersonViewModel @Inject constructor(
     private val syncPersonProfileUseCase: SyncPersonProfileUseCase,
-    private val imageCompressor: ImageCompressor
+    private val imageCompressor: ImageCompressor,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SyncPersonState())
@@ -42,10 +44,16 @@ class SyncPersonViewModel @Inject constructor(
 
     fun syncProfile(bitmaps: List<Bitmap>) {
         if (bitmaps.isEmpty()) return
+        analyticsHelper.syncPersonStarted()
         viewModelScope.launch {
             _state.value = _state.value.copy(result = PersonProfileResult.Loading)
             val base64List = bitmaps.map { imageCompressor.bitmapToBase64Jpeg(it) }
             val result = syncPersonProfileUseCase(base64List)
+            when (result) {
+                is PersonProfileResult.Success -> analyticsHelper.syncPersonCompleted()
+                is PersonProfileResult.Error -> analyticsHelper.syncPersonFailed(result.message)
+                else -> {}
+            }
             _state.value = _state.value.copy(result = result)
         }
     }

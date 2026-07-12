@@ -82,13 +82,12 @@ body {
 
 /* Neon red glow for CTAs */
 @keyframes neon-pulse {
-  0%, 100% {
-    box-shadow: 0 0 20px rgba(255, 0, 60, 0.15),
-                0 0 40px rgba(255, 0, 60, 0.05);
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(255, 0, 60, 0.15), 0 0 40px rgba(255, 0, 60, 0.05);
   }
   50% {
-    box-shadow: 0 0 30px rgba(255, 0, 60, 0.25),
-                0 0 60px rgba(255, 0, 60, 0.1);
+    box-shadow: 0 0 30px rgba(255, 0, 60, 0.25), 0 0 60px rgba(255, 0, 60, 0.1);
   }
 }
 
@@ -98,8 +97,13 @@ body {
 
 /* Status indicator blink */
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
 }
 
 .animate-blink {
@@ -108,8 +112,13 @@ body {
 
 /* Terminal cursor blink */
 @keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 .animate-cursor {
@@ -118,8 +127,14 @@ body {
 
 /* Fade in animation */
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -127,8 +142,33 @@ body {
 }
 
 /* Staggered fade-in delays */
-.delay-100 { animation-delay: 100ms; }
-.delay-200 { animation-delay: 200ms; }
-.delay-300 { animation-delay: 300ms; }
-.delay-400 { animation-delay: 400ms; }
-.delay-500 { animation-delay: 500ms; }
+.delay-100 {
+  animation-delay: 100ms;
+}
+.delay-200 {
+  animation-delay: 200ms;
+}
+.delay-300 {
+  animation-delay: 300ms;
+}
+.delay-400 {
+  animation-delay: 400ms;
+}
+.delay-500 {
+  animation-delay: 500ms;
+}
+
+/* Animated gradient background (used in LaunchBanner) */
+@keyframes gradient-x {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 6s ease infinite;
+}

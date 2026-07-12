@@ -14,6 +14,23 @@ import kotlin.coroutines.resumeWithException
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Mapping from RevenueCat entitlement IDs → backend tier strings.
+ * This is the single source of truth for the entitlement→tier relationship.
+ * Add new entitlements here as they are created in the RevenueCat dashboard.
+ *
+ * LTD entitlements (ltd, lifetime, match_ltd) map to "match" tier.
+ */
+private val ENTITLEMENT_TIER_MAP: Map<String, String> = mapOf(
+    "match" to "match",
+    "crush" to "crush",
+    "ltd" to "match",
+    "lifetime" to "match",
+    "match_ltd" to "match",
+)
+
+private val TIER_PRIORITY: List<String> = listOf("match", "match_ltd", "ltd", "lifetime", "crush")
+
 @Singleton
 class SubscriptionManager @Inject constructor() {
     private val _userTier = MutableStateFlow<String>("free")
@@ -58,8 +75,7 @@ class SubscriptionManager @Inject constructor() {
 
     /**
      * Fetch CustomerInfo from RevenueCat and update local tier state.
-     * Returns "rizz", "match", "crush", or "free" based on active entitlements.
-     * Priority: rizz > match > crush > free.
+     * Derives tier dynamically from [ENTITLEMENT_TIER_MAP] + [TIER_PRIORITY].
      */
     suspend fun updateUserTier(): Result<String> {
         return try {
@@ -79,12 +95,7 @@ class SubscriptionManager @Inject constructor() {
                     }
                 )
             }
-            val tier = when {
-                customerInfo.entitlements["rizz"]?.isActive == true -> "rizz"
-                customerInfo.entitlements["match"]?.isActive == true -> "match"
-                customerInfo.entitlements["crush"]?.isActive == true -> "crush"
-                else -> "free"
-            }
+            val tier = resolveTierFromEntitlements(customerInfo)
             _userTier.value = tier
             android.util.Log.d("SubscriptionManager", "User tier updated: $tier")
             Result.success(tier)
@@ -92,6 +103,21 @@ class SubscriptionManager @Inject constructor() {
             android.util.Log.e("SubscriptionManager", "Failed to update user tier: ${e.message}")
             Result.failure(e)
         }
+    }
+
+    /**
+     * Resolve the highest-priority active tier from RevenueCat [CustomerInfo].
+     * Iterates [TIER_PRIORITY] in order; first match wins.
+     * Returns "free" if no paid entitlement is active.
+     */
+    private fun resolveTierFromEntitlements(customerInfo: CustomerInfo): String {
+        for (tierKey in TIER_PRIORITY) {
+            val mappedTier = ENTITLEMENT_TIER_MAP[tierKey] ?: continue
+            if (customerInfo.entitlements[tierKey]?.isActive == true) {
+                return mappedTier
+            }
+        }
+        return "free"
     }
 
     fun getCurrentTier(): String = _userTier.value

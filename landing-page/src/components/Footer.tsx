@@ -6,18 +6,18 @@ const FOOTER_LINKS = {
     { label: "Features", href: "#features" },
     { label: "How It Works", href: "#how-it-works" },
     { label: "Pricing", href: "#pricing" },
-    { label: "FAQ", href: "#" },
+    { label: "FAQ", href: "#faq" },
+    { label: "Contact", href: "mailto:support@cookd.app" },
   ],
   Legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
-    { label: "Cookie Policy", href: "#" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
   ],
   Connect: [
-    { label: "Twitter / X", href: "#" },
-    { label: "Instagram", href: "#" },
-    { label: "TikTok", href: "#" },
-    { label: "Discord", href: "#" },
+    { label: "Twitter / X", href: "https://x.com/cookd_app" },
+    { label: "Instagram", href: "https://instagram.com/cookd.app" },
+    { label: "TikTok", href: "https://tiktok.com/@cookd.app" },
+    { label: "Discord", href: "https://discord.gg/cookd" },
   ],
 };
 

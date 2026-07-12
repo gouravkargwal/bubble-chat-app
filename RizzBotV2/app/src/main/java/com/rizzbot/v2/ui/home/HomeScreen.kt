@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.ui.theme.NeonRed
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
@@ -134,7 +135,10 @@ fun HomeScreen(
                     SectionHeader(title = "Primary Actions")
                     SmartReplyEntryCard(
                         onClick = onNavigateToSmartReply,
-                        creditsRemaining = state.usage.creditsRemaining
+                        tier = state.usage.tier,
+                        creditsRemaining = state.usage.creditsRemaining,
+                        creditsPeriodLimit = state.usage.creditsPeriodLimit,
+                        billingPeriod = state.usage.billingPeriod,
                     )
                     HeroCard(
                         isEnabled = state.isServiceEnabled,
@@ -179,7 +183,10 @@ fun HomeScreen(
 @Composable
 private fun SmartReplyEntryCard(
     onClick: () -> Unit,
-    creditsRemaining: Int
+    tier: String,
+    creditsRemaining: Int,
+    creditsPeriodLimit: Int,
+    billingPeriod: String = "daily",
 ) {
     Card(
         modifier = Modifier
@@ -224,11 +231,24 @@ private fun SmartReplyEntryCard(
                 )
             }
             Spacer(modifier = Modifier.width(NothingDimens.elementGap))
-            Text(
-                text = "$creditsRemaining cr",
-                color = NothingTextSecondary,
-                style = MaterialTheme.typography.labelSmall,
-            )
+            // Credit badge — shows fraction for paid, total for free
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = if (tier == TierQuota.PLAN_FREE)
+                        "$creditsRemaining cr"
+                    else
+                        "$creditsRemaining / $creditsPeriodLimit",
+                    color = if (creditsRemaining <= 0) NothingError else NothingTextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                if (tier != TierQuota.PLAN_FREE && creditsPeriodLimit > 0) {
+                    Text(
+                        text = TierQuota.billingPeriodNoun(billingPeriod),
+                        color = NothingTextTertiary,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 imageVector = Icons.Default.ChevronRight,

@@ -1,43 +1,29 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { StatusDot } from "./Logo";
-import { AnimatedSection, StaggerContainer, StaggerItem, ScaleHover } from "./Animations";
+import {
+  AnimatedSection,
+  StaggerContainer,
+  StaggerItem,
+  ScaleHover,
+} from "./Animations";
+
+const TOTAL_SPOTS = 140;
+const CLAIMED_BASE = 67;
 
 const PLANS = [
   {
-    id: "free",
-    name: "Free",
-    price: "0",
-    currency: "",
-    period: "forever",
-    description: "Perfect for testing the waters.",
-    credits: "2 / day",
-    signupCredits: "+15 on signup",
-    label: "STARTER",
-    highlighted: false,
-    features: [
-      { text: "4 conversation directions", included: true },
-      { text: "2 screenshots per request", included: true },
-      { text: "10 context messages", included: true },
-      { text: "Basic chat generation", included: true },
-      { text: "Custom hints", included: false },
-      { text: "Chemistry tracking", included: false },
-      { text: "Coach reasoning", included: false },
-      { text: "Photo audit", included: false },
-    ],
-  },
-  {
     id: "crush",
-    name: "Crush",
+    name: "Crush Pass",
     price: "99",
     currency: "₹",
     period: "/week",
-    description: "For when you want an edge.",
+    description: "For when you need a quick, short-term edge.",
     credits: "60 credits",
     signupCredits: "",
-    label: "POPULAR",
+    label: "WEEKLY PASS",
     highlighted: false,
     features: [
       { text: "7 conversation directions", included: true },
@@ -52,15 +38,15 @@ const PLANS = [
   },
   {
     id: "match",
-    name: "Match",
+    name: "Match Pro",
     price: "179",
     currency: "₹",
     period: "/month",
-    description: "The sweet spot. Most users choose this.",
-    credits: "150 credits",
+    description: "The standard blueprint for dating control.",
+    credits: "150 credits / month",
     signupCredits: "",
-    label: "BEST VALUE",
-    highlighted: true,
+    label: "MOST FLEXIBLE",
+    highlighted: false,
     features: [
       { text: "All 9 conversation directions", included: true },
       { text: "5 screenshots per request", included: true },
@@ -73,39 +59,48 @@ const PLANS = [
     ],
   },
   {
-    id: "rizz",
-    name: "Rizz",
-    price: "299",
+    id: "launch",
+    name: "Launch LTD",
+    price: "999",
     currency: "₹",
-    period: "/month",
-    description: "Maximum firepower. Unlimited potential.",
-    credits: "250 credits",
+    period: "/forever",
+    description: "Pay once, own the ecosystem forever. No subscription loops.",
+    credits: "Unlimited* Access",
     signupCredits: "",
-    label: "ULTIMATE",
-    highlighted: false,
+    label: "🚨 LAUNCH EXCLUSIVE",
+    highlighted: true,
     features: [
       { text: "All 9 conversation directions", included: true },
-      { text: "7 screenshots per request", included: true },
-      { text: "40 context messages", included: true },
-      { text: "Custom hints (500 chars)", included: true },
+      { text: "Max screenshots allowed*", included: true },
+      { text: "Max context messages*", included: true },
+      { text: "Custom hints (1000 chars)", included: true },
       { text: "Chemistry tracking", included: true },
       { text: "Coach reasoning", included: true },
       { text: "Profile blueprints", included: true },
-      { text: "Max limits on everything", included: true },
+      { text: "Get Number / Ask Out", included: true },
+      { text: "Priority server allocation", included: true },
+      { text: "Early access to feature updates", included: true },
+      { text: "Lifetime system updates", included: true },
     ],
   },
 ];
 
-function CheckIcon() {
+function CheckIcon({ highlighted }: { highlighted?: boolean }) {
   return (
     <svg
-      className="h-3.5 w-3.5 flex-shrink-0 text-neon-red"
+      className={`h-3.5 w-3.5 flex-shrink-0 ${
+        highlighted ? "text-neon-red" : "text-nothing-text-secondary"
+      }`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
       strokeWidth={2.5}
     >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 12.75l6 6 9-13.5"
+      />
     </svg>
   );
 }
@@ -113,7 +108,7 @@ function CheckIcon() {
 function MinusIcon() {
   return (
     <svg
-      className="h-3.5 w-3.5 flex-shrink-0 text-nothing-text-tertiary"
+      className="h-3.5 w-3.5 flex-shrink-0 text-nothing-text-tertiary opacity-50"
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -125,9 +120,23 @@ function MinusIcon() {
 }
 
 export function Pricing() {
+  const [spotsLeft, setSpotsLeft] = useState(TOTAL_SPOTS - CLAIMED_BASE);
+
+  useEffect(() => {
+    if (spotsLeft <= 0) return;
+    const interval = setInterval(() => {
+      if (Math.random() < 0.15) {
+        setSpotsLeft((prev) => Math.max(0, prev - 1));
+      }
+    }, 45000);
+    return () => clearInterval(interval);
+  }, [spotsLeft]);
+
   return (
-    <section id="pricing" className="relative px-6 py-24 sm:py-32 overflow-hidden">
-      {/* Background grid */}
+    <section
+      id="pricing"
+      className="relative px-6 py-24 sm:py-32 overflow-hidden"
+    >
       <div
         className="absolute inset-0 opacity-[0.02] pointer-events-none"
         style={{
@@ -137,113 +146,171 @@ export function Pricing() {
         }}
       />
 
-      {/* Section header */}
       <AnimatedSection className="mx-auto max-w-2xl text-center mb-16 sm:mb-20">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-nothing-border bg-nothing-surface px-4 py-1.5 text-xs font-mono text-nothing-text-secondary tracking-wider">
           <StatusDot active />
           PRICING
         </div>
         <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
-          One Plan. Three <span className="text-neon-red">Edges</span>.
+          Pick Your <span className="text-neon-red">Edge</span>.
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
-          Start free. Upgrade when you&apos;re ready to take control.
+          Start accelerating your chat conversion rate today. Own the platform
+          outright or pay as you go.
+        </p>
+        <p className="mt-2 text-xs font-mono text-nothing-text-tertiary tracking-wider">
+          ₹99/wk &bull; ₹179/mo (Save 55%) &bull;{" "}
+          <span className="text-neon-red">₹999 Lifetime (Best Value)</span>
         </p>
       </AnimatedSection>
 
-      {/* Pricing cards */}
-      <StaggerContainer className="mx-auto max-w-7xl" staggerDelay={0.1}>
-        <div className="grid gap-px bg-nothing-border sm:grid-cols-2 lg:grid-cols-4">
+      <StaggerContainer className="mx-auto max-w-6xl" staggerDelay={0.1}>
+        <div className="grid gap-6 lg:gap-8 sm:grid-cols-1 lg:grid-cols-3 items-center">
           {PLANS.map((plan) => (
-            <StaggerItem key={plan.id} distance={60}>
-              <ScaleHover scale={plan.highlighted ? 1.03 : 1.02}>
-                <motion.div
-                  className={`relative flex flex-col bg-nothing-black p-6 sm:p-8 transition-all duration-300 ${
+            <StaggerItem
+              key={plan.id}
+              distance={60}
+              className={plan.highlighted ? "order-first lg:order-none" : ""}
+            >
+              <ScaleHover scale={plan.highlighted ? 1.02 : 1.01}>
+                <div
+                  className={`relative flex flex-col p-6 sm:p-8 transition-all duration-300 rounded-xl ${
                     plan.highlighted
-                      ? "lg:-mt-4 lg:mb-[-1px] lg:pt-12 lg:pb-8 border-2 border-neon-red z-10"
-                      : "border-0 hover:bg-nothing-surface"
+                      ? "bg-nothing-black lg:-my-8 lg:py-12 border-2 border-neon-red z-20 shadow-2xl"
+                      : plan.label === "WEEKLY PASS"
+                      ? "bg-nothing-black/40 border border-nothing-border/30 opacity-70 hover:opacity-100 hover:bg-nothing-surface z-10"
+                      : "bg-nothing-black border border-nothing-border hover:bg-nothing-surface z-10"
                   }`}
-                  animate={
-                    plan.highlighted
-                      ? {
-                          boxShadow: [
-                            "0 0 20px rgba(255,0,60,0.1)",
-                            "0 0 40px rgba(255,0,60,0.2)",
-                            "0 0 20px rgba(255,0,60,0.1)",
-                          ],
-                        }
-                      : undefined
-                  }
-                  transition={
-                    plan.highlighted
-                      ? { duration: 3, repeat: Infinity, ease: "easeInOut" }
-                      : undefined
-                  }
                 >
-                  {/* Label */}
                   <span
                     className={`inline-block font-mono text-[10px] tracking-[0.15em] mb-4 ${
-                      plan.highlighted ? "text-neon-red" : "text-nothing-text-tertiary"
+                      plan.highlighted
+                        ? "text-neon-red font-bold"
+                        : "text-nothing-text-tertiary"
                     }`}
                   >
                     [ {plan.label} ]
                   </span>
 
-                  {/* Plan name */}
-                  <h3 className="text-xl font-bold text-nothing-white mb-1">
+                  <h3
+                    className={`text-xl font-bold mb-1 ${
+                      plan.highlighted
+                        ? "text-nothing-white"
+                        : "text-nothing-text-secondary"
+                    }`}
+                  >
                     {plan.name}
                   </h3>
-                  <p className="text-xs text-nothing-text-secondary mb-4 leading-relaxed">
+                  <p className="text-xs text-nothing-text-tertiary mb-4 leading-relaxed">
                     {plan.description}
                   </p>
 
-                  {/* Price */}
                   <div className="mb-2">
                     <motion.span
-                      className="text-3xl font-extrabold text-nothing-white inline-block"
+                      className={`text-3xl font-extrabold inline-block ${
+                        plan.highlighted
+                          ? "text-nothing-white"
+                          : "text-nothing-text-secondary"
+                      }`}
                       initial={{ opacity: 0, scale: 0.5 }}
                       whileInView={{ opacity: 1, scale: 1 }}
                       viewport={{ once: true }}
-                      transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 200,
+                        damping: 15,
+                        delay: 0.2,
+                      }}
                     >
-                      {plan.currency}{plan.price}
+                      {plan.currency}
+                      {plan.price}
                     </motion.span>
-                    <span className="text-sm text-nothing-text-secondary ml-1 font-mono">
+                    <span className="text-sm text-nothing-text-tertiary ml-1 font-mono">
                       {plan.period}
                     </span>
                   </div>
 
-                  {/* Credits */}
                   <div className="text-xs font-mono text-nothing-text-tertiary mb-6 tracking-wider">
-                    <span className="text-nothing-white">{plan.credits}</span>
-                    {plan.signupCredits && (
-                      <>
-                        <span className="mx-1.5">•</span>
-                        <span className="text-nothing-success">{plan.signupCredits}</span>
-                      </>
-                    )}
+                    <span
+                      className={
+                        plan.highlighted
+                          ? "text-nothing-white"
+                          : "text-nothing-text-secondary"
+                      }
+                    >
+                      {plan.credits}
+                    </span>
                   </div>
 
-                  {/* CTA — Open in Google Play */}
+                  {plan.highlighted && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                      className="mb-4 flex items-center gap-2 rounded-lg border border-neon-red/20 bg-neon-red/10 px-3 py-2"
+                    >
+                      <motion.span
+                        className="h-2 w-2 rounded-full bg-neon-red"
+                        animate={{ scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] }}
+                        transition={{
+                          duration: 1.2,
+                          repeat: Infinity,
+                        }}
+                      />
+                      <span className="text-[10px] font-mono text-neon-red tracking-wider font-bold">
+                        {spotsLeft} of {TOTAL_SPOTS} launch licenses remaining
+                      </span>
+                    </motion.div>
+                  )}
+
                   <motion.a
                     href="https://play.google.com/store/apps/details?id=com.cookd.mobile"
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
                       plan.highlighted
-                        ? "bg-neon-red text-nothing-white hover:shadow-[0_0_20px_rgba(255,0,60,0.3)]"
-                        : "border border-nothing-border text-nothing-white hover:bg-nothing-white/5"
+                        ? "bg-neon-red text-nothing-white hover:shadow-[0_0_20px_rgba(255,0,60,0.4)] hover:bg-red-600"
+                        : "border border-nothing-border text-nothing-text-secondary hover:bg-nothing-white/5 hover:text-nothing-white"
                     }`}
                     whileHover={{ scale: 1.04 }}
                     whileTap={{ scale: 0.97 }}
                   >
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5" />
+                    <svg
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
+                      />
                     </svg>
-                    Google Play
+                    {plan.id === "launch"
+                      ? "Claim Lifetime License"
+                      : "Download App"}
                   </motion.a>
 
-                  {/* Feature list */}
+                  {plan.highlighted && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.8 }}
+                      className="mb-4 rounded-lg border border-nothing-border bg-nothing-surface/50 px-3 py-2.5 text-center"
+                    >
+                      <p className="text-[10px] font-mono text-nothing-text-secondary tracking-wider leading-relaxed">
+                        Match Pro is ₹179/mo ={" "}
+                        <span className="text-nothing-white">₹2,148/yr</span>
+                        <br />
+                        <span className="text-neon-red">
+                          You save ₹1,149 in Year 1 alone with LTD
+                        </span>
+                      </p>
+                    </motion.div>
+                  )}
+
                   <ul className="space-y-3 mt-auto">
                     {plan.features.map((feature, fi) => (
                       <motion.li
@@ -254,12 +321,18 @@ export function Pricing() {
                         transition={{ delay: 0.3 + fi * 0.05 }}
                         className="flex items-start gap-2.5"
                       >
-                        {feature.included ? <CheckIcon /> : <MinusIcon />}
+                        {feature.included ? (
+                          <CheckIcon highlighted={plan.highlighted} />
+                        ) : (
+                          <MinusIcon />
+                        )}
                         <span
                           className={`text-xs leading-relaxed ${
                             feature.included
-                              ? "text-nothing-white"
-                              : "text-nothing-text-tertiary"
+                              ? plan.highlighted
+                                ? "text-nothing-white"
+                                : "text-nothing-text-secondary"
+                              : "text-nothing-text-tertiary opacity-50"
                           }`}
                         >
                           {feature.text}
@@ -267,7 +340,7 @@ export function Pricing() {
                       </motion.li>
                     ))}
                   </ul>
-                </motion.div>
+                </div>
               </ScaleHover>
             </StaggerItem>
           ))}

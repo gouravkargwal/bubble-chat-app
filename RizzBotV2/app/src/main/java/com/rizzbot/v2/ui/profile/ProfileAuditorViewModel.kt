@@ -9,6 +9,7 @@ import com.rizzbot.v2.data.remote.dto.AuditResponse
 import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
+import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.compressImage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -63,13 +64,16 @@ data class ProfileAuditorState(
 class ProfileAuditorViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val hostedRepository: HostedRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileAuditorState())
     val state: StateFlow<ProfileAuditorState> = _state.asStateFlow()
 
     init {
+        analyticsHelper.screenViewed("ProfileAuditor")
+
         viewModelScope.launch {
             combine(
                 settingsRepository.roastLanguage,
@@ -142,6 +146,7 @@ class ProfileAuditorViewModel @Inject constructor(
             Log.d("ProfileAuditorVM", "analyzePhotos: no active session")
             return
         }
+        analyticsHelper.profileAuditStarted(_state.value.selectedUris.size)
         val uris = _state.value.selectedUris
         if (uris.isEmpty() || _state.value.isLoading) {
             Log.d("ProfileAuditorVM", "analyzePhotos: aborted, uris=${uris.size}, isLoading=${_state.value.isLoading}")
@@ -213,9 +218,11 @@ class ProfileAuditorViewModel @Inject constructor(
                             val dto = status.result
                             if (dto != null) {
                                 Log.d("ProfileAuditorVM", "analyzePhotos: complete, totalAnalyzed=${dto.totalAnalyzed}")
+                                val uiModel = dto.toUiModel()
+                                analyticsHelper.profileAuditCompleted(uiModel.overallScore)
                                 _state.value = _state.value.copy(
                                     isLoading = false,
-                                    result = dto.toUiModel(),
+                                    result = uiModel,
                                     resultPhotoIdToUri = photoIdToUri,
                                     selectedUris = emptyList(),
                                     auditProgress = null
@@ -230,6 +237,7 @@ class ProfileAuditorViewModel @Inject constructor(
                         }
                         "failed" -> {
                             Log.e("ProfileAuditorVM", "analyzePhotos: job failed: ${status.error}")
+                            analyticsHelper.profileAuditFailed(status.error ?: "unknown")
                             _state.value = _state.value.copy(
                                 isLoading = false,
                                 error = status.error ?: "Audit processing failed.",

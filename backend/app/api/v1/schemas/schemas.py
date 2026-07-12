@@ -120,7 +120,7 @@ class UsageResponse(BaseModel):
     credits_period_limit: int = 0  # Total credits for this period (0 = free/daily)
     billing_period: str = "daily"  # "daily", "weekly", "monthly"
     # Tier info
-    tier: str = "free"  # free, crush, match, rizz
+    tier: str = "free"  # free, crush, match
     is_premium: bool = False
     tier_expires_at: int | None = None
     # Feature gates

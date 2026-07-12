@@ -1,0 +1,35 @@
+# ──────────────────────────────────────────────────────────────────────────
+# pre-commit hooks — automated code quality & security checks
+#
+# Install:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run on all files:
+#   pre-commit run --all-files
+# ──────────────────────────────────────────────────────────────────────────
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Prevent committing .env files (except .env.example)
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+
+  # Custom local hook to block env files (defense-in-depth)
+  - repo: local
+    hooks:
+      - id: block-env-files
+        name: Block .env* files from being committed
+        description: Prevents environment files with secrets from being staged
+        # Negate grep exit code: ! 0 (found .env files) → fail the hook
+        # ! 1 (no .env files found) → allow the commit
+        entry: bash -c '! git diff --cached --name-only --diff-filter=ACM | grep -v ".env.example" | grep -q ".env"'
+        language: system
+        always_run: false
+        pass_filenames: false

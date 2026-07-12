@@ -23,6 +23,7 @@ import com.rizzbot.v2.overlay.OverlayEvent
 import com.rizzbot.v2.overlay.OverlayEventBus
 import com.rizzbot.v2.overlay.OverlayLifecycleOwner
 import com.rizzbot.v2.overlay.ui.BubbleOverlay
+import com.rizzbot.v2.util.AnalyticsHelper
 import com.rizzbot.v2.util.ClipboardHelper
 import com.rizzbot.v2.util.HapticHelper
 import com.rizzbot.v2.BuildConfig
@@ -58,7 +59,8 @@ class BubbleManager @Inject constructor(
     private val clipboardHelper: ClipboardHelper,
     private val hapticHelper: HapticHelper,
     private val settingsRepository: SettingsRepository,
-    private val hostedRepository: HostedRepository
+    private val hostedRepository: HostedRepository,
+    private val analyticsHelper: AnalyticsHelper,
 ) {
     private var scope: CoroutineScope? = null
     private val windowManager by lazy { context.getSystemService(Context.WINDOW_SERVICE) as WindowManager }
@@ -937,6 +939,7 @@ class BubbleManager @Inject constructor(
             is OverlayEvent.CopyReply -> {
                 clipboardHelper.copyToClipboard(event.reply)
                 hapticHelper.lightTap()
+                analyticsHelper.replyCopied(event.vibeIndex)
                 activeScope.launch {
                     // Backend tracks copy via trackCopy endpoint (sets copied_index in interactions table)
                     if (event.interactionId.isNotEmpty()) {
@@ -959,6 +962,7 @@ class BubbleManager @Inject constructor(
                 }
             }
             is OverlayEvent.RateReply -> {
+                analyticsHelper.replyRated(event.vibeIndex, event.isPositive)
                 activeScope.launch {
                     if (event.interactionId.isNotEmpty()) {
                         try {

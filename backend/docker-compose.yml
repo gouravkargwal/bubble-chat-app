@@ -1,4 +1,5 @@
-# ─── Dev ─────────────────────────────────────────────────────────────────
+# ─── Development ──────────────────────────────────────────────────────────
+# Standalone dev environment. No external dependencies (no milk_network, etc.).
 # Run with:  docker compose --env-file .env.dev up -d
 # The --env-file is required so ${ZO_ROOT_USER_EMAIL} and other vars
 # in the environment: blocks resolve correctly.
@@ -24,9 +25,11 @@ services:
 
   # ── Init: auto-create dashboards on first start ───────────────────────
   # Runs setup_dashboards.py once when OpenObserver is ready.
-  # If it fails (e.g. OO not ready yet), Docker retries up to 3 times then stops.
+  # Uses lightweight python:3.12-slim directly — no need to build the
+  # full app image (setup_dashboards.py only uses stdlib).
+  # Starts in parallel with api (api does not depend on dashboards).
   init-dashboards:
-    build: .
+    image: python:3.12-slim
     command: python docker/observability/setup_dashboards.py
     environment:
       - ZO_ROOT_USER_EMAIL=${ZO_ROOT_USER_EMAIL}
@@ -34,6 +37,7 @@ services:
       - OPENOBSERVER_URL=http://openobserver:5001
     volumes:
       - .:/app
+    working_dir: /app
     depends_on:
       openobserver:
         condition: service_started
@@ -52,8 +56,6 @@ services:
         condition: service_healthy
       openobserver:
         condition: service_started
-      init-dashboards:
-        condition: service_completed_successfully
     restart: unless-stopped
 
   # OpenObserver (unified observability: logs, metrics, traces)

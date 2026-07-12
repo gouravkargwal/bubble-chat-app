@@ -1,7 +1,7 @@
 """Webhook endpoints for external services."""
 
 import structlog
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,17 @@ from app.services.billing import apply_plan_upgrade
 
 router = APIRouter()
 logger = structlog.get_logger()
+
+
+# Entitlement → tier mapping + LTD detection.
+# Add new entitlement IDs here as they are created in the RevenueCat dashboard.
+_ENTITLEMENT_TIER: dict[str, str] = {
+    "match": "match",
+    "crush": "crush",
+}
+
+# Entitlement IDs that represent a Lifetime Deal (non-subscription, perpetual).
+_LTD_ENTITLEMENTS: frozenset[str] = frozenset({"ltd", "lifetime", "match_ltd"})
 
 
 def _revenuecat_authorization_ok(header_value: str | None, webhook_secret: str) -> bool:
@@ -30,6 +41,30 @@ def _revenuecat_authorization_ok(header_value: str | None, webhook_secret: str) 
     if header_value == f"Bearer {webhook_secret}":
         return True
     return False
+
+
+def _resolve_tier_and_ltd(
+    affected_entitlements: list[str],
+    product_id: str | None,
+) -> tuple[str | None, bool]:
+    """Determine (tier, is_ltd) from RevenueCat webhook event data.
+
+    Priority: explicit entitlement mapping > product ID inference.
+    """
+    for entitlement_id in affected_entitlements:
+        tier = _ENTITLEMENT_TIER.get(entitlement_id)
+        if tier is not None:
+            return tier, entitlement_id in _LTD_ENTITLEMENTS
+    # Fallback: infer from product_id.
+    if product_id:
+        pid = product_id.lower()
+        if "ltd" in pid or "lifetime" in pid:
+            return "match", True
+        if "match" in pid:
+            return "match", False
+        if "crush" in pid:
+            return "crush", False
+    return None, False
 
 
 @router.post("/webhooks/revenuecat")
@@ -89,49 +124,19 @@ async def revenuecat_webhook(
         logger.warning("revenuecat_webhook_user_not_found", app_user_id=app_user_id)
         return {"status": "ignored", "reason": "User not found"}
 
-    # ---- Tier mapping + billing period logic ----
-    # Webhooks send an array of entitlement_ids (e.g. ["pro"], ["premium"])
+    # ---- Tier mapping + LTD detection ----
     affected_entitlements = event_data.get("entitlement_ids") or []
     if not isinstance(affected_entitlements, list):
         affected_entitlements = []
 
-    # Helper: does this event affect a given entitlement id?
-    def affects(entitlement_id: str) -> bool:
-        return entitlement_id in affected_entitlements
-
-    # Determine new tier from entitlements (priority: rizz > match > crush)
-    new_tier: str | None = None
-    if affects("rizz"):
-        new_tier = "rizz"
-    elif affects("match"):
-        new_tier = "match"
-    elif affects("crush"):
-        new_tier = "crush"
-
-    def infer_tier_from_product_id(pid: str | None) -> str | None:
-        if not pid:
-            return None
-        val = pid.lower()
-        if "rizz" in val:
-            return "rizz"
-        if "match" in val:
-            return "match"
-        if "crush" in val:
-            return "crush"
-        return None
-
     product_id: str | None = event_data.get("product_id")
-
-    # If entitlements were missing/empty, fall back to product_id inference.
-    if new_tier is None:
-        new_tier = infer_tier_from_product_id(product_id)
+    new_tier, is_ltd = _resolve_tier_and_ltd(affected_entitlements, product_id)
 
     # Derive billing_period from tier (authoritative) — avoids fragile product_id string matching.
     period_days = BILLING_PERIOD_DAYS.get(new_tier or "", 30)
     billing_period = "weekly" if period_days == 7 else "monthly"
 
     # 1) INITIAL_PURCHASE / RENEWAL / PRODUCT_CHANGE → Clean Slate upgrade path
-    # FIXED: Added PRODUCT_CHANGE so users who upgrade tiers actually get their new limits.
     if (
         event_type in ("INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE")
         and new_tier is not None
@@ -143,6 +148,7 @@ async def revenuecat_webhook(
             new_tier=new_tier,
             billing_period=billing_period,
             webhook_event_type=event_type,
+            is_ltd=is_ltd,
         )
 
         return {
@@ -150,21 +156,26 @@ async def revenuecat_webhook(
             "user_id": app_user_id,
             "new_tier": new_tier,
             "billing_period": billing_period,
+            "is_ltd": is_ltd,
             "message": "Plan upgraded with clean-slate quotas",
         }
 
     # 2) EXPIRATION: only downgrade if the expiring entitlement matches current tier.
-    # We also apply a soft quota reset behavior here so users are never "debt-locked"
-    # the moment their paid plan ends.
-    if event_type == "EXPIRATION":
+    # LTD entitlements never expire, so they are skipped here.
+    if event_type == "EXPIRATION" and not is_ltd:
         new_tier_exp: str | None = None
-        expiring_tier = infer_tier_from_product_id(product_id)
-        if user.tier == "rizz" and (affects("rizz") or expiring_tier == "rizz"):
-            new_tier_exp = "free"
-        elif user.tier == "match" and (affects("match") or expiring_tier == "match"):
-            new_tier_exp = "free"
-        elif user.tier == "crush" and (affects("crush") or expiring_tier == "crush"):
-            new_tier_exp = "free"
+        for entitlement_id in affected_entitlements:
+            t = _ENTITLEMENT_TIER.get(entitlement_id)
+            if t and user.tier == t:
+                new_tier_exp = "free"
+                break
+        # Fallback: product ID inference
+        if new_tier_exp is None and product_id:
+            pid = product_id.lower()
+            if "match" in pid and user.tier == "match":
+                new_tier_exp = "free"
+            elif "crush" in pid and user.tier == "crush":
+                new_tier_exp = "free"
 
         if new_tier_exp is None:
             return {
@@ -180,14 +191,8 @@ async def revenuecat_webhook(
         user.tier_expires_at = None
         user.plan_period_start = None
 
-        # Apply a grace reset on daily usage if they were above the free limit.
-        # This mirrors the downgrade behavior inside apply_plan_upgrade but is
-        # triggered by an EXPIRATION event instead of a PRODUCT_CHANGE.
         if user.google_provider_id:
-            from datetime import timedelta, timezone
-
             from app.infrastructure.database.models import UserQuota
-            from app.core.tier_config import TIER_CONFIG
 
             now = datetime.now(timezone.utc)
 
@@ -199,7 +204,6 @@ async def revenuecat_webhook(
             quota = quota_result.scalar_one_or_none()
 
             if quota is not None:
-                # On expiry, clear the period credit pool — user drops to free tier.
                 logger.info(
                     "revenuecat_expiration_credits_cleared",
                     app_user_id=app_user_id,
@@ -210,6 +214,10 @@ async def revenuecat_webhook(
                 quota.credits_reset_at = None
                 quota.daily_free_credits_used = 0
                 quota.daily_free_reset_at = now + timedelta(days=1)
+                # Clear LTD flags if present.
+                quota.is_ltd = False
+                quota.ltd_refill_credits = 0
+                quota.ltd_refill_days = 0
 
         await db.commit()
 

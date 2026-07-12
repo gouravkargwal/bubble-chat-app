@@ -15,30 +15,6 @@ _NAME_TO_LEVEL = {
 }
 
 
-def _sentry_processor(
-    logger: Any, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
-    """Send ERROR-level (and above) log entries to Sentry as breadcrumbs / events."""
-    level = event_dict.get("level", "")
-    if isinstance(level, int):
-        level = logging.getLevelName(level).lower()
-    if level in ("error", "critical"):
-        try:
-            import sentry_sdk
-
-            exc_info = event_dict.get("exc_info")
-            if exc_info:
-                sentry_sdk.capture_exception(exc_info)
-            else:
-                sentry_sdk.capture_message(
-                    event_dict.get("event", str(event_dict)),
-                    level=str(level),
-                )
-        except ImportError:
-            pass
-    return event_dict
-
-
 class _QuietAccessLogFilter(logging.Filter):
     """Drop high-churn access lines from stdout/Loki (health checks, polled JSON APIs).
 
@@ -117,7 +93,6 @@ def setup_logging(level: str = "INFO", *, json_logs: bool = True) -> None:
         _add_otel_trace_context,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
-        _sentry_processor,
     ]
 
     structlog.configure(

@@ -44,8 +44,8 @@ import com.rizzbot.v2.ui.theme.NothingTextSecondary
 import com.rizzbot.v2.ui.theme.NothingTextTertiary
 import com.rizzbot.v2.ui.theme.NothingWhite
 
-/** Matches backend FREE_SIGNUP_CREDITS in tier_config.py — 15 one-time signup bonus credits. */
-private val freeCreditsCount = 15
+/** Matches backend FREE_SIGNUP_CREDITS in tier_config.py — 10 one-time signup bonus credits. */
+private val freeCreditsCount = 10
 
 /**
  * Signup bonus screen shown to new users after Google Sign-In.

@@ -9,7 +9,6 @@ httpx>=0.27
 python-jose[cryptography]>=3.3
 slowapi>=0.1.9
 structlog>=24.0
-sentry-sdk[fastapi]>=2.0
 firebase-admin>=6.0
 google-auth>=2.0
 pyinstrument>=4.6
@@ -22,6 +21,16 @@ pillow>=10.0
 flashrank>=0.2
 numpy>=1.24.0
 tiktoken>=0.7.0
+crawlerdetect>=0.3
+disposable-email-domains>=0.0.218
+dnspython>=2.6.0
+prometheus-client>=0.21.0
+prometheus-fastapi-instrumentator>=7.0.0
+opentelemetry-sdk>=1.28.0
+opentelemetry-api>=1.28.0
+opentelemetry-exporter-otlp-proto-http>=1.28.0
+opentelemetry-instrumentation-fastapi>=0.49b0
+opentelemetry-instrumentation-httpx>=0.49b0
 
 [dev]
 pytest>=8.0

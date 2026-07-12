@@ -8,6 +8,7 @@ import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.domain.model.UsageState
 import com.rizzbot.v2.domain.repository.HostedRepository
 import com.rizzbot.v2.domain.repository.SettingsRepository
+import com.rizzbot.v2.util.AnalyticsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,13 +34,13 @@ data class SettingsState(
     val isApplyingReferral: Boolean = false,
     val roastLanguage: String = "English"
 ) {
-    val isPaidPlan: Boolean get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH || tier == TierQuota.PLAN_RIZZ
+    val isPaidPlan: Boolean get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH
     val isOnTrial: Boolean
         get() {
             val expiresAt = tierExpiresAt ?: return false
             val nowSec = System.currentTimeMillis() / 1000
             val diffDays = ((expiresAt - nowSec) / 86400).toInt()
-            return tier == TierQuota.PLAN_RIZZ && diffDays in 0..30 && creditsPeriodLimit == 15
+            return tier == TierQuota.PLAN_MATCH && diffDays in 0..30 && creditsPeriodLimit == 15
         }
     val trialDaysRemaining: Int
         get() {
@@ -55,7 +56,8 @@ data class SettingsState(
 class SettingsViewModel @Inject constructor(
     private val hostedRepository: HostedRepository,
     private val googleSignInHelper: GoogleSignInHelper,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val analyticsHelper: AnalyticsHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
@@ -74,6 +76,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     init {
+        analyticsHelper.screenViewed("Settings")
+
         _state.update {
             it.copy(
                 userName = googleSignInHelper.getCurrentUserName(),
@@ -124,6 +128,7 @@ class SettingsViewModel @Inject constructor(
             val result = hostedRepository.applyReferralCode(code)
             result.fold(
                 onSuccess = { _ ->
+                    analyticsHelper.settingsReferralApplied()
                     val info = hostedRepository.getReferralInfo()
                     _state.update {
                         it.copy(
@@ -147,17 +152,20 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setRoastLanguage(language: String) {
+        analyticsHelper.settingsLanguageChanged(language)
         viewModelScope.launch {
             settingsRepository.setRoastLanguage(language)
         }
     }
 
     fun signOut() {
+        analyticsHelper.settingsSignOut()
         googleSignInHelper.signOut()
         _state.update { it.copy(signedOut = true) }
     }
 
     fun deleteAllData(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        analyticsHelper.settingsDeleteData()
         viewModelScope.launch {
             val result = hostedRepository.deleteAllUserData()
             result.fold(

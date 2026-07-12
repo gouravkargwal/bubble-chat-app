@@ -1,9 +1,10 @@
 """Centralized quota management using user_quotas table — credits-based system.
 
 Credits system:
-- Free users: 15 one-time signup bonus + 2 credits/day forever.
+- Free users: 10 one-time signup bonus + 2 credits/day forever.
 - Paid users: period credit pool (weekly or monthly) set by billing.
-- Credit costs: chat_generation=1, profile_audit=5, profile_blueprint=8.
+- LTD users: perpetual refill cycle — credits replenish every [ltd_refill_days].
+- Credit costs: chat_generation=1, profile_audit=8, profile_blueprint=12.
 - No daily cap for paid users — they spend from their period pool freely.
 """
 
@@ -14,9 +15,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.tier_config import CREDIT_COSTS, FREE_SIGNUP_CREDITS
+from app.core.tier_config import CREDIT_COSTS, FREE_SIGNUP_CREDITS, FREE_DAILY_CREDITS
 
-FREE_SIGNUP_BONUS_CREDITS = FREE_SIGNUP_CREDITS  # 15 credits
+FREE_SIGNUP_BONUS_CREDITS = FREE_SIGNUP_CREDITS  # 10 credits
 from app.infrastructure.database.models import UserQuota
 
 
@@ -64,14 +65,25 @@ class QuotaManager:
             quota.daily_free_reset_at = now + timedelta(days=1)
 
     def _reset_period_if_needed(self, quota: UserQuota, now: datetime) -> None:
-        """Zero paid pool when prepaid period expires — no auto-refill."""
+        """Reset/refill credits when the billing period expires.
+
+        Subscriptions: zero the pool when the period ends (no auto-refill).
+        LTD: refill back to the refill cap on schedule forever.
+        """
         if quota.credits_reset_at is not None and now >= quota.credits_reset_at:
-            quota.credits_remaining = 0
-            quota.credits_period_limit = 0
-            quota.credits_reset_at = None
+            if quota.is_ltd and quota.ltd_refill_credits > 0:
+                # Perpetual refill: top up to the refill cap.
+                quota.credits_remaining = quota.ltd_refill_credits
+                quota.credits_period_limit = quota.ltd_refill_credits
+                quota.credits_reset_at = now + timedelta(days=quota.ltd_refill_days)
+            else:
+                # Subscriptions: zero pool on expiry.
+                quota.credits_remaining = 0
+                quota.credits_period_limit = 0
+                quota.credits_reset_at = None
 
     async def grant_signup_bonus(self, google_provider_id: str) -> bool:
-        """Grant one-time 15-credit signup bonus. Returns True if bonus was newly granted."""
+        """Grant one-time 10-credit signup bonus. Returns True if bonus was newly granted."""
         quota = await self._get_or_create_quota(google_provider_id, lock=True)
         if quota.signup_bonus_granted:
             return False
@@ -101,7 +113,7 @@ class QuotaManager:
         *,
         action: str,
         tier: str,
-        daily_free_limit: int = 2,
+        daily_free_limit: int = FREE_DAILY_CREDITS,
     ) -> None:
         """Check if user has credits without deducting. Raises QuotaExceededException if not."""
         now = datetime.now(timezone.utc)
@@ -143,7 +155,7 @@ class QuotaManager:
         *,
         action: str,
         tier: str,
-        daily_free_limit: int = 2,
+        daily_free_limit: int = FREE_DAILY_CREDITS,
         idempotency_key: str | None = None,
     ) -> int:
         """Check if user has enough credits, deduct them, return credits remaining.
@@ -215,8 +227,28 @@ class QuotaManager:
             if not quota.signup_bonus_granted:
                 return FREE_SIGNUP_BONUS_CREDITS
             self._reset_daily_free_window_if_needed(quota, now)
-            daily_remaining = max(0, 2 - quota.daily_free_credits_used)
+            daily_remaining = max(0, FREE_DAILY_CREDITS - quota.daily_free_credits_used)
             return quota.credits_remaining + daily_remaining
         else:
             self._reset_period_if_needed(quota, now)
             return quota.credits_remaining
+
+    async def get_credits_period_limit(self, google_provider_id: str, tier: str) -> int:
+        """Return the total credit pool for 'X of Y' display.
+
+        For free users: same as credits_remaining (signup bonus + daily free),
+                        so it shows correctly without a misleading progress bar.
+        For paid users: the period credit pool limit (e.g. 60 for Crush/week).
+        """
+        now = datetime.now(timezone.utc)
+        quota = await self._get_or_create_quota(google_provider_id, lock=False)
+
+        if tier == "free":
+            if not quota.signup_bonus_granted:
+                return FREE_SIGNUP_BONUS_CREDITS
+            self._reset_daily_free_window_if_needed(quota, now)
+            daily_remaining = max(0, FREE_DAILY_CREDITS - quota.daily_free_credits_used)
+            return quota.credits_remaining + daily_remaining
+        else:
+            self._reset_period_if_needed(quota, now)
+            return quota.credits_period_limit
