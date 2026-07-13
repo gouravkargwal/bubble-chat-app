@@ -97,6 +97,13 @@ const sections = [
 export default function TermsPage() {
   return (
     <>
+      <head>
+        <title>Terms of Service | Cookd</title>
+        <meta
+          name="description"
+          content="Cookd terms of service — conditions for using our AI dating coach app, including subscriptions, refunds, and acceptable use."
+        />
+      </head>
       <Header />
       <main className="relative min-h-screen px-6 pt-28 pb-24">
         {/* Grid background */}

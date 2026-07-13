@@ -110,6 +110,13 @@ export default function ContactPage() {
 
   return (
     <>
+      <head>
+        <title>Contact Us | Cookd</title>
+        <meta
+          name="description"
+          content="Get in touch with Cookd — our AI dating coach team is here to help. Contact support, ask questions, or share feedback."
+        />
+      </head>
       <Header />
       <main className="min-h-screen pt-24">
         {/* ── Hero Section ── */}

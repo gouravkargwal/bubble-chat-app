@@ -8,17 +8,22 @@ import { StatusDot } from "@/components/Logo";
 
 export default function LTDFailurePage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-nothing-black flex items-center justify-center">
-          <div className="animate-pulse text-nothing-text-secondary text-sm">
-            Loading...
+    <>
+      <head>
+        <meta name="robots" content="noindex, nofollow" />
+      </head>
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-nothing-black flex items-center justify-center">
+            <div className="animate-pulse text-nothing-text-secondary text-sm">
+              Loading...
+            </div>
           </div>
-        </div>
-      }
-    >
-      <LTDFailureContent />
-    </Suspense>
+        }
+      >
+        <LTDFailureContent />
+      </Suspense>
+    </>
   );
 }
 
@@ -64,30 +69,38 @@ function LTDFailureContent() {
             </svg>
           </motion.div>
 
-          <h1 className="text-2xl font-extrabold text-nothing-white mb-2">
+          <h1 className="font-heading text-2xl sm:text-3xl font-extrabold tracking-tight text-nothing-white mb-2">
             Payment Failed
           </h1>
-          <p className="text-sm text-nothing-text-secondary mb-4">{errorMsg}</p>
-          <p className="text-xs text-nothing-text-tertiary mb-6">
-            Your card was not charged. You can try again or use a different
-            payment method.
+          <p className="text-nothing-text-secondary mb-6 text-sm leading-relaxed">
+            {errorMsg}
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <div className="flex flex-col gap-3">
             <Link
               href="/#pricing"
-              className="inline-flex items-center justify-center rounded-full bg-neon-red px-6 py-3 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-red-600"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-neon-red px-6 py-3 text-sm font-bold text-nothing-white transition-opacity hover:opacity-90"
             >
               Try Again
             </Link>
             <Link
-              href="/"
-              className="inline-flex items-center justify-center rounded-full border border-nothing-border px-6 py-3 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5"
+              href="/contact"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-nothing-border px-6 py-3 text-sm font-bold text-nothing-white transition-opacity hover:opacity-90"
             >
-              Back to Home
+              Contact Support
             </Link>
           </div>
         </motion.div>
+
+        <p className="mt-6 text-center text-xs text-nothing-text-tertiary">
+          Need help? Email{" "}
+          <a
+            href="mailto:support@cookdai.site"
+            className="underline underline-offset-2 hover:text-nothing-white transition-colors"
+          >
+            support@cookdai.site
+          </a>
+        </p>
       </div>
     </main>
   );

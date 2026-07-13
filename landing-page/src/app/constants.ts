@@ -55,6 +55,8 @@ export const PRICING = {
 export const SITE = {
   name: "Cookd",
   tagline: "AI Dating Coach",
+  // Title is the primary SERP text. Keep it ≤60 chars for desktop SERP.
+  // The tagline + description go in the meta description for snippet.
   title:
     "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
   description:

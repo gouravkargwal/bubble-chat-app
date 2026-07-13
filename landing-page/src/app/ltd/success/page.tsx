@@ -10,17 +10,22 @@ import posthog from "posthog-js";
 
 export default function LTDSuccessPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-nothing-black flex items-center justify-center">
-          <div className="animate-pulse text-nothing-text-secondary text-sm">
-            Loading...
+    <>
+      <head>
+        <meta name="robots" content="noindex, nofollow" />
+      </head>
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-nothing-black flex items-center justify-center">
+            <div className="animate-pulse text-nothing-text-secondary text-sm">
+              Loading...
+            </div>
           </div>
-        </div>
-      }
-    >
-      <LTDSuccessContent />
-    </Suspense>
+        }
+      >
+        <LTDSuccessContent />
+      </Suspense>
+    </>
   );
 }
 

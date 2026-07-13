@@ -142,6 +142,13 @@ const sections = [
 export default function PrivacyPage() {
   return (
     <>
+      <head>
+        <title>Privacy Policy | Cookd</title>
+        <meta
+          name="description"
+          content="Cookd privacy policy — how we collect, use, and protect your data when you use our AI dating coach app."
+        />
+      </head>
       <Header />
       <main className="relative min-h-screen px-6 pt-28 pb-24">
         {/* Grid background */}
