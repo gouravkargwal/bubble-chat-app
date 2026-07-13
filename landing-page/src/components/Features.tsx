@@ -148,7 +148,7 @@ export function Features() {
           <StatusDot active />
           CAPABILITIES
         </div>
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+        <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
           Engineered for the <span className="text-neon-red">Modern Dater</span>
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
@@ -181,7 +181,7 @@ export function Features() {
                   </motion.div>
 
                   {/* Content */}
-                  <h3 className="text-lg font-bold text-nothing-white mb-2">
+                  <h3 className="font-heading text-lg font-bold text-nothing-white mb-2">
                     {feature.title}
                   </h3>
                   <p className="text-sm leading-relaxed text-nothing-text-secondary">

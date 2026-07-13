@@ -36,7 +36,7 @@ export function Header() {
         <Link href="/" className="flex items-center gap-3 group">
           <Logo size={36} />
           <div className="flex items-center gap-3">
-            <span className="text-lg font-extrabold tracking-tight text-nothing-white whitespace-nowrap">
+            <span className="font-heading text-lg font-extrabold tracking-tight text-nothing-white whitespace-nowrap">
               COOKD
             </span>
             <span className="hidden sm:inline-block">
@@ -64,7 +64,7 @@ export function Header() {
             href={APP_URLS.googlePlay}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full border border-nothing-border px-4 py-2 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5"
+            className="inline-flex items-center gap-1.5 rounded-full border border-nothing-border px-4 py-2 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5 btn-secondary-accent"
           >
             <svg
               className="h-3.5 w-3.5"

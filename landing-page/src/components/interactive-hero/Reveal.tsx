@@ -32,7 +32,7 @@ export function UpsellBlock() {
       <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-neon-red/30 px-3 py-1 text-[10px] font-mono text-neon-red tracking-wider">
         LIMITED OFFER
       </div>
-      <h3 className="text-xl font-extrabold text-nothing-white mb-2">
+      <h3 className="font-heading text-xl font-extrabold text-nothing-white mb-2">
         Lifetime Access
       </h3>
       <p className="text-xs text-nothing-text-secondary mb-5 max-w-sm mx-auto leading-relaxed">
@@ -125,7 +125,7 @@ function RateLimitedBlock({ appUrl }: { appUrl: string }) {
       className="flex flex-col items-center w-full"
     >
       <StateBadge step={5} />
-      <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
+      <h2 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
         Free Demo Used! 🎯
       </h2>
       <p className="text-sm text-nothing-text-secondary mb-8 text-center max-w-md">
@@ -190,7 +190,7 @@ export function Reveal({
         </motion.div>
       )}
 
-      <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
+      <h2 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
         Your Replies Are Ready &#x1F3AF;
       </h2>
       <p className="text-sm text-nothing-text-secondary mb-8 text-center max-w-md">

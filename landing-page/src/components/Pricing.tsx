@@ -164,7 +164,7 @@ export function Pricing() {
           <StatusDot active />
           PRICING
         </div>
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+        <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
           Pick Your <span className="text-neon-red">Edge</span>.
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
@@ -267,7 +267,7 @@ export function Pricing() {
                   </span>
 
                   <h3
-                    className={`text-xl font-bold mb-1 ${
+                    className={`font-heading text-xl font-bold mb-1 ${
                       plan.highlighted
                         ? "text-nothing-white"
                         : "text-nothing-text-secondary"

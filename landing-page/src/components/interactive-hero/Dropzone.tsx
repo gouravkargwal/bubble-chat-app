@@ -51,7 +51,7 @@ export function Dropzone({ onImageSelected }: DropzoneProps) {
     >
       {/* Heading */}
       <div className="text-center max-w-3xl">
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-nothing-white leading-[1.05]">
+        <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-nothing-white leading-[1.05]">
           Turn every <span className="text-neon-red">left on read</span> into a
           reply that{" "}
           <span className="text-nothing-white/70">actually lands</span>.

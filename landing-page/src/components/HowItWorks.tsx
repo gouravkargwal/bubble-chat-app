@@ -63,7 +63,7 @@ export function HowItWorks() {
           <StatusDot active />
           WORKFLOW
         </div>
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+        <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
           Five Steps to{" "}
           <span className="text-neon-red">Conversation Mastery</span>
         </h2>
@@ -123,7 +123,7 @@ export function HowItWorks() {
                 <span className="inline-block font-mono text-[10px] tracking-[0.15em] text-nothing-text-tertiary mb-3">
                   [ {step.label} ]
                 </span>
-                <h3 className="text-xl sm:text-2xl font-bold text-nothing-white mb-3">
+                <h3 className="font-heading text-xl sm:text-2xl font-bold text-nothing-white mb-3">
                   {step.title}
                 </h3>
                 <p className="text-sm sm:text-base leading-relaxed text-nothing-text-secondary max-w-md">

@@ -1,30 +1,45 @@
 @import "tailwindcss";
 
-/* ── Nothing OS / Teenage Engineering-inspired Design System ── */
-/* Strict dark mode: pitch black background, pure white text.   */
-/* Exactly one accent color (vibrant neon red) used strictly    */
-/* for primary actions. No drop shadows. Hard, crisp 1px        */
-/* borders. Monospaced labels. Bold geometric titles.           */
+/* ══════════════════════════════════════════════════
+   Design System — UI UX Pro Max applied
+   Pattern: App Store Style Landing (Vibrant & Block-based)
+   Palette: Rose primary (#E11D48) + Engagement blue (#2563EB)
+   Typography: Space Grotesk (heading) + DM Sans (body)
+   ══════════════════════════════════════════════════ */
 
 @theme inline {
-  /* ── Core Palette ── */
-  --color-nothing-black: #000000;
-  --color-nothing-white: #ffffff;
-  --color-neon-red: #ff003c;
-  --color-nothing-surface: #050505;
-  --color-nothing-border: rgba(255, 255, 255, 0.1);
-  --color-nothing-text-secondary: rgba(255, 255, 255, 0.45);
-  --color-nothing-text-tertiary: rgba(255, 255, 255, 0.3);
-  --color-nothing-success: #00ff66;
-  --color-nothing-error: #ff3355;
+  /* ── Brand Palette (dark default) ── */
+  --color-brand-black: #000000;
+  --color-brand-white: #ffffff;
+  --color-brand-primary: #e11d48; /* rose — primary actions */
+  --color-brand-accent: #2563eb; /* blue — secondary CTAs */
+  --color-brand-surface: #0a0a0a;
+  --color-brand-border: rgba(255, 255, 255, 0.1);
+  --color-brand-muted: rgba(255, 255, 255, 0.45);
+  --color-brand-subtle: rgba(255, 255, 255, 0.3);
+  --color-brand-success: #00ff66;
+  --color-brand-error: #ff3355;
+  --color-brand-foreground: #881337;
 
-  /* ── Typography ── */
-  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  /* ── Legacy alias tokens (backward-compatible) ── */
+  --color-nothing-black: var(--color-brand-black);
+  --color-nothing-white: var(--color-brand-white);
+  --color-neon-red: var(--color-brand-primary);
+  --color-nothing-surface: var(--color-brand-surface);
+  --color-nothing-border: var(--color-brand-border);
+  --color-nothing-text-secondary: var(--color-brand-muted);
+  --color-nothing-text-tertiary: var(--color-brand-subtle);
+  --color-nothing-success: var(--color-brand-success);
+  --color-nothing-error: var(--color-brand-error);
+
+  /* ── Typography (UI UX Pro Max: Space Grotesk + DM Sans) ── */
+  --font-heading: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
 
-  /* ── Spacing Tokens ── */
+  /* ── Spacing Tokens (Key Effects: 48px+ large sections) ── */
   --spacing-screen: 24px;
-  --spacing-section: 28px;
+  --spacing-section: 48px;
   --spacing-card: 16px;
 
   /* ── Border Radius ── */
@@ -36,23 +51,45 @@
   --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
 }
 
+/* ── Light Mode (UI UX Pro Max: Light ✓ Full) ── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-brand-black: #ffffff;
+    --color-brand-white: #111111;
+    --color-brand-primary: #e11d48;
+    --color-brand-accent: #2563eb;
+    --color-brand-surface: #fff1f2;
+    --color-brand-border: rgba(0, 0, 0, 0.1);
+    --color-brand-muted: rgba(0, 0, 0, 0.5);
+    --color-brand-subtle: rgba(0, 0, 0, 0.3);
+    --color-brand-success: #059669;
+    --color-brand-error: #dc2626;
+    --color-brand-foreground: #881337;
+  }
+}
+
 /* ── Base Styles ── */
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  background-color: #000000;
-  color: #ffffff;
+  background-color: var(--color-brand-black);
+  color: var(--color-brand-white);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Heading font utility ── */
+.font-heading {
+  font-family: var(--font-heading);
+}
+
 /* ── Selection ── */
 ::selection {
-  background-color: rgba(255, 0, 60, 0.3);
-  color: #ffffff;
+  background-color: rgba(225, 29, 72, 0.3);
+  color: var(--color-brand-white);
 }
 
 /* ── Scrollbar ── */
@@ -61,33 +98,35 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: var(--color-brand-black);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-brand-border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-brand-muted);
 }
 
 /* ── Custom Utility Classes ── */
 
 /* Hard border utility (replaces shadows) */
 .border-hard {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-brand-border);
 }
 
 /* Neon red glow for CTAs */
 @keyframes neon-pulse {
   0%,
   100% {
-    box-shadow: 0 0 20px rgba(255, 0, 60, 0.15), 0 0 40px rgba(255, 0, 60, 0.05);
+    box-shadow: 0 0 20px rgba(225, 29, 72, 0.15),
+      0 0 40px rgba(225, 29, 72, 0.05);
   }
   50% {
-    box-shadow: 0 0 30px rgba(255, 0, 60, 0.25), 0 0 60px rgba(255, 0, 60, 0.1);
+    box-shadow: 0 0 30px rgba(225, 29, 72, 0.25),
+      0 0 60px rgba(225, 29, 72, 0.1);
   }
 }
 
@@ -158,7 +197,7 @@ body {
   animation-delay: 500ms;
 }
 
-/* Animated gradient background (used in LaunchBanner) */
+/* Animated gradient background */
 @keyframes gradient-x {
   0%,
   100% {

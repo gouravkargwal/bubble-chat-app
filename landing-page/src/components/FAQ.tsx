@@ -107,7 +107,7 @@ export function FAQ() {
           <StatusDot active />
           FAQ
         </div>
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+        <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
           Got Questions?{" "}
           <span className="text-neon-red">We{"'"}ve Got Answers</span>.
         </h2>

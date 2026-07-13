@@ -492,7 +492,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
               ? "ANALYZING..."
               : "READY TO COPY"}
           </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+          <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
             See It in <span className="text-neon-red">Action</span>
           </h2>
           <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">

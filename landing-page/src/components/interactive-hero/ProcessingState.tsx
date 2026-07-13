@@ -54,7 +54,7 @@ export function ProcessingState() {
       className="flex flex-col items-center w-full"
     >
       <StateBadge step={3} />
-      <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
+      <h2 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
         Analyzing Your Chat
       </h2>
       <p className="text-sm text-nothing-text-secondary mb-8 text-center max-w-md">

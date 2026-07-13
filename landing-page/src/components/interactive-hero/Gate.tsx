@@ -19,13 +19,7 @@ const PREVIEW_CARDS = [
 ];
 
 /* ── Blurred preview card (matches the Reveal card design but blurred) ── */
-function BlurredCard({
-  label,
-  index,
-}: {
-  label: string;
-  index: number;
-}) {
+function BlurredCard({ label, index }: { label: string; index: number }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -92,11 +86,12 @@ export function Gate({ onSubmit, error: apiError }: GateProps) {
     >
       <StateBadge step={4} />
 
-      <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
+      <h2 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight text-nothing-white mb-3 text-center">
         Preview Your Replies
       </h2>
       <p className="text-sm text-nothing-text-secondary mb-6 text-center max-w-md">
-        Enter your email and our AI will craft personalized replies for your conversation.
+        Enter your email and our AI will craft personalized replies for your
+        conversation.
       </p>
 
       {/* ── Blurred preview cards ── */}

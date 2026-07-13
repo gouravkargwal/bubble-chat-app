@@ -69,7 +69,7 @@ export function CTA() {
 
             {/* Heading */}
             <motion.h2
-              className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white leading-tight"
+              className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white leading-tight"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -210,7 +210,7 @@ export function CTA() {
               <ScaleHover scale={1.05}>
                 <a
                   href="#pricing"
-                  className="inline-flex items-center gap-2 rounded-full border border-nothing-border px-8 py-3.5 text-sm font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5"
+                  className="inline-flex items-center gap-2 rounded-full border border-nothing-border px-8 py-3.5 text-sm font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5 btn-secondary-accent"
                 >
                   View Pricing
                 </a>

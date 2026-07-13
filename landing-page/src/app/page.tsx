@@ -71,7 +71,7 @@ export default function Home() {
       >
         <div className="flex items-center justify-between gap-3 border-t border-nothing-border bg-nothing-black/95 backdrop-blur-md px-4 py-3">
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-nothing-white leading-tight">
+            <span className="font-heading text-xs font-bold text-nothing-white leading-tight">
               {SITE.name} — {SITE.tagline}
             </span>
             <span className="text-[10px] font-mono text-nothing-text-tertiary">

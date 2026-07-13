@@ -32,7 +32,7 @@ export function Footer() {
           <div className="max-w-xs">
             <div className="flex items-center gap-2 mb-4">
               <Logo size={32} />
-              <span className="text-base font-extrabold tracking-tight text-nothing-white">
+              <span className="font-heading text-base font-extrabold tracking-tight text-nothing-white">
                 COOKD
               </span>
             </div>
