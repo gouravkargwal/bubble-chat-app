@@ -97,6 +97,8 @@ def create_app() -> FastAPI:
         title="RizzBot API",
         version="2.0.0",
         lifespan=lifespan,
+        docs_url=None if settings.environment != "development" else "/docs",
+        redoc_url=None if settings.environment != "development" else "/redoc",
     )
 
     # Prometheus metrics — exposes /metrics endpoint and instruments HTTP RED metrics

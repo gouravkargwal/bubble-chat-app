@@ -65,7 +65,7 @@ android {
                 "app_public_link",
                 "https://play.google.com/store/apps/details?id=com.cookd.mobile"
             )
-            buildConfigField("String", "BACKEND_URL", "\"https://cookd.digidairy.site/\"")
+            buildConfigField("String", "BACKEND_URL", "\"https://api.cookdai.site/\"")
             // Set in local.properties: GOOGLE_WEB_CLIENT_ID_PROD, REVENUE_CAT_PUBLIC_KEY_PROD (from production Firebase + RevenueCat)
             buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID_PROD") ?: ""}\"")
             buildConfigField("String", "REVENUE_CAT_PUBLIC_KEY", "\"${localProperties.getProperty("REVENUE_CAT_PUBLIC_KEY_PROD") ?: "REPLACE_WITH_PRODUCTION_KEY"}\"")
