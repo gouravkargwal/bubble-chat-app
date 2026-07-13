@@ -11,7 +11,7 @@ const FOOTER_LINKS = {
     { label: "How It Works", href: "#how-it-works" },
     { label: "Pricing", href: "#pricing" },
     { label: "FAQ", href: "#faq" },
-    { label: "Contact", href: `mailto:${EMAILS.support}` },
+    { label: "Contact", href: "/contact" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },

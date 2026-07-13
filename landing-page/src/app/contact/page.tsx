@@ -73,7 +73,6 @@ export default function ContactPage() {
   const [status, setStatus] = useState<FormStatus>("idle");
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
     subject: "",
     message: "",
   });
@@ -89,12 +88,10 @@ export default function ContactPage() {
     setStatus("sending");
 
     try {
-      // For MVP: sends via mailto fallback + logs to console
-      // Replace this with your preferred form backend when ready
-      const mailtoLink = `mailto:${EMAILS.hello}?subject=${encodeURIComponent(
+      const mailtoLink = `mailto:${EMAILS.support}?subject=${encodeURIComponent(
         formData.subject || "Contact from Cookd"
       )}&body=${encodeURIComponent(
-        `Name: ${formData.name}\nEmail: ${formData.email}\n\n${formData.message}`
+        `Name: ${formData.name}\n\n${formData.message}`
       )}`;
 
       // Simulate brief delay for UX
@@ -105,7 +102,7 @@ export default function ContactPage() {
 
       posthog.capture("contact_form_submitted", { subject: formData.subject });
       setStatus("sent");
-      setFormData({ name: "", email: "", subject: "", message: "" });
+      setFormData({ name: "", subject: "", message: "" });
     } catch {
       setStatus("error");
     }
@@ -251,43 +248,23 @@ export default function ContactPage() {
                         exit={{ opacity: 0, scale: 0.95 }}
                         className="space-y-5"
                       >
-                        <div className="grid sm:grid-cols-2 gap-5">
-                          <div>
-                            <label
-                              htmlFor="name"
-                              className="mb-1.5 block text-xs font-mono text-nothing-text-tertiary tracking-wider"
-                            >
-                              NAME
-                            </label>
-                            <input
-                              type="text"
-                              id="name"
-                              name="name"
-                              value={formData.name}
-                              onChange={handleChange}
-                              required
-                              placeholder="Your name"
-                              className="w-full rounded-lg border border-nothing-border bg-nothing-black px-4 py-2.5 text-sm text-nothing-white placeholder-nothing-text-tertiary outline-none transition-all duration-200 focus:border-neon-red/50 focus:ring-1 focus:ring-neon-red/20"
-                            />
-                          </div>
-                          <div>
-                            <label
-                              htmlFor="email"
-                              className="mb-1.5 block text-xs font-mono text-nothing-text-tertiary tracking-wider"
-                            >
-                              EMAIL
-                            </label>
-                            <input
-                              type="email"
-                              id="email"
-                              name="email"
-                              value={formData.email}
-                              onChange={handleChange}
-                              required
-                              placeholder="you@example.com"
-                              className="w-full rounded-lg border border-nothing-border bg-nothing-black px-4 py-2.5 text-sm text-nothing-white placeholder-nothing-text-tertiary outline-none transition-all duration-200 focus:border-neon-red/50 focus:ring-1 focus:ring-neon-red/20"
-                            />
-                          </div>
+                        <div>
+                          <label
+                            htmlFor="name"
+                            className="mb-1.5 block text-xs font-mono text-nothing-text-tertiary tracking-wider"
+                          >
+                            NAME
+                          </label>
+                          <input
+                            type="text"
+                            id="name"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            required
+                            placeholder="Your name"
+                            className="w-full rounded-lg border border-nothing-border bg-nothing-black px-4 py-2.5 text-sm text-nothing-white placeholder-nothing-text-tertiary outline-none transition-all duration-200 focus:border-neon-red/50 focus:ring-1 focus:ring-neon-red/20"
+                          />
                         </div>
 
                         <div>
@@ -385,7 +362,7 @@ export default function ContactPage() {
                             className="text-xs text-nothing-error text-center"
                           >
                             Something went wrong. Please email us directly at{" "}
-                            {EMAILS.hello}
+                            {EMAILS.support}
                           </motion.p>
                         )}
                       </motion.form>
@@ -412,7 +389,7 @@ export default function ContactPage() {
                   </h3>
                   <div className="space-y-4">
                     <a
-                      href={`mailto:${EMAILS.hello}`}
+                      href={`mailto:${EMAILS.support}`}
                       className="flex items-center gap-3 group"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-nothing-border bg-nothing-black group-hover:border-nothing-text-secondary transition-colors duration-200">
@@ -435,7 +412,7 @@ export default function ContactPage() {
                           EMAIL
                         </p>
                         <p className="text-sm text-nothing-white group-hover:text-neon-red transition-colors duration-200">
-                          {EMAILS.hello}
+                          {EMAILS.support}
                         </p>
                       </div>
                     </a>
@@ -510,7 +487,7 @@ export default function ContactPage() {
         </section>
 
         {/* ── FAQ Section ── */}
-        <section className="relative px-6 py-16 sm:py-20">
+        <section id="faq" className="relative px-6 py-16 sm:py-20">
           <div
             className="absolute inset-0 opacity-[0.02] pointer-events-none"
             style={{
