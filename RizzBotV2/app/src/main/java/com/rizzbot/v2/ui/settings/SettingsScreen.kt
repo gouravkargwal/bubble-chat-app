@@ -33,9 +33,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.rizzbot.v2.domain.model.TierQuota
-import com.rizzbot.v2.ui.components.LtdBannerCard
-import com.rizzbot.v2.ui.components.LtdBannerSkeleton
 import com.rizzbot.v2.ui.components.PlanCardSkeleton
+import com.rizzbot.v2.ui.components.RedeemCodeCard
+import com.rizzbot.v2.ui.components.RedeemCodeSkeleton
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingDimens
@@ -164,14 +164,12 @@ fun SettingsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(NothingDimens.screenPadding)
                 ) {
-            // ── LTD BANNER (each card loads independently, same usageLoaded flag) ──
+            // ── REDEEM CODE (simple input, no pricing/selling — Google Play safe) ──
             if (!state.isLtd) {
-                Text("LIFETIME DEAL", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text("REDEEM CODE", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(NothingDimens.elementGap))
                 if (state.usageLoaded) {
-                    LtdBannerCard(
-                        config = state.ltdBannerConfig,
-                        showRedeem = true,
+                    RedeemCodeCard(
                         ltdCodeInput = state.ltdCodeInput,
                         onLTDCodeChanged = { viewModel.onLTDCodeChanged(it) },
                         onRedeemClick = { viewModel.redeemLTDCode() },
@@ -179,7 +177,7 @@ fun SettingsScreen(
                         ltdRedeemResult = state.ltdRedeemResult,
                     )
                 } else {
-                    LtdBannerSkeleton()
+                    RedeemCodeSkeleton()
                 }
                 Spacer(Modifier.height(NothingDimens.sectionSpacing))
             }

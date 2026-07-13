@@ -8,15 +8,12 @@ import androidx.compose.ui.Modifier
 import com.rizzbot.v2.ui.theme.NothingDimens
 
 /**
- * Convenience skeleton that combines [LtdBannerSkeleton] and [PlanCardSkeleton]
+ * Convenience skeleton that combines [RedeemCodeSkeleton] and [PlanCardSkeleton]
  * — exactly the two sections shown on the Settings screen while data loads.
- *
- * Screens that only need one section should import [LtdBannerSkeleton] or
- * [PlanCardSkeleton] directly to avoid extra shimmer elements.
  */
 @Composable
 fun SettingsSkeleton() {
-    LtdBannerSkeleton()
+    RedeemCodeSkeleton()
     Spacer(modifier = Modifier.height(NothingDimens.sectionSpacing))
     PlanCardSkeleton()
 }

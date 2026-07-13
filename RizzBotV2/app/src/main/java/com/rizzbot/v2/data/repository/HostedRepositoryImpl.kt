@@ -536,38 +536,6 @@ class HostedRepositoryImpl @Inject constructor(
             Result.failure(e)
         }
     }
-    override suspend fun getLtdBannerConfig(): com.rizzbot.v2.ui.components.LtdBannerConfig {
-        return try {
-            val dto = hostedApi.getLtdBannerConfig()
-            com.rizzbot.v2.ui.components.LtdBannerConfig(
-                enabled = dto.enabled,
-                price = dto.price,
-                currency = dto.currency,
-                compareAt = dto.compareAt,
-                sticky = dto.sticky,
-                badge = dto.badge,
-                badgeIcon = dto.badgeIcon,
-                title = dto.title,
-                spotsRemaining = dto.spotsRemaining,
-                totalSpots = dto.totalSpots,
-                scarcityLabel = dto.scarcityLabel,
-                directions = dto.directions,
-                noExpiry = dto.noExpiry,
-                benefitDirectionsLabel = dto.benefitDirectionsLabel,
-                benefitNoExpiryLabel = dto.benefitNoExpiryLabel,
-                benefitNoExpiryValue = dto.benefitNoExpiryValue,
-                ctaText = dto.ctaText,
-                redeemTitle = dto.redeemTitle,
-                redeemPlaceholder = dto.redeemPlaceholder,
-                redeemCtaText = dto.redeemCtaText,
-                landingUrl = dto.landingUrl,
-                hideIfLtdActive = dto.hideIfLtdActive,
-            )
-        } catch (e: Exception) {
-            android.util.Log.w("HostedRepo", "getLtdBannerConfig failed: ${e.message}")
-            com.rizzbot.v2.ui.components.LtdBannerConfig() // fall back to defaults
-        }
-    }
 
     override suspend fun redeemLTDCode(code: String): Result<String> {
         return try {

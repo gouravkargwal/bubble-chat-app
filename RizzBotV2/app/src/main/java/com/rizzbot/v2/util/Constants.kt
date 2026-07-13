@@ -44,8 +44,4 @@ object Constants {
     const val REFERRER_CREDITS = 10
     const val REFEREE_CREDITS = 5
     const val MAX_REFERRALS = 10
-
-    // ── PayU / LTD ──
-    /** URL to the landing page LTD section (opens in browser). */
-    const val LTD_LANDING_URL = "https://cookd.app/#pricing"
 }

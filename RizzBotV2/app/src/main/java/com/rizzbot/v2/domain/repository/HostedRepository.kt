@@ -49,7 +49,6 @@ interface HostedRepository {
     suspend fun deleteProfileAuditPhoto(photoId: String): Result<Unit>
     suspend fun deleteAllUserData(): Result<Unit>
 
-    // LTD (Lifetime Deal)
-    suspend fun getLtdBannerConfig(): com.rizzbot.v2.ui.components.LtdBannerConfig
+    // LTD redeem (Google Play-safe: no pricing/selling, just code redemption)
     suspend fun redeemLTDCode(code: String): Result<String>
 }

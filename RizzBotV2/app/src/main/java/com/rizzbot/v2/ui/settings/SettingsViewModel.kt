@@ -37,10 +37,9 @@ data class SettingsState(
     val ltdCodeInput: String = "",
     val ltdRedeemResult: String? = null,
     val isRedeemingLTD: Boolean = false,
-    // LTD status + banner config (isLtd comes from usage — no separate /ltd/status call)
+    // LTD status (isLtd comes from usage — no separate /ltd/status call)
     val isLtd: Boolean = false,
     val usageLoaded: Boolean = false,
-    val ltdBannerConfig: com.rizzbot.v2.ui.components.LtdBannerConfig = com.rizzbot.v2.ui.components.LtdBannerConfig(),
 ) {
     val isPaidPlan: Boolean get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH
     val isOnTrial: Boolean
@@ -110,12 +109,6 @@ class SettingsViewModel @Inject constructor(
             _state.update { it.copy(referral = info) }
         }
 
-        // Fetch LTD banner config (isLtd comes from usage — no separate /ltd/status call)
-        viewModelScope.launch {
-            val config = hostedRepository.getLtdBannerConfig()
-            _state.update { it.copy(ltdBannerConfig = config) }
-        }
-
         viewModelScope.launch {
             settingsRepository.roastLanguage.collect { lang ->
                 _state.update { it.copy(roastLanguage = lang) }
@@ -129,11 +122,9 @@ class SettingsViewModel @Inject constructor(
         }
         applyUsageSnapshot(hostedRepository.usageState.value)
         val info = withContext(Dispatchers.IO) { hostedRepository.getReferralInfo() }
-        val config = withContext(Dispatchers.IO) { hostedRepository.getLtdBannerConfig() }
         _state.update {
             it.copy(
                 referral = info,
-                ltdBannerConfig = config,
             )
         }
     }

@@ -1,11 +1,7 @@
 package com.rizzbot.v2.ui.onboarding
 
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,14 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rizzbot.v2.ui.theme.NeonRed
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingDimens
@@ -277,34 +269,6 @@ fun OnboardingSignupBonusStep(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-
-        // ── LTD upsell banner (compact neon red) ──
-        Card(
-            colors = CardDefaults.cardColors(containerColor = NothingBlack),
-            shape = RoundedCornerShape(NothingDimens.cardRadius),
-            border = BorderStroke(1.dp, NeonRed),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.LTD_LANDING_URL)))
-                    }
-                    .padding(horizontal = NothingDimens.cardPadding, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(NeonRed),
-                    contentAlignment = Alignment.Center,
-                ) { Text("🔥", fontSize = 16.sp) }
-                Spacer(modifier = Modifier.width(NothingDimens.elementGap))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Lifetime Access — ₹999", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                    Text("Pay once. Unlimited. No expiry.", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
-                }
-                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = NothingTextTertiary, modifier = Modifier.size(18.dp))
-            }
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
