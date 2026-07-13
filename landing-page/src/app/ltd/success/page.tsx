@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { MobileIcon } from "@/components/interactive-hero/icons";
@@ -7,6 +8,22 @@ import { StatusDot } from "@/components/Logo";
 import { APP_URLS } from "@/app/constants";
 
 export default function LTDSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-nothing-black flex items-center justify-center">
+          <div className="animate-pulse text-nothing-text-secondary text-sm">
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <LTDSuccessContent />
+    </Suspense>
+  );
+}
+
+function LTDSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const code = searchParams.get("code") || "";

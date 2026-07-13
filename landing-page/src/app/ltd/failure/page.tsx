@@ -1,11 +1,28 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { StatusDot } from "@/components/Logo";
 
 export default function LTDFailurePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-nothing-black flex items-center justify-center">
+          <div className="animate-pulse text-nothing-text-secondary text-sm">
+            Loading...
+          </div>
+        </div>
+      }
+    >
+      <LTDFailureContent />
+    </Suspense>
+  );
+}
+
+function LTDFailureContent() {
   const searchParams = useSearchParams();
   const errorMsg =
     searchParams.get("Error") ||
