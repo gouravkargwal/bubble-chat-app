@@ -23,12 +23,13 @@ export const API_URLS = {
 } as const;
 
 // ── Social Links ──
-// Update these when you create official accounts.
+// TODO: Create official accounts and update these URLs.
+// Social signals are a ranking factor — every "#" here hurts domain authority.
 export const SOCIAL_LINKS = {
-  twitter: "#",
-  instagram: "#",
-  tiktok: "#",
-  discord: "#",
+  twitter: "https://x.com/cookdai",
+  instagram: "https://instagram.com/cookdai",
+  tiktok: "https://tiktok.com/@cookdai",
+  discord: "https://discord.gg/cookdai",
 } as const;
 
 // ── Email Addresses ──
@@ -60,5 +61,5 @@ export const SITE = {
   title:
     "Cookd — AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
   description:
-    "AI dating coach that analyzes your chats and crafts winning replies in real-time. Get better responses on Hinge, Bumble, Tinder & more. Download on Google Play.",
+    "Best free AI dating coach for Hinge, Bumble & Tinder — analyzes your chats and crafts winning replies in 3 seconds. 3x more responses. Download on Google Play.",
 } as const;

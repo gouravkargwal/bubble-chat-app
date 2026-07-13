@@ -1,15 +1,9 @@
 "use client";
 
-import React, { ReactNode, useRef } from "react";
-import {
-  motion,
-  useScroll,
-  useTransform,
-  useReducedMotion,
-} from "framer-motion";
+import React, { type ReactNode, useEffect, useRef, useState } from "react";
 
-// ── Scroll-triggered reveal wrapper ──
-// Apple-style: elements fade up with a gentle spring as they enter the viewport
+// ── Scroll-triggered reveal wrapper (CSS-only) ──
+// Lightweight: uses IntersectionObserver + CSS transitions instead of framer-motion.
 
 interface AnimatedSectionProps {
   children: ReactNode;
@@ -21,6 +15,24 @@ interface AnimatedSectionProps {
   once?: boolean;
 }
 
+function getTransform(
+  direction: "up" | "down" | "left" | "right" | "none",
+  distance: number
+): string {
+  switch (direction) {
+    case "up":
+      return `translateY(${distance}px)`;
+    case "down":
+      return `translateY(${-distance}px)`;
+    case "left":
+      return `translateX(${distance}px)`;
+    case "right":
+      return `translateX(${-distance}px)`;
+    case "none":
+      return "none";
+  }
+}
+
 export function AnimatedSection({
   children,
   className = "",
@@ -30,45 +42,156 @@ export function AnimatedSection({
   duration = 0.7,
   once = true,
 }: AnimatedSectionProps) {
-  const prefersReduced = useReducedMotion();
-  const directionOffset = {
-    up: { y: distance },
-    down: { y: -distance },
-    left: { x: distance },
-    right: { x: -distance },
-    none: {},
-  };
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
 
-  if (prefersReduced) {
-    return <div className={className}>{children}</div>;
-  }
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          if (once) observer.disconnect();
+        } else if (!once) {
+          setIsVisible(false);
+        }
+      },
+      { rootMargin: "-80px", threshold: 0 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [once]);
+
+  const transform = getTransform(direction, distance);
 
   return (
-    <motion.div
-      initial={{
-        opacity: 0,
-        ...directionOffset[direction],
-      }}
-      whileInView={{
-        opacity: 1,
-        x: 0,
-        y: 0,
-      }}
-      viewport={{ once, margin: "-80px" }}
-      transition={{
-        duration,
-        delay,
-        ease: [0.16, 1, 0.3, 1] as const,
-      }}
+    <div
+      ref={ref}
       className={className}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "none" : transform,
+        transition: `opacity ${duration}s cubic-bezier(0.16, 1, 0.3, 1), transform ${duration}s cubic-bezier(0.16, 1, 0.3, 1)`,
+        transitionDelay: `${delay}s`,
+      }}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 
-// ── Parallax section ──
-// Creates a subtle parallax effect on background elements
+// ── Staggered children container ──
+// Renders children as-is for maximum reliability.
+// Each child receives its stagger delay as a CSS custom property.
+// Falls back to immediate render when the container is visible.
+
+interface StaggerContainerProps {
+  children: ReactNode;
+  className?: string;
+  staggerDelay?: number;
+  once?: boolean;
+}
+
+export function StaggerContainer({
+  children,
+  className = "",
+  staggerDelay = 0.1,
+  once = true,
+}: StaggerContainerProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          if (once) observer.disconnect();
+        } else if (!once) {
+          setIsVisible(false);
+        }
+      },
+      { rootMargin: "-60px", threshold: 0 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [once]);
+
+  const childrenArray = React.Children.toArray(children);
+
+  return (
+    <div ref={ref} className={className}>
+      {childrenArray.map((child, index) => (
+        <div
+          key={index}
+          style={{
+            opacity: isVisible ? 1 : 0,
+            transform: isVisible ? "translateY(0)" : "translateY(40px)",
+            transition: `opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)`,
+            transitionDelay: isVisible ? `${index * staggerDelay}s` : "0s",
+          }}
+        >
+          {child}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface StaggerItemProps {
+  children: ReactNode;
+  className?: string;
+  direction?: "up" | "down" | "left" | "right" | "none";
+  distance?: number;
+}
+
+/**
+ * StaggerItem is a thin wrapper that does NOT set its own opacity.
+ * Visibility is managed entirely by the parent StaggerContainer.
+ */
+export function StaggerItem({ children, className = "" }: StaggerItemProps) {
+  return <div className={className}>{children}</div>;
+}
+
+// ── Scale-on-hover wrapper ──
+// Uses CSS hover via group utilities for performance.
+
+interface ScaleHoverProps {
+  children: ReactNode;
+  scale?: number;
+  className?: string;
+}
+
+export function ScaleHover({
+  children,
+  scale = 1.02,
+  className = "",
+}: ScaleHoverProps) {
+  return (
+    <div
+      className={className}
+      style={{ transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)" }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.transform = `scale(${scale})`;
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── ParallaxLayer (keeps framer-motion import) ──
+import { motion, useScroll, useTransform } from "framer-motion";
 
 interface ParallaxLayerProps {
   children: ReactNode;
@@ -92,112 +215,5 @@ export function ParallaxLayer({
     <div ref={ref} className={className}>
       <motion.div style={{ y }}>{children}</motion.div>
     </div>
-  );
-}
-
-// ── Staggered children container ──
-// Each child fades up one after another with increasing delay
-
-interface StaggerContainerProps {
-  children: ReactNode;
-  className?: string;
-  staggerDelay?: number;
-  once?: boolean;
-}
-
-export function StaggerContainer({
-  children,
-  className = "",
-  staggerDelay = 0.1,
-  once = true,
-}: StaggerContainerProps) {
-  return (
-    <motion.div
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once, margin: "-60px" }}
-      variants={{
-        hidden: {},
-        visible: {
-          transition: {
-            staggerChildren: staggerDelay,
-          },
-        },
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-interface StaggerItemProps {
-  children: ReactNode;
-  className?: string;
-  direction?: "up" | "down" | "left" | "right" | "none";
-  distance?: number;
-}
-
-export function StaggerItem({
-  children,
-  className = "",
-  direction = "up",
-  distance = 40,
-}: StaggerItemProps) {
-  const directionOffset = {
-    up: { y: distance },
-    down: { y: -distance },
-    left: { x: distance },
-    right: { x: -distance },
-    none: {},
-  };
-
-  return (
-    <motion.div
-      variants={{
-        hidden: {
-          opacity: 0,
-          ...directionOffset[direction],
-        },
-        visible: {
-          opacity: 1,
-          x: 0,
-          y: 0,
-          transition: {
-            duration: 0.6,
-            ease: [0.16, 1, 0.3, 1],
-          },
-        },
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-// ── Scale-on-hover wrapper for interactive elements ──
-// Apple-style subtle scale on hover
-
-interface ScaleHoverProps {
-  children: ReactNode;
-  scale?: number;
-  className?: string;
-}
-
-export function ScaleHover({
-  children,
-  scale = 1.02,
-  className = "",
-}: ScaleHoverProps) {
-  return (
-    <motion.div
-      whileHover={{ scale }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 400, damping: 20 }}
-      className={className}
-    >
-      {children}
-    </motion.div>
   );
 }

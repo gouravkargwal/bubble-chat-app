@@ -110,6 +110,30 @@ body {
   background: var(--color-brand-muted);
 }
 
+/* ── Blog article typography ── */
+
+/* Apply a subtle maximum width and comfortable reading spacing */
+.prose {
+  max-width: 65ch;
+}
+
+.prose p {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  color: var(--color-brand-muted);
+  margin-bottom: 1.25rem;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+/* Emphasized text */
+.prose strong {
+  color: var(--color-brand-white);
+  font-weight: 600;
+}
+
 /* ── Custom Utility Classes ── */
 
 /* Hard border utility (replaces shadows) */

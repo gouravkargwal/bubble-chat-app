@@ -62,8 +62,8 @@ function DotMatrixRing({
 
   for (let i = 0; i < dotCount; i++) {
     const angle = (360 / dotCount) * i * (Math.PI / 180);
-    const x = cx + ringRadius * Math.cos(angle);
-    const y = cy + ringRadius * Math.sin(angle);
+    const x = +(cx + ringRadius * Math.cos(angle)).toFixed(4);
+    const y = +(cy + ringRadius * Math.sin(angle)).toFixed(4);
     dots.push(
       <motion.circle
         key={i}

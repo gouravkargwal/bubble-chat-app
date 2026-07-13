@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Pricing", href: "/#pricing" },
   { label: "FAQ", href: "/#faq" },
+  { label: "Blog", href: "/blog" },
   { label: "Contact", href: "/contact" },
 ];
 
@@ -118,7 +119,7 @@ export function Header() {
       {/* Mobile Menu */}
       <div
         className={`md:hidden overflow-hidden transition-all duration-300 ${
-          mobileOpen ? "max-h-80" : "max-h-0"
+          mobileOpen ? "max-h-96" : "max-h-0"
         }`}
       >
         <div className="border-t border-nothing-border bg-nothing-black px-6 py-4 space-y-4">

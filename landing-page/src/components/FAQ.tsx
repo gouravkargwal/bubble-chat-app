@@ -61,12 +61,14 @@ function FAQItem({
     <div className="border-b border-nothing-border last:border-b-0">
       <button
         onClick={handleToggle}
-        className="flex w-full items-center justify-between py-5 text-left text-sm font-bold text-nothing-white hover:text-neon-red transition-colors duration-200"
+        className="flex w-full items-center justify-between py-5 text-left transition-colors duration-200"
         aria-expanded={isOpen}
       >
-        <span>{question}</span>
+        <h3 className="text-sm font-bold text-nothing-white hover:text-neon-red transition-colors duration-200">
+          {question}
+        </h3>
         <motion.svg
-          className="h-4 w-4 flex-shrink-0 ml-4"
+          className="h-4 w-4 flex-shrink-0 ml-4 text-nothing-white"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
