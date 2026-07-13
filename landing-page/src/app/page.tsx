@@ -10,14 +10,24 @@ import { Pricing } from "@/components/Pricing";
 import { FAQ } from "@/components/FAQ";
 import { CTA } from "@/components/CTA";
 import { Footer } from "@/components/Footer";
+import { SectionTracker } from "@/components/SectionTracker";
 import type { ReplyItem } from "@/components/interactive-hero/types";
 import { APP_URLS, EMAILS, SITE } from "./constants";
+import posthog from "posthog-js";
 
 export default function Home() {
   const [generatedReplies, setGeneratedReplies] = useState<ReplyItem[] | null>(
     null
   );
   const [showMobileCTA, setShowMobileCTA] = useState(false);
+
+  // Re-identify returning visitors from session storage
+  useEffect(() => {
+    const storedId = sessionStorage.getItem("posthog_distinct_id");
+    if (storedId) {
+      posthog.identify(storedId);
+    }
+  }, []);
 
   // Show sticky CTA on scroll past 50% of page height (for users who don't complete the funnel)
   useEffect(() => {
@@ -55,11 +65,21 @@ export default function Home() {
             When user generates replies via the funnel, the Hero's Reveal
             shows them — no need to duplicate them in the phone mockup. */}
         <AppMockup />
-        <Features />
-        <HowItWorks />
-        <Pricing />
-        <FAQ />
-        <CTA />
+        <SectionTracker section="features" id="features">
+          <Features />
+        </SectionTracker>
+        <SectionTracker section="how_it_works" id="how-it-works">
+          <HowItWorks />
+        </SectionTracker>
+        <SectionTracker section="pricing" id="pricing">
+          <Pricing />
+        </SectionTracker>
+        <SectionTracker section="faq" id="faq">
+          <FAQ />
+        </SectionTracker>
+        <SectionTracker section="cta" id="cta">
+          <CTA />
+        </SectionTracker>
       </main>
       <Footer />
 
@@ -83,6 +103,12 @@ export default function Home() {
               href={APP_URLS.googlePlay}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() =>
+                posthog.capture("app_download_clicked", {
+                  source: "sticky_mobile_cta",
+                  platform: "google_play",
+                })
+              }
               className="inline-flex items-center gap-1.5 rounded-full bg-neon-red px-4 py-2 text-xs font-bold text-nothing-white whitespace-nowrap"
             >
               <svg
@@ -102,6 +128,11 @@ export default function Home() {
             </a>
             <a
               href={APP_URLS.iosWaitlist}
+              onClick={() =>
+                posthog.capture("ios_waitlist_clicked", {
+                  source: "mobile_sticky_cta",
+                })
+              }
               className="inline-flex items-center gap-1.5 rounded-full border border-nothing-border px-4 py-2 text-xs font-bold text-nothing-white whitespace-nowrap"
             >
               <svg

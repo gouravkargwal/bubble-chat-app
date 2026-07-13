@@ -7,6 +7,7 @@ import { Footer } from "@/components/Footer";
 import { StatusDot } from "@/components/Logo";
 import { AnimatedSection, ScaleHover } from "@/components/Animations";
 import { EMAILS } from "@/app/constants";
+import posthog from "posthog-js";
 
 const FAQ_ITEMS = [
   {
@@ -102,6 +103,7 @@ export default function ContactPage() {
       // Open default mail client
       window.location.href = mailtoLink;
 
+      posthog.capture("contact_form_submitted", { subject: formData.subject });
       setStatus("sent");
       setFormData({ name: "", email: "", subject: "", message: "" });
     } catch {

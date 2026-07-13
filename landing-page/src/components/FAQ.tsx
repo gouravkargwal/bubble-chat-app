@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { StatusDot } from "./Logo";
 import { AnimatedSection } from "./Animations";
+import posthog from "posthog-js";
 
 const FAQS = [
   {
@@ -37,16 +38,29 @@ function FAQItem({
   answer,
   isOpen,
   onToggle,
+  onOpen,
+  onClose,
 }: {
   question: string;
   answer: string;
   isOpen: boolean;
   onToggle: () => void;
+  onOpen: () => void;
+  onClose: () => void;
 }) {
+  const handleToggle = useCallback(() => {
+    if (isOpen) {
+      onClose();
+    } else {
+      onOpen();
+    }
+    onToggle();
+  }, [isOpen, onOpen, onClose, onToggle]);
+
   return (
     <div className="border-b border-nothing-border last:border-b-0">
       <button
-        onClick={onToggle}
+        onClick={handleToggle}
         className="flex w-full items-center justify-between py-5 text-left text-sm font-bold text-nothing-white hover:text-neon-red transition-colors duration-200"
         aria-expanded={isOpen}
       >
@@ -90,6 +104,21 @@ function FAQItem({
 export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
+  const handleOpen = useCallback((index: number, question: string) => {
+    posthog.capture("faq_opened", { question, index });
+  }, []);
+
+  const handleClose = useCallback((index: number, question: string) => {
+    posthog.capture("faq_closed", { question, index });
+  }, []);
+
+  const handleToggle = useCallback(
+    (i: number) => {
+      setOpenIndex(openIndex === i ? null : i);
+    },
+    [openIndex]
+  );
+
   return (
     <section id="faq" className="relative px-6 py-24 sm:py-32 overflow-hidden">
       {/* Background grid */}
@@ -121,7 +150,9 @@ export function FAQ() {
               question={faq.q}
               answer={faq.a}
               isOpen={openIndex === i}
-              onToggle={() => setOpenIndex(openIndex === i ? null : i)}
+              onToggle={() => handleToggle(i)}
+              onOpen={() => handleOpen(i, faq.q)}
+              onClose={() => handleClose(i, faq.q)}
             />
           ))}
         </div>

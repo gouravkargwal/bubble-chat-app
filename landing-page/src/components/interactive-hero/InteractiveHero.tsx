@@ -16,6 +16,7 @@ import { ProcessingState } from "./ProcessingState";
 import { Reveal } from "./Reveal";
 import { type ComponentState, type ReplyItem, EASE_OUT } from "./types";
 import { APP_URLS, API_URLS } from "@/app/constants";
+import posthog from "posthog-js";
 
 /* ───────────────────────────────────────────
    Interactive Lead Magnet Hero
@@ -65,11 +66,16 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
     };
     reader.readAsDataURL(file);
     setState("vibe_check");
+    posthog.capture("screenshot_uploaded", {
+      file_type: file.type,
+      file_size: file.size,
+    });
   }, []);
 
   const onVibeSelect = useCallback((id: string) => {
     setSelectedVibe(id);
     setState("gate");
+    posthog.capture("vibe_selected", { vibe: id });
   }, []);
 
   const onGateSubmit = useCallback(
@@ -78,6 +84,14 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
 
       setEmail(submittedEmail);
       setApiError(null);
+      posthog.identify(submittedEmail);
+      // Store distinct_id in sessionStorage for re-identification on return visits
+      sessionStorage.setItem("posthog_distinct_id", submittedEmail);
+      const emailDomain = submittedEmail.split("@")[1] || "unknown";
+      posthog.capture("lead_email_submitted", {
+        vibe: selectedVibe,
+        email_domain: emailDomain,
+      });
 
       // Move to processing state immediately — shows the real terminal animation
       setState("processing");
@@ -107,6 +121,11 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
           // Handle 429, 502, 422 etc. — go back to gate with error
           setApiResponse(data);
           setApiError(data.detail || "Something went wrong.");
+          if (data.status === "rate_limited") {
+            posthog.capture("hero_rate_limited", {
+              retry_after_seconds: data.retry_after_seconds,
+            });
+          }
           setState("gate");
           return;
         }
@@ -114,6 +133,11 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
         // Success — pass replies up to page.tsx for the AppMockup
         setApiResponse(data);
         setState("reveal");
+        posthog.capture("replies_revealed", {
+          reply_count: data.replies?.length ?? 0,
+          cached: data.cached ?? false,
+          vibe: selectedVibe,
+        });
         if (onRepliesReady && data.replies) {
           onRepliesReady(data.replies);
         }

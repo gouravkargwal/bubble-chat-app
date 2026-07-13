@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Logo, StatusDot } from "./Logo";
 import { APP_URLS } from "@/app/constants";
+import posthog from "posthog-js";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
@@ -64,6 +65,12 @@ export function Header() {
             href={APP_URLS.googlePlay}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              posthog.capture("app_download_clicked", {
+                source: "header",
+                platform: "google_play",
+              })
+            }
             className="inline-flex items-center gap-1.5 rounded-full border border-nothing-border px-4 py-2 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5 btn-secondary-accent"
           >
             <svg
@@ -128,7 +135,13 @@ export function Header() {
             href="https://play.google.com/store/apps/details?id=com.cookd.mobile"
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => {
+              setMobileOpen(false);
+              posthog.capture("app_download_clicked", {
+                source: "mobile_menu",
+                platform: "google_play",
+              });
+            }}
             className="block w-full rounded-full border border-nothing-border px-4 py-2.5 text-center text-xs font-bold text-nothing-white mt-4 transition-all duration-200 hover:bg-nothing-white/5"
           >
             <span className="inline-flex items-center justify-center gap-1.5">

@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cookd Landing Page — cookdai.site
+
+Marketing landing page for Cookd AI Dating Coach. Built with Next.js 16 (App Router), Tailwind CSS 4, Framer Motion, and PostHog analytics.
+
+## Stack
+
+- **Framework:** Next.js 16.2.9 (App Router, Turbopack)
+- **Styling:** Tailwind CSS 4, custom design tokens
+- **Animation:** Framer Motion
+- **Analytics:** PostHog (self-hosted, reverse-proxied via `/ingest/*`)
+- **Fonts:** Space Grotesk (headings), DM Sans (body)
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Copy environment variables
+cp .env.example .env.local   # or use .env.production for prod builds
+
+# Start dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable                            | Required | Description                                          |
+| ----------------------------------- | -------- | ---------------------------------------------------- |
+| `NEXT_PUBLIC_API_BASE_URL`          | Yes      | Backend API base URL (e.g., `http://localhost:8000`) |
+| `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | Yes      | PostHog project token (`phc_...`)                    |
+| `NEXT_PUBLIC_POSTHOG_HOST`          | Yes      | PostHog server URL (`https://us.i.posthog.com`)      |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Domain Configuration
 
-## Learn More
+All domain-specific values are in [`src/app/constants.ts`](src/app/constants.ts). Edit **two constants** at the top:
 
-To learn more about Next.js, take a look at the following resources:
+```ts
+const APP_DOMAIN = "cookdai.site"; // website, ogImage, iosWaitlist
+const EMAIL_DOMAIN = "cookdai.site"; // support@, hello@, legal@
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/
+│   ├── layout.tsx          # Root layout + PostHog page view tracking
+│   ├── page.tsx            # Home page (hero → features → pricing → faq → cta)
+│   ├── constants.ts        # All domain config (single source of truth)
+│   ├── contact/page.tsx    # Contact form
+│   ├── ltd/success/page.tsx # LTD payment success + verification failure
+│   ├── privacy/page.tsx    # Privacy policy
+│   └── terms/page.tsx      # Terms of service
+├── components/
+│   ├── PostHogPageView.tsx # Route-based page view capture
+│   ├── SectionTracker.tsx  # IntersectionObserver section visibility
+│   ├── Header.tsx          # Navigation with CTA tracking
+│   ├── CTA.tsx             # Bottom call-to-action section
+│   ├── FAQ.tsx             # FAQ with interaction tracking
+│   ├── Footer.tsx          # Footer with link tracking
+│   └── interactive-hero/   # Lead magnet funnel (dropzone → vibe → gate → reveal)
+└── instrumentation-client.ts  # PostHog client init (production only)
+```
 
-## Deploy on Vercel
+## PostHog Events
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Event                             | Trigger                                                            |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `$pageview`                       | Every route change                                                 |
+| `section_viewed`                  | User scrolls to Features / Pricing / FAQ / CTA                     |
+| `screenshot_uploaded`             | User uploads screenshot in hero                                    |
+| `vibe_selected`                   | User picks a conversation direction                                |
+| `lead_email_submitted`            | User submits email in gate                                         |
+| `replies_revealed`                | AI replies generated successfully                                  |
+| `app_download_clicked`            | Any Google Play CTA (header, mobile menu, CTA section, sticky bar) |
+| `ltd_checkout_opened`             | LTD checkout modal opens                                           |
+| `ltd_payment_initiated`           | User submits LTD payment form                                      |
+| `ltd_payment_succeeded`           | Payment confirmed (with `txnid`, `amount`)                         |
+| `ltd_payment_verification_failed` | PayU redirect with error                                           |
+| `view_pricing_clicked`            | "View Pricing" secondary CTA                                       |
+| `faq_opened` / `faq_closed`       | FAQ toggle                                                         |
+| `footer_link_clicked`             | Any footer link                                                    |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Events are production-only (disabled in dev via `NODE_ENV` guard).
+
+## Build
+
+```bash
+npm run build    # Production build
+npm run start    # Start production server
+```
+
+## Domain
+
+**Production:** https://cookdai.site

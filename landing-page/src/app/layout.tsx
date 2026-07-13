@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Space_Grotesk, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { SITE, APP_URLS } from "./constants";
+import { Suspense } from "react";
+import { PostHogPageView } from "@/components/PostHogPageView";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-heading",
@@ -39,7 +41,6 @@ export const metadata: Metadata = {
     title: SITE.title,
     description: SITE.description,
     images: [APP_URLS.ogImage],
-    site: "@cookd_app",
   },
   icons: {
     icon: "/logo.svg",
@@ -64,6 +65,9 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${dmSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-brand-black text-brand-white font-sans">
+        <Suspense fallback={null}>
+          <PostHogPageView />
+        </Suspense>
         {children}
       </body>
     </html>

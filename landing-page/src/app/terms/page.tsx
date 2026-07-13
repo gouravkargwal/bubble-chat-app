@@ -17,13 +17,15 @@ const sections = [
       "By accessing or using Cookd (\u201Cthe Service\u201D), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service. These terms apply to all users, including free-tier, subscription-based, and Lifetime Deal (LTD) holders.",
   },
   {
-    title: "2. Fair Usage Policy (Lifetime Deal)",
-    content: `The Launch LTD (\u201C${PRICING.plans.ltd.currency}${PRICING.plans.ltd.price} Lifetime Deal\u201D) is a one-time purchase product designed for personal, non-commercial use. LTD accounts are unlimited for genuine personal use. To prevent server abuse, automated scraping, and commercial resale, a fair usage threshold applies:`,
+    title: "2. Lifetime Deal (LTD) — Terms, Revocation & Fair Usage",
+    content: `The Launch LTD (\u201C${PRICING.plans.ltd.currency}${PRICING.plans.ltd.price} Lifetime Deal\u201D) is a one-time purchase product designed for personal, non-commercial use. The following terms apply specifically to LTD holders:`,
     bullets: [
-      "LTD accounts are intended for personal dating chat assistance — unlimited conversations per month for real, individual use.",
-      "If usage exceeds 300 AI-generated replies per month for 3 consecutive months while exhibiting patterns consistent with automated or commercial use (e.g., bulk processing, scripted requests, reselling outputs), we may reach out to discuss a suitable plan.",
-      "Maximum of 5 context screenshots processed per active generation thread. Each new thread resets this counter.",
-      "These thresholds are subject to review and may be adjusted at our discretion. You will be notified of any material changes.",
+      "LTD accounts are granted for the lifetime of the Service as it exists at the time of purchase, subject to the terms below.",
+      "LTD is a single-user license. You may not share, resell, transfer, or sublicense your LTD access to any other person or entity.",
+      "The LTD is revocable under the following conditions: (a) violation of these Terms, including the Fair Usage Policy and User Conduct provisions; (b) commercial resale or redistribution of AI-generated outputs as a standalone service; (c) abusive, fraudulent, or illegal use of the Service; (d) automated or scripted access, scraping, or bulk processing that imposes an unreasonable burden on our infrastructure.",
+      "If your LTD is revoked for cause, you will lose access to the Service permanently. No refund will be issued, as revocation is a consequence of your breach of these Terms.",
+      "The LTD is a single-purchase product and access is granted for as long as the Service operates. If the Service is discontinued entirely, no refund will be provided. By purchasing the LTD, you acknowledge and accept this risk. This is common industry practice for lifetime deals, where the \u201C lifetime\u201D refers to the lifespan of the product, not your personal lifetime.",
+      "Fair Usage Policy: LTD accounts are intended for genuine personal use. If usage exceeds 300 AI-generated replies per month for 3 consecutive months while exhibiting patterns consistent with automated or commercial use (e.g., bulk processing, scripted requests, reselling outputs), we may reach out to discuss a suitable plan. Maximum of 5 context screenshots processed per active generation thread. These thresholds may be adjusted at our discretion with notice.",
     ],
   },
   {
@@ -38,7 +40,7 @@ const sections = [
   {
     title: "5. User Conduct",
     content:
-      "You agree not to: (a) use the Service for any illegal purpose or in violation of any laws; (b) attempt to reverse-engineer, scrape, or automate the AI generation pipeline; (c) resell or redistribute generated replies as a standalone service; (d) upload content that violates any third-party rights or contains hate speech, harassment, or explicit non-consensual material. Violation may result in immediate termination without refund.",
+      "You agree not to: (a) use the Service for any illegal purpose or in violation of any laws; (b) attempt to reverse-engineer, scrape, or automate the AI generation pipeline; (c) resell or redistribute generated replies as a standalone service; (d) upload content that violates any third-party rights or contains hate speech, harassment, or explicit non-consensual material. Violation may result in immediate termination and revocation of your license (including LTD) without refund.",
   },
   {
     title: "6. Data Privacy & Storage",
@@ -53,35 +55,42 @@ const sections = [
   {
     title: "8. Service Availability & Modifications",
     content:
-      "We strive for 99.9% uptime but do not guarantee uninterrupted access. The Service may be temporarily suspended for maintenance, updates, or emergency fixes. We reserve the right to modify, suspend, or discontinue any feature at any time with reasonable notice. LTD holders will be notified via email at least 30 days before any material reduction in service.",
+      "We strive for 99.9% uptime but do not guarantee uninterrupted access. The Service may be temporarily suspended for maintenance, updates, or emergency fixes. We reserve the right to modify, suspend, or discontinue any feature at any time with reasonable notice. LTD holders will be notified via email at least 30 days before any material reduction in service. In the event of full Service discontinuation, see Section 2 for LTD refund terms.",
   },
   {
     title: "9. Limitation of Liability",
     content:
-      "Cookd provides AI-generated suggestions for entertainment and conversational assistance. We do not guarantee specific outcomes (e.g., dates, replies, matches). To the maximum extent permitted by law, Cookd shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service. Our total liability is limited to the amount you paid in the 12 months preceding the claim.",
+      "Cookd provides AI-generated suggestions for entertainment and conversational assistance. We do not guarantee specific outcomes (e.g., dates, replies, matches). To the maximum extent permitted by law, Cookd shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service. Our total liability is limited to the amount you paid in the 12 months preceding the claim. For LTD holders, liability is limited to the purchase price of the LTD.",
   },
   {
     title: "10. Refund Policy",
-    content: `Lifetime Deal purchases are final and non-refundable, except where required by applicable consumer law. Subscription plan refunds are handled on a case-by-case basis within 7 days of purchase. To request a refund, contact ${EMAILS.support} with your order ID and reason.`,
+    content: `Lifetime Deal purchases are final and non-refundable, except where required by applicable consumer law. No refund will be provided if the Service is discontinued or modified, as the LTD is a pre-purchase of access for the lifespan of the product, not a guaranteed service period. Subscription plan refunds are handled on a case-by-case basis within 7 days of purchase. To request a refund or report an issue, contact ${EMAILS.support} with your order ID and reason.`,
   },
   {
-    title: "11. Termination",
+    title: "11. Termination & LTD Revocation",
     content:
-      "We reserve the right to suspend or terminate accounts that violate these terms, engage in abusive behavior, or fail to pay applicable fees. Upon termination, your access to the Service ceases immediately. LTD holders whose accounts are terminated for violation will not be refunded.",
+      "We reserve the right to suspend or terminate accounts, and to revoke Lifetime Deal licenses, under the following circumstances:",
+    bullets: [
+      "Violation of any provision of these Terms, including User Conduct (Section 5) and Fair Usage Policy (Section 2).",
+      "Engaging in abusive, fraudulent, or illegal activity through the Service.",
+      "Failure to pay applicable fees for subscription plans.",
+      "Attempting to circumvent usage limits, access controls, or payment requirements.",
+      "Upon termination or revocation, your access to the Service ceases immediately. LTD holders whose licenses are revoked for cause will not receive a refund. Subscription holders will not be refunded for the current billing period. We will notify you via email of any termination or revocation and the reason for it. You may appeal by contacting ${EMAILS.support} within 14 days of the notice.",
+    ],
   },
   {
-    title: "12. Governing Law",
+    title: "12. Governing Law & Dispute Resolution",
     content:
-      "These terms are governed by the laws of India. Any disputes arising from these terms shall be resolved exclusively in the courts of Mumbai, Maharashtra.",
+      "These terms are governed by the laws of India. Any disputes arising from these terms shall be resolved exclusively in the courts of Mumbai, Maharashtra. For consumers in the EEA or UK, nothing in this section deprives you of the protection of mandatory consumer protection laws in your country of residence. We encourage you to contact us first to resolve any dispute informally before pursuing legal action.",
   },
   {
     title: "13. Changes to Terms",
     content:
-      "We may update these Terms of Service from time to time. Material changes will be communicated via email or an in-app notification at least 14 days before they take effect. Continued use of the Service after changes constitutes acceptance of the new terms.",
+      "We may update these Terms of Service at any time at our sole discretion. Changes take effect immediately upon posting to this page, except for material changes which will be communicated via email or in-app notification. Your continued use of the Service after any changes constitutes acceptance of the new terms. If you do not agree to a material change, you may stop using the Service. No refund will be provided for discontinuing use due to terms changes.",
   },
   {
     title: "14. Contact",
-    content: `For questions about these terms, your account, or the Fair Usage Policy, reach out to ${EMAILS.support}. We aim to respond within 48 hours.`,
+    content: `For questions about these terms, your account, the Fair Usage Policy, or LTD revocation appeals, reach out to ${EMAILS.legal}. We aim to respond within 48 hours.`,
   },
 ];
 

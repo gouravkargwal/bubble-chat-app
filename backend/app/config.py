@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Where PayU redirects after payment (your domain)
     payu_redirect_base: str = "http://localhost:3000"
     # Sender email for LTD code emails (SendGrid / SMTP)
-    ltd_email_from: str = "hello@cookd.app"
+    ltd_email_from: str = "hello@cookdai.site"
     # SendPulse API credentials for transactional emails
     sendpulse_client_id: str = ""
     sendpulse_client_secret: str = ""

@@ -1,17 +1,18 @@
 // ── App URLs ──
+const APP_DOMAIN = "cookdai.site";
 export const APP_URLS = {
   googlePlay: "https://play.google.com/store/apps/details?id=com.cookd.mobile",
-  iosWaitlist: "mailto:support@cookd.app?subject=iOS%20Waitlist",
-  website: "https://cookd.app",
-  ogImage: "https://cookd.app/og-image.png",
+  iosWaitlist: `mailto:support@${APP_DOMAIN}?subject=iOS%20Waitlist`,
+  website: `https://${APP_DOMAIN}`,
+  ogImage: `https://${APP_DOMAIN}/og-image.png`,
   // PayU LTD checkout pages (relative — handled by Next.js routing)
   ltdSuccess: "/ltd/success",
   ltdFailure: "/ltd/failure",
 } as const;
 
 // ── API URLs ──
-// BASE_URL is just the origin (e.g. https://nonconscientious-annette-saddeningly.ngrok-free.dev)
-// without any path.  All endpoints append their full path including /api/v1/ prefix.
+// BASE_URL is just the origin without any path suffix.
+// All endpoints append their full path including /api/v1/ prefix.
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -22,18 +23,22 @@ export const API_URLS = {
 } as const;
 
 // ── Social Links ──
+// Update these when you create official accounts.
 export const SOCIAL_LINKS = {
-  twitter: "https://x.com/cookd_app",
-  instagram: "https://instagram.com/cookd.app",
-  tiktok: "https://tiktok.com/@cookd.app",
-  discord: "https://discord.gg/cookd",
+  twitter: "#",
+  instagram: "#",
+  tiktok: "#",
+  discord: "#",
 } as const;
 
 // ── Email Addresses ──
+// All emails use cookdai.site domain. Update the domain part when you change
+// your primary domain.
+const EMAIL_DOMAIN = "cookdai.site";
 export const EMAILS = {
-  support: "support@cookd.app",
-  hello: "hello@cookd.app",
-  privacy: "tickets@cookd.p.tawk.email",
+  support: `support@${EMAIL_DOMAIN}`,
+  hello: `hello@${EMAIL_DOMAIN}`,
+  legal: `legal@${EMAIL_DOMAIN}`,
 } as const;
 
 // ── Pricing ──

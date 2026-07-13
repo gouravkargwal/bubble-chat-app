@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { MobileIcon } from "@/components/interactive-hero/icons";
 import { StatusDot } from "@/components/Logo";
-import { APP_URLS } from "@/app/constants";
+import { APP_URLS, EMAILS } from "@/app/constants";
+import posthog from "posthog-js";
 
 export default function LTDSuccessPage() {
   return (
@@ -28,6 +29,24 @@ function LTDSuccessContent() {
   const router = useRouter();
   const code = searchParams.get("code") || "";
   const error = searchParams.get("error");
+  const txnid = searchParams.get("txnid") || "";
+  const amount = searchParams.get("amount") || "";
+
+  useEffect(() => {
+    if (error) {
+      posthog.capture("ltd_payment_verification_failed", {
+        error,
+        txnid,
+        amount,
+      });
+    } else {
+      posthog.capture("ltd_payment_succeeded", {
+        has_code: Boolean(code),
+        txnid: txnid || undefined,
+        amount: amount || undefined,
+      });
+    }
+  }, [error, code, txnid, amount]);
 
   if (error) {
     return (
@@ -70,10 +89,10 @@ function LTDSuccessContent() {
               Don't worry — if your payment was successful, your LTD code will
               be emailed to you. Contact{" "}
               <a
-                href="mailto:support@cookd.app"
+                href={`mailto:${EMAILS.support}`}
                 className="underline text-neon-red"
               >
-                support@cookd.app
+                {EMAILS.support}
               </a>{" "}
               for help.
             </p>

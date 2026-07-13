@@ -11,6 +11,7 @@ import {
 } from "./Animations";
 import { LtdCheckoutModal } from "./LtdCheckoutModal";
 import { APP_URLS, PRICING, API_URLS } from "@/app/constants";
+import posthog from "posthog-js";
 
 const PLANS = [
   {
@@ -339,7 +340,10 @@ export function Pricing() {
 
                   {plan.id === "launch" ? (
                     <motion.button
-                      onClick={() => setShowLtdModal(true)}
+                      onClick={() => {
+                        setShowLtdModal(true);
+                        posthog.capture("ltd_checkout_opened");
+                      }}
                       className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
                         plan.highlighted
                           ? "bg-neon-red text-nothing-white hover:bg-red-600"
@@ -368,6 +372,7 @@ export function Pricing() {
                       href={APP_URLS.googlePlay}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => posthog.capture("pricing_plan_cta_clicked", { plan: plan.id, plan_name: plan.name })}
                       className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
                         plan.highlighted
                           ? "bg-neon-red text-nothing-white hover:bg-red-600"

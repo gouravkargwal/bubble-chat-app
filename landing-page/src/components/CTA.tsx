@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { StatusDot, Logo } from "./Logo";
 import { AnimatedSection, ScaleHover } from "./Animations";
 import { APP_URLS } from "@/app/constants";
+import posthog from "posthog-js";
 
 export function CTA() {
   return (
@@ -157,6 +158,12 @@ export function CTA() {
                   href={APP_URLS.googlePlay}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() =>
+                    posthog.capture("app_download_clicked", {
+                      source: "cta_section",
+                      platform: "google_play",
+                    })
+                  }
                   className="group inline-flex items-center gap-2 rounded-full bg-neon-red px-8 py-3.5 text-sm font-bold text-nothing-white transition-all duration-300"
                   animate={{
                     boxShadow: [
@@ -210,6 +217,11 @@ export function CTA() {
               <ScaleHover scale={1.05}>
                 <a
                   href="#pricing"
+                  onClick={() =>
+                    posthog.capture("view_pricing_clicked", {
+                      source: "bottom_cta",
+                    })
+                  }
                   className="inline-flex items-center gap-2 rounded-full border border-nothing-border px-8 py-3.5 text-sm font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5 btn-secondary-accent"
                 >
                   View Pricing

@@ -4,6 +4,7 @@ import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LockIcon, MobileIcon } from "./interactive-hero/icons";
 import { APP_URLS, API_URLS } from "@/app/constants";
+import posthog from "posthog-js";
 
 interface LtdCheckoutModalProps {
   isOpen: boolean;
@@ -84,14 +85,15 @@ export function LtdCheckoutModal({ isOpen, onClose }: LtdCheckoutModalProps) {
       });
 
       // 3. Submit — redirects to PayU
+      posthog.identify(trimmedEmail);
+      posthog.capture("ltd_payment_initiated", { amount: data.amount, txnid: data.txnid });
       form.submit();
     } catch (err) {
       setStep("error");
-      setErrorMsg(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again."
-      );
+      const errMsg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setErrorMsg(errMsg);
+      posthog.capture("ltd_payment_error", { error: errMsg });
+      posthog.captureException(err);
     }
   };
 

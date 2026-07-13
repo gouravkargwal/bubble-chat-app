@@ -1,6 +1,9 @@
+"use client";
+
 import React from "react";
 import { Logo } from "./Logo";
 import { EMAILS, SOCIAL_LINKS } from "@/app/constants";
+import posthog from "posthog-js";
 
 const FOOTER_LINKS = {
   Product: [
@@ -21,6 +24,10 @@ const FOOTER_LINKS = {
     { label: "Discord", href: SOCIAL_LINKS.discord },
   ],
 };
+
+function trackFooterClick(category: string, label: string) {
+  posthog.capture("footer_link_clicked", { category, label });
+}
 
 export function Footer() {
   return (
@@ -54,6 +61,7 @@ export function Footer() {
                     <li key={link.label}>
                       <a
                         href={link.href}
+                        onClick={() => trackFooterClick(category, link.label)}
                         className="text-sm text-nothing-text-secondary hover:text-nothing-white transition-colors duration-200"
                       >
                         {link.label}
