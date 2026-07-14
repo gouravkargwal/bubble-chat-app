@@ -22,6 +22,7 @@ import javax.inject.Singleton
  * LTD entitlements (ltd, lifetime, match_ltd) map to "match" tier.
  */
 private val ENTITLEMENT_TIER_MAP: Map<String, String> = mapOf(
+    "rizz" to "rizz",
     "match" to "match",
     "crush" to "crush",
     "ltd" to "match",
@@ -29,7 +30,7 @@ private val ENTITLEMENT_TIER_MAP: Map<String, String> = mapOf(
     "match_ltd" to "match",
 )
 
-private val TIER_PRIORITY: List<String> = listOf("match", "match_ltd", "ltd", "lifetime", "crush")
+private val TIER_PRIORITY: List<String> = listOf("rizz", "match", "match_ltd", "ltd", "lifetime", "crush")
 
 @Singleton
 class SubscriptionManager @Inject constructor() {
