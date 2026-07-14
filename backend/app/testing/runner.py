@@ -264,7 +264,6 @@ class TestRunner:
 
             # Minimal AgentState for generator
             state: dict = {
-                "trace_id": f"eval_{scenario.id}_{run_index}",
                 "user_id": "eval",
                 "conversation_id": None,
                 "direction": scenario.direction,

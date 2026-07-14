@@ -103,14 +103,12 @@ async def auditor_node(state: AgentState) -> dict:
       - auditor_feedback: Specific instructions for the generator on what to fix
     """
     user_id = state.get("user_id", "")
-    trace_id = state.get("trace_id", "")
     conversation_id = state.get("conversation_id", "") or ""
     revision_count = state.get("revision_count", 0)
     t_start = time.monotonic()
     logger.info(
         "llm_lifecycle",
         stage="auditor_node_start",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=state.get("direction", "quick_reply"),
@@ -127,15 +125,13 @@ async def auditor_node(state: AgentState) -> dict:
     if drafts is None:
         logger.warning(
             "auditor_node_no_drafts",
-            trace_id=trace_id,
-            user_id=user_id,
+                user_id=user_id,
             conversation_id=conversation_id,
         )
         logger.info(
             "llm_lifecycle",
             stage="auditor_node_complete",
-            trace_id=trace_id,
-            user_id=user_id,
+                user_id=user_id,
             conversation_id=conversation_id,
             skipped=True,
             reason="no_drafts",
@@ -223,7 +219,6 @@ async def auditor_node(state: AgentState) -> dict:
     logger.info(
         "llm_lifecycle",
         stage="auditor_node_pre_llm",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
@@ -246,7 +241,6 @@ async def auditor_node(state: AgentState) -> dict:
 
     logger.info(
         "auditor_node_llm_messages",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
@@ -266,8 +260,7 @@ async def auditor_node(state: AgentState) -> dict:
         audit = cast(AuditorNodeOutput, result)
         logger.info(
             "auditor_node_llm_result",
-            trace_id=trace_id,
-            user_id=user_id,
+                user_id=user_id,
             conversation_id=conversation_id,
             direction=direction,
             phase="v2_auditor",
@@ -280,8 +273,7 @@ async def auditor_node(state: AgentState) -> dict:
         # Auditor failure should never block the response — approve and ship
         logger.error(
             "auditor_node_llm_error",
-            trace_id=trace_id,
-            user_id=user_id,
+                user_id=user_id,
             conversation_id=conversation_id,
             direction=direction,
             error=str(e),
@@ -291,8 +283,7 @@ async def auditor_node(state: AgentState) -> dict:
         logger.info(
             "llm_lifecycle",
             stage="auditor_node_complete",
-            trace_id=trace_id,
-            user_id=user_id,
+                user_id=user_id,
             conversation_id=conversation_id,
             skipped=True,
             reason="llm_error_approved",
@@ -332,7 +323,6 @@ async def auditor_node(state: AgentState) -> dict:
 
     logger.info(
         "auditor_node_full_verdicts",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
@@ -345,7 +335,6 @@ async def auditor_node(state: AgentState) -> dict:
     logger.info(
         "llm_lifecycle",
         stage="auditor_node_complete",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         overall_passes=audit.overall_passes,

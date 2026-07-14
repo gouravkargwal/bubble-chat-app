@@ -197,7 +197,6 @@ async def vision_node(state: AgentState) -> dict:
       - converts `VisionNodeOutput` -> `AnalystOutput`
       - normalizes `raw_ocr_text`
     """
-    trace_id = state.get("trace_id", "")
     user_id = state.get("user_id", "")
     conversation_id = state.get("conversation_id") or ""
     direction = state.get("direction", "")
@@ -212,7 +211,6 @@ async def vision_node(state: AgentState) -> dict:
     logger.info(
         "llm_lifecycle",
         stage="vision_node_start_pass_through",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
@@ -278,7 +276,6 @@ async def vision_node(state: AgentState) -> dict:
     logger.info(
         "llm_lifecycle",
         stage="vision_node_complete_pass_through",
-        trace_id=trace_id,
         is_valid_chat=True,
         user_id=user_id,
         conversation_id=conversation_id,

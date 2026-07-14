@@ -74,7 +74,6 @@ async def generator_node(state: AgentState) -> dict:
     Returns partial state update (LangGraph merges into full state).
     """
     user_id = state.get("user_id", "")
-    trace_id = state.get("trace_id", "")
     conversation_id = state.get("conversation_id", "") or ""
     revision_count = state.get("revision_count", 0)
     auditor_feedback = state.get("auditor_feedback", "")
@@ -303,7 +302,6 @@ async def generator_node(state: AgentState) -> dict:
     logger.info(
         "llm_lifecycle",
         stage="generator_node_start",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
@@ -326,7 +324,6 @@ async def generator_node(state: AgentState) -> dict:
 
     logger.info(
         "generator_node_pre_llm",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
@@ -366,8 +363,7 @@ async def generator_node(state: AgentState) -> dict:
 
         logger.info(
             "generator_fan_out_slot_start",
-            trace_id=trace_id,
-            slot=slot_index,
+                slot=slot_index,
             assigned_hook=assigned_hook,
             assigned_strategy=assigned_strategy,
             phase=call_phase,
@@ -388,8 +384,7 @@ async def generator_node(state: AgentState) -> dict:
             elapsed_ms = int((time.monotonic() - t0) * 1000)
             logger.info(
                 "generator_fan_out_slot_complete",
-                trace_id=trace_id,
-                slot=slot_index,
+                        slot=slot_index,
                 phase=call_phase,
                 elapsed_ms=elapsed_ms,
                 text=(result.text or "")[:60],
@@ -400,8 +395,7 @@ async def generator_node(state: AgentState) -> dict:
             elapsed_ms = int((time.monotonic() - t0) * 1000)
             logger.error(
                 "generator_fan_out_slot_error",
-                trace_id=trace_id,
-                slot=slot_index,
+                        slot=slot_index,
                 phase=call_phase,
                 error=str(exc),
                 error_type=type(exc).__name__,
@@ -449,8 +443,7 @@ async def generator_node(state: AgentState) -> dict:
         if isinstance(r, Exception):
             logger.error(
                 "generator_fan_out_exception",
-                trace_id=trace_id,
-                error=str(r),
+                        error=str(r),
                 error_type=type(r).__name__,
             )
             continue
@@ -536,8 +529,7 @@ async def generator_node(state: AgentState) -> dict:
             )
             logger.info(
                 "v2_generator_ab",
-                trace_id=trace_id,
-                user_id=user_id,
+                        user_id=user_id,
                 conversation_id=conversation_id,
                 direction=direction,
                 primary_provider="gemini",
@@ -564,8 +556,7 @@ async def generator_node(state: AgentState) -> dict:
         except Exception:
             logger.warning(
                 "v2_generator_ab_shadow_failed",
-                trace_id=trace_id,
-                exc_info=True,
+                        exc_info=True,
             )
 
     # --- Validate and fix ---
@@ -589,7 +580,6 @@ async def generator_node(state: AgentState) -> dict:
 
     logger.info(
         "generator_node_full_output",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,
@@ -612,7 +602,6 @@ async def generator_node(state: AgentState) -> dict:
     logger.info(
         "llm_lifecycle",
         stage="generator_node_complete",
-        trace_id=trace_id,
         user_id=user_id,
         conversation_id=conversation_id,
         direction=direction,

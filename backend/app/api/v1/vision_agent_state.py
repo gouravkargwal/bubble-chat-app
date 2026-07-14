@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from uuid import uuid4
 
 from app.domain.models import (
     AnalysisResult,
@@ -29,7 +28,6 @@ def _build_agent_initial_state(
     voice_dict = dataclasses.asdict(voice_dna) if voice_dna else {}
     context_dict = dataclasses.asdict(conversation_context) if conversation_context else {}
     return {
-        "trace_id": str(uuid4()),
         "image_bytes": image_base64,
         "vision_out": {},
         "direction": direction,

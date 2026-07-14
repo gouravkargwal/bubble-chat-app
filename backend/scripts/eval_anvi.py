@@ -55,7 +55,6 @@ def build_initial_state(payload: dict) -> dict:
     analysis = AnalystOutput(**analysis_dict)
 
     return {
-        "trace_id": f"eval_anvi_{int(time.time())}",
         "user_id": "eval",
         "conversation_id": None,
         "direction": payload.get("direction", "opener"),

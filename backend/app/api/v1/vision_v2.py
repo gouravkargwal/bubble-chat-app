@@ -173,7 +173,6 @@ async def perform_full_vision_analysis(
     logger.info(
         "llm_lifecycle",
         stage="vision_node_pre_llm",
-        trace_id="",
         user_id=user_id,
         conversation_id="",
         direction=vision_direction,
@@ -190,7 +189,6 @@ async def perform_full_vision_analysis(
     )
     logger.info(
         "vision_node_llm_messages",
-        trace_id="",
         user_id=user_id,
         conversation_id="",
         direction=vision_direction,
@@ -217,7 +215,6 @@ async def perform_full_vision_analysis(
         _vision_usage_row_var.set(usage_row)
         logger.info(
             "vision_node_llm_result",
-            trace_id="",
             user_id=user_id,
             conversation_id="",
             direction=vision_direction,
@@ -234,7 +231,6 @@ async def perform_full_vision_analysis(
     except Exception as e:
         logger.error(
             "vision_node_llm_error",
-            trace_id="",
             user_id=user_id,
             conversation_id="",
             direction=vision_direction,
@@ -586,7 +582,6 @@ async def _run_generate_v2(
         except Exception as e:
             logger.warning(
                 "agent_v2_librarian_failed",
-                trace_id="",
                 error=str(e),
                 user_id=user.id,
                 conversation_id=str(effective_conversation_id or ""),
@@ -601,7 +596,6 @@ async def _run_generate_v2(
         voice_dna,
         conversation_context,
     )
-    trace_id = initial_state.get("trace_id", "")
     initial_state["ocr_hint_text"] = ocr_hint_text
 
     # Inject the already-computed full Vision Node output + librarian context.
@@ -615,7 +609,6 @@ async def _run_generate_v2(
     logger.info(
         "llm_lifecycle",
         stage="v2_agent_run_start",
-        trace_id=trace_id,
         user_id=user.id,
         conversation_id=effective_conversation_id or "",
         ocr_hint_chars=len(initial_state["ocr_hint_text"] or ""),
@@ -637,7 +630,6 @@ async def _run_generate_v2(
             ) from e
         logger.error(
             "agent_v2_run_failed",
-            trace_id=trace_id,
             error=str(e),
             user_id=user.id,
             conversation_id=effective_conversation_id or "",
@@ -699,7 +691,6 @@ async def _run_generate_v2(
         logger.warning(
             "llm_lifecycle",
             stage="v2_lore_memory_scrub",
-            trace_id=trace_id,
             user_id=user.id,
             conversation_id=effective_conversation_id,
             contradiction_count=len(detected_contradictions),
@@ -742,7 +733,6 @@ async def _run_generate_v2(
     logger.info(
         "llm_lifecycle",
         stage="v2_agent_run_complete",
-        trace_id=trace_id,
         user_id=user.id,
         latency_ms=latency_ms,
         is_valid_chat=bool(final_state.get("is_valid_chat", True)),
@@ -810,7 +800,6 @@ async def _run_generate_v2(
     logger.info(
         "llm_lifecycle",
         stage="v2_persist_complete",
-        trace_id=trace_id,
         user_id=user.id,
         interaction_id=interaction.id,
         conversation_id=convo.id if convo else "",
@@ -848,7 +837,6 @@ async def _run_generate_v2(
     # Full response observability (what the client receives).
     logger.info(
         "v2_response_full",
-        trace_id=trace_id,
         user_id=user.id,
         interaction_id=interaction.id,
         conversation_id=response.conversation_id,
@@ -868,7 +856,6 @@ async def _run_generate_v2(
     logger.info(
         "llm_lifecycle",
         stage="v2_response_ready",
-        trace_id=trace_id,
         user_id=user.id,
         interaction_id=interaction.id,
         usage_remaining=response.usage_remaining,
@@ -913,7 +900,6 @@ async def _run_generate_v2(
         ]
         logger.info(
             "v2_analysis",
-            trace_id=trace_id,
             user_id=user.id,
             interaction_id=interaction.id,
             conversation_id=response.conversation_id,
@@ -982,7 +968,7 @@ async def _run_generate_v2(
             ),
         )
     except Exception:
-        logger.warning("v2_analysis_log_failed", trace_id=trace_id, exc_info=True)
+        logger.warning("v2_analysis_log_failed", exc_info=True)
 
     return response
 

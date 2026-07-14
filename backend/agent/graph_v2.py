@@ -59,7 +59,6 @@ def check_valid_chat(state: AgentState) -> str:
     logger.info(
         "llm_lifecycle",
         stage="graph_route_after_vision",
-        trace_id=state.get("trace_id", ""),
         route=route,
         user_id=state.get("user_id", ""),
         conversation_id=state.get("conversation_id", "") or "",
@@ -84,7 +83,6 @@ def check_audit(state: AgentState) -> str:
         logger.info(
             "llm_lifecycle",
             stage="graph_route_after_auditor",
-            trace_id=state.get("trace_id", ""),
             route="end",
             user_id=state.get("user_id", ""),
             conversation_id=state.get("conversation_id", "") or "",
@@ -102,8 +100,7 @@ def check_audit(state: AgentState) -> str:
         logger.info(
             "llm_lifecycle",
             stage="graph_route_after_auditor",
-            trace_id=state.get("trace_id", ""),
-            route="end",
+                route="end",
             user_id=state.get("user_id", ""),
             conversation_id=state.get("conversation_id", "") or "",
             direction=state.get("direction", ""),
@@ -117,7 +114,6 @@ def check_audit(state: AgentState) -> str:
     logger.info(
         "llm_lifecycle",
         stage="graph_route_after_auditor",
-        trace_id=state.get("trace_id", ""),
         route="rewrite",
         user_id=state.get("user_id", ""),
         conversation_id=state.get("conversation_id", "") or "",

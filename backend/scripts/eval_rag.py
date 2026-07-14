@@ -186,7 +186,6 @@ async def run_evaluation_pipeline():
                 is_cringe=False,
                 auditor_feedback="",
                 revision_count=0,
-                trace_id=f"eval_{idx}",
             )
             try:
                 gen_result = generator_node(mock_state)
@@ -269,14 +268,18 @@ async def analyze_production_retrieval_telemetry():
             stats_res = await db.execute(stats_query)
             stats = stats_res.mappings().first()
             if not stats or stats["total_retrieved"] == 0:
-                print("\n=== Telemetry Alert: No feedback production data logged yet. ===\n")
+                print(
+                    "\n=== Telemetry Alert: No feedback production data logged yet. ===\n"
+                )
                 return
             print("\n==================================================")
             print("   PRODUCTION RAG TELEMETRY OPTIMIZATION REPORT   ")
             print("==================================================")
             print(f"Total Context Elements Loaded: {stats['total_retrieved']}")
             print(f"Total Elements Utilized by LLM:  {stats['total_used']}")
-            print(f"Core Generative Hit Rate:        {stats['generation_conversion_rate']}%")
+            print(
+                f"Core Generative Hit Rate:        {stats['generation_conversion_rate']}%"
+            )
             print("==================================================\n")
         except Exception as e:
             logger.error("failed_to_extract_telemetry_metrics", error=str(e))
