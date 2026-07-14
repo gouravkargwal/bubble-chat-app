@@ -8,8 +8,6 @@ import {
   useCurrentFrame,
   useVideoConfig,
   random,
-  Img,
-  staticFile,
 } from "remotion";
 import { loadFont } from "@remotion/google-fonts/PlusJakartaSans";
 import { CookdShortProps } from "./types";
@@ -377,16 +375,33 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
             height: "100%",
             display: "flex",
             flexDirection: "column",
-            opacity: interpolate(frame, [55, 65], [0, 1]),
-            transform: `translateY(${interpolate(frame, [55, 70], [40, 0])}px)`,
+            // Remotion's interpolate() EXTENDS past its range by default —
+            // it does not clamp. This div has no upper frame bound (stays
+            // mounted for the rest of the video), so without clamping here,
+            // translateY kept extrapolating negative forever after frame 70,
+            // dragging the entire phone mockup upward and off-canvas as the
+            // video went on. That was the real bug — clamp both explicitly.
+            opacity: interpolate(frame, [55, 65], [0, 1], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            }),
+            transform: `translateY(${interpolate(
+              frame,
+              [55, 70],
+              [40, 0],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+            )}px)`,
           }}
         >
           <PhoneFrame>
             {/* Chat header — reads like a REAL messaging app (contact + online),
-                not a surveillance HUD. Native feel = shares, not "this is an ad". */}
+                not a surveillance HUD. Native feel = shares, not "this is an ad".
+                flexShrink: 0 — this is FIXED chrome; it must never be squeezed
+                or displaced by however tall the scrolling body gets. */}
             <div
               style={{
                 display: "flex",
+                flexShrink: 0,
                 justifyContent: "space-between",
                 alignItems: "center",
                 background: COOKD_THEME.nothingSurface,
@@ -461,11 +476,22 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
               </span>
             </div>
 
-            {/* Chat Messages — anchored to the BOTTOM so new messages
-                slide in from below and push older ones up (real scroll). */}
+            {/* Chat Messages BODY — the ONLY part of the phone that moves.
+                Header above and footer below are flexShrink:0 (fixed chrome);
+                this is flex:1 so it's locked to exactly the leftover space
+                between them, no matter how much is inside it.
+                minHeight: 0 overrides the flex-item default of min-height:auto —
+                without it, this box refuses to shrink below its own content
+                size and grows past its allotted space instead of clipping
+                internally (pushing the fixed header/footer out of place).
+                overflow: hidden + justifyContent: flex-end is what turns
+                "more messages than fit" into a real scroll: new messages sit
+                at the bottom, older ones get clipped off the top — the box
+                itself never resizes. */}
             <div
               style={{
                 flex: 1,
+                minHeight: 0,
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "flex-end",
@@ -871,9 +897,29 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                         >
                           ✨
                         </div>
-                        <div style={{ flex: 1 }}>
+                        <div style={{ flex: 1, position: "relative" }}>
+                          {/* Ghost: the FULL winning line, invisible, reserves
+                              the final box height up front. This is what stops
+                              the layout from moving as characters type in —
+                              only the overlaid text below grows into the space
+                              that's already there; nothing above it reflows. */}
                           <div
                             style={{
+                              fontSize: "36px",
+                              fontWeight: 600,
+                              lineHeight: 1.4,
+                              visibility: "hidden",
+                            }}
+                            aria-hidden
+                          >
+                            {winningLine}
+                          </div>
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              right: 0,
                               fontSize: "36px",
                               fontWeight: 600,
                               lineHeight: 1.4,
@@ -903,10 +949,11 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
               })()}
             </div>
 
-            {/* Subtext Footer */}
+            {/* Subtext Footer — fixed chrome, same contract as the header. */}
             <div
               style={{
                 display: "flex",
+                flexShrink: 0,
                 justifyContent: "space-between",
                 alignItems: "center",
                 borderTop: `1px solid ${COOKD_THEME.nothingBorder}`,
@@ -923,153 +970,81 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
         </div>
       )}
 
-      {/* 🎬 THE VIRAL OUTRO SPLASH SCREEN (Google Play CTA) — staggered spring entries */}
+      {/* 🎬 SOFT-CTA OUTRO — a small caption over the still-visible chat,
+          not a full-screen ad takeover. Native feel = it plays like a
+          creator's own caption, not a download prompt, so it doesn't kill
+          completion rate. The phone/chat stays on screen behind this. */}
       {(() => {
         if (frame < outroStartFrame) return null;
 
         const localFrame = frame - outroStartFrame;
+        const OUTRO_HOLD = 120; // matches the +120 tail in calcDuration
 
-        // Each element uses its own spring, delayed by staggerOffset frames
-        const staggerLogo = spring({
-          frame: localFrame,
-          fps,
-          config: { damping: 16, stiffness: 90 },
+        // Caption fades/slides in from the bottom third — like a subtitle.
+        const captionIn = interpolate(localFrame, [0, 15], [0, 1], {
+          extrapolateRight: "clamp",
+          easing: Easing.out(Easing.cubic),
         });
-        const staggerTitle = spring({
-          frame: Math.max(0, localFrame - 5),
-          fps,
-          config: { damping: 16, stiffness: 90 },
-        });
-        const staggerSubtitle = spring({
-          frame: Math.max(0, localFrame - 10),
-          fps,
-          config: { damping: 16, stiffness: 90 },
-        });
-        const staggerButton = spring({
-          frame: Math.max(0, localFrame - 15),
-          fps,
-          config: { damping: 16, stiffness: 100 },
-        });
-        const staggerCode = spring({
-          frame: Math.max(0, localFrame - 20),
-          fps,
-          config: { damping: 16, stiffness: 90 },
-        });
+
+        // Whole frame fades to black only in the final beat, so the cut
+        // feels like a natural close instead of a hard ad-stinger.
+        const fadeToBlack = interpolate(
+          localFrame,
+          [OUTRO_HOLD - 20, OUTRO_HOLD],
+          [0, 1],
+          { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+        );
 
         return (
-          <AbsoluteFill
-            style={{
-              backgroundColor: COOKD_THEME.nothingBlack,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 100,
-            }}
-          >
-            {/* Logo */}
-            <div
-              style={{
-                opacity: interpolate(staggerLogo, [0, 1], [0, 1]),
-                transform: `scale(${interpolate(
-                  staggerLogo,
-                  [0, 1],
-                  [0.6, 1]
-                )})`,
-              }}
-            >
-              <Img
-                src={staticFile("logo.svg")}
-                style={{
-                  width: "200px",
-                  height: "200px",
-                  borderRadius: "48px",
-                  marginBottom: "40px",
-                  border: `2px solid ${COOKD_THEME.nothingBorder}`,
-                  backgroundColor: COOKD_THEME.nothingSurface,
-                }}
-              />
-            </div>
-
-            {/* Title */}
-            <h1
-              style={{
-                fontSize: "80px",
-                fontWeight: 800,
-                margin: "0 0 16px 0",
-                opacity: interpolate(staggerTitle, [0, 1], [0, 1]),
-                transform: `translateY(${interpolate(
-                  staggerTitle,
-                  [0, 1],
-                  [40, 0]
-                )}px)`,
-              }}
-            >
-              Cookd AI
-            </h1>
-
-            {/* Subtitle */}
-            <p
-              style={{
-                fontSize: "36px",
-                color: COOKD_THEME.textSecondary,
-                fontFamily: "monospace",
-                margin: "0 0 60px 0",
-                letterSpacing: "2px",
-                opacity: interpolate(staggerSubtitle, [0, 1], [0, 1]),
-              }}
-            >
-              DATING_COACH // V2.0
-            </p>
-
-            {/* Google Play button */}
-            <div
+          <>
+            <AbsoluteFill
               style={{
                 display: "flex",
-                gap: "24px",
-                marginBottom: "80px",
-                opacity: interpolate(staggerButton, [0, 1], [0, 1]),
-                transform: `scale(${interpolate(
-                  staggerButton,
-                  [0, 1],
-                  [0.8, 1]
-                )})`,
+                alignItems: "center",
+                justifyContent: "flex-end",
+                paddingBottom: "90px",
+                zIndex: 100,
+                pointerEvents: "none",
               }}
             >
               <div
                 style={{
-                  padding: "20px 48px",
-                  border: `3px solid ${COOKD_THEME.nothingWhite}`,
-                  borderRadius: "14px",
-                  fontSize: "30px",
-                  fontWeight: 800,
                   display: "flex",
                   alignItems: "center",
                   gap: "12px",
+                  background: "rgba(5, 5, 5, 0.7)",
+                  border: `1px solid ${COOKD_THEME.nothingBorder}`,
+                  borderRadius: "999px",
+                  padding: "18px 32px",
+                  opacity: captionIn,
+                  transform: `translateY(${interpolate(
+                    captionIn,
+                    [0, 1],
+                    [20, 0]
+                  )}px)`,
                 }}
               >
-                GET IT ON GOOGLE PLAY
+                <span style={{ fontSize: "26px" }}>✨</span>
+                <span
+                  style={{
+                    fontSize: "26px",
+                    fontWeight: 600,
+                    color: COOKD_THEME.nothingWhite,
+                  }}
+                >
+                  Cookd AI helped write this reply
+                </span>
               </div>
-            </div>
-
-            {/* Closing tagline (no promo code — just the promise) */}
-            <div
+            </AbsoluteFill>
+            <AbsoluteFill
               style={{
-                fontSize: "34px",
-                fontWeight: 700,
-                color: COOKD_THEME.nothingWhite,
-                textAlign: "center",
-                opacity: interpolate(staggerCode, [0, 1], [0, 1]),
-                transform: `translateY(${interpolate(
-                  staggerCode,
-                  [0, 1],
-                  [30, 0]
-                )}px)`,
+                backgroundColor: COOKD_THEME.nothingBlack,
+                opacity: fadeToBlack,
+                zIndex: 300,
+                pointerEvents: "none",
               }}
-            >
-              Never get left on read again.
-            </div>
-          </AbsoluteFill>
+            />
+          </>
         );
       })()}
     </AbsoluteFill>
