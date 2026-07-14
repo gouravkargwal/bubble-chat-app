@@ -5,7 +5,6 @@ from typing import Any
 import structlog
 from opentelemetry import trace
 
-
 _NAME_TO_LEVEL = {
     "DEBUG": logging.DEBUG,
     "INFO": logging.INFO,
@@ -30,6 +29,10 @@ class _QuietAccessLogFilter(logging.Filter):
         "GET /api/v1/preferences ",
         "GET /api/v1/referral/me ",
         "GET /api/v1/profile-audit/blueprints",
+        "GET /api/v1/billing/ltd/banner-config",
+        # Bot/crawler noise: 404s for common scanner paths
+        "GET /robots.txt ",
+        "GET /favicon.ico ",
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -140,6 +143,13 @@ def setup_logging(level: str = "INFO", *, json_logs: bool = True) -> None:
         lg.propagate = True
         lg.setLevel(log_level)
     logging.getLogger("uvicorn.access").addFilter(_QuietAccessLogFilter())
+    # Set uvicorn.access to WARNING so its high-volume INFO lines (every request)
+    # are never exported to OpenObserver via the OTel logging handler.
+    # Successful 200 responses that aren't health endpoints are still logged at
+    # their original severity by uvicorn itself, but only WARNING+ propagates to
+    # the root OTel handler.  This eliminates ~99% of access log traffic in
+    # OpenObserver without losing error/critical access lines.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
     for name in ("httpx", "httpcore"):
         noisy = logging.getLogger(name)

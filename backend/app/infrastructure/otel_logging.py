@@ -24,7 +24,7 @@ from opentelemetry import _logs as otel_logs
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs._internal import LogRecord
-from opentelemetry.sdk._logs.export import ConsoleLogExporter, SimpleLogRecordProcessor
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, ConsoleLogExporter
 from opentelemetry.sdk.resources import Resource
 
 _SCALAR_TYPES = (str, int, float, bool)
@@ -92,7 +92,10 @@ def setup_otel_logging(
         if auth_header:
             headers["Authorization"] = auth_header
         otlp_exporter = OTLPLogExporter(endpoint=endpoint, headers=headers)
-        provider.add_log_record_processor(SimpleLogRecordProcessor(otlp_exporter))
+        # Batch records so each log line isn't a separate synchronous HTTP export
+        # to OpenObserve. Exports on a background thread when the queue fills or
+        # the schedule delay elapses, drastically reducing network overhead.
+        provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
 
     # Console exporter for local development
     if console_export:

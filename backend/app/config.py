@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     oci_namespace: str = ""  # auto-detected if empty
     oci_par_expiry_hours: int = 1  # signed URL lifetime
 
+    # Admin — shared secret for BFF proxy calls
+    admin_api_key: str = ""
+
     # App
     environment: str = "development"
     log_level: str = "INFO"

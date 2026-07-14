@@ -62,6 +62,9 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         # pgvector type is only available after this; initdb scripts also run it on fresh volumes.
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # pg_trgm trigram similarity for fuzzy graph-entity matching.
+        # See docker/migrations/007_pg_trgm.sql (applied idempotently here at startup).
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.create_all)
 
 

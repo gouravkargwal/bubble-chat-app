@@ -154,6 +154,24 @@ class VisionNodeOutput(BaseModel):
         description="0-5 atomic, long-term third-person lifestyle facts explicitly gathered about her.",
     )
 
+    # --- Video content scoring (for automated social media pipeline) ---
+    hook_type: str = Field(
+        default="strategy",
+        description="Video hook classification: 'roast' if user's message is low-effort, 'gap' if time delay visible, 'outcome' if winning reply sets up a date, 'strategy' otherwise.",
+    )
+    time_gap_signal: str = Field(
+        default="",
+        description="Visible time-stamp gap between messages, e.g. '3 hours', 'yesterday'. Empty if none.",
+    )
+    viral_tier: str = Field(
+        default="medium",
+        description="Video potential tier: 'low' (boring/skip), 'medium' (decent but not remarkable), 'high' (interesting tension or turnaround), 'viral' (extremely engaging). Classification is more consistent than a numeric score.",
+    )
+    viral_reasoning: str = Field(
+        default="",
+        description="1 sentence explaining the viral_tier — why this conversation would or wouldn't make an engaging short video.",
+    )
+
     # --- RAG query generation (piggy-backed on the Vision call for zero latency) ---
     rag_search_queries: list[str] = Field(
         default_factory=list,

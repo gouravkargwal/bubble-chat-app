@@ -16,7 +16,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata_dev:/var/lib/postgresql/data
-      - ./docker/initdb:/docker-entrypoint-initdb.d
+      - ./backend/docker/initdb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cookd"]
       interval: 5s
@@ -30,7 +30,7 @@ services:
   # Starts in parallel with api (api does not depend on dashboards).
   init-dashboards:
     image: python:3.12-slim
-    command: python docker/observability/setup_dashboards.py
+    command: python backend/docker/observability/setup_dashboards.py
     environment:
       - ZO_ROOT_USER_EMAIL=${ZO_ROOT_USER_EMAIL}
       - ZO_ROOT_USER_PASSWORD=${ZO_ROOT_USER_PASSWORD}
@@ -44,18 +44,42 @@ services:
     restart: on-failure:3
 
   api:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     command: uvicorn app.main:create_app --factory --reload --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     env_file: .env.dev
     volumes:
-      - .:/app
+      - ./backend:/app
     depends_on:
       postgres:
         condition: service_healthy
       openobserver:
         condition: service_started
+    restart: unless-stopped
+
+  # ── Landing Page (Next.js) ─────────────────────────────────────────────
+  landing-page:
+    build:
+      context: ./landing-page
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      # Clerk auth — set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY in .env.dev
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      # Admin BFF — shared secret with backend
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - BACKEND_URL=http://api:8000
+    volumes:
+      - ./landing-page:/app
+      - /app/node_modules
+      - /app/.next
     restart: unless-stopped
 
   # OpenObserver (unified observability: logs, metrics, traces)
@@ -73,7 +97,7 @@ services:
       - ZO_DATA_DIR=${ZO_DATA_DIR:-/data}
       - ZO_HTTP_PORT=5001
     volumes:
-      - ./docker/openobserver/config.yaml:/config.yaml
+      - ./backend/docker/openobserver/config.yaml:/config.yaml
       - openobserver_data_dev:/data
     depends_on:
       postgres:

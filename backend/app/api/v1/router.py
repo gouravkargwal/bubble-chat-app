@@ -17,6 +17,7 @@ from app.api.v1.telemetry import router as telemetry_router
 from app.api.v1.track import router as track_router
 from app.api.v1.usage import router as usage_router
 from app.api.v1.users import router as users_router
+from app.api.v1.video_export import router as video_export_router
 from app.api.v1.vision_v2 import router as vision_v2_router
 from app.api.v1.webhooks import router as webhooks_router
 
@@ -33,4 +34,5 @@ v1_router.include_router(conversations_router, tags=["conversations"])
 v1_router.include_router(referral_router, tags=["referral"])
 v1_router.include_router(billing_router, tags=["billing"])
 v1_router.include_router(users_router)
+v1_router.include_router(video_export_router, tags=["admin"])
 v1_router.include_router(webhooks_router, tags=["webhooks"])

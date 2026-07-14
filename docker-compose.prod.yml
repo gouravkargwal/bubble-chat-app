@@ -15,7 +15,7 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
-      - ./docker/initdb:/docker-entrypoint-initdb.d
+      - ./backend/docker/initdb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cookd}"]
       interval: 10s
@@ -41,7 +41,7 @@ services:
   # Starts in parallel with api (api does not depend on dashboards).
   init-dashboards:
     image: python:3.12-slim
-    command: python docker/observability/setup_dashboards.py
+    command: python backend/docker/observability/setup_dashboards.py
     env_file: .env.prod
     volumes:
       - .:/app
@@ -52,11 +52,13 @@ services:
     restart: on-failure:3
 
   api:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --workers 4 --timeout-keep-alive 30
     env_file: .env.prod
     volumes:
-      - ./oci:/app/oci:ro
+      - ./backend/oci:/app/oci:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +87,35 @@ services:
     mem_limit: 4g
     mem_reservation: 2g
     cpus: "2.5"
+
+  # ── Landing Page (Next.js) ─────────────────────────────────────────────
+  landing-page:
+    build:
+      context: ./landing-page
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Clerk auth — set these in .env.prod
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      # Admin BFF — shared secret with backend
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - BACKEND_URL=http://api:8000
+    env_file: .env.prod
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    mem_limit: 1g
+    mem_reservation: 512m
+    cpus: "1"
 
   # ── Nginx Proxy Manager ────────────────────────────────────────────────
   # Web UI for managing reverse proxies and Let's Encrypt SSL certificates.
@@ -145,7 +176,7 @@ services:
       - ZO_DATA_DIR=/data
       - ZO_HTTP_PORT=5001
     volumes:
-      - ./docker/openobserver/config.yaml:/config.yaml
+      - ./backend/docker/openobserver/config.yaml:/config.yaml
       - openobserver_data:/data
     ports:
       - "127.0.0.1:5001:5001"

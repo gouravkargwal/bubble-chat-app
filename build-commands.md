@@ -82,19 +82,19 @@ find app/build/outputs -name "*.apk" | grep staging
 
 ### App Details
 
-| Variant   | Application ID | App Name |
-|-----------|----------------|----------|
-| Staging   | `com.cookd.mobile.stg` | `Cookd (Staging)` |
-| Production | `com.cookd.mobile` | `Cookd` |
+| Variant    | Application ID         | App Name          |
+| ---------- | ---------------------- | ----------------- |
+| Staging    | `com.cookd.mobile.stg` | `Cookd (Staging)` |
+| Production | `com.cookd.mobile`     | `Cookd`           |
 
 ### APK / AAB Locations
 
-| Variant   | Build Type | Output Path |
-|-----------|------------|-------------|
-| Staging   | Debug      | `app/build/outputs/apk/staging/debug/app-staging-debug.apk` |
-| Staging   | Release    | `app/build/outputs/apk/staging/release/app-staging-release.apk` |
-| Production | Release   | `app/build/outputs/bundle/productionRelease/app-production-release.aab` (run `bundleProductionRelease`) |
-| Production | Release   | `app/build/outputs/apk/production/release/app-production-release.apk` (APK for local testing) |
+| Variant    | Build Type | Output Path                                                                                             |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| Staging    | Debug      | `app/build/outputs/apk/staging/debug/app-staging-debug.apk`                                             |
+| Staging    | Release    | `app/build/outputs/apk/staging/release/app-staging-release.apk`                                         |
+| Production | Release    | `app/build/outputs/bundle/productionRelease/app-production-release.aab` (run `bundleProductionRelease`) |
+| Production | Release    | `app/build/outputs/apk/production/release/app-production-release.apk` (APK for local testing)           |
 
 ### Versioning
 
@@ -162,12 +162,12 @@ make docker-down-prod  # same as docker compose -f docker-compose.prod.yml down
 
 ### Backend URLs
 
-| Service   | URL                      |
-|-----------|--------------------------|
-| API       | `http://localhost:8000`  |
-| Grafana   | `http://localhost:3333`  |
-| Loki      | `http://localhost:3110`  |
-| Postgres  | `localhost:5432` (user: `cookd`, pass: `cookd`) |
+| Service  | URL                                             |
+| -------- | ----------------------------------------------- |
+| API      | `http://localhost:8000`                         |
+| Grafana  | `http://localhost:3333`                         |
+| Loki     | `http://localhost:3110`                         |
+| Postgres | `localhost:5432` (user: `cookd`, pass: `cookd`) |
 
 ---
 
@@ -177,4 +177,8 @@ make docker-down-prod  # same as docker compose -f docker-compose.prod.yml down
 cd /Users/gouravkargwal/bubble-chat-app/backend
 
 ENV_FILE=".env.stage" python -m scripts.audio_video_factory
+
+
+docker compose --env-file .env.dev up -d
+
 ```
