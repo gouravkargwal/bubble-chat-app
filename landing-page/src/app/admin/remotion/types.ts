@@ -10,5 +10,14 @@ export interface CookdShortProps {
   strategyLabel: string;
   voiceoverAudio: string;
   // Dynamic hook fields
-  hookStyle?: "roast" | "gap" | "outcome" | "strategy" | "bet";
+  hookStyle?:
+    | "roast"
+    | "gap"
+    | "outcome"
+    | "strategy"
+    | "bet"
+    | "clapback"
+    | "identity"
+    | "social"
+    | "slams";
 }

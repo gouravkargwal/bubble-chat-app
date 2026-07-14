@@ -7,6 +7,10 @@
  *
  * This keeps admin endpoints unreachable from the public internet
  * even if someone discovers the backend URL.
+ *
+ * Handles:
+ *   - JSON API responses (default)
+ *   - Binary file downloads (when path ends in /download)
  */
 
 import { auth } from "@clerk/nextjs/server";
@@ -31,9 +35,13 @@ async function proxy(req: NextRequest, method: string) {
   }
 
   // ── Build backend URL ──
-  // /api/admin/video-pipeline/candidates → /api/v1/admin/video-pipeline/candidates
   const pathname = req.nextUrl.pathname.replace("/api/admin", "/api/v1/admin");
   const search = req.nextUrl.search;
+  const isDownload =
+    req.nextUrl.pathname.includes("/download") ||
+    (req.nextUrl.pathname.includes("/rendered-videos/") &&
+      method === "GET" &&
+      !search); // list endpoint has search
   const url = `${BACKEND_URL}${pathname}${search}`;
 
   // ── Forward request ──
@@ -50,15 +58,35 @@ async function proxy(req: NextRequest, method: string) {
       method,
       headers,
       body,
-      // Don't follow redirects — let the caller handle them
+      // ponytail: duplex required by Node 18+ fetch when sending a body
+      ...(body ? { duplex: "half" } : {}),
       redirect: "manual",
     });
 
-    // Build response preserving status and headers
-    const resHeaders = new Headers(backendRes.headers);
-    // Remove hop-by-hop headers
-    resHeaders.delete("transfer-encoding");
+    // ── Binary response (file download) — pass through raw ──
+    if (
+      isDownload ||
+      backendRes.headers.get("content-type")?.startsWith("video/") ||
+      backendRes.headers.get("content-type") === "application/octet-stream"
+    ) {
+      // For download endpoints, return the raw blob
+      const blob = await backendRes.blob();
+      const contentType = backendRes.headers.get("content-type") || "video/mp4";
+      const disposition =
+        backendRes.headers.get("content-disposition") ||
+        `attachment; filename="video.mp4"`;
 
+      return new NextResponse(blob, {
+        status: backendRes.status,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Disposition": disposition,
+          "Content-Length": blob.size.toString(),
+        },
+      });
+    }
+
+    // ── JSON response (default) ──
     const resBody = backendRes.headers
       .get("content-type")
       ?.includes("application/json")
@@ -67,7 +95,6 @@ async function proxy(req: NextRequest, method: string) {
 
     return NextResponse.json(resBody, {
       status: backendRes.status,
-      headers: resHeaders,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Backend unreachable";

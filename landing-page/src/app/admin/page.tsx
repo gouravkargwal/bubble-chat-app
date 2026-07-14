@@ -24,6 +24,21 @@ interface VideoCandidate {
   createdAt: string;
 }
 
+interface RenderedVideo {
+  id: string;
+  interactionId: string | null;
+  personName: string;
+  winningLine: string;
+  strategyLabel: string;
+  hookStyle: string;
+  viralScore: number;
+  fileSizeBytes: number;
+  status: string;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Helpers ──
 
 const HOOK_LABELS: Record<string, string> = {
@@ -32,6 +47,10 @@ const HOOK_LABELS: Record<string, string> = {
   outcome: "🎯 Outcome",
   strategy: "🧠 Strategy",
   bet: "🎲 Bet",
+  clapback: "👏 Clapback",
+  identity: "🪞 Identity",
+  social: "📈 Social Proof",
+  slams: "💥 Slam",
 };
 
 const HOOK_COLORS: Record<string, string> = {
@@ -40,6 +59,10 @@ const HOOK_COLORS: Record<string, string> = {
   outcome: "#00FF66",
   strategy: "#2563EB",
   bet: "#FFFFFF",
+  clapback: "#FFD700",
+  identity: "#8B5CF6",
+  social: "#00C9FF",
+  slams: "#FF6B35",
 };
 
 function ScoreBadge({ score }: { score: number }) {
@@ -50,17 +73,26 @@ function ScoreBadge({ score }: { score: number }) {
   return <span className="text-[rgba(255,255,255,0.3)]">{score}</span>;
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
 // ── Main Page ──
 
 export default function AdminVideoPipeline() {
   const [candidates, setCandidates] = useState<VideoCandidate[]>([]);
+  const [renderedVideos, setRenderedVideos] = useState<RenderedVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [rendering, setRendering] = useState(false);
   const [renderLog, setRenderLog] = useState<string[]>([]);
   const [renderProgress, setRenderProgress] = useState<string | null>(null);
-  const [videoUrls, setVideoUrls] = useState<Map<string, string>>(new Map());
+  const [tab, setTab] = useState<"candidates" | "rendered">("candidates");
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
@@ -70,6 +102,21 @@ export default function AdminVideoPipeline() {
       if (!res.ok) throw new Error(`Backend returned ${res.status}`);
       const data = await res.json();
       setCandidates(data.candidates || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchRenderedVideos = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/rendered-videos?limit=100");
+      if (!res.ok) throw new Error(`Backend returned ${res.status}`);
+      const data = await res.json();
+      setRenderedVideos(data.videos || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch");
     } finally {
@@ -97,12 +144,6 @@ export default function AdminVideoPipeline() {
     }
   };
 
-  /**
-   * Render a single candidate via Next.js Remotion endpoint.
-   *
-   * Sends the candidate data to /api/render-video (POST) which runs
-   * @remotion/renderer server-side and streams the .mp4 back as a download.
-   */
   const handleRender = async (candidate: VideoCandidate) => {
     if (rendering) return;
     setRendering(true);
@@ -117,6 +158,9 @@ export default function AdminVideoPipeline() {
           messages: candidate.transcript,
           winningLine: candidate.winningLine,
           strategyLabel: candidate.strategyLabel,
+          hookStyle: candidate.hookStyle,
+          viralScore: candidate.viralScore,
+          interactionId: candidate.id,
         }),
       });
 
@@ -125,10 +169,8 @@ export default function AdminVideoPipeline() {
         throw new Error(err.error || `Render failed (${res.status})`);
       }
 
-      // Stream the response as a downloadable MP4
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      setVideoUrls((prev) => new Map(prev).set(candidate.id, url));
 
       setRenderLog((prev) => [
         `🎬 ${candidate.personName} — rendered (${(
@@ -138,6 +180,18 @@ export default function AdminVideoPipeline() {
         ).toFixed(1)} MB)`,
         ...prev,
       ]);
+
+      // Trigger download automatically
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cookd-${candidate.personName
+        .toLowerCase()
+        .replace(/\s+/g, "-")}.mp4`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      // Refresh rendered list
+      fetchRenderedVideos();
     } catch (err) {
       setRenderLog((prev) => [
         `❌ ${candidate.personName}: ${
@@ -157,7 +211,6 @@ export default function AdminVideoPipeline() {
     const ids = Array.from(selectedIds);
     setRenderProgress(`Rendering ${ids.length} videos...`);
 
-    // Render each selected candidate sequentially (Remotion is heavy)
     let success = 0;
     let failed = 0;
 
@@ -174,6 +227,9 @@ export default function AdminVideoPipeline() {
             messages: candidate.transcript,
             winningLine: candidate.winningLine,
             strategyLabel: candidate.strategyLabel,
+            hookStyle: candidate.hookStyle,
+            viralScore: candidate.viralScore,
+            interactionId: candidate.id,
           }),
         });
 
@@ -188,7 +244,16 @@ export default function AdminVideoPipeline() {
 
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        setVideoUrls((prev) => new Map(prev).set(candidate.id, url));
+
+        // Trigger download
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `cookd-${candidate.personName
+          .toLowerCase()
+          .replace(/\s+/g, "-")}.mp4`;
+        a.click();
+        URL.revokeObjectURL(url);
+
         setRenderLog((prev) => [
           `🎬 ${candidate.personName} — rendered (${(
             blob.size /
@@ -211,11 +276,30 @@ export default function AdminVideoPipeline() {
 
     setRenderProgress(null);
     setRendering(false);
+    fetchRenderedVideos();
 
     setRenderLog((prev) => [
       `📊 Batch done: ${success} succeeded, ${failed} failed`,
       ...prev,
     ]);
+  };
+
+  const handleDeleteVideo = async (videoId: string, personName: string) => {
+    try {
+      const res = await fetch(`/api/admin/rendered-videos/${videoId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`Delete returned ${res.status}`);
+      setRenderedVideos((prev) => prev.filter((v) => v.id !== videoId));
+      setRenderLog((prev) => [`🗑️ Deleted video for ${personName}`, ...prev]);
+    } catch (err) {
+      setRenderLog((prev) => [
+        `❌ Failed to delete ${personName}: ${
+          err instanceof Error ? err.message : "unknown error"
+        }`,
+        ...prev,
+      ]);
+    }
   };
 
   const renderableCount = candidates.filter((c) => c.viralScore >= 30).length;
@@ -231,87 +315,124 @@ export default function AdminVideoPipeline() {
               🎬 Video Pipeline
             </h1>
             <p className="text-sm text-[rgba(255,255,255,0.45)] mt-1">
-              Select candidates. Click Render. Videos render server-side.
+              Select candidates. Click Render. Videos save permanently.
             </p>
           </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={
+                tab === "candidates" ? fetchCandidates : fetchRenderedVideos
+              }
+              className="px-4 py-2 text-xs font-bold border border-[rgba(255,255,255,0.1)] rounded-full hover:bg-white/5 transition-colors"
+            >
+              ↻ Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[#0a0a0a] p-1 w-fit">
           <button
-            onClick={fetchCandidates}
-            className="px-4 py-2 text-xs font-bold border border-[rgba(255,255,255,0.1)] rounded-full hover:bg-white/5 transition-colors"
+            onClick={() => setTab("candidates")}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+              tab === "candidates"
+                ? "bg-[#FF003C] text-white"
+                : "text-[rgba(255,255,255,0.45)] hover:text-white"
+            }`}
           >
-            ↻ Refresh
+            📋 Candidates ({candidates.length})
+          </button>
+          <button
+            onClick={() => {
+              setTab("rendered");
+              fetchRenderedVideos();
+            }}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+              tab === "rendered"
+                ? "bg-[#FF003C] text-white"
+                : "text-[rgba(255,255,255,0.45)] hover:text-white"
+            }`}
+          >
+            ✅ Rendered ({renderedVideos.length})
           </button>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          {[
-            { label: "Total", value: candidates.length, color: "" },
-            {
-              label: "Renderable",
-              value: renderableCount,
-              color: "text-[#00FF66]",
-            },
-            { label: "🔥 Viral", value: highCount, color: "text-[#FF003C]" },
-            {
-              label: "Selected",
-              value: selectedIds.size,
-              color: "text-[#2563EB]",
-            },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-xl border border-[rgba(255,255,255,0.1)] bg-[#0a0a0a] p-4"
-            >
-              <div className="text-[10px] font-mono text-[rgba(255,255,255,0.3)] tracking-wider uppercase">
-                {s.label}
+        {tab === "candidates" && (
+          <div className="grid grid-cols-4 gap-3 mb-6">
+            {[
+              { label: "Total", value: candidates.length, color: "" },
+              {
+                label: "Renderable",
+                value: renderableCount,
+                color: "text-[#00FF66]",
+              },
+              { label: "🔥 Viral", value: highCount, color: "text-[#FF003C]" },
+              {
+                label: "Selected",
+                value: selectedIds.size,
+                color: "text-[#2563EB]",
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-xl border border-[rgba(255,255,255,0.1)] bg-[#0a0a0a] p-4"
+              >
+                <div className="text-[10px] font-mono text-[rgba(255,255,255,0.3)] tracking-wider uppercase">
+                  {s.label}
+                </div>
+                <div className={`text-2xl font-extrabold mt-1 ${s.color}`}>
+                  {s.value}
+                </div>
               </div>
-              <div className={`text-2xl font-extrabold mt-1 ${s.color}`}>
-                {s.value}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {/* Action bar */}
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={selectAll}
-              className="text-xs font-mono text-[rgba(255,255,255,0.45)] hover:text-white transition-colors"
-            >
-              {selectedIds.size === candidates.length
-                ? "Deselect All"
-                : "Select All"}
-            </button>
+        {/* Action bar (candidates) */}
+        {tab === "candidates" && (
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={selectAll}
+                className="text-xs font-mono text-[rgba(255,255,255,0.45)] hover:text-white transition-colors"
+              >
+                {selectedIds.size === candidates.length
+                  ? "Deselect All"
+                  : "Select All"}
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              {renderProgress && (
+                <span className="text-xs font-mono text-[rgba(255,255,255,0.7)]">
+                  {renderProgress}
+                </span>
+              )}
+              <button
+                onClick={handleBatchRender}
+                disabled={selectedIds.size === 0 || rendering}
+                className={`px-6 py-2 rounded-full text-xs font-bold transition-all duration-200 ${
+                  selectedIds.size === 0 || rendering
+                    ? "bg-[rgba(255,255,255,0.05)] text-[rgba(255,255,255,0.3)] cursor-not-allowed"
+                    : "bg-[#FF003C] text-white hover:shadow-[0_0_20px_rgba(255,0,60,0.25)]"
+                }`}
+              >
+                {rendering
+                  ? "Processing..."
+                  : `🎬 Render ${selectedIds.size} videos`}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {renderProgress && (
-              <span className="text-xs font-mono text-[rgba(255,255,255,0.7)]">
-                {renderProgress}
-              </span>
-            )}
-            <button
-              onClick={handleBatchRender}
-              disabled={selectedIds.size === 0 || rendering}
-              className={`px-6 py-2 rounded-full text-xs font-bold transition-all duration-200 ${
-                selectedIds.size === 0 || rendering
-                  ? "bg-[rgba(255,255,255,0.05)] text-[rgba(255,255,255,0.3)] cursor-not-allowed"
-                  : "bg-[#FF003C] text-white hover:shadow-[0_0_20px_rgba(255,0,60,0.25)]"
-              }`}
-            >
-              {rendering
-                ? "Processing..."
-                : `🎬 Render ${selectedIds.size} videos`}
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Error */}
         {error && (
           <div className="mb-6 rounded-xl border border-[#FF003C]/30 bg-[#FF003C]/10 p-4">
             <p className="text-sm text-[#FF003C] font-mono">Error: {error}</p>
             <button
-              onClick={fetchCandidates}
+              onClick={
+                tab === "candidates" ? fetchCandidates : fetchRenderedVideos
+              }
               className="mt-2 text-xs font-mono text-[rgba(255,255,255,0.45)] underline"
             >
               Retry
@@ -325,27 +446,29 @@ export default function AdminVideoPipeline() {
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 rounded-full border-2 border-[#FF003C] border-t-transparent animate-spin" />
               <p className="text-xs font-mono text-[rgba(255,255,255,0.45)]">
-                Loading candidates...
+                Loading...
               </p>
             </div>
           </div>
         )}
 
-        {/* Candidate list */}
-        {!loading && candidates.length === 0 && !error && (
-          <div className="text-center py-24">
-            <p className="text-lg font-bold">No candidates found</p>
-            <p className="text-sm text-[rgba(255,255,255,0.45)] mt-2">
-              Make sure the backend has interactions with transcripts.
-            </p>
-          </div>
-        )}
+        {/* ── CANDIDATES TAB ── */}
+        {!loading &&
+          tab === "candidates" &&
+          candidates.length === 0 &&
+          !error && (
+            <div className="text-center py-24">
+              <p className="text-lg font-bold">No candidates found</p>
+              <p className="text-sm text-[rgba(255,255,255,0.45)] mt-2">
+                Make sure the backend has interactions with transcripts.
+              </p>
+            </div>
+          )}
 
-        {!loading && (
+        {!loading && tab === "candidates" && (
           <div className="space-y-3">
             {candidates.map((c) => {
               const sel = selectedIds.has(c.id);
-              const hasVideo = videoUrls.has(c.id);
               return (
                 <div
                   key={c.id}
@@ -408,7 +531,7 @@ export default function AdminVideoPipeline() {
                           &ldquo;{c.winningLine}&rdquo;
                         </p>
 
-                        {/* Render + Download buttons */}
+                        {/* Render button */}
                         <div className="flex items-center gap-2 mt-3">
                           <button
                             onClick={() => handleRender(c)}
@@ -417,19 +540,6 @@ export default function AdminVideoPipeline() {
                           >
                             🎬 Render
                           </button>
-                          {hasVideo && (
-                            <a
-                              href={videoUrls.get(c.id)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-4 py-1.5 text-xs font-bold rounded-full border border-[rgba(255,255,255,0.2)] text-[rgba(255,255,255,0.7)] hover:text-white hover:border-white transition-all"
-                            >
-                              ⬇ Download
-                            </a>
-                          )}
-                          <span className="text-[10px] font-mono text-[rgba(255,255,255,0.25)]">
-                            Opens on backend directly
-                          </span>
                         </div>
 
                         <details className="group mt-2">
@@ -468,6 +578,99 @@ export default function AdminVideoPipeline() {
           </div>
         )}
 
+        {/* ── RENDERED VIDEOS TAB ── */}
+        {!loading &&
+          tab === "rendered" &&
+          renderedVideos.length === 0 &&
+          !error && (
+            <div className="text-center py-24">
+              <p className="text-lg font-bold">No rendered videos yet</p>
+              <p className="text-sm text-[rgba(255,255,255,0.45)] mt-2">
+                Render some candidates first.
+              </p>
+            </div>
+          )}
+
+        {!loading && tab === "rendered" && (
+          <div className="space-y-3">
+            {renderedVideos.map((v) => (
+              <div
+                key={v.id}
+                className="rounded-xl border border-[rgba(255,255,255,0.1)] bg-[#0a0a0a]"
+              >
+                <div className="p-4 sm:p-5">
+                  <div className="flex items-start gap-4">
+                    {/* Status indicator */}
+                    <div
+                      className={`flex-shrink-0 w-3 h-3 rounded-full mt-1.5 ${
+                        v.status === "completed"
+                          ? "bg-[#00FF66]"
+                          : v.status === "failed"
+                          ? "bg-[#FF003C]"
+                          : "bg-[#FF8C00]"
+                      }`}
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <span className="font-heading text-base font-bold">
+                          {v.personName}
+                        </span>
+                        <span
+                          className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border"
+                          style={{
+                            color: HOOK_COLORS[v.hookStyle],
+                            borderColor: HOOK_COLORS[v.hookStyle],
+                          }}
+                        >
+                          {HOOK_LABELS[v.hookStyle] || v.hookStyle}
+                        </span>
+                        <span className="text-xs font-mono text-[rgba(255,255,255,0.3)]">
+                          {formatBytes(v.fileSizeBytes)}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                            v.status === "completed"
+                              ? "bg-[#00FF66]/10 text-[#00FF66]"
+                              : v.status === "failed"
+                              ? "bg-[#FF003C]/10 text-[#FF003C]"
+                              : "bg-[#FF8C00]/10 text-[#FF8C00]"
+                          }`}
+                        >
+                          {v.status}
+                        </span>
+                      </div>
+
+                      <p className="text-sm text-[rgba(255,255,255,0.7)] italic mb-2">
+                        &ldquo;{v.winningLine}&rdquo;
+                      </p>
+
+                      <div className="flex items-center gap-2 mt-3">
+                        <a
+                          href={`/api/admin/rendered-videos/${v.id}/download`}
+                          className="px-4 py-1.5 text-xs font-bold rounded-full bg-[#FF003C] text-white hover:shadow-[0_0_15px_rgba(255,0,60,0.2)] transition-all"
+                          download
+                        >
+                          ⬇ Download
+                        </a>
+                        <button
+                          onClick={() => handleDeleteVideo(v.id, v.personName)}
+                          className="px-4 py-1.5 text-xs font-bold rounded-full border border-[rgba(255,255,255,0.1)] text-[rgba(255,255,255,0.45)] hover:text-[#FF003C] hover:border-[#FF003C] transition-all"
+                        >
+                          🗑 Delete
+                        </button>
+                        <span className="text-[10px] font-mono text-[rgba(255,255,255,0.25)]">
+                          {new Date(v.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Render Log */}
         {renderLog.length > 0 && (
           <div className="mt-8">
@@ -492,8 +695,10 @@ export default function AdminVideoPipeline() {
           <p className="text-[10px] font-mono text-[rgba(255,255,255,0.25)] leading-relaxed">
             Admin API calls go through a Clerk-authenticated BFF proxy (
             <code className="text-[#FF003C]">/api/admin/*</code>) that forwards
-            to the backend with an internal admin key. Public routes hit the
-            backend directly via Nginx Proxy Manager.
+            to the backend with an internal admin key. Rendered videos are saved
+            to <code className="text-[#00FF66]">./rendered-videos/</code> and
+            tracked in the{" "}
+            <code className="text-[#00FF66]">rendered_videos</code> DB table.
           </p>
         </div>
       </div>

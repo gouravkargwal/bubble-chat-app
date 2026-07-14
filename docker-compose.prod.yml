@@ -59,6 +59,7 @@ services:
     env_file: .env.prod
     volumes:
       - ./backend/oci:/app/oci:ro
+      - rendered_videos_data:/rendered-videos
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,6 +104,8 @@ services:
       # Admin BFF — shared secret with backend
       - ADMIN_API_KEY=${ADMIN_API_KEY}
       - BACKEND_URL=http://api:8000
+    volumes:
+      - rendered_videos_data:/rendered-videos
     env_file: .env.prod
     restart: unless-stopped
     deploy:
@@ -201,3 +204,4 @@ volumes:
   openobserver_data:
   npm_data:
   npm_ssl:
+  rendered_videos_data:

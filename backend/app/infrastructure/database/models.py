@@ -708,3 +708,37 @@ class LTDRedemptionCode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+class RenderedVideo(Base):
+    """Tracks rendered video exports — CRUD for the admin pipeline."""
+
+    __tablename__ = "rendered_videos"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    # Source interaction (nullable for manual renders)
+    interaction_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("interactions.id"), nullable=True, index=True
+    )
+    person_name: Mapped[str] = mapped_column(String(128), default="Someone")
+    winning_line: Mapped[str] = mapped_column(Text, default="")
+    strategy_label: Mapped[str] = mapped_column(String(64), default="COOKD_AI")
+    hook_style: Mapped[str] = mapped_column(String(32), default="strategy")
+    viral_score: Mapped[int] = mapped_column(Integer, default=0)
+    # File storage
+    file_path: Mapped[str] = mapped_column(String(512), default="")
+    file_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    content_type: Mapped[str] = mapped_column(String(64), default="video/mp4")
+    # Render status
+    status: Mapped[str] = mapped_column(
+        String(20), default="completed"
+    )  # queued, rendering, completed, failed
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

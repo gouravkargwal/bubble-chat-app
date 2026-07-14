@@ -2,6 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Audio,
+  Easing,
   interpolate,
   spring,
   useCurrentFrame,
@@ -30,7 +31,155 @@ const COOKD_THEME = {
   successGreen: "#00FF66",
 };
 
-const SCRAMBLE_CHARS = "!<>-_\\\\/[]{}—=+*^?#_";
+const SCRAMBLE_CHARS = "!<>-_\\/[]{}—=+*^?#_";
+
+// ── AVATAR COLORS (deterministic from personName) ──
+const AVATAR_PALETTE = [
+  "#FF003C",
+  "#FF6B35",
+  "#FFD23F",
+  "#00FF66",
+  "#00C9FF",
+  "#8B5CF6",
+  "#FF007F",
+  "#00F5D4",
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+// ── DETERMINISTIC VARIETY (breaks the "obviously templated" look) ──
+// Same input → same output (renders are reproducible), but different people
+// yield different backgrounds / copy, so the feed doesn't look mass-produced.
+function seedFrom(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = str.charCodeAt(i) + ((h << 5) - h);
+  }
+  return Math.abs(h);
+}
+
+function pick<T>(arr: T[], seed: number, salt = 0): T {
+  return arr[(seed + salt) % arr.length];
+}
+
+// Subtle dark-gradient variants — keeps the brand mood, varies the frame.
+const BG_VARIANTS = [
+  "radial-gradient(ellipse at 50% 0%, #1a1a1a 0%, #000000 100%)",
+  "radial-gradient(ellipse at 22% 8%, #1d1418 0%, #000000 70%)",
+  "radial-gradient(ellipse at 80% 12%, #13181d 0%, #000000 72%)",
+  "radial-gradient(ellipse at 50% 100%, #191919 0%, #000000 82%)",
+];
+
+// "Cookd is working" labels — human, curious, never clinical.
+const THINKING_LABELS = [
+  "COOKD IS COOKING",
+  "READING THE VIBE",
+  "FINDING YOUR MOVE",
+  "CRAFTING THE REPLY",
+];
+
+// Payoff labels — outcome-driven, screams "copy this", not "target acquired".
+const REVEAL_LABELS = ["SEND THIS 👇", "YOUR MOVE 🔥", "USE THIS ONE", "COPY THIS 👇"];
+
+// Relatable status lines shown during the (now brief) thinking beat.
+const THINKING_LINES = [
+  ["Reading their last message…", "Matching your energy…"],
+  ["Catching the vibe…", "Finding the perfect angle…"],
+  ["Reading between the lines…", "Building your comeback…"],
+  ["Feeling out the tone…", "Lining up the reply…"],
+];
+
+// ── TYPING DOTS COMPONENT ──
+const TypingDots: React.FC<{ frame: number; fps: number }> = ({
+  frame,
+  fps,
+}) => {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "12px",
+        padding: "20px 30px",
+        alignItems: "center",
+      }}
+    >
+      {[0, 1, 2].map((i) => {
+        const dotSpring = spring({
+          frame: frame - i * 4,
+          fps,
+          config: { damping: 12, mass: 0.5 },
+        });
+        return (
+          <div
+            key={i}
+            style={{
+              width: "14px",
+              height: "14px",
+              borderRadius: "50%",
+              backgroundColor: COOKD_THEME.textSecondary,
+              opacity: interpolate(dotSpring, [0, 1], [0.2, 0.8]),
+              transform: `scale(${dotSpring})`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
+// ── PHONE MOCKUP FRAME ──
+const PhoneFrame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      borderRadius: "48px",
+      border: "3px solid rgba(255, 255, 255, 0.15)",
+      overflow: "hidden",
+      position: "relative",
+      background: COOKD_THEME.nothingBlack,
+    }}
+  >
+    {/* Notch */}
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "180px",
+        height: "28px",
+        backgroundColor: COOKD_THEME.nothingBlack,
+        borderBottomLeftRadius: "18px",
+        borderBottomRightRadius: "18px",
+        zIndex: 50,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "8px",
+      }}
+    >
+      <div
+        style={{
+          width: "10px",
+          height: "10px",
+          borderRadius: "50%",
+          backgroundColor: "#1a1a1a",
+          border: "1px solid #333",
+        }}
+      />
+    </div>
+    {children}
+  </div>
+);
 
 export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
   personName,
@@ -52,323 +201,759 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
     strategyLabel,
   });
 
-  // --- CORE TIMING MATH (30 FPS) ---
-  // 0. Hook frame: first 60 frames (2 seconds at 30fps)
-  // 1. Give 1.5 seconds (45 frames) per message for reading time
-  const analyzeStartFrame = 30 + messages.length * 45;
-  // 2. Hold the "Analyzing..." HUD for 2 full seconds (60 frames)
-  const revealStartFrame = analyzeStartFrame + 60;
-  // 3. Slower typing speed (3 frames per character)
-  const typingSpeed = 3;
+  // Break the hook into words, flagging any word inside "quotes" so it can be
+  // emphasized in neon red — that's the emotional beat the eye should catch.
+  const hookWords: { text: string; emph: boolean }[] = [];
+  hookText.split('"').forEach((segment, segIndex) => {
+    const emph = segIndex % 2 === 1; // odd segments were inside quotes
+    const words = segment.split(/\s+/).filter((w) => w.length > 0);
+    words.forEach((word, wi) => {
+      // Re-attach the quote glyphs to the emphasized phrase so it still reads.
+      let text = word;
+      if (emph && wi === 0) text = `"${text}`;
+      if (emph && wi === words.length - 1) text = `${text}"`;
+      hookWords.push({ text, emph });
+    });
+  });
+
+  // Seeded, per-person variety so the feed never looks mass-produced.
+  const seed = seedFrom(personName + strategyLabel);
+  const bgGradient = pick(BG_VARIANTS, seed);
+  const thinkingLabel = pick(THINKING_LABELS, seed, 1);
+  const revealLabel = pick(REVEAL_LABELS, seed, 2);
+  const thinkingLines = pick(THINKING_LINES, seed, 3);
+
+  // --- CORE TIMING MATH (30 FPS) — tuned for RETENTION ---
+  // Rule: the payoff (winning line) must land by ~8s or viewers swipe.
+  // 0. Hook: first 60 frames (2s)
+  // 1. Messages arrive fast — ~0.9s each (no dead air between them)
+  const MSG_PACE = 28;
+  const chatStartFrame = 65; // after hook + 5 frame gap
+  const analyzeStartFrame = chatStartFrame + messages.length * MSG_PACE;
+  // 2. Brief tension beat — 0.6s, builds anticipation instead of making you wait
+  const ANALYZE_FRAMES = 18;
+  const revealStartFrame = analyzeStartFrame + ANALYZE_FRAMES;
+  // 3. Snappy typing (2 frames/char) so the payoff hits hard and quick
+  const typingSpeed = 2;
   const typingDuration = winningLine.length * typingSpeed;
-  // 4. Wait 3 full seconds (90 frames) AFTER typing finishes before the splash screen
-  const outroStartFrame = revealStartFrame + typingDuration + 90;
+  // 4. Let the payoff breathe (~2.5s) before the outro
+  const outroStartFrame = revealStartFrame + typingDuration + 75;
 
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: COOKD_THEME.nothingBlack,
-        fontFamily, // Uses Plus Jakarta Sans globally
+        background: bgGradient,
+        fontFamily,
         color: COOKD_THEME.nothingWhite,
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        padding: "100px 60px",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "40px",
       }}
     >
-      {/* 🎙️ MASTER AUDIO */}
-      {voiceoverAudio && <Audio src={voiceoverAudio} />}
+      {/* 🎙️ MASTER AUDIO — kept quiet so a creator can drop a trending sound
+          on top later. Nothing in the video RELIES on audio to be understood:
+          the whole story reads with sound off (silent-first for organic reach). */}
+      {voiceoverAudio && <Audio src={voiceoverAudio} volume={0.8} />}
 
-      {/* 🪝 DYNAMIC HOOK FRAME (first 2 seconds — 60 frames at 30fps) */}
+      {/* 🪝 HOOK FRAME (first ~2 seconds — 60 frames at 30fps) */}
       {frame < 60 && (
         <AbsoluteFill
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: COOKD_THEME.nothingBlack,
             zIndex: 200,
-            opacity: interpolate(frame, [0, 15, 50, 60], [0, 1, 1, 0]),
-            transform: `scale(${interpolate(frame, [0, 15, 50, 60], [0.9, 1, 1, 1.05])})`,
+            // Snap in fast (attention peaks instantly), hold, clean exit.
+            opacity: interpolate(frame, [0, 5, 50, 60], [0, 1, 1, 0]),
+            // Confident punch-in, then a quick pop on the way out.
+            transform: `scale(${interpolate(
+              frame,
+              [0, 50, 60],
+              [1, 1.05, 1.14]
+            )})`,
           }}
         >
-          <h1
+          {/* ⚡ COLOR FLASH PATTERN INTERRUPT (first 3 frames) */}
+          {frame < 4 && (
+            <AbsoluteFill
+              style={{
+                backgroundColor: COOKD_THEME.neonRed,
+                opacity: interpolate(frame, [0, 1, 4], [1, 0.7, 0]),
+              }}
+            />
+          )}
+          <div
             style={{
-              fontSize: frame < 50 ? "72px" : "60px",
-              fontWeight: 800,
-              textAlign: "center",
-              maxWidth: "80%",
-              lineHeight: 1.3,
-              color: COOKD_THEME.nothingWhite,
-              padding: "0 40px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "36px",
             }}
           >
-            {hookText}
-          </h1>
+            {/* Word-by-word kinetic reveal — legible almost immediately,
+                each word springs up with a touch of overshoot for energy. */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                alignItems: "baseline",
+                maxWidth: "92%",
+                columnGap: "20px",
+                rowGap: "6px",
+                padding: "0 20px",
+              }}
+            >
+              {hookWords.map((word, i) => {
+                const wordSpring = spring({
+                  frame: frame - i * 1.6,
+                  fps,
+                  config: { damping: 12, stiffness: 200, mass: 0.6 },
+                });
+                return (
+                  <span
+                    key={i}
+                    style={{
+                      display: "inline-block",
+                      fontSize: "84px",
+                      fontWeight: 800,
+                      lineHeight: 1.05,
+                      letterSpacing: "-2px",
+                      color: word.emph
+                        ? COOKD_THEME.neonRed
+                        : COOKD_THEME.nothingWhite,
+                      textShadow: word.emph
+                        ? "0 0 40px rgba(255, 0, 60, 0.45)"
+                        : "none",
+                      opacity: interpolate(wordSpring, [0, 0.8], [0, 1]),
+                      transform: `translateY(${interpolate(
+                        wordSpring,
+                        [0, 1],
+                        [28, 0]
+                      )}px) scale(${interpolate(
+                        wordSpring,
+                        [0, 1],
+                        [0.86, 1]
+                      )})`,
+                    }}
+                  >
+                    {word.text}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Neon accent line — stamps in under the text for a punchy beat
+                (replaces the old "loading bar", which read as waiting). */}
+            <div
+              style={{
+                width: `${interpolate(
+                  spring({
+                    frame: frame - hookWords.length * 1.6,
+                    fps,
+                    config: { damping: 14, stiffness: 160 },
+                  }),
+                  [0, 1],
+                  [0, 160]
+                )}px`,
+                height: "6px",
+                background: COOKD_THEME.neonRed,
+                borderRadius: "3px",
+                boxShadow: "0 0 24px rgba(255, 0, 60, 0.6)",
+              }}
+            />
+          </div>
         </AbsoluteFill>
       )}
 
-      {/* App Header Widget */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: COOKD_THEME.nothingSurface,
-          padding: "30px 40px",
-          border: `1px solid ${COOKD_THEME.nothingBorder}`,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          <div
-            style={{
-              width: "16px",
-              height: "16px",
-              backgroundColor: COOKD_THEME.neonRed,
-              opacity: frame % 30 < 15 ? 1 : 0.2, // Slower hardware blink
-            }}
-          />
-          <span
-            style={{ fontSize: "36px", fontWeight: 800, letterSpacing: "-1px" }}
-          >
-            COOKD_AI // CHAT_LOG
-          </span>
-        </div>
-        <span
+      {/* Phone mockup containing chat UI */}
+      {frame >= 55 && (
+        <div
           style={{
-            color: COOKD_THEME.textSecondary,
-            fontSize: "24px",
-            fontWeight: 600,
+            width: "90%",
+            maxWidth: "860px",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            opacity: interpolate(frame, [55, 65], [0, 1]),
+            transform: `translateY(${interpolate(frame, [55, 70], [40, 0])}px)`,
           }}
         >
-          [ID: {personName.toUpperCase()}]
-        </span>
-      </div>
-
-      {/* Chat Bubbles */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          gap: "40px",
-          margin: "60px 0",
-        }}
-      >
-        {messages.map((msg, index) => {
-          const entryFrame = 15 + index * 45;
-          const popScale = spring({
-            frame: frame - entryFrame,
-            fps,
-            config: { damping: 14, mass: 0.9 },
-          });
-
-          if (frame < entryFrame) return null;
-
-          const isThem = msg.sender === "them";
-          return (
-            <div
-              key={index}
-              style={{
-                display: "flex",
-                justifyContent: isThem ? "flex-start" : "flex-end",
-                transform: `scale(${popScale})`,
-                opacity: interpolate(frame - entryFrame, [0, 5], [0, 1]),
-              }}
-            >
-              <div
-                style={{
-                  maxWidth: "85%",
-                  padding: "35px 45px",
-                  fontSize: "34px",
-                  lineHeight: 1.4,
-                  backgroundColor: isThem
-                    ? COOKD_THEME.nothingSurface
-                    : COOKD_THEME.nothingBlack,
-                  border: `1px solid ${COOKD_THEME.nothingBorder}`,
-                  color: COOKD_THEME.nothingWhite,
-                  borderRadius: "8px",
-                  fontWeight: 500,
-                }}
-              >
-                {msg.text}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* ⚡ VIRAL AI GENERATION BLOCK */}
-        {(() => {
-          if (frame < analyzeStartFrame) return null;
-
-          const isAnalyzing = frame < revealStartFrame;
-          const charsToShow = Math.max(
-            0,
-            Math.floor((frame - revealStartFrame) / typingSpeed),
-          );
-          const visibleText = winningLine.substring(0, charsToShow);
-          const isTyping = charsToShow < winningLine.length && !isAnalyzing;
-          const randomScrambleChar = isTyping
-            ? SCRAMBLE_CHARS[Math.floor(random(frame) * SCRAMBLE_CHARS.length)]
-            : "";
-          const calcProgress = Math.min(
-            99,
-            Math.floor(((frame - analyzeStartFrame) / 60) * 100),
-          );
-
-          return (
+          <PhoneFrame>
+            {/* Chat header — reads like a REAL messaging app (contact + online),
+                not a surveillance HUD. Native feel = shares, not "this is an ad". */}
             <div
               style={{
-                marginTop: "60px",
                 display: "flex",
-                flexDirection: "column",
-                width: "100%",
-                gap: "30px",
+                justifyContent: "space-between",
+                alignItems: "center",
                 background: COOKD_THEME.nothingSurface,
-                padding: "50px",
-                border: `1px solid ${
-                  isAnalyzing ? COOKD_THEME.textSecondary : COOKD_THEME.neonRed
-                }`,
-                boxShadow: isAnalyzing
-                  ? "none"
-                  : `0 0 40px rgba(255, 0, 60, 0.15)`,
+                padding: "24px 32px",
+                borderBottom: `1px solid ${COOKD_THEME.nothingBorder}`,
               }}
             >
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
                   alignItems: "center",
-                  borderBottom: `1px solid ${COOKD_THEME.nothingBorder}`,
-                  paddingBottom: "20px",
+                  gap: "16px",
                 }}
               >
-                <span
+                {/* Contact avatar */}
+                <div
                   style={{
-                    fontSize: "32px",
-                    color: isAnalyzing
-                      ? COOKD_THEME.textSecondary
-                      : COOKD_THEME.neonRed,
-                    fontWeight: 800,
-                    letterSpacing: "1px",
+                    width: "56px",
+                    height: "56px",
+                    borderRadius: "50%",
+                    backgroundColor: getAvatarColor(personName),
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "26px",
+                    fontWeight: 700,
+                    flexShrink: 0,
                   }}
                 >
-                  {isAnalyzing ? "SYS_ANALYZING..." : "TARGET_LOCKED"}
-                </span>
-                {!isAnalyzing && (
+                  {personName.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                   <span
                     style={{
-                      fontSize: "22px",
-                      color: COOKD_THEME.nothingBlack,
-                      backgroundColor: COOKD_THEME.successGreen,
-                      padding: "4px 12px",
-                      fontWeight: 800,
+                      fontSize: "28px",
+                      fontWeight: 700,
+                      letterSpacing: "-0.5px",
                     }}
                   >
-                    {strategyLabel}
+                    {personName}
                   </span>
-                )}
-              </div>
-
-              <div
-                style={{
-                  fontSize: isAnalyzing ? "26px" : "44px",
-                  fontWeight: 600,
-                  lineHeight: 1.4,
-                  color: COOKD_THEME.nothingWhite,
-                }}
-              >
-                {isAnalyzing ? (
-                  <div
+                  <span
                     style={{
-                      color: COOKD_THEME.textSecondary,
                       display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontSize: "18px",
+                      fontWeight: 600,
+                      color: COOKD_THEME.successGreen,
                     }}
                   >
-                    <div>
-                      &gt; TARGET_ENGAGEMENT:{" "}
-                      <span style={{ color: COOKD_THEME.neonRed }}>LOW</span>
-                    </div>
-                    <div>&gt; INITIATING_PATTERN_INTERRUPT...</div>
-                    <div>
-                      &gt; CALCULATING_WIN_PROBABILITY:{" "}
-                      <span style={{ color: COOKD_THEME.nothingWhite }}>
-                        {calcProgress}%
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "4px",
-                        background: COOKD_THEME.nothingBorder,
-                        marginTop: "10px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${calcProgress}%`,
-                          height: "100%",
-                          background: COOKD_THEME.textSecondary,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    "{visibleText}
-                    <span style={{ color: COOKD_THEME.textSecondary }}>
-                      {randomScrambleChar}
-                    </span>
-                    "
                     <span
                       style={{
-                        opacity: isTyping || frame % 20 < 10 ? 1 : 0,
-                        color: COOKD_THEME.neonRed,
+                        width: "10px",
+                        height: "10px",
+                        borderRadius: "50%",
+                        backgroundColor: COOKD_THEME.successGreen,
+                      }}
+                    />
+                    online
+                  </span>
+                </div>
+              </div>
+              {/* Video-call glyph — pure native chrome */}
+              <span
+                style={{
+                  color: COOKD_THEME.textSecondary,
+                  fontSize: "28px",
+                }}
+              >
+                📹
+              </span>
+            </div>
+
+            {/* Chat Messages — anchored to the BOTTOM so new messages
+                slide in from below and push older ones up (real scroll). */}
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                margin: "40px 32px",
+                overflow: "hidden",
+              }}
+            >
+              {messages.map((msg, index) => {
+                const entryFrame = chatStartFrame + index * MSG_PACE;
+                const isThem = msg.sender === "them";
+                // Short "typing…" tease (10 frames) — enough to feel live,
+                // not enough to stall the pace.
+                const DOTS_WINDOW = 10;
+                const showTypingDots =
+                  frame >= entryFrame - DOTS_WINDOW && frame < entryFrame;
+
+                if (frame < entryFrame - DOTS_WINDOW) return null;
+
+                return (
+                  <React.Fragment key={index}>
+                    {/* Typing dots indicator before message */}
+                    {showTypingDots && (
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: isThem ? "flex-start" : "flex-end",
+                        }}
+                      >
+                        {isThem && (
+                          <div
+                            style={{
+                              width: "44px",
+                              height: "44px",
+                              borderRadius: "50%",
+                              backgroundColor: getAvatarColor(personName),
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "20px",
+                              fontWeight: 700,
+                              marginRight: "12px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {personName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <TypingDots
+                          frame={frame - (entryFrame - DOTS_WINDOW)}
+                          fps={fps}
+                        />
+                        {!isThem && (
+                          <div
+                            style={{
+                              width: "44px",
+                              height: "44px",
+                              borderRadius: "50%",
+                              backgroundColor: COOKD_THEME.neonRed,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "20px",
+                              fontWeight: 700,
+                              marginLeft: "12px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            Y
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Message bubble */}
+                    {frame >= entryFrame &&
+                      (() => {
+                        // Monotonic ease (no bounce) that fully settles in ~10
+                        // frames — the upward growth IS the scroll, and it
+                        // finishes before the next message lands at MSG_PACE.
+                        const reveal = interpolate(
+                          frame - entryFrame,
+                          [0, 10],
+                          [0, 1],
+                          {
+                            extrapolateRight: "clamp",
+                            easing: Easing.out(Easing.cubic),
+                          }
+                        );
+
+                        return (
+                          <div
+                            style={{
+                              // Grow the row height from 0 → full: older
+                              // messages get pushed up smoothly, newest stays
+                              // pinned to the bottom. 600px comfortably exceeds
+                              // any single bubble so tall ones aren't clipped.
+                              maxHeight: `${interpolate(
+                                reveal,
+                                [0, 1],
+                                [0, 600]
+                              )}px`,
+                              overflow: "hidden",
+                              paddingTop: `${interpolate(
+                                reveal,
+                                [0, 1],
+                                [0, 28]
+                              )}px`,
+                            }}
+                          >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-end",
+                              gap: "12px",
+                              justifyContent: isThem
+                                ? "flex-start"
+                                : "flex-end",
+                              transform: `translateY(${interpolate(
+                                reveal,
+                                [0, 1],
+                                [30, 0]
+                              )}px)`,
+                              opacity: interpolate(reveal, [0, 0.6], [0, 1]),
+                            }}
+                          >
+                            {/* Avatar for "them" messages */}
+                            {isThem && (
+                              <div
+                                style={{
+                                  width: "44px",
+                                  height: "44px",
+                                  borderRadius: "50%",
+                                  backgroundColor: getAvatarColor(personName),
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "20px",
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                  border: `2px solid ${COOKD_THEME.nothingBorder}`,
+                                }}
+                              >
+                                {personName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+
+                            <div
+                              style={{
+                                maxWidth: "75%",
+                                padding: "24px 32px",
+                                fontSize: "28px",
+                                lineHeight: 1.4,
+                                backgroundColor: isThem
+                                  ? COOKD_THEME.nothingSurface
+                                  : "rgba(255, 0, 60, 0.08)",
+                                border: `1px solid ${
+                                  isThem
+                                    ? COOKD_THEME.nothingBorder
+                                    : "rgba(255, 0, 60, 0.2)"
+                                }`,
+                                color: COOKD_THEME.nothingWhite,
+                                borderRadius: isThem
+                                  ? "4px 20px 20px 20px"
+                                  : "20px 4px 20px 20px",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {msg.text}
+                            </div>
+
+                            {/* Avatar for "you" messages */}
+                            {!isThem && (
+                              <div
+                                style={{
+                                  width: "44px",
+                                  height: "44px",
+                                  borderRadius: "50%",
+                                  backgroundColor: COOKD_THEME.neonRed,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "20px",
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                  border: `2px solid rgba(255, 0, 60, 0.4)`,
+                                }}
+                              >
+                                Y
+                              </div>
+                            )}
+                          </div>
+                          </div>
+                        );
+                      })()}
+                  </React.Fragment>
+                );
+              })}
+
+              {/* ⚡ VIRAL AI GENERATION BLOCK */}
+              {(() => {
+                if (frame < analyzeStartFrame) return null;
+
+                const isAnalyzing = frame < revealStartFrame;
+                const charsToShow = Math.max(
+                  0,
+                  Math.floor((frame - revealStartFrame) / typingSpeed)
+                );
+                const visibleText = winningLine.substring(0, charsToShow);
+                const isTyping =
+                  charsToShow < winningLine.length && !isAnalyzing;
+                const randomScrambleChar = isTyping
+                  ? SCRAMBLE_CHARS[
+                      Math.floor(random(frame) * SCRAMBLE_CHARS.length)
+                    ]
+                  : "";
+                // Confidence races to 99% across the brief thinking beat —
+                // motion that builds anticipation instead of a dead spinner.
+                const calcProgress = Math.min(
+                  99,
+                  Math.floor(((frame - analyzeStartFrame) / ANALYZE_FRAMES) * 100)
+                );
+
+                // Slide the AI block up fast so it never stalls the pace.
+                const aiReveal = interpolate(
+                  frame - analyzeStartFrame,
+                  [0, 10],
+                  [0, 1],
+                  { extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) }
+                );
+
+                return (
+                  <div
+                    style={{
+                      maxHeight: `${interpolate(aiReveal, [0, 1], [0, 900])}px`,
+                      overflow: "hidden",
+                      paddingTop: `${interpolate(aiReveal, [0, 1], [0, 40])}px`,
+                      transform: `translateY(${interpolate(
+                        aiReveal,
+                        [0, 1],
+                        [30, 0]
+                      )}px)`,
+                      opacity: interpolate(aiReveal, [0, 0.6], [0, 1]),
+                    }}
+                  >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      width: "100%",
+                      gap: "24px",
+                      background: COOKD_THEME.nothingSurface,
+                      padding: "36px 40px",
+                      border: `1px solid ${
+                        isAnalyzing
+                          ? COOKD_THEME.textSecondary
+                          : COOKD_THEME.neonRed
+                      }`,
+                      boxShadow: isAnalyzing
+                        ? "none"
+                        : `0 0 40px rgba(255, 0, 60, 0.15)`,
+                      borderRadius: "12px",
+                    }}
+                  >
+                    {/* Header */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: `1px solid ${COOKD_THEME.nothingBorder}`,
+                        paddingBottom: "16px",
                       }}
                     >
-                      █
-                    </span>
-                  </>
-                )}
-              </div>
+                      <span
+                        style={{
+                          fontSize: "26px",
+                          color: isAnalyzing
+                            ? COOKD_THEME.textSecondary
+                            : COOKD_THEME.neonRed,
+                          fontWeight: 800,
+                          letterSpacing: "1px",
+                        }}
+                      >
+                        {isAnalyzing ? thinkingLabel : revealLabel}
+                      </span>
+                      {!isAnalyzing && (
+                        <span
+                          style={{
+                            fontSize: "18px",
+                            color: COOKD_THEME.nothingBlack,
+                            backgroundColor: COOKD_THEME.successGreen,
+                            padding: "4px 12px",
+                            fontWeight: 800,
+                            borderRadius: "4px",
+                          }}
+                        >
+                          {strategyLabel}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Body */}
+                    {isAnalyzing ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "24px",
+                        }}
+                      >
+                        {/* AI Network Pulse - 3 concentric circles */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "40px",
+                          }}
+                        >
+                          {[0, 1, 2].map((i) => {
+                            const pulse = spring({
+                              frame: frame - i * 3,
+                              fps,
+                              config: { damping: 20, mass: 0.8 },
+                            });
+                            return (
+                              <div
+                                key={i}
+                                style={{
+                                  width: `${20 + i * 16}px`,
+                                  height: `${20 + i * 16}px`,
+                                  borderRadius: "50%",
+                                  border: `2px solid ${COOKD_THEME.neonRed}`,
+                                  opacity: interpolate(
+                                    pulse,
+                                    [0, 1],
+                                    [0.1, 0.6 - i * 0.15]
+                                  ),
+                                  transform: `scale(${interpolate(
+                                    pulse,
+                                    [0, 1],
+                                    [0.8, 1.2]
+                                  )})`,
+                                }}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        <div
+                          style={{
+                            color: COOKD_THEME.textSecondary,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "10px",
+                            fontSize: "24px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          <div>{thinkingLines[0]}</div>
+                          <div>{thinkingLines[1]}</div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                            }}
+                          >
+                            <span>Confidence</span>
+                            <span
+                              style={{
+                                color: COOKD_THEME.successGreen,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {calcProgress}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "16px",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        {/* Sparkle — "here's the magic line", not a crosshair */}
+                        <div
+                          style={{
+                            width: "48px",
+                            height: "48px",
+                            borderRadius: "50%",
+                            backgroundColor: "rgba(0, 255, 102, 0.12)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "24px",
+                            flexShrink: 0,
+                            marginTop: "4px",
+                          }}
+                        >
+                          ✨
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: "36px",
+                              fontWeight: 600,
+                              lineHeight: 1.4,
+                              color: COOKD_THEME.nothingWhite,
+                            }}
+                          >
+                            {visibleText}
+                            <span style={{ color: COOKD_THEME.textSecondary }}>
+                              {randomScrambleChar}
+                            </span>
+                            <span
+                              style={{
+                                opacity: isTyping || frame % 20 < 10 ? 1 : 0,
+                                color: COOKD_THEME.neonRed,
+                                fontSize: "32px",
+                              }}
+                            >
+                              █
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  </div>
+                );
+              })()}
             </div>
-          );
-        })()}
-      </div>
 
-      {/* Subtext Footer */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          borderTop: `1px solid ${COOKD_THEME.nothingBorder}`,
-          paddingTop: "40px",
-          fontSize: "24px",
-          color: COOKD_THEME.textSecondary,
-          fontWeight: 600,
-        }}
-      >
-        <div>SYSTEM // COOKD_APP</div>
-        <div>
-          INVITE:{" "}
-          <span style={{ color: COOKD_THEME.nothingWhite, fontWeight: 800 }}>
-            COOKD100
-          </span>
+            {/* Subtext Footer */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderTop: `1px solid ${COOKD_THEME.nothingBorder}`,
+                padding: "28px 32px",
+                fontSize: "18px",
+                color: COOKD_THEME.textSecondary,
+                fontWeight: 600,
+              }}
+            >
+              <div>Cookd AI ✨</div>
+              <div>your wingman, in your pocket</div>
+            </div>
+          </PhoneFrame>
         </div>
-      </div>
+      )}
 
-      {/* 🎬 THE VIRAL OUTRO SPLASH SCREEN (Google Play CTA) */}
+      {/* 🎬 THE VIRAL OUTRO SPLASH SCREEN (Google Play CTA) — staggered spring entries */}
       {(() => {
         if (frame < outroStartFrame) return null;
 
-        const outroSlide = spring({
-          frame: frame - outroStartFrame,
+        const localFrame = frame - outroStartFrame;
+
+        // Each element uses its own spring, delayed by staggerOffset frames
+        const staggerLogo = spring({
+          frame: localFrame,
           fps,
-          config: { damping: 16, stiffness: 90 }, // Slower, smoother slide up
+          config: { damping: 16, stiffness: 90 },
+        });
+        const staggerTitle = spring({
+          frame: Math.max(0, localFrame - 5),
+          fps,
+          config: { damping: 16, stiffness: 90 },
+        });
+        const staggerSubtitle = spring({
+          frame: Math.max(0, localFrame - 10),
+          fps,
+          config: { damping: 16, stiffness: 90 },
+        });
+        const staggerButton = spring({
+          frame: Math.max(0, localFrame - 15),
+          fps,
+          config: { damping: 16, stiffness: 100 },
+        });
+        const staggerCode = spring({
+          frame: Math.max(0, localFrame - 20),
+          fps,
+          config: { damping: 16, stiffness: 90 },
         });
 
         return (
@@ -379,94 +964,110 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              transform: `translateY(${interpolate(outroSlide, [0, 1], [1920, 0])}px)`,
-              zIndex: 100, // Forces the splash screen to cover the chat UI completely
+              zIndex: 100,
             }}
           >
-            {/* 🖼️ ACTUAL APP SVG LOGO */}
-            <Img
-              src={staticFile("logo.svg")} // Reads directly from marketing-video/public/logo.svg
+            {/* Logo */}
+            <div
               style={{
-                width: "240px",
-                height: "240px",
-                borderRadius: "56px",
-                marginBottom: "60px",
-                border: `2px solid ${COOKD_THEME.nothingBorder}`,
-                backgroundColor: COOKD_THEME.nothingSurface,
+                opacity: interpolate(staggerLogo, [0, 1], [0, 1]),
+                transform: `scale(${interpolate(
+                  staggerLogo,
+                  [0, 1],
+                  [0.6, 1]
+                )})`,
               }}
-            />
+            >
+              <Img
+                src={staticFile("logo.svg")}
+                style={{
+                  width: "200px",
+                  height: "200px",
+                  borderRadius: "48px",
+                  marginBottom: "40px",
+                  border: `2px solid ${COOKD_THEME.nothingBorder}`,
+                  backgroundColor: COOKD_THEME.nothingSurface,
+                }}
+              />
+            </div>
 
+            {/* Title */}
             <h1
               style={{
-                fontSize: "90px",
+                fontSize: "80px",
                 fontWeight: 800,
-                margin: "0 0 20px 0",
+                margin: "0 0 16px 0",
+                opacity: interpolate(staggerTitle, [0, 1], [0, 1]),
+                transform: `translateY(${interpolate(
+                  staggerTitle,
+                  [0, 1],
+                  [40, 0]
+                )}px)`,
               }}
             >
               Cookd AI
             </h1>
+
+            {/* Subtitle */}
             <p
               style={{
-                fontSize: "40px",
+                fontSize: "36px",
                 color: COOKD_THEME.textSecondary,
                 fontFamily: "monospace",
-                margin: "0 0 80px 0",
+                margin: "0 0 60px 0",
                 letterSpacing: "2px",
+                opacity: interpolate(staggerSubtitle, [0, 1], [0, 1]),
               }}
             >
               DATING_COACH // V2.0
             </p>
 
-            {/* GOOGLE PLAY EXCLUSIVE BADGE */}
+            {/* Google Play button */}
             <div
               style={{
                 display: "flex",
-                gap: "30px",
-                marginBottom: "100px",
+                gap: "24px",
+                marginBottom: "80px",
+                opacity: interpolate(staggerButton, [0, 1], [0, 1]),
+                transform: `scale(${interpolate(
+                  staggerButton,
+                  [0, 1],
+                  [0.8, 1]
+                )})`,
               }}
             >
               <div
                 style={{
-                  padding: "25px 60px",
+                  padding: "20px 48px",
                   border: `3px solid ${COOKD_THEME.nothingWhite}`,
-                  borderRadius: "16px",
-                  fontSize: "36px",
+                  borderRadius: "14px",
+                  fontSize: "30px",
                   fontWeight: 800,
                   display: "flex",
                   alignItems: "center",
-                  gap: "15px",
+                  gap: "12px",
                 }}
               >
                 GET IT ON GOOGLE PLAY
               </div>
             </div>
 
-            {/* Final Referral Code Highlight */}
+            {/* Closing tagline (no promo code — just the promise) */}
             <div
               style={{
-                backgroundColor: COOKD_THEME.nothingSurface,
-                border: `1px solid ${COOKD_THEME.neonRed}`,
-                padding: "40px 60px",
-                borderRadius: "24px",
+                fontSize: "34px",
+                fontWeight: 700,
+                color: COOKD_THEME.nothingWhite,
                 textAlign: "center",
+                opacity: interpolate(staggerCode, [0, 1], [0, 1]),
+                transform: `translateY(${interpolate(
+                  staggerCode,
+                  [0, 1],
+                  [30, 0]
+                )}px)`,
               }}
             >
-              <div
-                style={{
-                  fontSize: "28px",
-                  color: COOKD_THEME.neonRed,
-                  fontWeight: 700,
-                  marginBottom: "15px",
-                }}
-              >
-                UNLOCK 5 FREE GENERATIONS
-              </div>
-              <div style={{ fontSize: "48px", fontWeight: 800 }}>
-                CODE:{" "}
-                <span style={{ color: COOKD_THEME.nothingWhite }}>
-                  COOKD100
-                </span>
-              </div>
+              Never get left on read again.
             </div>
           </AbsoluteFill>
         );

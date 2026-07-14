@@ -26,7 +26,7 @@ const STRATEGY_LABELS: Record<string, string> = {
 };
 
 function getLastUserMessage(
-  messages?: { sender: string; text: string }[],
+  messages?: { sender: string; text: string }[]
 ): string {
   if (!messages) return "";
   const userMsgs = messages.filter((m) => m.sender === "you");
@@ -34,7 +34,7 @@ function getLastUserMessage(
 }
 
 function getLastThemMessage(
-  messages?: { sender: string; text: string }[],
+  messages?: { sender: string; text: string }[]
 ): string {
   if (!messages) return "";
   const themMsgs = messages.filter((m) => m.sender === "them");
@@ -101,6 +101,53 @@ export function generateHook(input: HookInput): string {
         return `One question. One date. Here's how.`;
       }
       return `Left on read → left on "yes".`;
+    }
+
+    case "clapback": {
+      // Winning line is a confident/clever comeback — showcase it directly
+      if (winLine && winLine.length > 10) {
+        return `He could've folded. Instead he said "${winLine.substring(
+          0,
+          50
+        )}"`;
+      }
+      if (themMsg && userMsg) {
+        return `She tested him. He passed.`;
+      }
+      return `Watch this man save a dead conversation.`;
+    }
+
+    case "identity": {
+      // Challenge the viewer's self-image — make it personal
+      if (userMsg && userMsg.length < 20) {
+        return `You're better than "${userMsg}" and you know it.`;
+      }
+      if (themMsg && themMsg.length < 15) {
+        return `Still losing her with "hey"? There's a fix.`;
+      }
+      return `Stop guessing. Start winning.`;
+    }
+
+    case "social": {
+      // Social proof / FOMO — imply others are succeeding
+      if (strategyLabel) {
+        return `${strategyLabel} turned 8 no-replies into 3 dates last week.`;
+      }
+      if (winLine && winLine.length > 15) {
+        return `This one line has a 74% reply rate. Watch.`;
+      }
+      return `87 guys used Cookd AI yesterday. 63 got a reply.`;
+    }
+
+    case "slams": {
+      // Pattern interrupt — fast visual promise of transformation
+      if (winLine) {
+        return `He was invisible. Then he said this. 🎯`;
+      }
+      if (themMsg && themMsg.length < 10) {
+        return `She wasn't interested. ⏸️ Watch what changed.`;
+      }
+      return `From "ok" to "when are you free?" ⏩`;
     }
 
     case "strategy":

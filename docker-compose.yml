@@ -53,6 +53,7 @@ services:
     env_file: .env.dev
     volumes:
       - ./backend:/app
+      - rendered_videos_data:/rendered-videos
     depends_on:
       postgres:
         condition: service_healthy
@@ -80,6 +81,7 @@ services:
       - ./landing-page:/app
       - /app/node_modules
       - /app/.next
+      - rendered_videos_data:/rendered-videos
     restart: unless-stopped
 
   # OpenObserver (unified observability: logs, metrics, traces)
@@ -107,3 +109,4 @@ services:
 volumes:
   pgdata_dev:
   openobserver_data_dev:
+  rendered_videos_data:

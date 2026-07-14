@@ -145,9 +145,19 @@ def score_interaction(ix: Interaction) -> dict:
     elif score_effort >= 8:
         hook_type = "gap"
     elif score_win >= 8 and len(win_text) > 25:
-        hook_type = "outcome"
+        # Check if winning line reads as a clever comeback (clapback) vs date setup (outcome)
+        win_lower = win_text.lower()
+        if any(
+            w in win_lower
+            for w in ["because", "actually", "tell me", "prove", "wow", "oh", "wait"]
+        ):
+            hook_type = "clapback"
+        else:
+            hook_type = "outcome"
     elif score_detail >= 8:
         hook_type = "strategy"
+    elif 3 <= n <= 5:
+        hook_type = "social"
     else:
         hook_type = "bet"
 
