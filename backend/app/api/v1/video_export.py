@@ -214,42 +214,97 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
 
 @router.get("/admin/video-pipeline/candidates")
 async def get_video_candidates(
-    limit: int = Query(default=20, ge=1, le=100),
-    min_score: int = Query(default=30, ge=0, le=70),
+    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(
+        default=20, ge=1, le=100, alias="pageSize", description="Items per page"
+    ),
+    # ── Filters ──
+    search: str | None = Query(
+        default=None,
+        description="Search by person name (case-insensitive partial match)",
+    ),
+    hook_type: str | None = Query(
+        default=None,
+        alias="hookType",
+        description="Filter by hook type (roast, gap, outcome, etc.)",
+    ),
+    priority: str | None = Query(
+        default=None, description="Filter by priority (high, medium, low)"
+    ),
+    min_score: int | None = Query(
+        default=None,
+        ge=0,
+        le=70,
+        alias="minScore",
+        description="Minimum viral score (default: 0)",
+    ),
+    max_score: int | None = Query(
+        default=None, ge=0, le=70, alias="maxScore", description="Maximum viral score"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Score recent interactions and return the best video candidates.
+    Score recent interactions and return video candidates with pagination & filters.
 
     Results are sorted by score descending, so the most viral-worthy
     interactions appear first. Each candidate includes a score breakdown
     and a Remotion-ready payload.
     """
+    # Apply DB-level filters early
+    db_filters = [Interaction.transcript_json.isnot(None)]
+    if search:
+        db_filters.append(Interaction.person_name.ilike(f"%{search}%"))
+
     stmt = (
         select(Interaction)
-        .where(Interaction.transcript_json.isnot(None))
+        .where(*db_filters)
         .order_by(Interaction.created_at.desc())
-        .limit(200)  # Fetch more, filter down
+        .limit(200)  # Fetch more, filter + score in memory
     )
     result = await db.execute(stmt)
     interactions = result.scalars().all()
 
+    # Score + apply in-memory filters
     candidates = []
     for ix in interactions:
         score = score_interaction(ix)
-        if score["should_render"] and score["total"] >= min_score:
-            payload = _build_video_payload(ix, score)
-            candidates.append((score["total"], score, payload))
+        s = score["total"]
+
+        # Skip non-renderable
+        if not score["should_render"]:
+            continue
+
+        # Score range
+        if min_score is not None and s < min_score:
+            continue
+        if max_score is not None and s > max_score:
+            continue
+
+        # Priority filter
+        if priority and score["priority"] != priority:
+            continue
+
+        # Hook type filter
+        if hook_type and score["hook_type"] != hook_type:
+            continue
+
+        payload = _build_video_payload(ix, score)
+        candidates.append((s, score, payload))
 
     candidates.sort(key=lambda x: x[0], reverse=True)
-    top = candidates[:limit]
+
+    # Paginate
+    total = len(candidates)
+    offset = (page - 1) * page_size
+    page_items = candidates[offset : offset + page_size]
 
     return {
-        "candidates": [p for _, _, p in top],
-        "count": len(top),
-        "total_scored": len(interactions),
-        "total_renderable": len(candidates),
-        "min_score_used": min_score,
+        "candidates": [p for _, _, p in page_items],
+        "count": len(page_items),
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "totalPages": max(1, (total + page_size - 1) // page_size),
         "score_buckets": {
             "high": sum(1 for s, _, _ in candidates if s >= 50),
             "medium": sum(1 for s, _, _ in candidates if 30 <= s < 50),

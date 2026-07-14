@@ -7,7 +7,7 @@ the /api/admin/* BFF proxy from the landing page.
 import os
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import FileResponse
 
@@ -21,20 +21,62 @@ router = APIRouter(dependencies=[Depends(get_db)])  # admin_deps injected via ro
 
 @router.get("/admin/rendered-videos")
 async def list_rendered_videos(
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-    status: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1, description="Page number (1-based)"),
+    page_size: int = Query(
+        default=50, ge=1, le=200, alias="pageSize", description="Items per page"
+    ),
+    # ── Filters ──
+    status: str | None = Query(default=None, description="Filter by render status"),
+    search: str | None = Query(
+        default=None,
+        description="Search by person name (case-insensitive partial match)",
+    ),
+    hook_style: str | None = Query(
+        default=None, alias="hookStyle", description="Filter by hook style"
+    ),
+    strategy_label: str | None = Query(
+        default=None, alias="strategyLabel", description="Filter by strategy label"
+    ),
+    min_score: int | None = Query(
+        default=None, ge=0, le=100, alias="minScore", description="Minimum viral score"
+    ),
+    max_score: int | None = Query(
+        default=None, ge=0, le=100, alias="maxScore", description="Maximum viral score"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all rendered videos, newest first."""
+    """List rendered videos with pagination and filters, newest first."""
+    # Build base query with filters
+    filters = []
+    if status:
+        filters.append(RenderedVideo.status == status)
+    if search:
+        filters.append(RenderedVideo.person_name.ilike(f"%{search}%"))
+    if hook_style:
+        filters.append(RenderedVideo.hook_style == hook_style)
+    if strategy_label:
+        filters.append(RenderedVideo.strategy_label == strategy_label)
+    if min_score is not None:
+        filters.append(RenderedVideo.viral_score >= min_score)
+    if max_score is not None:
+        filters.append(RenderedVideo.viral_score <= max_score)
+
+    # Count total matching records
+    count_stmt = select(func.count(RenderedVideo.id))
+    if filters:
+        count_stmt = count_stmt.where(and_(*filters))
+    total = await db.scalar(count_stmt) or 0
+
+    # Fetch page
+    offset = (page - 1) * page_size
     stmt = (
         select(RenderedVideo)
         .order_by(RenderedVideo.created_at.desc())
         .offset(offset)
-        .limit(limit)
+        .limit(page_size)
     )
-    if status:
-        stmt = stmt.where(RenderedVideo.status == status)
+    if filters:
+        stmt = stmt.where(and_(*filters))
 
     result = await db.execute(stmt)
     videos = result.scalars().all()
@@ -54,11 +96,14 @@ async def list_rendered_videos(
                 "errorMessage": v.error_message,
                 "createdAt": v.created_at.isoformat() if v.created_at else None,
                 "updatedAt": v.updated_at.isoformat() if v.updated_at else None,
-                # Download URL is just the id — frontend constructs /api/admin/rendered-videos/{id}/download
             }
             for v in videos
         ],
         "count": len(videos),
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "totalPages": max(1, (total + page_size - 1) // page_size),
     }
 
 
