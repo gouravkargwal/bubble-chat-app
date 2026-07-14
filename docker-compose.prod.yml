@@ -165,7 +165,8 @@ services:
   # Access at http://localhost:5001
   # ── Production configuration ────────────────────────────────────────────
   #   All env vars are loaded from .env.prod via env_file above.
-  #   Database: Uses Postgres for metadata (set ZO_POSTGRES_DSN in .env.prod).
+  #   Database: Uses Postgres for metadata (set ZO_META_STORE=postgres and
+  #             ZO_META_POSTGRES_DSN in .env.prod).
   #   Auth:     ZO_ROOT_USER_EMAIL + ZO_ROOT_USER_PASSWORD create the admin
   #             account on first startup. After that, create API keys in the UI
   #             at Settings → API Keys and set OPENOBSERVER_API_KEY in .env.prod.

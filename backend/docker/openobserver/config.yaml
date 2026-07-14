@@ -12,8 +12,8 @@ server:
 storage:
   # Database for metadata (users, dashboards, stream schemas, saved searches).
   #   Dev:  SQLite  (default) — no external dependencies, data in /data/openobserver.db
-  #   Prod: Postgres — set ZO_POSTGRES_DSN env var to override this path.
-  #         Example: ZO_POSTGRES_DSN=postgres://cookd:cookd@postgres:5432/openobserver
+  #   Prod: Postgres — set ZO_META_STORE=postgres and ZO_META_POSTGRES_DSN env vars.
+  #         Example: ZO_META_POSTGRES_DSN=postgres://cookd:cookd@postgres:5432/openobserver
   sqlite_path: /data/openobserver.db
   # Data retention in days for observability data (logs, traces, metrics)
   retention_days: 30
