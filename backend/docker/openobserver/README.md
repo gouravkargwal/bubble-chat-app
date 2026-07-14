@@ -41,9 +41,9 @@ docker-compose up -d
 
 ## Endpoints
 
-- **Traces**: `http://localhost:5001/v1/otlp/traces`
-- **Metrics**: `http://localhost:5001/v1/otlp/metrics`
-- **Logs**: `http://localhost:5001/v1/otlp/logs`
+- **Traces**: `http://localhost:5001/api/default/v1/traces`
+- **Metrics**: `http://localhost:5001/api/default/v1/metrics`
+- **Logs**: `http://localhost:5001/api/default/v1/logs`
 - **Health**: `http://localhost:5001/health`
 
 ## Features

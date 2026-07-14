@@ -1,19 +1,12 @@
-# OpenObserver configuration
-# Single binary for logs, metrics, and traces.
-# This file sets defaults. Override via environment variables in production.
+# NOTE: the zinclabs/openobserve binary is configured entirely via ZO_*
+# env vars (see docker-compose*.yml) and does not read a mounted config
+# file — nothing in this file is actually consumed by the container.
+# Real OTLP ingestion paths are fixed by the binary: /api/{org}/v1/{traces,metrics,logs}.
+# Kept here only as documentation of intended defaults.
 
 server:
   http_listen_port: 5001
   grpc_listen_port: 5002
-
-# OTLP endpoints for various signals
-otlp:
-  # Traces endpoint - receives OpenTelemetry traces
-  traces_path: /v1/otlp/traces
-  # Metrics endpoint - receives OpenTelemetry metrics
-  metrics_path: /v1/otlp/metrics
-  # Logs endpoint - receives OpenTelemetry logs
-  logs_path: /v1/otlp/logs
 
 # Storage configuration
 storage:

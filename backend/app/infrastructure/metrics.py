@@ -437,7 +437,7 @@ def setup_otel_metrics(
 
     Args:
         endpoint: OTLP HTTP endpoint for metrics
-            (e.g. "http://openobserver:5001/v1/otlp/metrics").
+            (e.g. "http://openobserver:5001/api/default/v1/metrics").
         auth_header: Full `Authorization` header value (e.g. "Bearer <key>" or "Basic <b64>").
         service_name: Service name for resource attributes.
     """

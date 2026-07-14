@@ -45,7 +45,7 @@ def setup_tracing(
     Args:
         app: FastAPI application instance.
         service_name: Resource service name.
-        otlp_endpoint: OTLP HTTP endpoint (e.g. "http://openobserver:5001/v1/otlp/traces").
+        otlp_endpoint: OTLP HTTP endpoint (e.g. "http://openobserver:5001/api/default/v1/traces").
                         If empty, traces go to the console exporter only.
         console_export: Also emit traces to stdout (useful for local dev).
         auth_header: Full `Authorization` header value (e.g. "Bearer <key>" or "Basic <b64>").

@@ -65,7 +65,7 @@ def setup_otel_logging(
     """Configure OpenTelemetry log export to OpenObserver.
 
     Args:
-        endpoint: OTLP HTTP endpoint for logs (e.g. "http://openobserver:5001/v1/otlp/logs").
+        endpoint: OTLP HTTP endpoint for logs (e.g. "http://openobserver:5001/api/default/v1/logs").
         auth_header: Full `Authorization` header value (e.g. "Bearer <key>" or "Basic <b64>").
         service_name: Service name for resource attributes.
         console_export: Also emit logs to stdout.
