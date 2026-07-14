@@ -246,7 +246,14 @@ def generate_vision(
     )
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
-    text = response.text
+    text = response.text or ""
+    # Strip markdown code fences if present (some models wrap JSON in ```json ... ```).
+    text = text.strip()
+    if text.startswith("```"):
+        # Remove opening fence (```json, ```, etc.) and closing fence.
+        text = text.split("\n", 1)[-1] if "\n" in text else text
+        text = text.rsplit("```", 1)[0] if "```" in text else text
+        text = text.strip()
     row = _usage_row_from_response(response, phase=phase, model=model)
 
     logger.info(
