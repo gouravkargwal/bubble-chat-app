@@ -46,10 +46,11 @@ def _detail_for_log(detail: Any, *, max_len: int = 4000) -> Any:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # OpenTelemetry — initialise exporters for OpenObserver (replaces Sentry)
     if settings.otlp_enabled:
-        # OpenObserve OTLP/HTTP ingestion is org-scoped: /api/{org}/v1/{signal}
-        base_url = f"{settings.openobserver_endpoint.rstrip('/')}/api/{settings.zo_org}"
-        traces_endpoint = f"{base_url}/v1/traces"
-        logs_endpoint = f"{base_url}/v1/logs"
+        # OpenObserve OTLP/HTTP ingestion — use standard OTLP paths matching config.yaml
+        #   config.yaml: otlp.traces_path = /v1/otlp/traces
+        base_url = settings.openobserver_endpoint.rstrip("/")
+        traces_endpoint = f"{base_url}/v1/otlp/traces"
+        logs_endpoint = f"{base_url}/v1/otlp/logs"
 
         try:
             auth_header = settings.openobserver_auth_header
@@ -70,7 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             from app.infrastructure.metrics import setup_otel_metrics
 
             setup_otel_metrics(
-                endpoint=f"{base_url}/v1/metrics",
+                endpoint=f"{base_url}/v1/otlp/metrics",
                 auth_header=auth_header,
                 service_name=settings.openobserver_service_name,
             )
