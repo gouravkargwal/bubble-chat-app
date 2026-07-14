@@ -13,7 +13,6 @@
 ### Staging Debug Build
 
 ```bash
-cd /Users/gouravkargwal/bubble-chat-app/RizzBotV2
 ./gradlew assembleStagingDebug
 adb install -r app/build/outputs/apk/staging/debug/app-staging-debug.apk
 ```
@@ -23,7 +22,6 @@ adb install -r app/build/outputs/apk/staging/debug/app-staging-debug.apk
 ### Staging Release Build (signed)
 
 ```bash
-cd /Users/gouravkargwal/bubble-chat-app/RizzBotV2
 ./gradlew assembleStagingRelease
 adb install -r app/build/outputs/apk/staging/release/app-staging-release.apk
 ```
@@ -33,8 +31,6 @@ adb install -r app/build/outputs/apk/staging/release/app-staging-release.apk
 ### Production Release AAB (for Google Play)
 
 ```bash
-cd /Users/gouravkargwal/bubble-chat-app/RizzBotV2
-
 # Clean previous builds
 ./gradlew clean
 

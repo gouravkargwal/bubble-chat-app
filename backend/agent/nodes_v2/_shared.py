@@ -10,8 +10,6 @@ import io
 import time
 
 import structlog
-from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel
 
 from app.config import settings
 from app.services.memory_service import get_match_context
@@ -37,13 +35,12 @@ from app.prompts.prompt_fragments import (  # noqa: F401
     STRATEGY_LABEL_GLOSSARY,
 )
 
-# Same model id as `settings.gemini_model` / `GEMINI_MODEL` in `.env` — one knob for
-# vision + generator + auditor (LangChain). Hybrid OCR and GeminiClient paths also use
-# settings.gemini_model via callers.
-_AGENT_MODEL = settings.gemini_model
-VISION_MODEL = _AGENT_MODEL
-GENERATOR_MODEL = _AGENT_MODEL
-AUDITOR_MODEL = _AGENT_MODEL
+# Per-node model resolution with optional overrides.
+# Each node can use a different model (e.g. 3.1-flash-lite for generator,
+# 3.1-pro for auditor), or fall back to the default gemini_model.
+VISION_MODEL = settings.gemini_vision_model or settings.gemini_model
+GENERATOR_MODEL = settings.gemini_generator_model or settings.gemini_model
+AUDITOR_MODEL = settings.gemini_auditor_model or settings.gemini_model
 
 # MIME magic bytes for common image formats
 _MIME_SIGNATURES: list[tuple[bytes, str]] = [
@@ -351,23 +348,7 @@ def has_forbidden_punctuation(text: str) -> bool:
     return any(ch in text for ch in forbidden)
 
 
-def build_llm(
-    *,
-    model: str,
-    temperature: float,
-    structured_output: type[BaseModel] | None = None,
-) -> Any:
-    """Build a Gemini LLM client with timeout, retry, and optional structured output."""
-    llm = ChatGoogleGenerativeAI(
-        model=model,
-        temperature=temperature,
-        timeout=LLM_TIMEOUT_SECONDS,
-        max_retries=LLM_MAX_RETRIES,
-        google_api_key=settings.gemini_api_key,
-    )
-    if structured_output:
-        return llm.with_structured_output(structured_output)
-    return llm
+# build_llm is removed — use app.llm.genai.generate_structured or generate_content instead.
 
 
 # ---------------------------------------------------------------------------

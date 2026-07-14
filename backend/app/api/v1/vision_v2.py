@@ -141,33 +141,17 @@ async def perform_full_vision_analysis(
     is_opener = vision_direction == "opener"
     system_prompt = build_vision_system_prompt(vision_direction)
 
-    content: list = []
-    for b64 in images_base64:
-        b64 = downscale_image_b64(
-            b64
-        )  # cap long edge ~768px → fewer Gemini image tiles
-        image_url = encode_image_from_state(cast(AgentState, {"image_bytes": b64}))
-        content.append({"type": "image_url", "image_url": {"url": image_url}})
-
     n = len(images_base64)
     multi_hint = _multi_screenshot_user_hint(n, is_opener=is_opener)
 
-    content.append(
-        {
-            "type": "text",
-            "text": (
-                f"OCR hint text (may be partial/noisy):\n{ocr_hint_text.strip()}\n\n"
-                f"Process the attached image{'s' if n > 1 else ''} as the absolute current reality."
-                + multi_hint
-            ),
-        }
+    # Build the user-facing text that follows the images.
+    user_text = (
+        f"OCR hint text (may be partial/noisy):\n{ocr_hint_text.strip()}\n\n"
+        f"Process the attached image{'s' if n > 1 else ''} as the absolute current reality."
+        + multi_hint
     )
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=content),
-    ]
 
-    images_attached_to_vision_llm = _count_image_url_parts_in_human_content(content)
+    images_attached_to_vision_llm = n
 
     t_start = time.monotonic()
     logger.info(
@@ -187,25 +171,19 @@ async def perform_full_vision_analysis(
             screenshots_in_request if screenshots_in_request is not None else n
         ),
     )
-    logger.info(
-        "vision_node_llm_messages",
-        user_id=user_id,
-        conversation_id="",
-        direction=vision_direction,
-        phase="v2_vision",
-        model=VISION_MODEL,
-        messages=sanitize_llm_messages_for_logging(messages),
-    )
 
     try:
-        result, usage_row = invoke_structured_gemini(
+        from app.llm.genai import generate_vision
+
+        result, usage_row = generate_vision(
             model=VISION_MODEL,
             temperature=0,
-            schema=VisionNodeOutput,
-            messages=messages,
+            system_prompt=system_prompt,
+            user_prompt=user_text,
+            base64_images=images_base64,
             phase="v2_vision",
         )
-        out = cast(VisionNodeOutput, result)
+        out = VisionNodeOutput.model_validate_json(result)
         # Archetype is DERIVED from the constrained dimensions, never chosen by the
         # LLM — this makes an invalid/hallucinated label structurally impossible and
         # removes the taxonomy-maintenance problem. Kept for logging + Phase 4/5.

@@ -1,55 +1,49 @@
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import List, Optional
 
 import structlog
-from langchain_google_genai import GoogleGenerativeAIEmbeddings  # type: ignore[reportMissingImports]
 
 from app.config import settings
+from app.llm.genai import generate_embedding as _genai_embed
 
 logger = structlog.get_logger()
-# We must strictly enforce this to match the Postgres pgvector schema
-# Default embedding dimensionality.
-#
-# NOTE: pgvector's expected dimensionality comes from the `Interaction.embedding`
-# column type at runtime. We still keep a default here, but callers should pass
-# the expected dimension when they can.
+
+# Default embedding dimensionality. pgvector column is 768d.
+# text-embedding-005 outputs 768 by default.
 EMBEDDING_DIMENSIONS = 768
 
 
-@lru_cache(maxsize=1)
-def _get_embeddings_model() -> GoogleGenerativeAIEmbeddings:
-    """Return a cached Gemini embeddings client."""
-    return GoogleGenerativeAIEmbeddings(model=settings.gemini_embedding_model)
-
-
 async def embed_text(text: str, dimensions: int | None = None) -> Optional[List[float]]:
-    """Generate an embedding vector for the given text.
+    """Generate an embedding vector using the google-genai SDK.
 
-    If `dimensions` is provided, we force Gemini to return exactly that output dimensionality.
-    Otherwise we fall back to `EMBEDDING_DIMENSIONS`.
+    If `dimensions` is provided, we force the model to return exactly that output
+    dimensionality. Otherwise we fall back to `EMBEDDING_DIMENSIONS`.
 
-    This uses LangChain's GoogleGenerativeAIEmbeddings wrapper under the hood.
+    This replaces the old LangChain GoogleGenerativeAIEmbeddings wrapper.
     """
-    # The underlying client is synchronous, so offload to a thread.
     import asyncio
 
-    model = _get_embeddings_model()
     try:
         dimensions_to_use = dimensions or EMBEDDING_DIMENSIONS
 
-        # CRITICAL: output_dimensionality must be passed here, NOT in the constructor
+        # The SDK's embed_content is synchronous, offload to thread.
         embedding = await asyncio.to_thread(
-            model.embed_query, text, output_dimensionality=dimensions_to_use
+            _genai_embed,
+            text=text,
+            model=settings.gemini_embedding_model,
+            dimensions=dimensions_to_use,
         )
 
-        if not embedding or len(embedding) != dimensions_to_use:
+        if embedding is None:
+            return None
+
+        if len(embedding) != dimensions_to_use:
             logger.error(
                 "embedding_dimension_mismatch",
                 embedding_model=settings.gemini_embedding_model,
                 expected_dim=dimensions_to_use,
-                actual_dim=len(embedding) if embedding else 0,
+                actual_dim=len(embedding),
                 text_preview=text[:120] if text else "",
             )
             return None

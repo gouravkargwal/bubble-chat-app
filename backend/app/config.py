@@ -26,14 +26,20 @@ class Settings(BaseSettings):
 
     # LLM — Gemini is the primary (and only) provider
     gemini_api_key: str = ""
-    # Used by GeminiClient, LangGraph nodes (v1 + v2), hybrid OCR, audits/blueprints.
-    # Set GEMINI_MODEL in env (see .env.example).
-    gemini_model: str = "gemini-2.5-flash"
-    # Fallback model used when the primary model returns 429 or 503 (capacity spike).
-    # Set GEMINI_FALLBACK_MODEL in env to override.
-    gemini_fallback_model: str = "gemini-2.5-flash-lite"
-    # Embeddings for pgvector / semantic memory (LangChain GoogleGenerativeAIEmbeddings model id).
-    gemini_embedding_model: str = "models/gemini-embedding-001"
+    # Backend: "ai_studio" (default, uses api_key) or "vertex_ai" (uses ADC/project+region).
+    # Dev → ai_studio, Prod → vertex_ai (to use the $300 credits).
+    gemini_provider: str = "ai_studio"
+    # GCP project & region (required only when gemini_provider = "vertex_ai").
+    gemini_project_id: str = ""
+    gemini_region: str = "us-central1"
+    # Default model used when no per-node override is set.
+    gemini_model: str = "gemini-3.1-flash-lite"
+    # Optional per-node model overrides (empty = fall back to gemini_model).
+    gemini_vision_model: str = ""
+    gemini_generator_model: str = ""
+    gemini_auditor_model: str = ""
+    # Embeddings model (Vertex AI name: text-embedding-005 for 768d).
+    gemini_embedding_model: str = "text-embedding-005"
 
     # OpenRouter — used by v2 agent generator_node
     openrouter_api_key: str = ""

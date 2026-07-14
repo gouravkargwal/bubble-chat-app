@@ -21,7 +21,6 @@ pytestmark = pytest.mark.skipif(
 )
 
 PRIMARY_MODEL = settings.gemini_model
-FALLBACK_MODEL = settings.gemini_fallback_model
 
 
 @pytest.fixture
@@ -50,20 +49,6 @@ async def test_generate_content_primary_returns_text(gemini_client: GeminiClient
     print(f"\n[primary={PRIMARY_MODEL}] {result!r}")
 
 
-@pytest.mark.asyncio
-async def test_generate_content_fallback_model_returns_text(gemini_client: GeminiClient):
-    """Fallback model responds when called directly."""
-    result = await gemini_client.generate_content(
-        system_prompt="You are a helpful assistant. Reply in one short sentence.",
-        user_prompt="Say hello.",
-        model=FALLBACK_MODEL,
-        max_output_tokens=64,
-    )
-    assert isinstance(result, str)
-    assert len(result.strip()) > 0
-    print(f"\n[fallback={FALLBACK_MODEL}] {result!r}")
-
-
 # ---------------------------------------------------------------------------
 # vision_generate
 # ---------------------------------------------------------------------------
@@ -83,19 +68,3 @@ async def test_vision_generate_primary_returns_text(gemini_client: GeminiClient)
     assert isinstance(result, str)
     assert len(result.strip()) > 0
     print(f"\n[vision primary={PRIMARY_MODEL}] {result!r}")
-
-
-@pytest.mark.asyncio
-async def test_vision_generate_fallback_model_returns_text(gemini_client: GeminiClient):
-    """vision_generate works correctly when called with fallback model directly."""
-    result = await gemini_client.vision_generate(
-        system_prompt='Reply with a valid JSON object: {"ok": true}',
-        user_prompt="respond now",
-        base64_images=[],
-        temperature=0.0,
-        model=FALLBACK_MODEL,
-        max_output_tokens=64,
-    )
-    assert isinstance(result, str)
-    assert len(result.strip()) > 0
-    print(f"\n[vision fallback={FALLBACK_MODEL}] {result!r}")
