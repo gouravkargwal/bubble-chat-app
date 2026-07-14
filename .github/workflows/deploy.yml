@@ -17,6 +17,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ═══════════════════════════════════════════════════════
+      # Debug step — shows whether secrets are populated
+      # (masked values like *** mean the secret IS set)
+      # Remove this step once you've confirmed it works.
+      # ═══════════════════════════════════════════════════════
+      - name: 🔍 Debug — verify secrets are populated
+        run: |
+          echo "SSH_PRIVATE_KEY length: ${{ secrets.SSH_PRIVATE_KEY != '' && '✅ SET' || '❌ MISSING' }}"
+          echo "Server: 140.245.224.228 / ubuntu"
+          echo "App dir: /home/ubuntu/bubble-chat-app"
+          echo ""
+          echo "If SSH_PRIVATE_KEY shows ❌ MISSING, add it at:"
+          echo "  https://github.com/${{ github.repository }}/settings/secrets/actions"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
