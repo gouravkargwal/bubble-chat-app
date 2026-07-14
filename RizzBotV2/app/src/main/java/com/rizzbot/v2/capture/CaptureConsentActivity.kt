@@ -1,19 +1,21 @@
 package com.rizzbot.v2.capture
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import com.rizzbot.v2.util.Constants
 
-class CaptureConsentActivity : Activity() {
+class CaptureConsentActivity : ComponentActivity() {
 
     /** Guards against double-delivering the consent result (onActivityResult + onDestroy fallback). */
     private var resultDelivered = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         try {

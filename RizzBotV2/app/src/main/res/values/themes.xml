@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        NOTE: android:statusBarColor and android:navigationBarColor are intentionally omitted.
+        enableEdgeToEdge() in each Activity handles these programmatically. Setting them in XML
+        uses deprecated parameters and can conflict with the programmatic edge-to-edge setup.
+    -->
     <style name="Theme.RizzBotV2" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@color/splash_background</item>
     </style>
 
