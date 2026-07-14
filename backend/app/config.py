@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     gemini_provider: str = "ai_studio"
     # GCP project & region (required only when gemini_provider = "vertex_ai").
     gemini_project_id: str = ""
-    gemini_region: str = "us-central1"
+    gemini_region: str = "global"
     # Default model used when no per-node override is set.
     gemini_model: str = "gemini-3.1-flash-lite"
     # Optional per-node model overrides (empty = fall back to gemini_model).

@@ -5,8 +5,8 @@ Provides a cached GenAI client and convenience wrappers for structured output,
 text generation, and embeddings. The client auto-selects the backend based on
 settings.gemini_provider:
 
-  "ai_studio"  → genai.Client(api_key=...)            (GOOGLE_GENAI_USE_ENTERPRISE not set)
-  "vertex_ai"  → genai.Client(project=..., location=...) (uses ADC / service account)
+  "ai_studio"  → genai.Client(api_key=...)            (AI Studio API)
+  "vertex_ai"  → genai.Client(api_key=...)            (Vertex AI API, via env vars)
 
 Usage:
 
@@ -60,22 +60,25 @@ logger = structlog.get_logger(__name__)
 def _build_client() -> genai.Client:
     """Create a GenAI client targeting the configured provider (ai_studio | vertex_ai).
 
-    Auth can use an API key for both providers. For Vertex AI the SDK routes
-    to the aiplatform endpoint based on the GOOGLE_GENAI_USE_ENTERPRISE env var.
-    project/location are only needed when using ADC (no api_key).
+    For Vertex AI the SDK uses the `enterprise=True` flag to route to the
+    aiplatform endpoint. Both providers can use API key auth.
     """
     if settings.gemini_provider == "vertex_ai":
         import os
 
-        os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "true")
-        # Vertex AI with API key — project/location not needed, SDK routes by env var.
-        # fall back to project+location if no api_key (ADC path).
+        # Set project/location env vars for the SDK.
+        os.environ.setdefault("GOOGLE_CLOUD_PROJECT", settings.gemini_project_id)
+        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", settings.gemini_region)
+        # Vertex AI with API key (express mode) — no project/location needed.
         if settings.gemini_api_key:
             return genai.Client(
+                enterprise=True,
                 api_key=settings.gemini_api_key,
-                http_options=types.HttpOptions(api_version="v1beta"),
+                http_options=types.HttpOptions(api_version="v1"),
             )
+        # ADC fallback (service account) — needs project + location.
         return genai.Client(
+            enterprise=True,
             project=settings.gemini_project_id,
             location=settings.gemini_region,
         )
