@@ -58,8 +58,23 @@ logger = structlog.get_logger(__name__)
 
 
 def _build_client() -> genai.Client:
-    """Create a GenAI client targeting the configured provider (ai_studio | vertex_ai)."""
+    """Create a GenAI client targeting the configured provider (ai_studio | vertex_ai).
+
+    Auth can use an API key for both providers. For Vertex AI the SDK routes
+    to the aiplatform endpoint based on the GOOGLE_GENAI_USE_ENTERPRISE env var.
+    project/location are only needed when using ADC (no api_key).
+    """
     if settings.gemini_provider == "vertex_ai":
+        import os
+
+        os.environ.setdefault("GOOGLE_GENAI_USE_ENTERPRISE", "true")
+        # Vertex AI with API key — project/location not needed, SDK routes by env var.
+        # fall back to project+location if no api_key (ADC path).
+        if settings.gemini_api_key:
+            return genai.Client(
+                api_key=settings.gemini_api_key,
+                http_options=types.HttpOptions(api_version="v1beta"),
+            )
         return genai.Client(
             project=settings.gemini_project_id,
             location=settings.gemini_region,
