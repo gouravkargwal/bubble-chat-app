@@ -9,6 +9,7 @@ interface SettingsRepository {
     val firstCaptureDone: Flow<Boolean>
     val highValueCopyCount: Flow<Int>
     val roastLanguage: Flow<String>
+    val marketingConsent: Flow<Boolean>
 
     suspend fun setServiceEnabled(enabled: Boolean)
     suspend fun setOnboardingCompleted(completed: Boolean)
@@ -16,4 +17,5 @@ interface SettingsRepository {
     suspend fun setFirstCaptureDone()
     suspend fun incrementHighValueCopyCount(): Int
     suspend fun setRoastLanguage(language: String)
+    suspend fun setMarketingConsent(enabled: Boolean)
 }

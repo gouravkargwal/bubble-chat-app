@@ -21,6 +21,7 @@ import javax.inject.Inject
 
 data class SettingsState(
     val tier: String = TierQuota.PLAN_FREE,
+    val marketingConsent: Boolean = true,
     val creditsRemaining: Int = 0,
     val creditsPeriodLimit: Int = 0,
     val billingPeriod: String = "monthly",
@@ -112,6 +113,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.roastLanguage.collect { lang ->
                 _state.update { it.copy(roastLanguage = lang) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.marketingConsent.collect { consent ->
+                _state.update { it.copy(marketingConsent = consent) }
             }
         }
     }
@@ -215,6 +221,13 @@ class SettingsViewModel @Inject constructor(
         analyticsHelper.settingsLanguageChanged(language)
         viewModelScope.launch {
             settingsRepository.setRoastLanguage(language)
+        }
+    }
+
+    fun setMarketingConsent(enabled: Boolean) {
+        analyticsHelper.settingsMarketingConsentChanged(enabled)
+        viewModelScope.launch {
+            settingsRepository.setMarketingConsent(enabled)
         }
     }
 

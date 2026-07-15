@@ -17,6 +17,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val firstCaptureDone: Flow<Boolean> = dataStore.firstCaptureDone
     override val highValueCopyCount: Flow<Int> = dataStore.highValueCopyCount
     override val roastLanguage: Flow<String> = dataStore.roastLanguage
+    override val marketingConsent: Flow<Boolean> = dataStore.marketingConsent
 
     override suspend fun setServiceEnabled(enabled: Boolean) { dataStore.setServiceEnabled(enabled) }
     override suspend fun setOnboardingCompleted(completed: Boolean) { dataStore.setOnboardingCompleted(completed) }
@@ -24,4 +25,5 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setFirstCaptureDone() { dataStore.setFirstCaptureDone() }
     override suspend fun incrementHighValueCopyCount(): Int = dataStore.incrementHighValueCopyCount()
     override suspend fun setRoastLanguage(language: String) { dataStore.setRoastLanguage(language) }
+    override suspend fun setMarketingConsent(enabled: Boolean) { dataStore.setMarketingConsent(enabled) }
 }

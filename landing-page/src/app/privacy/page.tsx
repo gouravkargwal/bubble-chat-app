@@ -50,6 +50,7 @@ const sections = [
       "To monitor and analyze usage trends via PostHog for product improvement and crash detection.",
       "To enforce our Terms of Service, prevent fraud and abuse, and protect the rights and safety of our users and the public.",
       "To comply with legal obligations and respond to lawful requests from authorities.",
+      "To create marketing content, including social media video advertisements, that may display: (a) your name or the name of a person appearing in your chat conversations; (b) simulated reconstructions of chat messages based on text content you submit; (c) AI-generated replies produced by the Service. Marketing Content is optional — you can opt out at any time via in-app Settings under Privacy & Data.",
     ],
   },
   {
@@ -58,7 +59,18 @@ const sections = [
       "When you use our AI features, the content you submit (screenshots, text, conversation context) is processed by our AI models to generate reply suggestions. This processing occurs in real-time. We do not use your submitted content to train or fine-tune our AI models. Uploaded screenshots and conversation data are not stored beyond what is necessary to generate a response and are deleted within 24 hours of processing. AI-generated outputs may not always be accurate or suitable for every context. You are solely responsible for deciding whether and how to use any suggested replies.",
   },
   {
-    title: "6. How We Share Information",
+    title: "6. Marketing Content",
+    content:
+      "We may create video advertisements and other promotional materials that incorporate content derived from your use of the App. These materials are designed to demonstrate the Service's functionality and may be published on social media platforms, our website, and other marketing channels.",
+    bullets: [
+      "Marketing videos may show your name (as it appears in your chats) and simulated reconstructions of your conversations based on the text content you submit.",
+      "We do not include your actual screenshots, profile photos, contact information, or direct identifiers in marketing videos.",
+      "Marketing Content is optional. You can opt out at any time via Settings → Privacy & Data → Allow marketing use of my data in the app.",
+      "Once you opt out, we will not create new marketing content using your data. Previously published content may remain in circulation on the platforms where it was published.",
+    ],
+  },
+  {
+    title: "7. How We Share Information",
     content:
       "We do not sell your personal information. We may share your data with the following categories of third parties:",
     bullets: [
@@ -68,7 +80,7 @@ const sections = [
     ],
   },
   {
-    title: "7. Data Retention",
+    title: "8. Data Retention",
     content:
       "We retain your personal information only as long as necessary to fulfill the purposes described in this policy, unless a longer retention period is required or permitted by law:",
     bullets: [
@@ -77,11 +89,11 @@ const sections = [
       "Submitted Content (Screenshots/Images): Deleted within 24 hours of AI processing. Not retained beyond the generation session.",
       "Purchase Data: Retained for 7 years to comply with tax and accounting obligations.",
       "Communication Records: Retained for 12 months after the last communication.",
-      "You may request earlier deletion of your data by contacting us (see Section 15).",
+      "You may request earlier deletion of your data by contacting us (see Section 16).",
     ],
   },
   {
-    title: "8. Your Rights (GDPR, CCPA & Others)",
+    title: "9. Your Rights (GDPR, CCPA & Others)",
     content:
       "Depending on your jurisdiction, you may have the following rights regarding your personal information:",
     bullets: [
@@ -93,41 +105,41 @@ const sections = [
       "Right to Object: Object to processing based on legitimate interests, including analytics and profiling.",
       "Right to Withdraw Consent: Where processing is based on consent, you may withdraw at any time without affecting the lawfulness of processing before withdrawal.",
       "Right to Non-Discrimination (CCPA): We will not discriminate against you for exercising any of your privacy rights.",
-      "To exercise any of these rights, contact us at the email in Section 15. We will respond within 30 days. If you are in the EEA, you also have the right to lodge a complaint with your local data protection authority.",
+      "To exercise any of these rights, contact us at the email in Section 16. We will respond within 30 days. If you are in the EEA, you also have the right to lodge a complaint with your local data protection authority.",
     ],
   },
   {
-    title: "9. Third-Party Analytics (PostHog)",
+    title: "10. Third-Party Analytics (PostHog)",
     content:
       "We use PostHog as our analytics platform to understand how users interact with the Service. PostHog collects usage data including page views, feature interactions, and error events. This data is hosted on PostHog\u2019s US-based servers. PostHog acts as a data processor on our behalf. You can view PostHog\u2019s privacy policy at https://posthog.com/privacy. To opt out of analytics tracking, you may use browser-level Do Not Track settings or contact us. Note that opting out may affect our ability to improve the Service based on usage data.",
   },
   {
-    title: "10. Security",
+    title: "11. Security",
     content:
       "We implement reasonable technical and organizational security measures to protect your personal information, including: encryption in transit (TLS 1.3), encryption at rest for stored data, access controls and authentication for production systems, regular security reviews, and incident response procedures. No method of transmission or storage is 100% secure. We cannot guarantee absolute security but will notify you of any data breach affecting your personal information within 72 hours of becoming aware of it, where required by applicable law.",
   },
   {
-    title: "11. Children",
+    title: "12. Children",
     content:
       "Cookd is not directed to individuals under the age of 13 (or the applicable age of digital consent in your jurisdiction, which may be up to 16 in certain EEA countries). We do not knowingly collect personal information from children. If we become aware that a child has provided us with personal information, we will delete it promptly. If you believe a child has provided us with personal data, please contact us immediately.",
   },
   {
-    title: "12. International Data Transfers",
+    title: "13. International Data Transfers",
     content:
       "Your information may be transferred to and processed in countries outside your own, including India (where we are based) and the United States (where our analytics provider PostHog is based). When transferring data from the EEA or UK to countries not deemed adequate by the European Commission, we use appropriate transfer mechanisms (including Standard Contractual Clauses where applicable) to ensure your data receives an equivalent level of protection.",
   },
   {
-    title: "13. Data Breach Notification",
+    title: "14. Data Breach Notification",
     content:
       "In the event of a data breach that is likely to result in a risk to your rights and freedoms, we will notify you without undue delay and within 72 hours of becoming aware of the breach, where required by applicable law (including Article 34 of the GDPR). Notifications will be sent to the email address associated with your account.",
   },
   {
-    title: "14. Changes to This Policy",
+    title: "15. Changes to This Policy",
     content:
       "We may update this Privacy Policy at any time at our sole discretion. Changes take effect immediately upon posting. Material changes will be communicated via email or through a prominent notice on the Service. Your continued use of the Service after any changes constitutes acceptance of the updated policy. We encourage you to review this page periodically. The \u201CLast updated\u201D date at the top of this page indicates when this policy was last revised.",
   },
   {
-    title: "15. Contact & Privacy Requests",
+    title: "16. Contact & Privacy Requests",
     content:
       "If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us. We aim to respond within 48 hours.",
     bullets: [

@@ -17,4 +17,8 @@
     <string name="support_email_subject" translatable="false">Cookd support</string>
     <string name="support_email_chooser_title">Send email</string>
     <string name="support_no_email_app">No email app found. You can write to us at %1$s</string>
+    <!-- Marketing Consent -->
+    <string name="marketing_consent_setting">Allow marketing use of my data</string>
+    <string name="marketing_consent_setting_desc">Your name and chat messages may appear in Cookd social media videos</string>
+    <string name="marketing_consent_opt_out_note">We may use anonymized chat data for marketing videos — opt out anytime in Settings</string>
 </resources>

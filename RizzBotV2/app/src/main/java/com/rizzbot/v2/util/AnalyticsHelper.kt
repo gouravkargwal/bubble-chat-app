@@ -144,6 +144,7 @@ class AnalyticsHelper @Inject constructor(
     fun settingsReferralApplied() = logEvent("settings_referral_applied")
     fun settingsLtdRedeemed() = logEvent("settings_ltd_redeemed")
     fun settingsDeleteData() = logEvent("settings_delete_data")
+    fun settingsMarketingConsentChanged(enabled: Boolean) = logEvent("settings_marketing_consent", mapOf("enabled" to enabled.toString()))
 
     // History
     fun historyEntryCopied() = logEvent("history_entry_copied")

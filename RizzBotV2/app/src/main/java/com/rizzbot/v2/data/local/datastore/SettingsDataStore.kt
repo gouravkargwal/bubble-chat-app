@@ -29,6 +29,7 @@ class SettingsDataStore @Inject constructor(
         val LAST_CAPTURE_TIMESTAMP = longPreferencesKey("last_capture_timestamp")
         val HIGH_VALUE_COPY_COUNT = intPreferencesKey("high_value_copy_count")
         val ROAST_LANGUAGE = stringPreferencesKey("roast_language")
+        val MARKETING_CONSENT = booleanPreferencesKey("marketing_consent")
     }
 
     val serviceEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.SERVICE_ENABLED] ?: false }
@@ -37,12 +38,14 @@ class SettingsDataStore @Inject constructor(
     val lastCaptureTimestamp: Flow<Long> = context.dataStore.data.map { it[Keys.LAST_CAPTURE_TIMESTAMP] ?: 0L }
     val highValueCopyCount: Flow<Int> = context.dataStore.data.map { it[Keys.HIGH_VALUE_COPY_COUNT] ?: 0 }
     val roastLanguage: Flow<String> = context.dataStore.data.map { it[Keys.ROAST_LANGUAGE] ?: "English" }
+    val marketingConsent: Flow<Boolean> = context.dataStore.data.map { it[Keys.MARKETING_CONSENT] ?: true }
 
     suspend fun setServiceEnabled(enabled: Boolean) = context.dataStore.edit { it[Keys.SERVICE_ENABLED] = enabled }
     suspend fun setOnboardingCompleted(completed: Boolean) = context.dataStore.edit { it[Keys.ONBOARDING_COMPLETED] = completed }
     suspend fun setFirstCaptureDone() = context.dataStore.edit { it[Keys.FIRST_CAPTURE_DONE] = true }
     suspend fun setLastCaptureTimestamp(timestamp: Long) = context.dataStore.edit { it[Keys.LAST_CAPTURE_TIMESTAMP] = timestamp }
     suspend fun setRoastLanguage(language: String) = context.dataStore.edit { it[Keys.ROAST_LANGUAGE] = language }
+    suspend fun setMarketingConsent(enabled: Boolean) = context.dataStore.edit { it[Keys.MARKETING_CONSENT] = enabled }
     suspend fun incrementHighValueCopyCount(): Int {
         var newValue = 0
         context.dataStore.edit { prefs ->
