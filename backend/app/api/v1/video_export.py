@@ -30,7 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.admin_deps import verify_admin_key
 from app.infrastructure.database.engine import get_db
-from app.infrastructure.database.models import Interaction
+from sqlalchemy.orm import joinedload
+from app.infrastructure.database.models import Interaction, User
 
 logger = structlog.get_logger(__name__)
 
@@ -255,23 +256,22 @@ async def get_video_candidates(
     interactions appear first. Each candidate includes a score breakdown
     and a Remotion-ready payload.
 
-    ponytail: marketing_consent filtering currently relies on a per-user flag
-    that is set client-side. In the future, this should be a denormalized column
-    on the User model synced from the Android app's DataStore, or a JOIN on a
-    user_preferences table. For now, set marketingConsentOnly=false if you need
-    to bypass the filter for administrative review. If the User model ever gains
-    a `marketing_consent` column, replace this inline filter with a DB-level JOIN.
+    The marketing_consent flag is stored on the User model and synced from
+    the Android app's DataStore via PUT /users/me/marketing-consent.
+    By default, only interactions from consenting users are returned.
     """
     # Apply DB-level filters early
     db_filters = [Interaction.transcript_json.isnot(None)]
     if search:
         db_filters.append(Interaction.person_name.ilike(f"%{search}%"))
 
+    # Join with User to filter by marketing_consent
     stmt = (
         select(Interaction)
+        .join(Interaction.user)
         .where(*db_filters)
         .order_by(Interaction.created_at.desc())
-        .limit(200)  # Fetch more, filter + score in memory
+        .limit(200)
     )
     result = await db.execute(stmt)
     interactions = result.scalars().all()
@@ -279,6 +279,9 @@ async def get_video_candidates(
     # Score + apply in-memory filters
     candidates = []
     for ix in interactions:
+        # Marketing consent filter (DB-level fallback: check the joined User record)
+        if marketing_consent_only and not (ix.user and ix.user.marketing_consent):
+            continue
         score = score_interaction(ix)
         s = score["total"]
 

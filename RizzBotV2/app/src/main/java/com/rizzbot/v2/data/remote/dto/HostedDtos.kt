@@ -322,3 +322,10 @@ data class ProfileBlueprintListResponse(
     val limit: Int,
     val offset: Int
 )
+
+// ── Marketing Consent ──
+
+@Serializable
+data class MarketingConsentRequest(
+    @SerialName("marketing_consent") val marketingConsent: Boolean
+)

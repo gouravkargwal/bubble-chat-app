@@ -556,6 +556,18 @@ class HostedRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun syncMarketingConsent(enabled: Boolean): Result<Unit> {
+        return try {
+            hostedApi.updateMarketingConsent(
+                com.rizzbot.v2.data.remote.dto.MarketingConsentRequest(enabled)
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            android.util.Log.w("HostedRepo", "Failed to sync marketing consent: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     private fun getAndroidDeviceId(): String? {
         return try {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)

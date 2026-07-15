@@ -16,6 +16,7 @@ import com.rizzbot.v2.data.remote.dto.ReferralInfoResponse
 import com.rizzbot.v2.data.remote.dto.TrackCopyRequest
 import com.rizzbot.v2.data.remote.dto.TrackRatingRequest
 import com.rizzbot.v2.data.remote.dto.UsageResponse
+import com.rizzbot.v2.data.remote.dto.MarketingConsentRequest
 import com.rizzbot.v2.data.remote.dto.UserPreferencesResponse
 import com.rizzbot.v2.data.remote.dto.VisionGenerateRequest
 import com.rizzbot.v2.data.remote.dto.VisionGenerateResponse
@@ -29,11 +30,16 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface HostedApi {
+
+    // User Preferences
+    @PUT("api/v1/users/me/marketing-consent")
+    suspend fun updateMarketingConsent(@Body request: MarketingConsentRequest)
 
     // Auth (no Authorization header — handled by AuthInterceptor skip list)
     @POST("api/v1/auth/firebase")

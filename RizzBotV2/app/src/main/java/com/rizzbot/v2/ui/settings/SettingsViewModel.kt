@@ -227,7 +227,10 @@ class SettingsViewModel @Inject constructor(
     fun setMarketingConsent(enabled: Boolean) {
         analyticsHelper.settingsMarketingConsentChanged(enabled)
         viewModelScope.launch {
+            // Save locally first (fast)
             settingsRepository.setMarketingConsent(enabled)
+            // Sync to backend (fire-and-forget, non-critical)
+            hostedRepository.syncMarketingConsent(enabled)
         }
     }
 
