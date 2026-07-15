@@ -98,12 +98,6 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      # Clerk auth — set these in .env.prod
-      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
-      # Admin BFF — shared secret with backend
-      - ADMIN_API_KEY=${ADMIN_API_KEY}
-      - BACKEND_URL=http://api:8000
     volumes:
       - rendered_videos_data:/rendered-videos
     env_file: .env.prod
