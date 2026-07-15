@@ -108,7 +108,7 @@ export default function RootLayout({
         <head>
           {/* Theme color matches the dark brand background */}
           <meta name="theme-color" content="#0a0a0b" />
-          <meta name="apple-mobile-web-app-capable" content="yes" />
+          <meta name="mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-status-bar-style" content="black" />
           <meta name="apple-mobile-web-app-title" content={SITE.name} />
 

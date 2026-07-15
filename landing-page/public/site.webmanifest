@@ -1,0 +1,17 @@
+{
+  "name": "Cookd",
+  "short_name": "Cookd",
+  "description": "AI Dating Coach: Get Better Replies on Hinge, Bumble & Tinder",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0b",
+  "theme_color": "#0a0a0b",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
