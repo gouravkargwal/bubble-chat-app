@@ -148,10 +148,10 @@ export default function ChildSafetyPage() {
                 <li className="text-sm text-nothing-text-secondary leading-relaxed list-disc">
                   <strong>Email:</strong>{" "}
                   <a
-                    href="mailto:safety@cookdai.site"
+                    href="mailto:support@cookdai.site"
                     className="text-[#FF003C] underline"
                   >
-                    safety@cookdai.site
+                    support@cookdai.site
                   </a>
                 </li>
                 <li className="text-sm text-nothing-text-secondary leading-relaxed list-disc">
@@ -223,10 +223,10 @@ export default function ChildSafetyPage() {
               <p className="text-sm text-nothing-text-secondary leading-relaxed mt-2">
                 <strong>Email:</strong>{" "}
                 <a
-                  href="mailto:safety@cookdai.site"
+                  href="mailto:support@cookdai.site"
                   className="text-[#FF003C] underline"
                 >
-                  safety@cookdai.site
+                  support@cookdai.site
                 </a>
               </p>
             </motion.section>

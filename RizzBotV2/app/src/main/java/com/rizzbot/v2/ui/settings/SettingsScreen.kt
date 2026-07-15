@@ -294,7 +294,13 @@ fun SettingsScreen(
                 border = BorderStroke(NothingDimens.borderThickness, NothingBorder)
             ) {
                 Column {
-                    SettingsRow(icon = Icons.Default.Email, label = "Email Support", onClick = {})
+                    SettingsRow(icon = Icons.Default.Email, label = "Email Support", onClick = {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:support@cookdai.site")
+                            putExtra(Intent.EXTRA_SUBJECT, "Cookd Support")
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Send Email"))
+                    })
                     HorizontalDivider(color = NothingBorder)
                     SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {
                         val shareText = "Check out Cookd — AI replies for dating apps! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile"
