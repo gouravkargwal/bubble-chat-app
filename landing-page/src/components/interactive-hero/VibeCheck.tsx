@@ -28,7 +28,11 @@ export function VibeCheck({ onSelect }: VibeCheckProps) {
         the situation.
       </p>
 
-      <div className="grid w-full max-w-lg gap-2.5">
+      <div
+        className="grid w-full max-w-lg gap-2.5"
+        role="radiogroup"
+        aria-label="Conversation direction"
+      >
         {VIBE_OPTIONS.map((vibe, i) => (
           <motion.button
             key={vibe.id}
@@ -43,6 +47,9 @@ export function VibeCheck({ onSelect }: VibeCheckProps) {
             className="group flex items-center gap-4 rounded-xl border border-nothing-border bg-nothing-surface/50 p-4 text-left transition-all duration-200 hover:border-neon-red/50 hover:bg-neon-red/[0.03]"
             whileHover={{ scale: 1.01, x: 4 }}
             whileTap={{ scale: 0.98 }}
+            role="radio"
+            aria-checked={false}
+            aria-label={`Select ${vibe.label}: ${vibe.description}`}
           >
             <span className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-lg border border-nothing-border bg-nothing-black text-[10px] font-mono text-nothing-text-tertiary tracking-wider group-hover:border-neon-red/30 group-hover:text-neon-red transition-colors">
               {vibe.shortcut}

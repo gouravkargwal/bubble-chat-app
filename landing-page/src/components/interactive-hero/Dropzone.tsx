@@ -83,7 +83,10 @@ export function Dropzone({ onImageSelected }: DropzoneProps) {
               LIVE DEMO
             </motion.span>
           </div>
-          <p className="text-sm text-nothing-white blur-sm select-none">
+          <p
+            className="text-sm text-nothing-white blur-sm select-none"
+            aria-hidden="true"
+          >
             Haha you&rsquo;re literally impossible to resist, you know that? 😏
           </p>
           <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-nothing-black/10 backdrop-blur-[1px]">
@@ -119,13 +122,18 @@ export function Dropzone({ onImageSelected }: DropzoneProps) {
               ? "border-nothing-border bg-nothing-surface"
               : "border-nothing-border hover:border-nothing-text-secondary hover:bg-nothing-white/[0.02]"
           }`}
+          aria-label={
+            preview
+              ? "Screenshot preview uploaded, click to upload a different screenshot"
+              : "Upload your chat screenshot"
+          }
         >
           {preview ? (
             <div className="flex flex-col items-center gap-3">
               <div className="relative h-48 w-full max-w-xs">
                 <Image
                   src={preview}
-                  alt="Screenshot preview"
+                  alt="Uploaded chat screenshot preview"
                   fill
                   className="rounded-lg object-contain"
                   unoptimized
@@ -138,7 +146,10 @@ export function Dropzone({ onImageSelected }: DropzoneProps) {
           ) : (
             <div className="flex flex-col items-center gap-4">
               <div className="rounded-full border border-nothing-border p-4">
-                <UploadIcon className="h-8 w-8 text-nothing-text-secondary" />
+                <UploadIcon
+                  className="h-8 w-8 text-nothing-text-secondary"
+                  aria-hidden="true"
+                />
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold text-nothing-white">
@@ -162,6 +173,7 @@ export function Dropzone({ onImageSelected }: DropzoneProps) {
             accept="image/*"
             className="hidden"
             onChange={handleInputChange}
+            aria-hidden="true"
           />
         </button>
       </motion.div>

@@ -1,19 +1,56 @@
 "use client";
 
-import { useState, useCallback, useEffect, type ReactNode } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  lazy,
+  Suspense,
+  type ReactNode,
+} from "react";
 import { Header } from "@/components/Header";
-import { InteractiveHero } from "@/components/interactive-hero";
-import { AppMockup } from "@/components/AppMockup";
-import { Features } from "@/components/Features";
-import { HowItWorks } from "@/components/HowItWorks";
-import { Pricing } from "@/components/Pricing";
-import { FAQ } from "@/components/FAQ";
-import { CTA } from "@/components/CTA";
-import { Footer } from "@/components/Footer";
 import { SectionTracker } from "@/components/SectionTracker";
 import type { ReplyItem } from "@/components/interactive-hero/types";
 import { APP_URLS, SITE } from "@/app/constants";
 import posthog from "posthog-js";
+
+// Dynamic imports for heavy components — keeps the initial bundle small
+const InteractiveHero = lazy(() =>
+  import("@/components/interactive-hero").then((m) => ({
+    default: m.InteractiveHero,
+  }))
+);
+const AppMockup = lazy(() =>
+  import("@/components/AppMockup").then((m) => ({ default: m.AppMockup }))
+);
+const Features = lazy(() =>
+  import("@/components/Features").then((m) => ({ default: m.Features }))
+);
+const HowItWorks = lazy(() =>
+  import("@/components/HowItWorks").then((m) => ({ default: m.HowItWorks }))
+);
+const Pricing = lazy(() =>
+  import("@/components/Pricing").then((m) => ({ default: m.Pricing }))
+);
+const FAQ = lazy(() =>
+  import("@/components/FAQ").then((m) => ({ default: m.FAQ }))
+);
+const CTA = lazy(() =>
+  import("@/components/CTA").then((m) => ({ default: m.CTA }))
+);
+const Footer = lazy(() =>
+  import("@/components/Footer").then((m) => ({ default: m.Footer }))
+);
+
+function SectionFallback({ height = "400px" }: { height?: string }) {
+  return (
+    <div
+      className="flex items-center justify-center"
+      style={{ minHeight: height }}
+      aria-hidden="true"
+    />
+  );
+}
 
 /**
  * ClientShell wraps all interactive sections.
@@ -21,8 +58,6 @@ import posthog from "posthog-js";
  * This component is the ONLY "use client" wrapper needed at the top level.
  * It holds the shared state (generated replies, mobile CTA) that flows
  * between the InteractiveHero funnel and the AppMockup display.
- *
- * Everything else can be a server component for better SSR/SEO.
  */
 export function ClientShell() {
   const [generatedReplies, setGeneratedReplies] = useState<ReplyItem[] | null>(
@@ -68,25 +103,41 @@ export function ClientShell() {
     <>
       <Header />
       <main>
-        <InteractiveHero onRepliesReady={handleRepliesReady} />
-        <AppMockup replies={generatedReplies ?? undefined} />
+        <Suspense fallback={<SectionFallback height="100vh" />}>
+          <InteractiveHero onRepliesReady={handleRepliesReady} />
+        </Suspense>
+        <Suspense fallback={<SectionFallback />}>
+          <AppMockup replies={generatedReplies ?? undefined} />
+        </Suspense>
         <SectionTracker section="features" id="features">
-          <Features />
+          <Suspense fallback={<SectionFallback />}>
+            <Features />
+          </Suspense>
         </SectionTracker>
         <SectionTracker section="how_it_works" id="how-it-works">
-          <HowItWorks />
+          <Suspense fallback={<SectionFallback />}>
+            <HowItWorks />
+          </Suspense>
         </SectionTracker>
         <SectionTracker section="pricing" id="pricing">
-          <Pricing />
+          <Suspense fallback={<SectionFallback />}>
+            <Pricing />
+          </Suspense>
         </SectionTracker>
         <SectionTracker section="faq" id="faq">
-          <FAQ />
+          <Suspense fallback={<SectionFallback />}>
+            <FAQ />
+          </Suspense>
         </SectionTracker>
         <SectionTracker section="cta" id="cta">
-          <CTA />
+          <Suspense fallback={<SectionFallback />}>
+            <CTA />
+          </Suspense>
         </SectionTracker>
       </main>
-      <Footer />
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
 
       {/* Sticky mobile CTA bar */}
       <div
@@ -115,6 +166,7 @@ export function ClientShell() {
                 })
               }
               className="inline-flex items-center gap-1.5 rounded-full bg-neon-red px-4 py-2 text-xs font-bold text-nothing-white whitespace-nowrap"
+              aria-label="Download Cookd from Google Play"
             >
               <svg
                 className="h-3.5 w-3.5"
@@ -122,6 +174,7 @@ export function ClientShell() {
                 viewBox="0 0 24 24"
                 stroke="currentColor"
                 strokeWidth={2}
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -146,6 +199,7 @@ export function ClientShell() {
                 viewBox="0 0 24 24"
                 stroke="currentColor"
                 strokeWidth={2}
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"

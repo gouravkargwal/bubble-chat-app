@@ -19,6 +19,7 @@ const FEATURES = [
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={1.5}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"
@@ -40,6 +41,7 @@ const FEATURES = [
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={1.5}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"
@@ -61,6 +63,7 @@ const FEATURES = [
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={1.5}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"
@@ -82,6 +85,7 @@ const FEATURES = [
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={1.5}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"
@@ -103,6 +107,7 @@ const FEATURES = [
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={1.5}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"
@@ -124,6 +129,7 @@ const FEATURES = [
         viewBox="0 0 24 24"
         stroke="currentColor"
         strokeWidth={1.5}
+        aria-hidden="true"
       >
         <path
           strokeLinecap="round"
@@ -141,14 +147,21 @@ const FEATURES = [
 
 export function Features() {
   return (
-    <section id="features" className="relative px-6 py-24 sm:py-32">
+    <section
+      id="features"
+      className="relative px-6 py-24 sm:py-32"
+      aria-labelledby="features-heading"
+    >
       {/* Section header */}
       <AnimatedSection className="mx-auto max-w-2xl text-center mb-16 sm:mb-20">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-nothing-border bg-nothing-surface px-4 py-1.5 text-xs font-mono text-nothing-text-secondary tracking-wider">
           <StatusDot active />
           CAPABILITIES
         </div>
-        <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+        <h2
+          id="features-heading"
+          className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white"
+        >
           Engineered for the <span className="text-neon-red">Modern Dater</span>
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
@@ -176,6 +189,7 @@ export function Features() {
                       rotate: [0, -10, 10, -5, 0],
                       transition: { duration: 0.4 },
                     }}
+                    aria-hidden="true"
                   >
                     {feature.icon}
                   </motion.div>

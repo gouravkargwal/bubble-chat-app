@@ -36,7 +36,11 @@ export function Header() {
       {/* Main nav bar */}
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 sm:px-8">
         {/* Logo + Brand */}
-        <Link href="/" className="flex items-center gap-3 group">
+        <Link
+          href="/"
+          className="flex items-center gap-3 group"
+          aria-label="Cookd Home"
+        >
           <Logo size={36} />
           <div className="flex items-center gap-3">
             <span className="font-heading text-lg font-extrabold tracking-tight text-nothing-white whitespace-nowrap">
@@ -49,7 +53,10 @@ export function Header() {
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav
+          className="hidden md:flex items-center gap-8"
+          aria-label="Main navigation"
+        >
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}
@@ -74,6 +81,7 @@ export function Header() {
               })
             }
             className="inline-flex items-center gap-1.5 rounded-full border border-nothing-border px-4 py-2 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-nothing-white/5 btn-secondary-accent"
+            aria-label="Download Cookd from Google Play"
           >
             <svg
               className="h-3.5 w-3.5"
@@ -81,6 +89,7 @@ export function Header() {
               viewBox="0 0 24 24"
               stroke="currentColor"
               strokeWidth={2}
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -96,7 +105,8 @@ export function Header() {
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
           className="md:hidden flex flex-col gap-1.5 p-2"
-          aria-label="Toggle menu"
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
         >
           <span
             className={`block h-0.5 w-5 bg-nothing-white transition-transform duration-200 ${
@@ -121,6 +131,8 @@ export function Header() {
         className={`md:hidden overflow-hidden transition-all duration-300 ${
           mobileOpen ? "max-h-96" : "max-h-0"
         }`}
+        role="region"
+        aria-label="Mobile navigation"
       >
         <div className="border-t border-nothing-border bg-nothing-black px-6 py-4 space-y-4">
           {NAV_LINKS.map((link) => (
@@ -145,6 +157,7 @@ export function Header() {
               });
             }}
             className="block w-full rounded-full border border-nothing-border px-4 py-2.5 text-center text-xs font-bold text-nothing-white mt-4 transition-all duration-200 hover:bg-nothing-white/5"
+            aria-label="Download Cookd from Google Play"
           >
             <span className="inline-flex items-center justify-center gap-1.5">
               <svg
@@ -153,6 +166,7 @@ export function Header() {
                 viewBox="0 0 24 24"
                 stroke="currentColor"
                 strokeWidth={2}
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"

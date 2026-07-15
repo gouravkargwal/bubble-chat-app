@@ -53,9 +53,13 @@ export function HowItWorks() {
     <section
       id="how-it-works"
       className="relative px-6 py-24 sm:py-32 overflow-hidden"
+      aria-labelledby="how-it-works-heading"
     >
       {/* Background accent line */}
-      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-nothing-border to-transparent hidden lg:block" />
+      <div
+        className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-nothing-border to-transparent hidden lg:block"
+        aria-hidden="true"
+      />
 
       {/* Section header */}
       <AnimatedSection className="mx-auto max-w-2xl text-center mb-16 sm:mb-20">
@@ -63,7 +67,10 @@ export function HowItWorks() {
           <StatusDot active />
           WORKFLOW
         </div>
-        <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+        <h2
+          id="how-it-works-heading"
+          className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white"
+        >
           Five Steps to{" "}
           <span className="text-neon-red">Conversation Mastery</span>
         </h2>
@@ -75,7 +82,10 @@ export function HowItWorks() {
       {/* Steps */}
       <div className="mx-auto max-w-4xl relative">
         {/* Connecting line (mobile) */}
-        <div className="absolute left-[19px] top-0 bottom-0 w-px bg-nothing-border sm:left-[29px] lg:hidden" />
+        <div
+          className="absolute left-[19px] top-0 bottom-0 w-px bg-nothing-border sm:left-[29px] lg:hidden"
+          aria-hidden="true"
+        />
 
         <div className="space-y-12 sm:space-y-16 lg:space-y-24 relative">
           {STEPS.map((step, i) => (
@@ -111,6 +121,7 @@ export function HowItWorks() {
                     repeat: Infinity,
                     delay: i * 0.8,
                   }}
+                  aria-hidden="true"
                 />
               </div>
 
@@ -148,6 +159,7 @@ export function HowItWorks() {
                       repeat: Infinity,
                       ease: "linear",
                     }}
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"

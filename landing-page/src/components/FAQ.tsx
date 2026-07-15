@@ -59,30 +59,33 @@ function FAQItem({
 
   return (
     <div className="border-b border-nothing-border last:border-b-0">
-      <button
-        onClick={handleToggle}
-        className="flex w-full items-center justify-between py-5 text-left transition-colors duration-200"
-        aria-expanded={isOpen}
-      >
-        <h3 className="text-sm font-bold text-nothing-white hover:text-neon-red transition-colors duration-200">
-          {question}
-        </h3>
-        <motion.svg
-          className="h-4 w-4 flex-shrink-0 ml-4 text-nothing-white"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2.5}
-          animate={{ rotate: isOpen ? 45 : 0 }}
-          transition={{ duration: 0.2 }}
+      <h3>
+        <button
+          onClick={handleToggle}
+          className="flex w-full items-center justify-between py-5 text-left transition-colors duration-200"
+          aria-expanded={isOpen}
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M12 4.5v15m7.5-7.5h-15"
-          />
-        </motion.svg>
-      </button>
+          <span className="text-sm font-bold text-nothing-white hover:text-neon-red transition-colors duration-200">
+            {question}
+          </span>
+          <motion.svg
+            className="h-4 w-4 flex-shrink-0 ml-4 text-nothing-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            animate={{ rotate: isOpen ? 45 : 0 }}
+            transition={{ duration: 0.2 }}
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 4.5v15m7.5-7.5h-15"
+            />
+          </motion.svg>
+        </button>
+      </h3>
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
@@ -122,7 +125,11 @@ export function FAQ() {
   );
 
   return (
-    <section id="faq" className="relative px-6 py-24 sm:py-32 overflow-hidden">
+    <section
+      id="faq"
+      className="relative px-6 py-24 sm:py-32 overflow-hidden"
+      aria-labelledby="faq-heading"
+    >
       {/* Background grid */}
       <div
         className="absolute inset-0 opacity-[0.02] pointer-events-none"
@@ -131,6 +138,7 @@ export function FAQ() {
             "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
           backgroundSize: "40px 40px",
         }}
+        aria-hidden="true"
       />
 
       <AnimatedSection className="mx-auto max-w-2xl text-center mb-16">
@@ -138,7 +146,10 @@ export function FAQ() {
           <StatusDot active />
           FAQ
         </div>
-        <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+        <h2
+          id="faq-heading"
+          className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white"
+        >
           Got Questions?{" "}
           <span className="text-neon-red">We{"'"}ve Got Answers</span>.
         </h2>

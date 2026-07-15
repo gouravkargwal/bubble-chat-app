@@ -10,7 +10,8 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and static files, protect everything else
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    // Match only admin routes — skip all Next.js internals, static files,
+    // and the public landing page which doesn't need Clerk middleware.
+    "/admin/:path*",
   ],
 };

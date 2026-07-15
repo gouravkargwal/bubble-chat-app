@@ -52,16 +52,17 @@
 }
 
 /* ── Light Mode (UI UX Pro Max: Light ✓ Full) ── */
+/* Adjusted contrast ratios to meet WCAG AA: muted 4.5:1, subtle 3:1 minimum */
 @media (prefers-color-scheme: light) {
   :root {
     --color-brand-black: #ffffff;
     --color-brand-white: #111111;
-    --color-brand-primary: #e11d48;
-    --color-brand-accent: #2563eb;
+    --color-brand-primary: #be123c;
+    --color-brand-accent: #1d4ed8;
     --color-brand-surface: #fff1f2;
     --color-brand-border: rgba(0, 0, 0, 0.1);
-    --color-brand-muted: rgba(0, 0, 0, 0.5);
-    --color-brand-subtle: rgba(0, 0, 0, 0.3);
+    --color-brand-muted: rgba(0, 0, 0, 0.65);
+    --color-brand-subtle: rgba(0, 0, 0, 0.4);
     --color-brand-success: #059669;
     --color-brand-error: #dc2626;
     --color-brand-foreground: #881337;

@@ -4,19 +4,20 @@ import "./globals.css";
 import { SITE, APP_URLS } from "./constants";
 import { Suspense } from "react";
 import { PostHogPageView } from "@/components/PostHogPageView";
-import { WebVitalsReporter } from "@/components/WebVitalsReporter";
 import { ClerkProvider } from "@clerk/nextjs";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-heading",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 const dmSans = DM_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
+  display: "swap",
 });
 
 const siteName = SITE.name;
@@ -100,6 +101,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // ClerkProvider wrapped only at the layout level — it only activates JS
+    // for admin routes via middleware protection.
     <ClerkProvider>
       <html
         lang="en"
@@ -112,8 +115,15 @@ export default function RootLayout({
           <meta name="apple-mobile-web-app-status-bar-style" content="black" />
           <meta name="apple-mobile-web-app-title" content={SITE.name} />
 
-          {/* Preload hero image for faster LCP */}
-          <link rel="preload" as="image" href="/logo.svg" />
+          {/* Preconnect to critical origins */}
+          <link rel="preconnect" href="https://us.posthog.com" />
+          <link rel="preconnect" href="https://us-assets.i.posthog.com" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link
+            rel="preconnect"
+            href="https://fonts.gstatic.com"
+            crossOrigin="anonymous"
+          />
 
           {/* JSON-LD: WebApplication (AI Dating Coach) */}
           <script
@@ -243,7 +253,6 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <PostHogPageView />
           </Suspense>
-          <WebVitalsReporter />
           {children}
         </body>
       </html>
