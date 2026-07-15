@@ -1,4 +1,4 @@
-"""User data management endpoints."""
+"""User data management and preference endpoints."""
 
 from pathlib import Path
 from sqlalchemy import select
@@ -19,8 +19,36 @@ from app.infrastructure.database.models import (
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
+from pydantic import BaseModel
+
 logger = structlog.get_logger()
 STATIC_ROOT = Path("static")
+
+
+class UpdateMarketingConsentRequest(BaseModel):
+    marketing_consent: bool
+
+
+@router.put("/me/marketing-consent")
+async def update_marketing_consent(
+    body: UpdateMarketingConsentRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Sync the marketing consent flag from the Android app.
+
+    Called when the user toggles 'Allow marketing use of my data'
+    in Settings -> Privacy & Data. The value is stored on the User
+    record so the admin video pipeline can filter candidates.
+    """
+    user.marketing_consent = body.marketing_consent
+    await db.commit()
+    logger.info(
+        "marketing_consent_updated",
+        user_id=user.id,
+        consent=body.marketing_consent,
+    )
+    return {"status": "ok", "marketing_consent": body.marketing_consent}
 
 
 @router.delete("/me/data")

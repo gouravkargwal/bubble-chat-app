@@ -322,7 +322,27 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(NothingDimens.cardRadius),
                 border = BorderStroke(NothingDimens.borderThickness, NothingBorder)
             ) {
-                SettingsRow(icon = Icons.Default.DeleteForever, label = "Delete All My Data", onClick = { showDeleteAllDataDialog = true }, textColor = NothingError)
+                Column {
+                    // Marketing consent toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = NothingDimens.cardPadding, vertical = NothingDimens.elementGap),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = NothingWhite, modifier = Modifier.size(22.dp))
+                        Spacer(modifier = Modifier.width(NothingDimens.elementGap))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Allow marketing use of my data", color = NothingWhite, style = MaterialTheme.typography.titleSmall)
+                            Text("Your name and chat messages may appear in Cookd social media videos", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
+                        }
+                        Switch(
+                            checked = state.marketingConsent,
+                            onCheckedChange = { viewModel.setMarketingConsent(it) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = NothingWhite, checkedThumbColor = NothingBlack)
+                        )
+                    }
+                    HorizontalDivider(color = NothingBorder)
+                    SettingsRow(icon = Icons.Default.DeleteForever, label = "Delete All My Data", onClick = { showDeleteAllDataDialog = true }, textColor = NothingError)
+                }
             }
 
             Spacer(modifier = Modifier.height(NothingDimens.sectionSpacing))

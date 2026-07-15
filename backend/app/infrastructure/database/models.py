@@ -61,6 +61,7 @@ class User(Base):
         String(36), ForeignKey("users.id"), nullable=True
     )
     prompt_variant: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    marketing_consent: Mapped[bool] = mapped_column(Boolean, default=True)
     # Set to the purchase timestamp whenever a new paid plan activates (INITIAL_PURCHASE / RENEWAL).
     # Usage counters use MAX(week_start, plan_period_start) so limits reset with each new period.
     plan_period_start: Mapped[datetime | None] = mapped_column(
@@ -708,6 +709,7 @@ class LTDRedemptionCode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
 
 class RenderedVideo(Base):
     """Tracks rendered video exports — CRUD for the admin pipeline."""

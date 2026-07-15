@@ -241,6 +241,11 @@ async def get_video_candidates(
     max_score: int | None = Query(
         default=None, ge=0, le=70, alias="maxScore", description="Maximum viral score"
     ),
+    marketing_consent_only: bool | None = Query(
+        default=True,
+        alias="marketingConsentOnly",
+        description="Only return candidates from users who have opted into marketing content (default: true). The consent flag is set client-side and synced per-user. Set to false to include all interactions regardless of consent status.",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -249,6 +254,13 @@ async def get_video_candidates(
     Results are sorted by score descending, so the most viral-worthy
     interactions appear first. Each candidate includes a score breakdown
     and a Remotion-ready payload.
+
+    ponytail: marketing_consent filtering currently relies on a per-user flag
+    that is set client-side. In the future, this should be a denormalized column
+    on the User model synced from the Android app's DataStore, or a JOIN on a
+    user_preferences table. For now, set marketingConsentOnly=false if you need
+    to bypass the filter for administrative review. If the User model ever gains
+    a `marketing_consent` column, replace this inline filter with a DB-level JOIN.
     """
     # Apply DB-level filters early
     db_filters = [Interaction.transcript_json.isnot(None)]
