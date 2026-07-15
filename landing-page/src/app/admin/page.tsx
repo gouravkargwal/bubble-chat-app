@@ -16,6 +16,7 @@ import { CandidateFilterBar } from "@/components/admin/CandidateFilterBar";
 import { PaginationBar } from "@/components/admin/PaginationBar";
 import { CandidatesTab } from "@/components/admin/CandidatesTab";
 import { RenderedTab } from "@/components/admin/RenderedTab";
+import { PublishedTab } from "@/components/admin/PublishedTab";
 
 const PAGE_SIZE = 20;
 
@@ -28,7 +29,9 @@ export default function AdminVideoPipeline() {
   const [rendering, setRendering] = useState(false);
   const [renderLog, setRenderLog] = useState<string[]>([]);
   const [renderProgress, setRenderProgress] = useState<string | null>(null);
-  const [tab, setTab] = useState<"candidates" | "rendered">("candidates");
+  const [tab, setTab] = useState<"candidates" | "rendered" | "published">(
+    "candidates"
+  );
 
   // ── Rendered videos pagination & filters ──
   const [renderedPage, setRenderedPage] = useState(1);
@@ -171,27 +174,14 @@ export default function AdminVideoPipeline() {
         throw new Error(err.error || `Render failed (${res.status})`);
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
       setRenderLog((prev) => [
-        `🎬 ${candidate.personName} — rendered (${(
-          blob.size /
-          1024 /
-          1024
-        ).toFixed(1)} MB)`,
+        `🎬 ${candidate.personName} — rendered`,
         ...prev,
       ]);
 
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `cookd-${candidate.personName
-        .toLowerCase()
-        .replace(/\s+/g, "-")}.mp4`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      fetchRenderedVideos(renderedPage, appliedFilters);
+      // Switch to rendered tab so user can preview / post the video
+      setTab("rendered");
+      fetchRenderedVideos(1, appliedFilters);
     } catch (err) {
       setRenderLog((prev) => [
         `❌ ${candidate.personName}: ${
@@ -387,6 +377,16 @@ export default function AdminVideoPipeline() {
           >
             ✅ Rendered ({renderedTotal})
           </button>
+          <button
+            onClick={() => setTab("published")}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+              tab === "published"
+                ? "bg-[#FF003C] text-white"
+                : "text-[rgba(255,255,255,0.45)] hover:text-white"
+            }`}
+          >
+            🌐 Published
+          </button>
         </div>
 
         {/* Error */}
@@ -467,6 +467,9 @@ export default function AdminVideoPipeline() {
               error={error}
               appliedFilters={appliedFilters}
               onDelete={handleDeleteVideo}
+              onPublished={() =>
+                fetchRenderedVideos(renderedPage, appliedFilters)
+              }
             />
 
             <PaginationBar
@@ -477,6 +480,9 @@ export default function AdminVideoPipeline() {
             />
           </>
         )}
+
+        {/* ── PUBLISHED TAB ── */}
+        {tab === "published" && <PublishedTab />}
 
         {/* Render Log */}
         {renderLog.length > 0 && (

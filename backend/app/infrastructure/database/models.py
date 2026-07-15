@@ -744,3 +744,48 @@ class RenderedVideo(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class PublishedVideo(Base):
+    """Tracks videos published to social platforms."""
+
+    __tablename__ = "published_videos"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    rendered_video_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("rendered_videos.id"), nullable=False, index=True
+    )
+    platform: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # "instagram" | "youtube"
+    platform_post_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # ID returned by the platform
+    platform_url: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )  # URL to the published post
+    # Audio track info
+    audio_track_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    audio_track_youtube_id: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )
+    # Caption used
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Status
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending, posting, posted, failed
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Performance metrics (polled later)
+    view_count: Mapped[int] = mapped_column(Integer, default=0)
+    like_count: Mapped[int] = mapped_column(Integer, default=0)
+    comment_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

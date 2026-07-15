@@ -7,7 +7,7 @@ const csp = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https://clerk.accounts.dev https://us.posthog.com https://us-assets.i.posthog.com https://*.clerk.com https://api.cookdai.site http://localhost:8000 https://api.payu.in http://localhost:*",
-  "frame-src https://payu.in https://www.payu.in https://accounts.google.com",
+  "frame-src https://payu.in https://www.payu.in https://accounts.google.com https://www.youtube.com",
   "media-src 'self' blob:",
   "frame-ancestors 'none'",
   "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in",

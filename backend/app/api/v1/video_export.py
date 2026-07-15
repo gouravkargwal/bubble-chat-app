@@ -72,6 +72,9 @@ def score_interaction(ix: Interaction) -> dict:
       - breakdown: dict of individual scores
     """
     messages = _safe_json(ix.transcript_json, [])
+    # Fall back to their_last_message if transcript_json is empty
+    if not messages and ix.their_last_message:
+        messages = [{"s": "them", "t": ix.their_last_message}]
     replies = [_safe_json(getattr(ix, f"reply_{i}", None)) for i in range(4)]
     winning = next(
         (r for r in replies if r.get("is_recommended")),
@@ -188,21 +191,57 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
         _get_reply(replies, 0),
     )
 
-    return {
-        "id": ix.id,
-        "personName": ix.person_name or "Someone",
-        "detectedApp": "dating_app",  # Could be refined later
-        "strategyLabel": winning.get("strategy_label", "COOKD_AI"),
-        "winningLine": winning.get("text", ""),
-        "coachReasoning": winning.get("coach_reasoning", ""),
-        "theirLastMessage": ix.their_last_message or "",
-        "transcript": [
+    # Build transcript: prefer structured transcript_json.
+    # Fall back to their_last_message (LLM paraphrase — good enough for
+    # video context, not perfect but better than 0 chat bubbles).
+    transcript: list[dict] = []
+    if messages:
+        transcript = [
             {
                 "sender": "them" if m.get("s") == "them" else "you",
                 "text": m.get("t", ""),
             }
             for m in messages
-        ],
+        ]
+    elif ix.their_last_message:
+        # Strip analytical prefixes from the LLM paraphrase to get
+        # something that reads like a real chat message.
+        # Common prefixes: "She is responding to...", "She is saying...",
+        # "She caught on...", "Her message...", etc.
+        text = ix.their_last_message
+        for prefix in [
+            "She is responding to ",
+            "She is saying ",
+            "She is simply saying ",
+            "She caught on that ",
+            "Her message is ",
+            "She says ",
+        ]:
+            if text.startswith(prefix):
+                text = text[len(prefix) :]
+                break
+        # If still too long, take the last sentence or 80 chars
+        if len(text) > 80:
+            # Try finding a sentence break near the end
+            last_period = text.rfind(".", 0, 80)
+            if last_period > 20:
+                text = text[: last_period + 1]
+            else:
+                text = text[:80] + "..."
+        transcript = [
+            {"sender": "them", "text": text},
+            {"sender": "you", "text": winning.get("text", "✨")},
+        ]
+
+    return {
+        "id": ix.id,
+        "personName": ix.person_name or "Someone",
+        "detectedApp": "dating_app",
+        "strategyLabel": winning.get("strategy_label", "COOKD_AI"),
+        "winningLine": winning.get("text", ""),
+        "coachReasoning": winning.get("coach_reasoning", ""),
+        "theirLastMessage": ix.their_last_message or "",
+        "transcript": transcript,
         "hookStyle": score["hook_type"],
         "viralScore": score["total"],
         "priority": score["priority"],
@@ -243,9 +282,9 @@ async def get_video_candidates(
         default=None, ge=0, le=70, alias="maxScore", description="Maximum viral score"
     ),
     marketing_consent_only: bool | None = Query(
-        default=True,
+        default=False,
         alias="marketingConsentOnly",
-        description="Only return candidates from users who have opted into marketing content (default: true). The consent flag is set client-side and synced per-user. Set to false to include all interactions regardless of consent status.",
+        description="Only return candidates from users who have opted into marketing content (default: false). The consent flag is set client-side and synced per-user via PUT /users/me/marketing-consent.",
     ),
     db: AsyncSession = Depends(get_db),
 ):
@@ -261,7 +300,12 @@ async def get_video_candidates(
     By default, only interactions from consenting users are returned.
     """
     # Apply DB-level filters early
-    db_filters = [Interaction.transcript_json.isnot(None)]
+    # Accept interactions with transcript_json (lead magnet / structured)
+    # OR their_last_message (app interactions via screenshots).
+    db_filters = [
+        Interaction.transcript_json.isnot(None)
+        | Interaction.their_last_message.isnot(None)
+    ]
     if search:
         db_filters.append(Interaction.person_name.ilike(f"%{search}%"))
 

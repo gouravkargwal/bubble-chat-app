@@ -10,8 +10,9 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    // Match only admin routes — skip all Next.js internals, static files,
-    // and the public landing page which doesn't need Clerk middleware.
+    // Match admin pages AND admin API routes so Clerk middleware runs
+    // before the BFF proxy calls auth().
     "/admin/:path*",
+    "/api/admin/:path*",
   ],
 };

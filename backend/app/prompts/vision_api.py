@@ -99,7 +99,9 @@ If valid, extract verbatim text. Do not translate/summarize. Ignore text input b
 _VISION_STEP_3_CHAT_MODE = """
 STEP 3: ANALYSIS (VISUAL GROUND TRUTH ONLY)
 Use only visible evidence. Never assume "them"'s questions/accusations are factual truths about the user.
-Map raw_ocr_text 1:1 to visual_transcript (using sender, quoted_context, actual_new_message).
+
+CRITICAL — You MUST populate visual_transcript FIRST, before any analysis fields:
+Copy the ENTIRE raw_ocr_text array below into visual_transcript, keeping the same structure, order, sender, actual_new_message, quoted_context, and is_reply for every entry. Do NOT skip this step. visual_transcript must be a 1:1 replica of raw_ocr_text.
 
 Fields for BOTH modes:
 * visual_hooks: List 3-4 physical/environmental details from visible photos (empty list if no photos). On profiles, mine every photo across all screenshots (outfit, setting, props, vibe).

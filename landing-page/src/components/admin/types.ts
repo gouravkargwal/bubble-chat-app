@@ -33,6 +33,38 @@ export interface RenderedVideo {
   updatedAt: string;
 }
 
+export interface TrendingTrack {
+  youtubeId: string;
+  title: string;
+  channelName: string;
+  viewCount: number;
+  durationSeconds: number | null;
+}
+
+export interface PublishedVideo {
+  id: string;
+  renderedVideoId: string;
+  platform: string;
+  platformPostId: string | null;
+  platformUrl: string | null;
+  audioTrackTitle: string | null;
+  caption: string | null;
+  status: string;
+  errorMessage: string | null;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  createdAt: string;
+}
+
+export interface PublishResult {
+  platform: string;
+  status: string;
+  platformPostId: string | null;
+  platformUrl: string | null;
+  error: string | null;
+}
+
 export interface PaginatedResponse {
   videos: RenderedVideo[];
   count: number;

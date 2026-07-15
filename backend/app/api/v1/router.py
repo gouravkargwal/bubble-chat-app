@@ -21,6 +21,7 @@ from app.api.v1.video_crud import router as video_crud_router
 from app.api.v1.video_export import router as video_export_router
 from app.api.v1.vision_v2 import router as vision_v2_router
 from app.api.v1.webhooks import router as webhooks_router
+from app.api.v1.publish import router as publish_router
 
 v1_router = APIRouter()
 v1_router.include_router(auth_router, tags=["auth"])
@@ -38,3 +39,4 @@ v1_router.include_router(users_router)
 v1_router.include_router(video_export_router, tags=["admin"])
 v1_router.include_router(video_crud_router, tags=["admin"])
 v1_router.include_router(webhooks_router, tags=["webhooks"])
+v1_router.include_router(publish_router, tags=["admin"])

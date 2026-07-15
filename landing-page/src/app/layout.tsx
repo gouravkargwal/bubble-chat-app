@@ -101,8 +101,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // ClerkProvider wrapped only at the layout level — it only activates JS
-    // for admin routes via middleware protection.
+    // ClerkProvider is needed for the admin page to access auth state.
+    // It does NOT block rendering if Clerk JS CDN is unavailable —
+    // the server-side middleware.ts and BFF proxy handle actual auth.
     <ClerkProvider>
       <html
         lang="en"

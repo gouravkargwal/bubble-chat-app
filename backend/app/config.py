@@ -3,14 +3,15 @@ import os
 
 
 class Settings(BaseSettings):
-    # Allow overriding the env file via ENV_FILE so we can have clean staging/prod configs.
-    # Defaults to .env.dev for local development.
+    # Load from .env.dev file, but environment variables always take precedence.
+    # In Docker Compose, the root .env.dev is injected via env_file, so vars
+    # like YOUTUBE_API_KEY set there will override file-based values.
     model_config = SettingsConfigDict(
         env_file=os.getenv("ENV_FILE", ".env.dev"),
         env_file_encoding="utf-8",
-        # Ignore unrelated env vars (e.g. legacy GROQ_* keys) so app startup
-        # doesn't fail when extra keys exist in deployment environments.
         extra="ignore",
+        # Environment variables override file values
+        case_sensitive=False,
     )
 
     # Database
@@ -93,6 +94,14 @@ class Settings(BaseSettings):
 
     # Admin — shared secret for BFF proxy calls
     admin_api_key: str = ""
+
+    # Social platform API keys (auto-poster)
+    youtube_api_key: str = ""
+    youtube_client_id: str = ""
+    youtube_client_secret: str = ""
+    youtube_refresh_token: str = ""
+    instagram_access_token: str = ""
+    instagram_business_account_id: str = ""
 
     # App
     environment: str = "development"
