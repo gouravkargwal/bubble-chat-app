@@ -133,8 +133,15 @@ def generate_structured(
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
+    # Strip markdown code fences if present (Vertex AI sometimes wraps JSON).
+    raw_text = (response.text or "").strip()
+    if raw_text.startswith("```"):
+        raw_text = raw_text.split("\n", 1)[-1] if "\n" in raw_text else raw_text
+        raw_text = raw_text.rsplit("```", 1)[0] if "```" in raw_text else raw_text
+        raw_text = raw_text.strip()
+
     # Parse structured output
-    parsed = schema.model_validate_json(response.text)
+    parsed = schema.model_validate_json(raw_text)
 
     # Build usage row
     row = _usage_row_from_response(response, phase=phase, model=model)
