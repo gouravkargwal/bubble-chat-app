@@ -6,7 +6,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https://clerk.accounts.dev https://us.posthog.com https://us-assets.i.posthog.com https://*.clerk.com http://localhost:8000 https://api.payu.in http://localhost:*",
+  "connect-src 'self' https://clerk.accounts.dev https://us.posthog.com https://us-assets.i.posthog.com https://*.clerk.com https://api.cookdai.site http://localhost:8000 https://api.payu.in http://localhost:*",
   "frame-src https://payu.in https://www.payu.in https://accounts.google.com",
   "media-src 'self' blob:",
   "frame-ancestors 'none'",
@@ -17,8 +17,6 @@ const csp = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Remotion packages use native platform binaries — don't bundle them,
-  // load from node_modules at runtime instead.
   serverExternalPackages: [
     "@remotion/renderer",
     "@remotion/bundler",

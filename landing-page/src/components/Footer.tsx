@@ -54,9 +54,9 @@ export function Footer() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-12">
             {Object.entries(FOOTER_LINKS).map(([category, links]) => (
               <div key={category}>
-                <h4 className="text-xs font-mono tracking-[0.15em] text-nothing-text-tertiary mb-4 uppercase">
+                <h2 className="text-xs font-mono tracking-[0.15em] text-nothing-text-secondary mb-4 uppercase">
                   {category}
-                </h4>
+                </h2>
                 <ul className="space-y-3">
                   {links.map((link) => (
                     <li key={link.label}>
@@ -77,10 +77,10 @@ export function Footer() {
 
         {/* Bottom bar */}
         <div className="mt-12 pt-8 border-t border-nothing-border flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs font-mono text-nothing-text-tertiary tracking-wider">
+          <p className="text-xs font-mono text-nothing-text-secondary tracking-wider">
             &copy; {new Date().getFullYear()} COOKD. ALL RIGHTS RESERVED.
           </p>
-          <div className="flex items-center gap-3 text-xs font-mono text-nothing-text-tertiary tracking-wider">
+          <div className="flex items-center gap-3 text-xs font-mono text-nothing-text-secondary tracking-wider">
             <span className="text-nothing-success">▲</span>
             <span>v2.0 // SYSTEM_ONLINE</span>
           </div>

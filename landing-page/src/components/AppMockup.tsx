@@ -16,11 +16,11 @@ interface AppMockupProps {
 const DEMO_REPLIES = [
   {
     label: "Flirty",
-    text: "There's a trail that ends at this cute cafe... but I'd need someone cute to go with \ud83d\ude0f",
+    text: "There's a trail that ends at this cute cafe... but I'd need someone cute to go with 😏",
     strategy: "CHARM",
     recommended: true,
     reasoning:
-      "She engaged with playful energy \u2014 mirror it. The compliment is implied, not stated, making it land harder.",
+      "She engaged with playful energy — mirror it. The compliment is implied, not stated, making it land harder.",
   },
   {
     label: "Witty",
@@ -92,6 +92,7 @@ function DotMatrixRing({
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       className="absolute inset-0"
+      aria-hidden="true"
     >
       <circle cx={cx} cy={cy} r={ringRadius + dotRadius} fill="none" />
       {dots}
@@ -108,6 +109,7 @@ function CLogo({ size = 30 }: { size?: number }) {
       viewBox="0 0 108 108"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
     >
       <circle cx="54" cy="54" r="28" fill="white" />
       <path
@@ -326,6 +328,9 @@ function SuggestionCard({
             className="flex items-center gap-1 transition-colors duration-200"
             style={{ color: copied ? "#00FF66" : "rgba(255,255,255,0.45)" }}
             whileTap={{ scale: 0.92 }}
+            aria-label={
+              copied ? "Copied to clipboard" : "Copy reply to clipboard"
+            }
           >
             <svg
               className="h-3.5 w-3.5"
@@ -333,6 +338,7 @@ function SuggestionCard({
               viewBox="0 0 24 24"
               stroke="currentColor"
               strokeWidth={2}
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -358,6 +364,7 @@ function SuggestionCard({
                     : "rgba(255,255,255,0.45)",
               }}
               whileTap={{ scale: 0.85 }}
+              aria-label="Like this reply"
             >
               <svg
                 className="h-3.5 w-3.5"
@@ -365,6 +372,7 @@ function SuggestionCard({
                 viewBox="0 0 24 24"
                 stroke="currentColor"
                 strokeWidth={2}
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -385,6 +393,7 @@ function SuggestionCard({
                     : "rgba(255,255,255,0.45)",
               }}
               whileTap={{ scale: 0.85 }}
+              aria-label="Dislike this reply"
             >
               <svg
                 className="h-3.5 w-3.5"
@@ -392,6 +401,7 @@ function SuggestionCard({
                 viewBox="0 0 24 24"
                 stroke="currentColor"
                 strokeWidth={2}
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -470,7 +480,11 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
   ];
 
   return (
-    <section className="relative px-6 py-24 sm:py-32 overflow-hidden">
+    <section
+      id="app-mockup"
+      className="relative px-6 py-24 sm:py-32 overflow-hidden"
+      aria-labelledby="mockup-heading"
+    >
       {/* Background grid */}
       <div
         className="absolute inset-0 opacity-[0.02] pointer-events-none"
@@ -479,6 +493,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
             "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
           backgroundSize: "60px 60px",
         }}
+        aria-hidden="true"
       />
 
       <div className="relative mx-auto max-w-6xl">
@@ -492,7 +507,10 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
               ? "ANALYZING..."
               : "READY TO COPY"}
           </div>
-          <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white">
+          <h2
+            id="mockup-heading"
+            className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white"
+          >
             See It in <span className="text-neon-red">Action</span>
           </h2>
           <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
@@ -546,8 +564,8 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                         }}
                       >
                         <div className="max-w-[85%] rounded-xl rounded-bl-sm bg-nothing-surface border border-nothing-border px-2.5 py-1.5 text-[10px] leading-relaxed text-nothing-text-secondary">
-                          Hey! I saw you&apos;re into hiking too. What&apos;s
-                          your favourite trail?
+                          Hey! I saw you're into hiking too. What's your
+                          favourite trail?
                         </div>
                       </motion.div>
                       <motion.div
@@ -601,6 +619,19 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                         }}
                         onClick={() => {
                           if (state === "bubble") {
+                            setState("loading");
+                            setProgress(0);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Tap to generate AI replies"
+                        onKeyDown={(e) => {
+                          if (
+                            state === "bubble" &&
+                            (e.key === "Enter" || e.key === " ")
+                          ) {
+                            e.preventDefault();
                             setState("loading");
                             setProgress(0);
                           }
@@ -704,6 +735,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                                 ease: "easeInOut",
                                 times: [0, 0.15, 0.85, 1],
                               }}
+                              aria-hidden="true"
                             >
                               <span className="text-[8px] font-mono text-nothing-text-secondary tracking-wider bg-nothing-surface/80 px-2 py-0.5 rounded-full border border-nothing-border">
                                 Tap me →
@@ -833,6 +865,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                               }}
                               className="flex w-full items-center justify-center gap-2 rounded-full bg-nothing-white py-2.5 text-[11px] font-bold text-nothing-black transition-all duration-200 hover:bg-nothing-white/90"
                               whileTap={{ scale: 0.97 }}
+                              aria-label="Regenerate replies"
                             >
                               <svg
                                 className="h-3.5 w-3.5"
@@ -840,6 +873,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
                                 strokeWidth={2.5}
+                                aria-hidden="true"
                               >
                                 <path
                                   strokeLinecap="round"
@@ -877,6 +911,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                               <button
                                 onClick={onReset}
                                 className="text-[10px] font-mono text-nothing-text-tertiary underline underline-offset-4 hover:text-nothing-text-secondary transition-colors"
+                                aria-label="Try again with a new screenshot"
                               >
                                 TRY AGAIN WITH A NEW SCREENSHOT
                               </button>
@@ -936,7 +971,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                       </span>
                     </div>
                     <div>
-                      <h4
+                      <h3
                         className={`text-sm font-bold mb-1 transition-colors duration-500 ${
                           isActive
                             ? "text-nothing-white"
@@ -944,7 +979,7 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                         }`}
                       >
                         {item.title}
-                      </h4>
+                      </h3>
                       <p className="text-xs text-nothing-text-tertiary leading-relaxed">
                         {item.desc}
                       </p>
