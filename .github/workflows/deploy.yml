@@ -33,7 +33,8 @@ jobs:
 
             # Rebuild changed images and restart containers
             # --pull fetches latest base images (security updates)
-            docker compose -f docker-compose.prod.yml up -d --build --pull always
+            # --env-file .env.prod ensures ${VAR} references resolve correctly
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build --pull always
 
             # Prune unused images (don't let the disk fill up)
             docker image prune -f --filter "until=24h"
