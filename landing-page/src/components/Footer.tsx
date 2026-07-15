@@ -21,8 +21,7 @@ const FOOTER_LINKS = {
   Connect: [
     { label: "Twitter / X", href: SOCIAL_LINKS.twitter },
     { label: "Instagram", href: SOCIAL_LINKS.instagram },
-    { label: "TikTok", href: SOCIAL_LINKS.tiktok },
-    { label: "Discord", href: SOCIAL_LINKS.discord },
+    { label: "YouTube", href: SOCIAL_LINKS.youtube },
   ],
 };
 

@@ -23,13 +23,10 @@ export const API_URLS = {
 } as const;
 
 // ── Social Links ──
-// TODO: Create official accounts and update these URLs.
-// Social signals are a ranking factor — every "#" here hurts domain authority.
 export const SOCIAL_LINKS = {
-  twitter: "https://x.com/cookdai",
-  instagram: "https://instagram.com/cookdai",
-  tiktok: "https://tiktok.com/@cookdai",
-  discord: "https://discord.gg/cookdai",
+  twitter: "https://x.com/trycookdai",
+  instagram: "https://instagram.com/trycookdai",
+  youtube: "https://youtube.com/@trycookdai",
 } as const;
 
 // ── Email Addresses ──
