@@ -19,9 +19,10 @@ interface RevealProps {
   isRateLimited?: boolean;
   appUrl?: string;
   onReset?: () => void;
+  onBuyLifetime?: () => void;
 }
 
-export function UpsellBlock() {
+export function UpsellBlock({ onBuyLifetime }: { onBuyLifetime?: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -49,15 +50,13 @@ export function UpsellBlock() {
         </span>
       </div>
 
-      <a
-        href={APP_URLS.googlePlay}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        onClick={onBuyLifetime}
         className="inline-flex items-center gap-2 rounded-full border border-nothing-border bg-nothing-white px-8 py-3 text-xs font-bold text-nothing-black transition-all duration-200 hover:bg-nothing-white/90"
       >
         <MobileIcon className="h-3.5 w-3.5" />
-        Get the App
-      </a>
+        Claim Lifetime Access
+      </button>
 
       <div className="mt-4 flex items-center justify-center gap-3 text-[10px] font-mono text-nothing-text-tertiary">
         <span>[ NO SUBSCRIPTION ]</span>
@@ -68,7 +67,7 @@ export function UpsellBlock() {
   );
 }
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, onCopy }: { text: string; onCopy?: () => void }) {
   const [copied, setCopied] = React.useState(false);
 
   React.useEffect(() => {
@@ -83,6 +82,7 @@ function CopyButton({ text }: { text: string }) {
       onClick={() => {
         navigator.clipboard.writeText(text);
         setCopied(true);
+        onCopy?.();
       }}
       className={`rounded-md border px-2 py-0.5 text-[10px] font-mono transition-colors ${
         copied
@@ -163,6 +163,7 @@ export function Reveal({
   isRateLimited = false,
   appUrl = APP_URLS.googlePlay,
   onReset,
+  onBuyLifetime,
 }: RevealProps) {
   // Rate limited state — show download prompt
   if (isRateLimited || replies.length === 0) {
@@ -211,7 +212,7 @@ export function Reveal({
               <span className="text-[10px] font-mono uppercase tracking-widest text-nothing-text-tertiary">
                 {reply.style}
               </span>
-              <CopyButton text={reply.text} />
+              <CopyButton text={reply.text} onCopy={onBuyLifetime} />
             </div>
             <p className="text-sm text-nothing-white">{reply.text}</p>
           </motion.div>
@@ -219,18 +220,7 @@ export function Reveal({
       </div>
 
       {/* Upsell */}
-      <UpsellBlock />
-
-      {onReset && (
-        <motion.button
-          onClick={onReset}
-          className="mt-6 text-xs font-mono text-nothing-text-tertiary underline underline-offset-4 hover:text-nothing-text-secondary transition-colors"
-          whileHover={{ scale: 1.02, letterSpacing: "0.05em" }}
-          whileTap={{ scale: 0.98 }}
-        >
-          TRY AGAIN WITH A NEW SCREENSHOT
-        </motion.button>
-      )}
+      <UpsellBlock onBuyLifetime={onBuyLifetime} />
     </motion.div>
   );
 }
