@@ -207,17 +207,9 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
         _get_reply(replies, 0),
     )
 
-    return {
-        "id": ix.id,
-        "isOpener": is_opener,
-        "personName": ix.person_name or "Someone",
-        "detectedApp": "dating_app",
-        "strategyLabel": winning.get("strategy_label", "COOKD_AI"),
-        "winningLine": winning.get("text", ""),
-        "coachReasoning": winning.get("coach_reasoning", ""),
-        "theirLastMessage": ix.their_last_message or "",
-        "keyDetail": ix.key_detail or "",
-        "transcript": [
+    # Build transcript: from transcript_json if available, else synthetic from their_last_message
+    if messages:
+        transcript = [
             {
                 "sender": "them" if m.get("s") == "them" else "you",
                 "text": m.get("t", ""),
@@ -253,15 +245,19 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
             {"sender": "them", "text": text},
             {"sender": "you", "text": winning.get("text", "✨")},
         ]
+    else:
+        transcript = []
 
     return {
         "id": ix.id,
+        "isOpener": is_opener,
         "personName": ix.person_name or "Someone",
         "detectedApp": "dating_app",
         "strategyLabel": winning.get("strategy_label", "COOKD_AI"),
         "winningLine": winning.get("text", ""),
         "coachReasoning": winning.get("coach_reasoning", ""),
         "theirLastMessage": ix.their_last_message or "",
+        "keyDetail": ix.key_detail or "",
         "transcript": transcript,
         "hookStyle": score["hook_type"],
         "viralScore": score["total"],
