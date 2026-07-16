@@ -163,6 +163,8 @@ export default function AdminVideoPipeline() {
           hookStyle: candidate.hookStyle,
           viralScore: candidate.viralScore,
           interactionId: candidate.id,
+          isOpener: candidate.isOpener,
+          keyDetail: candidate.keyDetail,
         }),
       });
 
@@ -230,6 +232,8 @@ export default function AdminVideoPipeline() {
             hookStyle: candidate.hookStyle,
             viralScore: candidate.viralScore,
             interactionId: candidate.id,
+            isOpener: candidate.isOpener,
+            keyDetail: candidate.keyDetail,
           }),
         });
 

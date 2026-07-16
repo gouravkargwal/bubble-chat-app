@@ -1,5 +1,6 @@
 import { Composition } from "remotion";
 import { CookdChatShortVideo } from "./Composition";
+import { ProfileCardVideo, calcProfileCardDuration } from "./ProfileCard";
 import { CookdShortProps } from "./types";
 
 // 🧠 DYNAMIC MATH ENGINE: Calculates exact video length based on payload size
@@ -14,7 +15,7 @@ export const calculateVideoDuration = (props: CookdShortProps) => {
 };
 
 export const RemotionRoot: React.FC = () => {
-  const samplePreviewProps: CookdShortProps = {
+  const sampleChatProps: CookdShortProps = {
     personName: "Anvi",
     messages: [
       { sender: "them", text: "hey." },
@@ -25,18 +26,44 @@ export const RemotionRoot: React.FC = () => {
     voiceoverAudio: "",
   };
 
+  const sampleOpenerProps: CookdShortProps = {
+    personName: "Anupama",
+    messages: [
+      {
+        sender: "them",
+        text: "She is a grounded, mindfulness-focused individual who values substance and adventure over superficiality.",
+      },
+    ],
+    winningLine: "adventure over glam or just nice hotel lobbies?",
+    strategyLabel: "FRAME CONTROL",
+    voiceoverAudio: "",
+    isOpener: true,
+    keyDetail: "Adventure than Glam",
+  };
+
   return (
     <>
       <Composition
         id="CookdChatShort"
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         component={CookdChatShortVideo as any}
-        // Instead of hardcoding 540, the video now mathematically sizes itself!
-        durationInFrames={calculateVideoDuration(samplePreviewProps)}
+        durationInFrames={calculateVideoDuration(sampleChatProps)}
         fps={30}
         width={1080}
         height={1920}
-        defaultProps={samplePreviewProps}
+        defaultProps={sampleChatProps}
+      />
+      <Composition
+        id="CookdProfileCard"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        component={ProfileCardVideo as any}
+        durationInFrames={calcProfileCardDuration(
+          sampleOpenerProps.winningLine
+        )}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={sampleOpenerProps}
       />
     </>
   );

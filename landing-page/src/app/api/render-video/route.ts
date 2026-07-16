@@ -35,6 +35,11 @@ function calcDuration(messages: number, winningLineLen: number): number {
   return outroStartFrame + 120; // ~4s outro hold
 }
 
+// Duration for ProfileCard (opener) composition
+function calcProfileCardDuration(winningLineLen: number): number {
+  return 120 + winningLineLen * 2 + 20 + 60 + 90; // ~12s total
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -46,6 +51,8 @@ export async function POST(request: NextRequest) {
       hookStyle,
       viralScore,
       interactionId,
+      isOpener,
+      keyDetail,
     } = body;
 
     if (!winningLine || !personName) {
@@ -72,6 +79,8 @@ export async function POST(request: NextRequest) {
       winningLine,
       strategyLabel: strategyLabel || "COOKD_AI",
       voiceoverAudio: "",
+      isOpener: !!isOpener,
+      keyDetail: keyDetail || "",
     };
 
     // ── Step 1: Bundle the composition .tsx files into a static site ──
@@ -81,12 +90,16 @@ export async function POST(request: NextRequest) {
     });
 
     // ── Step 2: Select the composition by ID, overriding duration ──
+    // Openers use the ProfileCard composition; chat replies use ChatShort.
+    const compositionId = isOpener ? "CookdProfileCard" : "CookdChatShort";
     const composition = await selectComposition({
       serveUrl,
-      id: "CookdChatShort",
+      id: compositionId,
       inputProps,
     });
-    composition.durationInFrames = calcDuration(msgCount, winningLine.length);
+    composition.durationInFrames = isOpener
+      ? calcProfileCardDuration(winningLine.length)
+      : calcDuration(msgCount, winningLine.length);
 
     // ── Step 3: Define permanent output path (shared Docker volume) ──
     // Both landing-page and api containers mount rendered_videos_data at /rendered-videos
