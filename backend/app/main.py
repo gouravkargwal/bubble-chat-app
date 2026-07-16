@@ -281,8 +281,17 @@ def create_app() -> FastAPI:
         ).strip()
         cid = incoming or str(uuid.uuid4())
         request.state.correlation_id = cid
+
+        # Include OTel trace/span IDs in structured logs so every event
+        # can be linked to its trace waterfall in OpenObserver.
+        from opentelemetry import trace as _otel_trace
+
+        _span = _otel_trace.get_current_span()
+        _ctx = _span.get_span_context() if _span else None
         structlog.contextvars.bind_contextvars(
             correlation_id=cid,
+            trace_id=(format(_ctx.trace_id, "032x") if _ctx and _ctx.is_valid else ""),
+            span_id=(format(_ctx.span_id, "016x") if _ctx and _ctx.is_valid else ""),
             http_method=request.method,
             http_path=request.url.path,
         )
@@ -292,7 +301,11 @@ def create_app() -> FastAPI:
             return response
         finally:
             structlog.contextvars.unbind_contextvars(
-                "correlation_id", "http_method", "http_path"
+                "correlation_id",
+                "trace_id",
+                "span_id",
+                "http_method",
+                "http_path",
             )
 
     # Global exception handler — must NOT intercept HTTPException
