@@ -67,7 +67,9 @@ COPY --from=builder /app/src/app/admin/remotion ./src/app/admin/remotion
 
 # deps stage runs as root; nextjs user needs write access to node_modules
 # for Remotion/rspack cache directories.
-RUN chown -R nextjs:nodejs ./node_modules
+RUN chown -R nextjs:nodejs ./node_modules && \
+    mkdir -p /rendered-videos && \
+    chown nextjs:nodejs /rendered-videos
 
 USER nextjs
 
