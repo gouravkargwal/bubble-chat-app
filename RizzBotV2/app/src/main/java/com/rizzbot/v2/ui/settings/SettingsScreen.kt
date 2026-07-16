@@ -243,7 +243,7 @@ fun SettingsScreen(
                                 clipboard.setPrimaryClip(ClipData.newPlainText("Referral Code", referral.referralCode))
                             }) { Icon(Icons.Default.ContentCopy, "Copy", tint = NothingTextSecondary) }
                             IconButton(onClick = {
-                                val shareText = "Use my code ${referral.referralCode} to join me on Cookd! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile"
+                                val shareText = "Use my code ${referral.referralCode} to join me on Cookd! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile&ref=${referral.referralCode}"
                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
                                     putExtra(Intent.EXTRA_TEXT, shareText)
@@ -303,7 +303,9 @@ fun SettingsScreen(
                     })
                     HorizontalDivider(color = NothingBorder)
                     SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {
-                        val shareText = "Check out Cookd — AI replies for dating apps! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile"
+                        val refCode = state.referral?.referralCode
+                        val refSuffix = if (!refCode.isNullOrEmpty()) "&ref=$refCode" else ""
+                        val shareText = "Check out Cookd — AI replies for dating apps! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile$refSuffix"
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, shareText)

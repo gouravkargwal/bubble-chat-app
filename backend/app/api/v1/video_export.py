@@ -27,10 +27,10 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.v1.admin_deps import verify_admin_key
 from app.infrastructure.database.engine import get_db
-from sqlalchemy.orm import joinedload
 from app.infrastructure.database.models import Interaction, User
 
 logger = structlog.get_logger(__name__)
@@ -183,20 +183,41 @@ def score_interaction(ix: Interaction) -> dict:
 
 
 def _build_video_payload(ix: Interaction, score: dict) -> dict:
-    """Format an interaction + score as a Remotion input props object."""
-    messages = _safe_json(ix.transcript_json, [])
+    """Format an interaction + score as a Remotion input props object.
+
+    Openers (first messages) don't have a chat transcript. For those we
+    set ``isOpener: true`` and build a minimal transcript from the profile
+    analysis (their_last_message) plus our winning opener so the Remotion
+    composition can render a "Profile Card" style instead of chat bubbles.
+    """
+    is_opener = ix.direction == "opener"
+    messages = _safe_json(ix.transcript_json, None)
+    if messages is None and is_opener:
+        # Build synthetic transcript for the Profile Card format:
+        # her profile vibe as "them" context + our winning line as "you"
+        messages = []
+        if ix.their_last_message:
+            messages.append({"s": "them", "t": ix.their_last_message})
+    elif messages is None:
+        messages = []
+
     replies = [_safe_json(getattr(ix, f"reply_{i}", None)) for i in range(4)]
     winning = next(
         (r for r in replies if r.get("is_recommended")),
         _get_reply(replies, 0),
     )
 
-    # Build transcript: prefer structured transcript_json.
-    # Fall back to their_last_message (LLM paraphrase — good enough for
-    # video context, not perfect but better than 0 chat bubbles).
-    transcript: list[dict] = []
-    if messages:
-        transcript = [
+    return {
+        "id": ix.id,
+        "isOpener": is_opener,
+        "personName": ix.person_name or "Someone",
+        "detectedApp": "dating_app",
+        "strategyLabel": winning.get("strategy_label", "COOKD_AI"),
+        "winningLine": winning.get("text", ""),
+        "coachReasoning": winning.get("coach_reasoning", ""),
+        "theirLastMessage": ix.their_last_message or "",
+        "keyDetail": ix.key_detail or "",
+        "transcript": [
             {
                 "sender": "them" if m.get("s") == "them" else "you",
                 "text": m.get("t", ""),
@@ -300,18 +321,19 @@ async def get_video_candidates(
     By default, only interactions from consenting users are returned.
     """
     # Apply DB-level filters early
-    # Accept interactions with transcript_json (lead magnet / structured)
-    # OR their_last_message (app interactions via screenshots).
-    db_filters = [
-        Interaction.transcript_json.isnot(None)
-        | Interaction.their_last_message.isnot(None)
-    ]
+    # ponytail: Include openers (first messages) even without transcript_json.
+    # The video payload builder falls back to their_last_message for those.
+    # Ceiling: once every interaction has transcript_json, restore this filter.
+    db_filters = []
     if search:
         db_filters.append(Interaction.person_name.ilike(f"%{search}%"))
 
-    # Join with User to filter by marketing_consent
+    # Join with User to filter by marketing_consent.
+    # Must use selectinload() so ix.user is accessible outside the query
+    # without triggering a lazy load (which breaks in async context).
     stmt = (
         select(Interaction)
+        .options(selectinload(Interaction.user))
         .join(Interaction.user)
         .where(*db_filters)
         .order_by(Interaction.created_at.desc())

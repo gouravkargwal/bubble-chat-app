@@ -37,8 +37,8 @@ export function UpsellBlock({ onBuyLifetime }: { onBuyLifetime?: () => void }) {
         Lifetime Access
       </h3>
       <p className="text-xs text-nothing-text-secondary mb-5 max-w-sm mx-auto leading-relaxed">
-        Unlimited conversations. All directions, custom hints, chemistry
-        tracking, and more. *
+        Unlimited conversations. All directions, custom hints, coach reasoning,
+        and more. *
       </p>
 
       <div className="mb-5 flex items-baseline justify-center gap-1.5">
@@ -151,7 +151,6 @@ function RateLimitedBlock({ appUrl }: { appUrl: string }) {
       <div className="mt-6 flex items-center justify-center gap-4 text-[10px] font-mono text-nothing-text-tertiary">
         <span>&#x2726; Unlimited replies</span>
         <span>&#x2726; Custom coaching</span>
-        <span>&#x2726; Chemistry tracking</span>
       </div>
     </motion.div>
   );

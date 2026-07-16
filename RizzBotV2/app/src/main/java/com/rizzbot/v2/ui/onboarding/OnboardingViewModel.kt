@@ -106,6 +106,7 @@ class OnboardingViewModel @Inject constructor(
     private suspend fun handleSuccessfulSignIn(result: GoogleSignInResult.Success) {
         hapticHelper.successTap()
         analyticsHelper.authCompleted()
+        analyticsHelper.signupCompleted(isNewUser = result.isNewUser)
         // Refresh usage so the app knows the user's actual tier (force after auth)
         hostedRepository.refreshUsage(force = true)
 

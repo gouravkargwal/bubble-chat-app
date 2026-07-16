@@ -709,9 +709,15 @@ async def upsert_conversation_memory(
             )
 
             # --- Graph RAG ingestion: extract entities + edges ---
+            # Use a savepoint to isolate graph ingestion from the outer transaction.
+            # Without this, any DB error here (e.g. NULL FK violation) poisons the
+            # asyncpg connection, causing *every* subsequent db.execute() on this
+            # session to raise InFailedSQLTransactionError.
+            await db.execute(text("SAVEPOINT graph_sp"))
             try:
                 if graph_data.entities:
                     # 1. Insert entity nodes (upsert via ON CONFLICT)
+                    inserted_entity_names: set[str] = set()
                     for entity in graph_data.entities:
                         entity_name = entity.name.strip().lower()
                         entity_type = entity.type.strip().lower()
@@ -736,23 +742,39 @@ async def upsert_conversation_memory(
                                 "type": entity_type,
                             },
                         )
+                        inserted_entity_names.add(entity_name)
 
-                    # 2. Insert directed edges
+                    # 2. Insert directed edges — only when both endpoints exist
                     for rel in graph_data.relationships:
                         src = rel.source.strip().lower()
                         tgt = rel.target.strip().lower()
                         rel_type = rel.relationship.strip().upper()
                         if not src or not tgt or not rel_type:
                             continue
+                        # Skip edges referencing entities not in the just-inserted set.
+                        # The subquery below returns NULL for unknown names, violating
+                        # source_entity_id/target_entity_id NOT NULL — poisoning the
+                        # entire transaction.
+                        if (
+                            src not in inserted_entity_names
+                            or tgt not in inserted_entity_names
+                        ):
+                            logger.warning(
+                                "graph_edge_skipped_unknown_entity",
+                                src=src,
+                                tgt=tgt,
+                                rel=rel_type,
+                            )
+                            continue
                         await db.execute(
                             text("""
                             INSERT INTO conversation_memory_edges
                                 (id, user_id, conversation_id,
                                 source_entity_id, target_entity_id,
-                                relationship_type, weight, created_at) -- Added 'weight' column here
+                                relationship_type, weight, created_at)
                             VALUES (
-                                :id, 
-                                :user_id, 
+                                :id,
+                                :user_id,
                                 CAST(:conversation_id AS VARCHAR),
                                 (SELECT id FROM conversation_memory_entities
                                 WHERE conversation_id = CAST(:conversation_id AS VARCHAR)
@@ -760,8 +782,8 @@ async def upsert_conversation_memory(
                                 (SELECT id FROM conversation_memory_entities
                                 WHERE conversation_id = CAST(:conversation_id AS VARCHAR)
                                 AND entity_name = :tgt LIMIT 1),
-                                :rel, 
-                                1.0,  -- Maps cleanly to 'weight' now
+                                :rel,
+                                1.0,
                                 now()
                             )
                             ON CONFLICT DO NOTHING
@@ -775,7 +797,9 @@ async def upsert_conversation_memory(
                                 "rel": rel_type,
                             },
                         )
+                await db.execute(text("RELEASE SAVEPOINT graph_sp"))
             except Exception as graph_err:
+                await db.execute(text("ROLLBACK TO SAVEPOINT graph_sp"))
                 logger.warning("graph_db_ingestion_failed", error=str(graph_err))
 
         # NB: No db.commit() here -- transaction boundaries are managed by the

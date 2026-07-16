@@ -28,6 +28,9 @@ class AnalyticsHelper @Inject constructor(
     private val crashlytics by lazy { Firebase.crashlytics }
     private val telemetryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // Guards so milestone events fire at most once per process lifetime
+    private var firstReplyFired = false
+
     fun logEvent(event: String, params: Map<String, Any?> = emptyMap()) {
         val bundle = Bundle().apply {
             params.forEach { (key, value) ->
@@ -123,10 +126,24 @@ class AnalyticsHelper @Inject constructor(
     fun replyRegenerated() = logEvent("reply_regenerated")
     fun sessionMemoryUsed(turnCount: Int) = logEvent("session_memory_used", mapOf("turn_count" to turnCount))
 
+    // Signup — distinguishes new users from returning users
+    fun signupCompleted(isNewUser: Boolean) =
+        logEvent("signup_completed", mapOf("is_new_user" to isNewUser))
+
+    // Activation — first AI reply ever (fires once per process lifetime)
+    fun firstReplyGenerated(provider: String, latencyMs: Long) {
+        if (firstReplyFired) return
+        firstReplyFired = true
+        logEvent("first_reply_generated", mapOf("provider" to provider, "latency_ms" to latencyMs))
+    }
+
     // Usage & Premium
     fun quotaExhausted() = logEvent("quota_exhausted")
     fun premiumViewed() = logEvent("premium_viewed")
     fun authCompleted() = logEvent("auth_completed")
+
+    // Overlay permission — critical funnel step after signup
+    fun overlayPermissionGranted() = logEvent("overlay_permission_granted")
 
     // Profile Audit
     fun profileAuditStarted(photoCount: Int) = logEvent("profile_audit_started", mapOf("photo_count" to photoCount))

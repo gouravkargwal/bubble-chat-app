@@ -20,4 +20,8 @@ export interface CookdShortProps {
     | "identity"
     | "social"
     | "slams";
+  // Opener (first message) fields
+  isOpener?: boolean;
+  theirLastMessage?: string;
+  keyDetail?: string;
 }

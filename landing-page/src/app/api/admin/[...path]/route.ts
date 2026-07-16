@@ -20,34 +20,23 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://api:8000";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
 async function proxy(req: NextRequest, method: string) {
-  // ── Layer 1: Clerk session (optional — skip if Clerk CDN is unreachable) ──
-  // We try Clerk first. If it fails (CDN blocked, not configured), we fall back
-  // to checking the Referer header comes from the admin page. The middleware.ts
-  // already blocks non-admin users from reaching the page at all.
-  const isDev = process.env.NODE_ENV === "development";
-  if (!isDev || process.env.CLERK_SECRET_KEY) {
-    try {
-      const { auth: clerkAuth } = await import("@clerk/nextjs/server");
-      const session = await clerkAuth();
-      if (!session.userId) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      // Clerk auth succeeded — proceed
-    } catch {
-      if (!isDev) {
-        // In prod, fall through (Clerk CDN might be blocked).
-        // The request already passed middleware.ts which protects /admin/* pages.
-        // We log the failure but don't block.
-        console.warn(
-          "[BFF] Clerk auth unavailable, falling back to origin check"
-        );
-      }
-      // In dev without Clerk keys, or in prod with blocked CDN, fall through
+  // ── Layer 1: Clerk session ──
+  try {
+    const session = await auth();
+    if (!session.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+  } catch (authErr) {
+    console.error("[BFF] Clerk auth error:", authErr);
+    return NextResponse.json(
+      { error: "Authentication service error" },
+      { status: 500 }
+    );
   }
 
   // ── Layer 2: Admin API key must be configured ──
   if (!ADMIN_API_KEY) {
+    console.error("[BFF] Missing ADMIN_API_KEY environment variable");
     return NextResponse.json(
       { error: "Admin API key not configured on server." },
       { status: 503 }
@@ -108,18 +97,38 @@ async function proxy(req: NextRequest, method: string) {
     }
 
     // ── JSON response (default) ──
-    const resBody = backendRes.headers
-      .get("content-type")
-      ?.includes("application/json")
-      ? await backendRes.json()
-      : await backendRes.text();
+    let resBody: unknown;
+    try {
+      resBody = backendRes.headers
+        .get("content-type")
+        ?.includes("application/json")
+        ? await backendRes.json()
+        : await backendRes.text();
+    } catch (parseErr) {
+      const text = await backendRes.text().catch(() => "");
+      console.error(
+        `[BFF] Failed to parse backend response (${backendRes.status}):`,
+        text.slice(0, 500),
+        parseErr
+      );
+      return NextResponse.json(
+        { error: "Invalid response from backend" },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(resBody, {
       status: backendRes.status,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Backend unreachable";
-    return NextResponse.json({ error: message }, { status: 502 });
+    const detail =
+      err instanceof TypeError && err.message === "fetch failed"
+        ? `Backend unreachable at ${BACKEND_URL}`
+        : err instanceof Error
+        ? err.message
+        : "Backend unreachable";
+    console.error("[BFF] Fetch error:", method, url, err);
+    return NextResponse.json({ error: detail }, { status: 502 });
   }
 }
 
