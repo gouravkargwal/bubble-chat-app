@@ -194,6 +194,7 @@ async def perform_full_vision_analysis(
             user_prompt=user_text,
             base64_images=images_base64,
             response_schema=_VISION_OUTPUT_SCHEMA,
+            max_output_tokens=8192,
             phase="v2_vision",
         )
         out = VisionNodeOutput.model_validate_json(result)
