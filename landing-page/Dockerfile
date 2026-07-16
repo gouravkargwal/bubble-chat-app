@@ -56,10 +56,12 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-# remotion/@remotion/renderer are serverExternalPackages (native binaries) —
-# standalone tracing doesn't bundle them, so pull the real packages in from deps
-COPY --from=deps /app/node_modules/remotion ./node_modules/remotion
-COPY --from=deps /app/node_modules/@remotion ./node_modules/@remotion
+# serverExternalPackages (@remotion/renderer, @remotion/bundler, remotion, esbuild)
+# contain native binaries that standalone tracing cannot bundle. Copy the full
+# node_modules from the deps stage as a fallback — Docker layer caching ensures
+# zero deduplication cost, and prevents errors from missing transitive native
+# deps (e.g. @rspack/binding pulled by @remotion/bundler).
+COPY --from=deps /app/node_modules ./node_modules
 # Remotion composition files
 COPY --from=builder /app/src/app/admin/remotion ./src/app/admin/remotion
 
