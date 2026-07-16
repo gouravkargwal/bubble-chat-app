@@ -1,5 +1,11 @@
 import React from "react";
-import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from "remotion";
+import {
+  AbsoluteFill,
+  interpolate,
+  spring,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
 import { loadFont as loadHeading } from "@remotion/google-fonts/SpaceGrotesk";
 import { loadFont as loadBody } from "@remotion/google-fonts/DMSans";
 import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
@@ -115,6 +121,7 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
   keyDetail,
 }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
   const seed = seedFrom(personName + strategyLabel);
   const bgGradient = pick(BG_VARIANTS, seed);
@@ -126,17 +133,114 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
   const typingDone = openerStart + (winningLine?.length || 0) * typingSpeed;
   const badgeStart = typingDone + 20;
   const outroStart = badgeStart + 60;
+  const OUTRO_HOLD = 90;
+  const totalDuration = outroStart + OUTRO_HOLD;
+
+  // Once the reply lands, the bio/name/avatar dim down so the payoff is the
+  // one bright thing on screen — a focus-pull, not just another element at
+  // the same brightness as everything before it.
+  const focusDim =
+    frame >= typingDone
+      ? interpolate(frame, [typingDone, typingDone + 15], [1, 0.32], {
+          extrapolateRight: "clamp",
+        })
+      : 1;
+
+  // Landed pop: scale-snap + white glow the instant typing finishes — the
+  // actual payoff, so it should read as a hit rather than the cursor stopping.
+  // Capped so the overshoot can't push the line wider than its container.
+  const landedPunch =
+    frame < typingDone
+      ? 1
+      : Math.min(
+          spring({
+            frame: frame - typingDone,
+            fps,
+            config: { damping: 8, stiffness: 300, mass: 0.5 },
+          }),
+          1.06
+        );
+  const landedFlash = interpolate(
+    frame,
+    [typingDone, typingDone + 2, typingDone + 12],
+    [0, 1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+
+  // Badge "thunks" in with an overshoot pop instead of just fading.
+  const badgePunch =
+    frame < badgeStart
+      ? 0
+      : spring({
+          frame: frame - badgeStart,
+          fps,
+          config: { damping: 9, stiffness: 260, mass: 0.6 },
+        });
 
   return (
     <AbsoluteFill
       style={{
-        background: bgGradient,
         fontFamily: bodyFont,
         color: COOKD_THEME.nothingWhite,
       }}
     >
+      {/* Background lives on its own layer with a slow "breathing" zoom —
+          a static gradient reads as a dead screenshot no matter how much
+          the foreground animates; this keeps something always moving. */}
+      <AbsoluteFill
+        style={{
+          background: bgGradient,
+          transform: `scale(${interpolate(
+            Math.sin((frame / (totalDuration * 1.1)) * Math.PI),
+            [0, 1],
+            [1, 1.08]
+          )})`,
+        }}
+      />
+
       {/* Persistent logo watermark */}
       <LogoWatermark />
+
+      {/* Progress bar — a filling bar is a well-worn "don't swipe away yet,
+          there's a payoff coming" retention cue, and it also gives the
+          frame continuous motion for its entire runtime. */}
+      <div
+        style={{
+          position: "absolute",
+          top: 40,
+          left: SAFE_LEFT,
+          right: SAFE_RIGHT,
+          height: "3px",
+          borderRadius: "2px",
+          backgroundColor: "rgba(255,255,255,0.12)",
+          zIndex: 400,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${interpolate(frame, [0, totalDuration], [0, 100], {
+              extrapolateRight: "clamp",
+            })}%`,
+            backgroundColor: COOKD_THEME.neonRed,
+          }}
+        />
+      </div>
+
+      {/* Opening stinger — a standalone layer (not nested in the hook's own
+          fade-in) so it actually hits full-opacity red at frame 0 instead of
+          being multiplied down to a dark maroon wash by the parent's fade. */}
+      {frame < 4 && (
+        <AbsoluteFill
+          style={{
+            backgroundColor: COOKD_THEME.neonRed,
+            opacity: interpolate(frame, [0, 1, 4], [1, 0.7, 0]),
+            zIndex: 380,
+            pointerEvents: "none",
+          }}
+        />
+      )}
 
       {/* HOOK: 0-2s */}
       {frame < hookEnd && (
@@ -151,14 +255,6 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
             paddingRight: SAFE_RIGHT,
           }}
         >
-          {frame < 4 && (
-            <AbsoluteFill
-              style={{
-                backgroundColor: COOKD_THEME.neonRed,
-                opacity: interpolate(frame, [0, 1, 4], [1, 0.7, 0]),
-              }}
-            />
-          )}
           <div
             style={{
               display: "flex",
@@ -216,6 +312,10 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
             }),
           }}
         >
+          {/* Dims once the reply lands — a focus-pull so the payoff is the
+              one bright thing on screen instead of staying level with the
+              bio/name that came before it. */}
+          <div style={{ opacity: focusDim, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
           {/* Avatar — neutral chip, no rainbow palette (one accent only) */}
           <div
             style={{
@@ -299,6 +399,7 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
               </span>
             </div>
           )}
+          </div>
 
           {/* Cookd reply label */}
           <span
@@ -333,10 +434,18 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
             >
               <span
                 style={{
+                  display: "inline-block",
                   fontFamily: bodyFont,
                   fontSize: "30px",
                   fontWeight: 600,
                   lineHeight: 1.4,
+                  transform: `scale(${landedPunch})`,
+                  transformOrigin: "left center",
+                  textShadow: `0 0 ${interpolate(
+                    landedFlash,
+                    [0, 1],
+                    [0, 24]
+                  )}px rgba(255,255,255,${landedFlash * 0.9})`,
                 }}
               >
                 {winningLine.substring(
@@ -369,10 +478,11 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
                 borderRadius: "9999px",
                 opacity: interpolate(
                   frame,
-                  [badgeStart, badgeStart + 15],
+                  [badgeStart, badgeStart + 10],
                   [0, 1],
                   { extrapolateRight: "clamp" }
                 ),
+                transform: `scale(${badgePunch})`,
               }}
             >
               <TargetIcon size={18} color={COOKD_THEME.successGreen} />
@@ -391,6 +501,25 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
           )}
         </div>
       )}
+
+      {/* Flash-cuts — a hard 2-frame white pop at the payoff landing and the
+          outro starting, instead of another smooth fade. */}
+      {[typingDone, outroStart].map((cutFrame, i) => (
+        <AbsoluteFill
+          key={i}
+          style={{
+            backgroundColor: COOKD_THEME.nothingWhite,
+            opacity: interpolate(
+              frame,
+              [cutFrame, cutFrame + 1, cutFrame + 3],
+              [0, 0.85, 0],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+            ),
+            zIndex: 350,
+            pointerEvents: "none",
+          }}
+        />
+      ))}
 
       {/* OUTRO CTA — inside safe zone */}
       {frame >= outroStart && (
@@ -441,6 +570,36 @@ export const ProfileCardVideo: React.FC<CookdShortProps> = ({
           </div>
         </AbsoluteFill>
       )}
+
+      {/* Seamless-loop bookend: fade to black, then the last frame lands on
+          the exact same full-opacity red as frame 0's opening stinger, so an
+          autoplay loop reads as one continuous flash instead of a jump cut. */}
+      <AbsoluteFill
+        style={{
+          backgroundColor: COOKD_THEME.nothingBlack,
+          opacity: interpolate(
+            frame - outroStart,
+            [OUTRO_HOLD - 26, OUTRO_HOLD - 6],
+            [0, 1],
+            { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+          ),
+          zIndex: 300,
+          pointerEvents: "none",
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          backgroundColor: COOKD_THEME.neonRed,
+          opacity: interpolate(
+            frame - outroStart,
+            [OUTRO_HOLD - 5, OUTRO_HOLD - 2, OUTRO_HOLD - 1],
+            [0, 0.7, 1],
+            { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+          ),
+          zIndex: 301,
+          pointerEvents: "none",
+        }}
+      />
     </AbsoluteFill>
   );
 };

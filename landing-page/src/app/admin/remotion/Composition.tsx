@@ -277,7 +277,9 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
   const revealStartFrame = analyzeStartFrame + ANALYZE_FRAMES;
   const typingSpeed = 2;
   const typingDuration = winningLine.length * typingSpeed;
+  const OUTRO_HOLD = 120;
   const outroStartFrame = revealStartFrame + typingDuration + 75;
+  const totalDuration = outroStartFrame + OUTRO_HOLD;
 
   // Matches globals.css `.animate-neon-pulse` keyframe (3s ease-in-out loop),
   // the one place the design system allows a glow instead of a hard border.
@@ -287,18 +289,82 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
   const pulseAlpha1 = interpolate(pulseT, [0, 1], [0.15, 0.25]);
   const pulseAlpha2 = interpolate(pulseT, [0, 1], [0.05, 0.1]);
 
+  // Once the AI reveals its line, the earlier back-and-forth dims down so
+  // the payoff is the one bright thing on screen — a focus-pull, not just
+  // another element at the same brightness as everything before it.
+  const focusDim =
+    frame >= revealStartFrame
+      ? interpolate(frame, [revealStartFrame, revealStartFrame + 15], [1, 0.32], {
+          extrapolateRight: "clamp",
+        })
+      : 1;
+
   return (
     <AbsoluteFill
       style={{
-        background: bgGradient,
         fontFamily: bodyFont,
         color: COOKD_THEME.nothingWhite,
       }}
     >
       {voiceoverAudio && <Audio src={voiceoverAudio} volume={0.8} />}
 
+      {/* Background lives on its own layer with a slow "breathing" zoom —
+          a static gradient reads as a dead screenshot no matter how much
+          the foreground animates; this keeps something always moving. */}
+      <AbsoluteFill
+        style={{
+          background: bgGradient,
+          transform: `scale(${interpolate(
+            Math.sin((frame / (totalDuration * 1.1)) * Math.PI),
+            [0, 1],
+            [1, 1.08]
+          )})`,
+        }}
+      />
+
       {/* --- Persistent logo watermark (all frames) --- */}
       <LogoWatermark />
+
+      {/* Progress bar — a filling bar is a well-worn "don't swipe away yet,
+          there's a payoff coming" retention cue, and it also gives the
+          frame continuous motion for its entire runtime. */}
+      <div
+        style={{
+          position: "absolute",
+          top: 40,
+          left: SAFE_LEFT,
+          right: SAFE_RIGHT,
+          height: "3px",
+          borderRadius: "2px",
+          backgroundColor: "rgba(255,255,255,0.12)",
+          zIndex: 400,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${interpolate(frame, [0, totalDuration], [0, 100], {
+              extrapolateRight: "clamp",
+            })}%`,
+            backgroundColor: COOKD_THEME.neonRed,
+          }}
+        />
+      </div>
+
+      {/* Opening stinger — a standalone layer (not nested in the hook's own
+          fade-in) so it actually hits full-opacity red at frame 0 instead of
+          being multiplied down to a dark maroon wash by the parent's fade. */}
+      {frame < 4 && (
+        <AbsoluteFill
+          style={{
+            backgroundColor: COOKD_THEME.neonRed,
+            opacity: interpolate(frame, [0, 1, 4], [1, 0.7, 0]),
+            zIndex: 380,
+            pointerEvents: "none",
+          }}
+        />
+      )}
 
       {/* HOOK FRAME (first ~2 seconds) */}
       {frame < 60 && (
@@ -318,14 +384,6 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
             paddingRight: SAFE_RIGHT,
           }}
         >
-          {frame < 4 && (
-            <AbsoluteFill
-              style={{
-                backgroundColor: COOKD_THEME.neonRed,
-                opacity: interpolate(frame, [0, 1, 4], [1, 0.7, 0]),
-              }}
-            />
-          )}
           <div
             style={{
               display: "flex",
@@ -348,11 +406,21 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
               }}
             >
               {hookWords.map((word, i) => {
+                // Punchy, slightly underdamped spring — overshoots past 1 before
+                // settling, so words "land" with a snap instead of easing in.
+                // Capped (Math.min) so the overshoot can't grow large enough to
+                // visually collide with the tightly-packed word next to it.
                 const wordSpring = spring({
                   frame: frame - i * 1.6,
                   fps,
-                  config: { damping: 12, stiffness: 200, mass: 0.6 },
+                  config: { damping: 9, stiffness: 240, mass: 0.6 },
                 });
+                const wordScale = Math.min(wordSpring, 1.08);
+                // Per-word rotation jitter so the line lands like a chaotic
+                // gang of pop-ins rather than one uniform wave — breaks the
+                // monotone easing that makes smooth motion feel "quiet".
+                const wordSeed = seedFrom(word.text, String(i));
+                const rot = ((wordSeed % 5) - 2) * 2.2;
                 return (
                   <span
                     key={i}
@@ -365,16 +433,19 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                       color: word.emph
                         ? COOKD_THEME.neonRed
                         : COOKD_THEME.nothingWhite,
-                      opacity: interpolate(wordSpring, [0, 0.8], [0, 1]),
+                      opacity: interpolate(wordSpring, [0, 0.7], [0, 1], {
+                        extrapolateRight: "clamp",
+                      }),
                       transform: `translateY(${interpolate(
                         wordSpring,
                         [0, 1],
                         [28, 0]
-                      )}px) scale(${interpolate(
+                      )}px) scale(${wordScale}) rotate(${interpolate(
                         wordSpring,
                         [0, 1],
-                        [0.86, 1]
-                      )})`,
+                        [rot, 0],
+                        { extrapolateRight: "clamp" }
+                      )}deg)`,
                     }}
                   >
                     {word.text}
@@ -501,6 +572,10 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
               overflow: "hidden",
             }}
           >
+            {/* Dims once the AI reveals its line — a focus-pull that makes
+                the payoff the one bright thing on screen instead of just
+                another element at the same brightness as the small talk. */}
+            <div style={{ opacity: focusDim }}>
             {messages.map((msg, index) => {
               const entryFrame = chatStartFrame + index * MSG_PACE;
               const isThem = msg.sender === "them";
@@ -610,7 +685,7 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                                 borderRadius: isThem
                                   ? "4px 12px 12px 12px"
                                   : "12px 4px 12px 12px",
-                                fontWeight: 500,
+                                fontWeight: 600,
                               }}
                             >
                               {msg.text}
@@ -626,6 +701,7 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                 </React.Fragment>
               );
             })}
+            </div>
 
             {/* AI Generation block */}
             {(() => {
@@ -658,6 +734,47 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                 }
               );
 
+              // The card "thunks" in with an overshoot pop right when the
+              // analyzing→revealed cut happens — punchier than another fade.
+              // Capped so the overshoot can't push the card into the message
+              // bubble above it or outside its clipped container.
+              const revealPunch = isAnalyzing
+                ? 1
+                : Math.min(
+                    spring({
+                      frame: Math.max(0, frame - revealStartFrame),
+                      fps,
+                      config: { damping: 9, stiffness: 260, mass: 0.6 },
+                    }),
+                    1.05
+                  );
+
+              // The line "lands" with a scale-snap + white flash the instant
+              // typing finishes — the actual payoff moment, so it should feel
+              // like an event, not just the cursor stopping.
+              const finishFrame = revealStartFrame + typingDuration;
+              const landedPunch =
+                frame < finishFrame
+                  ? 1
+                  : Math.min(
+                      spring({
+                        frame: frame - finishFrame,
+                        fps,
+                        config: { damping: 8, stiffness: 300, mass: 0.5 },
+                      }),
+                      1.06
+                    );
+              const landedFlash = interpolate(
+                frame,
+                [finishFrame, finishFrame + 2, finishFrame + 12],
+                [0, 1, 0],
+                { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+              );
+
+              // A tiny high-frequency jitter while analyzing — reads as
+              // "buzzing with anticipation" instead of sitting inert.
+              const jitterX = isAnalyzing ? Math.sin(frame * 2.2) * 1.5 : 0;
+
               return (
                 <div
                   style={{
@@ -689,6 +806,7 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                         ? "none"
                         : `0 0 ${pulseBlur}px rgba(225, 29, 72, ${pulseAlpha1}), 0 0 ${pulseSpread}px rgba(225, 29, 72, ${pulseAlpha2})`,
                       borderRadius: "12px",
+                      transform: `scale(${revealPunch}) translateX(${jitterX}px)`,
                     }}
                   >
                     {/* Header */}
@@ -845,7 +963,11 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                             }}
                             aria-hidden
                           >
-                            {winningLine}
+                            {/* Trailing glyph matches the cursor block so this
+                                reservation div wraps identically to the visible
+                                text below — otherwise a 1-word wrap mismatch
+                                lets the last word spill outside the card. */}
+                            {winningLine}█
                           </div>
                           <div
                             style={{
@@ -857,7 +979,17 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                               fontSize: "30px",
                               fontWeight: 600,
                               lineHeight: 1.4,
+                              // Landed pop: scale-snap + a quick white glow the
+                              // instant typing finishes — makes the payoff read
+                              // as a hit, not just the cursor stopping.
                               color: COOKD_THEME.nothingWhite,
+                              transform: `scale(${landedPunch})`,
+                              transformOrigin: "left center",
+                              textShadow: `0 0 ${interpolate(
+                                landedFlash,
+                                [0, 1],
+                                [0, 24]
+                              )}px rgba(255,255,255,${landedFlash * 0.9})`,
                             }}
                           >
                             {visibleText}
@@ -885,12 +1017,29 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
         </div>
       )}
 
+      {/* Flash-cuts — a hard 2-frame white pop at the two "event" moments
+          (the payoff landing, the outro starting) instead of another smooth
+          fade. Cheap pattern-interrupt that reads as a beat, not a slide. */}
+      {[revealStartFrame, outroStartFrame].map((cutFrame, i) => (
+        <AbsoluteFill
+          key={i}
+          style={{
+            backgroundColor: COOKD_THEME.nothingWhite,
+            opacity: interpolate(frame, [cutFrame, cutFrame + 1, cutFrame + 3], [0, 0.85, 0], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            }),
+            zIndex: 350,
+            pointerEvents: "none",
+          }}
+        />
+      ))}
+
       {/* OUTRO — CTA badge, positioned within safe zone */}
       {(() => {
         if (frame < outroStartFrame) return null;
 
         const localFrame = frame - outroStartFrame;
-        const OUTRO_HOLD = 120;
 
         const captionIn = interpolate(localFrame, [0, 15], [0, 1], {
           extrapolateRight: "clamp",
@@ -899,8 +1048,19 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
 
         const fadeToBlack = interpolate(
           localFrame,
-          [OUTRO_HOLD - 20, OUTRO_HOLD],
+          [OUTRO_HOLD - 26, OUTRO_HOLD - 6],
           [0, 1],
+          { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+        );
+
+        // Seamless-loop bookend: the last frame lands on the exact same
+        // full-opacity red as frame 0's opening stinger, so an autoplay
+        // loop reads as one continuous flash instead of a black→red jump
+        // cut. Mirrors the intro's [0, 1, 4] → [1, 0.7, 0] decay in reverse.
+        const loopFlash = interpolate(
+          localFrame,
+          [OUTRO_HOLD - 5, OUTRO_HOLD - 2, OUTRO_HOLD - 1],
+          [0, 0.7, 1],
           { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
         );
 
@@ -960,6 +1120,14 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                 backgroundColor: COOKD_THEME.nothingBlack,
                 opacity: fadeToBlack,
                 zIndex: 300,
+                pointerEvents: "none",
+              }}
+            />
+            <AbsoluteFill
+              style={{
+                backgroundColor: COOKD_THEME.neonRed,
+                opacity: loopFlash,
+                zIndex: 301,
                 pointerEvents: "none",
               }}
             />
