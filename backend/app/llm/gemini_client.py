@@ -224,6 +224,23 @@ class GeminiClient(LlmClient):
                 if usage_sink is not None:
                     usage_sink.append(row)
 
+                if row.get("prompt_tokens") or row.get("candidates_tokens"):
+                    llm_tokens_total.labels(
+                        model=model, operation=operation, token_type="input"
+                    ).inc(row.get("prompt_tokens", 0))
+                    llm_tokens_total.labels(
+                        model=model, operation=operation, token_type="output"
+                    ).inc(row.get("candidates_tokens", 0))
+                    cost = cost_usd_for_tokens(
+                        model=model,
+                        prompt_tokens=row.get("prompt_tokens", 0),
+                        output_tokens=row.get("candidates_tokens", 0),
+                    )
+                    if cost > 0:
+                        llm_cost_total.labels(model=model, operation=operation).inc(
+                            cost
+                        )
+
                 logger.info(
                     "llm_lifecycle",
                     stage="sdk_gemini_structured",
@@ -300,6 +317,23 @@ class GeminiClient(LlmClient):
                 row = _usage_row_from_response(response, phase=usage_phase, model=model)
                 if usage_sink is not None:
                     usage_sink.append(row)
+
+                if row.get("prompt_tokens") or row.get("candidates_tokens"):
+                    llm_tokens_total.labels(
+                        model=model, operation=operation, token_type="input"
+                    ).inc(row.get("prompt_tokens", 0))
+                    llm_tokens_total.labels(
+                        model=model, operation=operation, token_type="output"
+                    ).inc(row.get("candidates_tokens", 0))
+                    cost = cost_usd_for_tokens(
+                        model=model,
+                        prompt_tokens=row.get("prompt_tokens", 0),
+                        output_tokens=row.get("candidates_tokens", 0),
+                    )
+                    if cost > 0:
+                        llm_cost_total.labels(model=model, operation=operation).inc(
+                            cost
+                        )
 
                 logger.info(
                     "llm_lifecycle",
