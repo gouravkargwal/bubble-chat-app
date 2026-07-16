@@ -21,13 +21,22 @@ const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
 async function proxy(req: NextRequest, method: string) {
   // ── Layer 1: Clerk session ──
-  const session = await auth();
-  if (!session.userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await auth();
+    if (!session.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  } catch (authErr) {
+    console.error("[BFF] Clerk auth error:", authErr);
+    return NextResponse.json(
+      { error: "Authentication service error" },
+      { status: 500 }
+    );
   }
 
   // ── Layer 2: Admin API key must be configured ──
   if (!ADMIN_API_KEY) {
+    console.error("[BFF] Missing ADMIN_API_KEY environment variable");
     return NextResponse.json(
       { error: "Admin API key not configured on server." },
       { status: 503 }
@@ -87,18 +96,38 @@ async function proxy(req: NextRequest, method: string) {
     }
 
     // ── JSON response (default) ──
-    const resBody = backendRes.headers
-      .get("content-type")
-      ?.includes("application/json")
-      ? await backendRes.json()
-      : await backendRes.text();
+    let resBody: unknown;
+    try {
+      resBody = backendRes.headers
+        .get("content-type")
+        ?.includes("application/json")
+        ? await backendRes.json()
+        : await backendRes.text();
+    } catch (parseErr) {
+      const text = await backendRes.text().catch(() => "");
+      console.error(
+        `[BFF] Failed to parse backend response (${backendRes.status}):`,
+        text.slice(0, 500),
+        parseErr
+      );
+      return NextResponse.json(
+        { error: "Invalid response from backend" },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(resBody, {
       status: backendRes.status,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Backend unreachable";
-    return NextResponse.json({ error: message }, { status: 502 });
+    const detail =
+      err instanceof TypeError && err.message === "fetch failed"
+        ? `Backend unreachable at ${BACKEND_URL}`
+        : err instanceof Error
+        ? err.message
+        : "Backend unreachable";
+    console.error("[BFF] Fetch error:", method, url, err);
+    return NextResponse.json({ error: detail }, { status: 502 });
   }
 }
 
