@@ -67,6 +67,12 @@ from app.prompts.vision_api import (
 )
 from langchain_core.messages import HumanMessage, SystemMessage
 
+# Gemini structured-output schema: inlines Pydantic $defs so the API
+# accepts it (Gemini rejects root-level $defs maps).
+from app.services.rag_improvements import inline_pydantic_defs
+
+_VISION_OUTPUT_SCHEMA: dict | None = None
+
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 _vision_usage_row_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
@@ -173,6 +179,12 @@ async def perform_full_vision_analysis(
     )
 
     try:
+        global _VISION_OUTPUT_SCHEMA  # noqa: PLW0603 — lazy-init cache
+        if _VISION_OUTPUT_SCHEMA is None:
+            _VISION_OUTPUT_SCHEMA = inline_pydantic_defs(
+                VisionNodeOutput.model_json_schema()
+            )
+
         from app.llm.genai import generate_vision
 
         result, usage_row = generate_vision(
@@ -181,6 +193,7 @@ async def perform_full_vision_analysis(
             system_prompt=system_prompt,
             user_prompt=user_text,
             base64_images=images_base64,
+            response_schema=_VISION_OUTPUT_SCHEMA,
             phase="v2_vision",
         )
         out = VisionNodeOutput.model_validate_json(result)
