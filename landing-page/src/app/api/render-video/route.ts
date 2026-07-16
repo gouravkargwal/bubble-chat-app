@@ -1,15 +1,7 @@
 /**
  * POST /api/render-video — start a render job (returns immediately with jobId)
- * GET  /api/render-video?id=<jobId> — poll for job status / download finished video
- *
- * Render runs in a background asyncio task so the HTTP request doesn't block
- * for 30-90s. The client polls GET until status="completed" or "error".
- *
- * Dependencies:
- *   npm install @remotion/bundler @remotion/renderer remotion
- *
- * Chrome must be available on the server for Remotion to render.
- * Install: npx puppeteer browsers install chrome
+ * GET  /api/render-video/stream?id=<jobId> — SSE status stream
+ * GET  /api/render-video?id=<jobId> — download completed video
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,11 +14,8 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://api:8000";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
 // ── In-process job store ────────────────────────────────────────────────
-// Shared across all requests within the same process. On serverless or
-// multi-process deployments this would need Redis — fine for a single
-// Node.js process behind a proxy.
 
-interface RenderJob {
+interface PendingJob {
   id: string;
   status: "pending" | "rendering" | "completed" | "error";
   outputPath: string;
@@ -34,17 +23,19 @@ interface RenderJob {
   createdAt: number;
   completedAt?: number;
   dbRecordId?: string | null;
+  /** SSE subscriber callbacks — called when status changes. */
+  subscribers: Set<(event: string, data: unknown) => void>;
 }
 
-const jobs = new Map<string, RenderJob>();
-
+const jobs = new Map<string, PendingJob>();
 let jobCounter = 0;
+
 function nextJobId(): string {
   jobCounter += 1;
   return `render-${Date.now()}-${jobCounter}`;
 }
 
-// ── Background runner ────────────────────────────────────────────────────
+// ── Background render ───────────────────────────────────────────────────
 
 async function runRender(
   jobId: string,
@@ -63,8 +54,13 @@ async function runRender(
   const job = jobs.get(jobId);
   if (!job) return;
 
+  const emit = (event: string, data: unknown) => {
+    for (const cb of job.subscribers) cb(event, data);
+  };
+
   try {
     job.status = "rendering";
+    emit("status", { status: "rendering" });
 
     const {
       personName,
@@ -79,7 +75,6 @@ async function runRender(
     } = body;
     const msgCount = (messages || []).length;
 
-    // Import Remotion modules dynamically (they're heavy)
     const { bundle } = await import("@remotion/bundler");
     const { renderMedia, selectComposition } = await import(
       "@remotion/renderer"
@@ -96,13 +91,13 @@ async function runRender(
       keyDetail: keyDetail || "",
     };
 
-    // Step 1: bundle
+    emit("status", { status: "bundling" });
     const serveUrl = await bundle({
       entryPoint: path.join(compositionDir, "index.ts"),
       outDir: path.join(os.tmpdir(), "cookd-remotion-bundles"),
     });
 
-    // Step 2: select composition
+    emit("status", { status: "rendering_video" });
     const compositionId = isOpener ? "CookdProfileCard" : "CookdChatShort";
     const composition = await selectComposition({
       serveUrl,
@@ -113,17 +108,13 @@ async function runRender(
       ? calcProfileCardDuration(winningLine.length)
       : calcDuration(msgCount, winningLine.length);
 
-    // Step 3: output path
     const permanentDir = "/rendered-videos";
     await fs.mkdir(permanentDir, { recursive: true });
     const timestamp = Date.now();
     const safeName = personName.toLowerCase().replace(/\s+/g, "-");
     const outputPath = path.join(permanentDir, `${timestamp}-${safeName}.mp4`);
-
-    // Update job with the real output path
     job.outputPath = outputPath;
 
-    // Step 4: render
     await renderMedia({
       composition,
       serveUrl,
@@ -135,7 +126,6 @@ async function runRender(
       videoBitrate: "8M",
     });
 
-    // Step 5: DB record
     const stat = await fs.stat(outputPath);
     let dbRecordId: string | null = null;
     try {
@@ -161,8 +151,7 @@ async function runRender(
         }
       );
       if (recordRes.ok) {
-        const record = await recordRes.json();
-        dbRecordId = record.id;
+        dbRecordId = (await recordRes.json()).id;
       }
     } catch {
       console.warn("[Render] Failed to create DB record");
@@ -171,26 +160,25 @@ async function runRender(
     job.status = "completed";
     job.completedAt = Date.now();
     job.dbRecordId = dbRecordId;
+    emit("completed", {
+      downloadUrl: `/api/render-video?id=${jobId}`,
+      dbRecordId,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Render failed";
     console.error("[Render Error]", message);
     job.status = "error";
     job.error = message;
     job.completedAt = Date.now();
+    emit("error", { message });
+  } finally {
+    job.subscribers.clear();
   }
 }
 
-// ── Duration helpers (lock-step with Composition.tsx) ────────────────────
-
 function calcDuration(messages: number, winningLineLen: number): number {
-  const chatStartFrame = 65;
-  const analyzeStartFrame = chatStartFrame + messages * 28;
-  const revealStartFrame = analyzeStartFrame + 18;
-  const typingDuration = winningLineLen * 2;
-  const outroStartFrame = revealStartFrame + typingDuration + 75;
-  return outroStartFrame + 120;
+  return 65 + messages * 28 + 18 + winningLineLen * 2 + 75 + 120;
 }
-
 function calcProfileCardDuration(winningLineLen: number): number {
   return 120 + winningLineLen * 2 + 20 + 60 + 90;
 }
@@ -201,7 +189,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { personName, winningLine } = body;
-
     if (!winningLine || !personName) {
       return NextResponse.json(
         { error: "Missing required fields: personName, winningLine" },
@@ -209,80 +196,136 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Clean up stale jobs older than 1 hour
+    // Clean stale jobs
     const staleCutoff = Date.now() - 3_600_000;
     for (const [id, j] of jobs) {
       if (j.completedAt && j.completedAt < staleCutoff) jobs.delete(id);
     }
 
     const jobId = nextJobId();
-    const job: RenderJob = {
+    jobs.set(jobId, {
       id: jobId,
       status: "pending",
       outputPath: "",
       createdAt: Date.now(),
-    };
-    jobs.set(jobId, job);
+      subscribers: new Set(),
+    });
 
-    // Fire & forget — runs in background
     runRender(jobId, body).catch((err) =>
-      console.error("[Render] background task crashed:", err)
+      console.error("[Render] background crash:", err)
     );
 
     return NextResponse.json({ jobId, status: "pending" });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Render failed";
-    console.error("[Render POST Error]", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
-  const jobId = request.nextUrl.searchParams.get("id");
-  if (!jobId) {
-    return NextResponse.json(
-      { error: "Missing ?id= parameter" },
-      { status: 400 }
-    );
-  }
+  const { searchParams } = request.nextUrl;
 
-  const job = jobs.get(jobId);
-  if (!job) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
-  }
+  // ── SSE stream (use ?stream instead of sub-path for Next.js App Router) ─
+  if (searchParams.has("stream")) {
+    const jobId = searchParams.get("id");
+    if (!jobId) {
+      return NextResponse.json(
+        { error: "Missing ?id= param" },
+        { status: 400 }
+      );
+    }
+    const job = jobs.get(jobId);
+    if (!job) {
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
-  // If completed and the file exists, stream it as a download
-  if (
-    job.status === "completed" &&
-    job.outputPath &&
-    existsSync(job.outputPath)
-  ) {
-    const fileBuffer = readFileSync(job.outputPath);
-    const safeName = path.basename(job.outputPath).replace(/\.mp4$/, "");
-    const fileName = `cookd-${safeName}.mp4`;
+    // Already done — return immediately as JSON
+    if (job.status === "completed") {
+      return NextResponse.json({
+        event: "completed",
+        downloadUrl: `/api/render-video?id=${jobId}`,
+        dbRecordId: job.dbRecordId,
+      });
+    }
+    if (job.status === "error") {
+      return NextResponse.json({ event: "error", message: job.error });
+    }
 
-    // Clean up the job from the map — no more polling needed
-    jobs.delete(jobId);
+    // Subscribe to live updates
+    const encoder = new TextEncoder();
+    let closed = false;
+    const stream = new ReadableStream({
+      start(controller) {
+        const send = (event: string, data: unknown) => {
+          if (closed) return;
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+          );
+          if (event === "completed" || event === "error") {
+            closed = true;
+            controller.close();
+          }
+        };
 
-    return new NextResponse(fileBuffer, {
+        send("status", { status: job.status });
+        job.subscribers.add(send);
+
+        const timeout = setTimeout(() => {
+          job.subscribers.delete(send);
+          send("error", { message: "Render timed out" });
+        }, 300_000);
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          job.subscribers.delete(send);
+        };
+        // Store cleanup on controller so cancel() can call it
+        (controller as unknown as { _cleanup: () => void })._cleanup = cleanup;
+      },
+      cancel() {
+        (this as unknown as { _cleanup?: () => void })._cleanup?.();
+      },
+    });
+
+    return new NextResponse(stream, {
       headers: {
-        "Content-Type": "video/mp4",
-        "Content-Disposition": `attachment; filename="${fileName}"`,
-        "Content-Length": fileBuffer.length.toString(),
-        "X-Video-Id": job.dbRecordId || "",
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
   }
 
-  // Otherwise return status
-  return NextResponse.json({
-    jobId: job.id,
-    status: job.status,
-    error: job.error,
-    createdAt: job.createdAt,
-    completedAt: job.completedAt,
-    ...(job.status === "completed"
-      ? { downloadUrl: `/api/render-video?id=${jobId}` }
-      : {}),
+  // ── Download completed video ────────────────────────────────────────────
+  const jobId = searchParams.get("id");
+  if (!jobId) {
+    return NextResponse.json({ error: "Missing ?id= param" }, { status: 400 });
+  }
+  const job = jobs.get(jobId);
+  if (!job) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+  if (
+    job.status !== "completed" ||
+    !job.outputPath ||
+    !existsSync(job.outputPath)
+  ) {
+    return NextResponse.json({
+      status: job.status,
+      error: job.status === "error" ? job.error : undefined,
+    });
+  }
+
+  const fileBuffer = readFileSync(job.outputPath);
+  const safeName = path.basename(job.outputPath).replace(/\.mp4$/, "");
+  jobs.delete(jobId);
+
+  return new NextResponse(fileBuffer, {
+    headers: {
+      "Content-Type": "video/mp4",
+      "Content-Disposition": `attachment; filename="cookd-${safeName}.mp4"`,
+      "Content-Length": fileBuffer.length.toString(),
+      "X-Video-Id": job.dbRecordId || "",
+    },
   });
 }

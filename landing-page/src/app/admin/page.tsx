@@ -19,9 +19,12 @@ import { RenderedTab } from "@/components/admin/RenderedTab";
 
 const PAGE_SIZE = 20;
 
-// ── Async render helper: POST to start, then poll GET until done ─────────
+// ── Async render helper: POST to start, then SSE stream for completion ──
 
-async function startRender(candidate: VideoCandidate): Promise<Blob> {
+async function startRender(
+  candidate: VideoCandidate,
+  onStatus?: (status: string) => void
+): Promise<Blob> {
   const postRes = await fetch("/api/render-video", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -45,37 +48,47 @@ async function startRender(candidate: VideoCandidate): Promise<Blob> {
   }
   const { jobId } = await postRes.json();
 
-  // 2. Poll until completed (GET returns the video blob when done)
-  const pollIntervalMs = 3_000;
-  const maxWaitMs = 120_000;
-  const deadline = Date.now() + maxWaitMs;
+  // Subscribe to SSE stream — resolves when the video is ready
+  return new Promise<Blob>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      evtSource.close();
+      reject(new Error("Render timed out"));
+    }, 300_000);
 
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
-    const pollRes = await fetch(`/api/render-video?id=${jobId}`);
-    if (!pollRes.ok) {
-      if (pollRes.status === 404) throw new Error("Render job not found");
-      throw new Error(`Poll failed (${pollRes.status})`);
-    }
+    const evtSource = new EventSource(`/api/render-video?stream&id=${jobId}`);
 
-    const contentType = pollRes.headers.get("content-type") || "";
-    // Video response means the render is done
-    if (contentType.startsWith("video/")) {
-      return pollRes.blob();
-    }
+    evtSource.addEventListener("status", (e) => {
+      const data = JSON.parse(e.data);
+      if (data.status && onStatus) onStatus(data.status);
+    });
 
-    const status = await pollRes.json();
-    if (status.status === "error") {
-      throw new Error(status.error || "Render error");
-    }
-    if (status.status === "completed") {
-      const finalRes = await fetch(`/api/render-video?id=${jobId}`);
-      if (!finalRes.ok) throw new Error("Failed to fetch completed video");
-      return finalRes.blob();
-    }
-  }
+    evtSource.addEventListener("completed", (e) => {
+      clearTimeout(timeout);
+      evtSource.close();
+      const data = JSON.parse(e.data);
+      // Fetch the completed video
+      fetch(data.downloadUrl)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to download");
+          return res.blob();
+        })
+        .then(resolve)
+        .catch(reject);
+    });
 
-  throw new Error("Render timed out");
+    evtSource.addEventListener("error", (e) => {
+      clearTimeout(timeout);
+      evtSource.close();
+      let message = "Render failed";
+      try {
+        const data = JSON.parse((e as MessageEvent).data);
+        message = data.message || message;
+      } catch {
+        // EventSource error event has no data on connection failure
+      }
+      reject(new Error(message));
+    });
+  });
 }
 
 export default function AdminVideoPipeline() {
@@ -211,7 +224,9 @@ export default function AdminVideoPipeline() {
     setRenderProgress(`Rendering ${candidate.personName}...`);
 
     try {
-      const blob = await startRender(candidate);
+      const blob = await startRender(candidate, (status) => {
+        setRenderProgress(`Rendering ${candidate.personName} — ${status}...`);
+      });
       const url = URL.createObjectURL(blob);
 
       setRenderLog((prev) => [
