@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
+const isAdminRoute = createRouteMatcher(["/admin(.*)", "/api/admin(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isAdminRoute(req)) {
@@ -10,8 +10,10 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    // Match only admin routes — skip all Next.js internals, static files,
-    // and the public landing page which doesn't need Clerk middleware.
+    // Protect admin pages (/admin/*) and admin API routes (/api/admin/*).
+    // The BFF proxy at /api/admin/[...path]/route.ts calls Clerk's auth()
+    // which requires clerkMiddleware to have run for the request first.
     "/admin/:path*",
+    "/api/admin/:path*",
   ],
 };
