@@ -27,9 +27,7 @@ const PLANS = [
     features: [
       { text: "7 conversation directions", included: true },
       { text: "5 screenshots per request", included: true },
-      { text: "20 context messages", included: true },
       { text: "Custom hints (300 chars)", included: true },
-      { text: "Chemistry tracking", included: true },
       { text: "Coach reasoning", included: true },
       { text: "Advanced languages", included: true },
       { text: "Photo audit (6 photos)", included: true },
@@ -48,9 +46,7 @@ const PLANS = [
     features: [
       { text: "All 9 conversation directions", included: true },
       { text: "5 screenshots per request", included: true },
-      { text: "25 context messages", included: true },
       { text: "Custom hints (300 chars)", included: true },
-      { text: "Chemistry tracking", included: true },
       { text: "Coach reasoning", included: true },
       { text: "Profile blueprints", included: true },
       { text: "Get Number / Ask Out", included: true },
@@ -70,14 +66,10 @@ const PLANS = [
     features: [
       { text: "All 9 conversation directions", included: true },
       { text: "Max screenshots allowed*", included: true },
-      { text: "Max context messages*", included: true },
       { text: "Custom hints (1000 chars)", included: true },
-      { text: "Chemistry tracking", included: true },
       { text: "Coach reasoning", included: true },
       { text: "Profile blueprints", included: true },
       { text: "Get Number / Ask Out", included: true },
-      { text: "Priority server allocation", included: true },
-      { text: "Early access to feature updates", included: true },
       { text: "Lifetime system updates", included: true },
     ],
   },
@@ -372,7 +364,12 @@ export function Pricing() {
                       href={APP_URLS.googlePlay}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={() => posthog.capture("pricing_plan_cta_clicked", { plan: plan.id, plan_name: plan.name })}
+                      onClick={() =>
+                        posthog.capture("pricing_plan_cta_clicked", {
+                          plan: plan.id,
+                          plan_name: plan.name,
+                        })
+                      }
                       className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
                         plan.highlighted
                           ? "bg-neon-red text-nothing-white hover:bg-red-600"
