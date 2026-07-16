@@ -65,6 +65,10 @@ COPY --from=deps /app/node_modules ./node_modules
 # Remotion composition files
 COPY --from=builder /app/src/app/admin/remotion ./src/app/admin/remotion
 
+# deps stage runs as root; nextjs user needs write access to node_modules
+# for Remotion/rspack cache directories.
+RUN chown -R nextjs:nodejs ./node_modules
+
 USER nextjs
 
 EXPOSE 3000
