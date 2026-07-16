@@ -317,6 +317,14 @@ def create_app() -> FastAPI:
         if isinstance(exc, HTTPException):
             raise exc
 
+        # Record the exception on the current OTel span so it appears as
+        # a span event in the Traces tab (with type, message, stacktrace).
+        from opentelemetry import trace as _otel_trace
+
+        _span = _otel_trace.get_current_span()
+        if _span and _span.is_recording():
+            _span.record_exception(exc)
+
         logger = structlog.get_logger()
         correlation_id = getattr(request.state, "correlation_id", "unknown")
         logger.error(
