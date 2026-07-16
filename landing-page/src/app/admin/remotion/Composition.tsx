@@ -9,21 +9,32 @@ import {
   useVideoConfig,
   random,
 } from "remotion";
-import { loadFont } from "@remotion/google-fonts/PlusJakartaSans";
+import { loadFont as loadHeading } from "@remotion/google-fonts/SpaceGrotesk";
+import { loadFont as loadBody } from "@remotion/google-fonts/DMSans";
+import { loadFont as loadMono } from "@remotion/google-fonts/JetBrainsMono";
 import { CookdShortProps } from "./types";
 import { generateHook } from "./hookGenerator";
 
-// 🔲 EXACT TYPOGRAPHY FROM Typography.kt
-const { fontFamily } = loadFont("normal", {
-  weights: ["400", "500", "600", "700", "800"],
+// ── Fonts — matches landing-page globals.css tokens exactly:
+// --font-heading: Space Grotesk, --font-sans: DM Sans, --font-mono: mono stack.
+const { fontFamily: headingFont } = loadHeading("normal", {
+  weights: ["500", "600", "700"],
+});
+const { fontFamily: bodyFont } = loadBody("normal", {
+  weights: ["400", "500", "700"],
+});
+const { fontFamily: monoFont } = loadMono("normal", {
+  weights: ["500", "600"],
 });
 
-// 🎨 EXACT COLORS FROM JETPACK COMPOSE
+// ── Brand tokens — lifted from landing-page/src/app/globals.css and
+// RizzBotV2 ui/theme/Color.kt: pitch black, pure white, exactly one accent
+// (brand-primary / neon-red, #E11D48) reserved for the primary action.
 const COOKD_THEME = {
   nothingBlack: "#000000",
   nothingWhite: "#FFFFFF",
-  neonRed: "#FF003C",
-  nothingSurface: "#050505",
+  neonRed: "#E11D48",
+  nothingSurface: "#0A0A0A",
   nothingBorder: "rgba(255, 255, 255, 0.1)",
   textSecondary: "rgba(255, 255, 255, 0.45)",
   successGreen: "#00FF66",
@@ -31,153 +42,196 @@ const COOKD_THEME = {
 
 const SCRAMBLE_CHARS = "!<>-_\\/[]{}—=+*^?#_";
 
-// ── AVATAR COLORS (deterministic from personName) ──
-const AVATAR_PALETTE = [
-  "#FF003C",
-  "#FF6B35",
-  "#FFD23F",
-  "#00FF66",
-  "#00C9FF",
-  "#8B5CF6",
-  "#FF007F",
-  "#00F5D4",
-];
+// ── Safe zones for platform UI overlays ──
+// Instagram Reels: username/caption/audio-disc sit in the bottom ~340px, and
+// like/comment/share/save icons run down the right edge in a ~150px column.
+// YouTube Shorts: subscribe pill (bottom-left) + description affordance push
+// the bottom dead zone to ~360px, with a similar right-edge icon rail.
+// These margins keep content inside the ~900x1400 area that's clear on both.
+const SAFE_TOP = 190;
+const SAFE_BOTTOM = 340;
+const SAFE_LEFT = 60;
+const SAFE_RIGHT = 160;
 
-function getAvatarColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
-}
-
-// ── DETERMINISTIC VARIETY (breaks the "obviously templated" look) ──
-// Same input → same output (renders are reproducible), but different people
-// yield different backgrounds / copy, so the feed doesn't look mass-produced.
-function seedFrom(str: string): number {
+function seedFrom(...parts: string[]): number {
   let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = str.charCodeAt(i) + ((h << 5) - h);
+  const s = parts.join("|");
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
   }
   return Math.abs(h);
 }
 
-function pick<T>(arr: T[], seed: number, salt = 0): T {
-  return arr[(seed + salt) % arr.length];
+function pick<T>(arr: readonly T[], seed: number, offset = 0): T {
+  return arr[(seed + offset) % arr.length];
 }
 
-// Subtle dark-gradient variants — keeps the brand mood, varies the frame.
+// Pitch-black, single-accent backgrounds — no off-brand hues. Variety comes
+// only from the vignette position, matching "strict dark mode, no compromises".
 const BG_VARIANTS = [
-  "radial-gradient(ellipse at 50% 0%, #1a1a1a 0%, #000000 100%)",
-  "radial-gradient(ellipse at 22% 8%, #1d1418 0%, #000000 70%)",
-  "radial-gradient(ellipse at 80% 12%, #13181d 0%, #000000 72%)",
-  "radial-gradient(ellipse at 50% 100%, #191919 0%, #000000 82%)",
+  "radial-gradient(ellipse at 50% 0%, #0a0a0a 0%, #000000 100%)",
+  "radial-gradient(ellipse at 15% 10%, #0a0a0a 0%, #000000 70%)",
+  "radial-gradient(ellipse at 85% 10%, #0a0a0a 0%, #000000 70%)",
+  "radial-gradient(ellipse at 50% 100%, #0a0a0a 0%, #000000 85%)",
 ];
 
-// "Cookd is working" labels — human, curious, never clinical.
 const THINKING_LABELS = [
   "COOKD IS COOKING",
   "READING THE VIBE",
-  "FINDING YOUR MOVE",
-  "CRAFTING THE REPLY",
+  "ANALYZING THE CHAT",
+  "COMPOSING YOUR MOVE",
 ];
 
-// Payoff labels — outcome-driven, screams "copy this", not "target acquired".
-const REVEAL_LABELS = ["SEND THIS 👇", "YOUR MOVE 🔥", "USE THIS ONE", "COPY THIS 👇"];
+const REVEAL_LABELS = [
+  "THE WINNING LINE",
+  "YOUR REPLY",
+  "THE MOVE",
+  "PLAY THIS",
+];
 
-// Relatable status lines shown during the (now brief) thinking beat.
 const THINKING_LINES = [
-  ["Reading their last message…", "Matching your energy…"],
-  ["Catching the vibe…", "Finding the perfect angle…"],
-  ["Reading between the lines…", "Building your comeback…"],
-  ["Feeling out the tone…", "Lining up the reply…"],
+  ["reading context…", "analyzing her tone…", "crafting frame…"],
+  ["decoding signals…", "scanning for hooks…", "building bait…"],
+  ["reviewing strategy…", "optimizing for reply…", "calculating timing…"],
 ];
 
-// ── TYPING DOTS COMPONENT ──
+// ── Icons (hand-inlined, heroicons-style outline paths — no emoji) ──
+
+const CameraIcon: React.FC<{ size?: number; color?: string }> = ({
+  size = 24,
+  color = "currentColor",
+}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      stroke={color}
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
+    />
+  </svg>
+);
+
+const SparkleIcon: React.FC<{ size?: number; color?: string }> = ({
+  size = 20,
+  color = "currentColor",
+}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path
+      fill={color}
+      d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
+    />
+  </svg>
+);
+
+// ── Brand logo watermark (inline SVG — matches public/logo.svg exactly) ──
+
+const LogoWatermark: React.FC = () => (
+  <div
+    style={{
+      position: "absolute",
+      top: 56,
+      left: SAFE_LEFT,
+      zIndex: 400,
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      pointerEvents: "none",
+      filter: "drop-shadow(0 2px 10px rgba(0,0,0,0.6))",
+    }}
+  >
+    <svg width="40" height="40" viewBox="0 0 108 108" fill="none">
+      <circle cx="54" cy="54" r="28" fill="#FFFFFF" />
+      <path
+        fill="#000000"
+        fillRule="evenodd"
+        d="M63.73,45.51 A12,12 0 1,0 63.73,62.49 L61.31,60.07 A8.6,8.6 0 1,1 61.31,47.93 Z"
+      />
+    </svg>
+    <span
+      style={{
+        fontFamily: monoFont,
+        fontSize: "22px",
+        fontWeight: 600,
+        color: "rgba(255,255,255,0.92)",
+        letterSpacing: "1px",
+      }}
+    >
+      COOKD
+    </span>
+  </div>
+);
+
+// ── Neutral contact avatar chip (no rainbow palette — one accent only,
+// reserved for the "you" side; everyone else gets the same neutral chip) ──
+
+const Avatar: React.FC<{
+  size: number;
+  initial: string;
+  variant: "contact" | "you";
+  fontSize: number;
+}> = ({ size, initial, variant, fontSize }) => (
+  <div
+    style={{
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: "50%",
+      backgroundColor:
+        variant === "you" ? COOKD_THEME.neonRed : COOKD_THEME.nothingSurface,
+      border: `1.5px solid ${
+        variant === "you" ? "rgba(225, 29, 72, 0.4)" : COOKD_THEME.nothingBorder
+      }`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: headingFont,
+      fontSize: `${fontSize}px`,
+      fontWeight: 700,
+      flexShrink: 0,
+      color: COOKD_THEME.nothingWhite,
+    }}
+  >
+    {initial}
+  </div>
+);
+
+// ── Typing dots ──
+
 const TypingDots: React.FC<{ frame: number; fps: number }> = ({
   frame,
   fps,
-}) => {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: "12px",
-        padding: "20px 30px",
-        alignItems: "center",
-      }}
-    >
-      {[0, 1, 2].map((i) => {
-        const dotSpring = spring({
-          frame: frame - i * 4,
-          fps,
-          config: { damping: 12, mass: 0.5 },
-        });
-        return (
-          <div
-            key={i}
-            style={{
-              width: "14px",
-              height: "14px",
-              borderRadius: "50%",
-              backgroundColor: COOKD_THEME.textSecondary,
-              opacity: interpolate(dotSpring, [0, 1], [0.2, 0.8]),
-              transform: `scale(${dotSpring})`,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
-// ── PHONE MOCKUP FRAME ──
-const PhoneFrame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+}) => (
   <div
     style={{
-      width: "100%",
-      height: "100%",
       display: "flex",
-      flexDirection: "column",
-      borderRadius: "48px",
-      border: "3px solid rgba(255, 255, 255, 0.15)",
-      overflow: "hidden",
-      position: "relative",
-      background: COOKD_THEME.nothingBlack,
+      gap: "8px",
+      padding: "16px 20px",
     }}
   >
-    {/* Notch */}
-    <div
-      style={{
-        position: "absolute",
-        top: 0,
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "180px",
-        height: "28px",
-        backgroundColor: COOKD_THEME.nothingBlack,
-        borderBottomLeftRadius: "18px",
-        borderBottomRightRadius: "18px",
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "8px",
-      }}
-    >
-      <div
-        style={{
-          width: "10px",
-          height: "10px",
-          borderRadius: "50%",
-          backgroundColor: "#1a1a1a",
-          border: "1px solid #333",
-        }}
-      />
-    </div>
-    {children}
+    {[0, 1, 2].map((i) => {
+      const dotSpring = spring({
+        frame: frame - i * 3,
+        fps,
+        config: { damping: 20, stiffness: 300, mass: 0.5 },
+      });
+      return (
+        <div
+          key={i}
+          style={{
+            width: "12px",
+            height: "12px",
+            borderRadius: "50%",
+            backgroundColor: COOKD_THEME.textSecondary,
+            opacity: interpolate(dotSpring, [0, 1], [0.2, 0.8]),
+            transform: `scale(${dotSpring})`,
+          }}
+        />
+      );
+    })}
   </div>
 );
+
+// ── Main composition ──
 
 export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
   personName,
@@ -190,7 +244,6 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Generate dynamic hook text for the first 2 seconds
   const hookText = generateHook({
     hookStyle,
     personName,
@@ -199,14 +252,11 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
     strategyLabel,
   });
 
-  // Break the hook into words, flagging any word inside "quotes" so it can be
-  // emphasized in neon red — that's the emotional beat the eye should catch.
   const hookWords: { text: string; emph: boolean }[] = [];
   hookText.split('"').forEach((segment, segIndex) => {
-    const emph = segIndex % 2 === 1; // odd segments were inside quotes
+    const emph = segIndex % 2 === 1;
     const words = segment.split(/\s+/).filter((w) => w.length > 0);
     words.forEach((word, wi) => {
-      // Re-attach the quote glyphs to the emphasized phrase so it still reads.
       let text = word;
       if (emph && wi === 0) text = `"${text}`;
       if (emph && wi === words.length - 1) text = `${text}"`;
@@ -214,48 +264,43 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
     });
   });
 
-  // Seeded, per-person variety so the feed never looks mass-produced.
   const seed = seedFrom(personName + strategyLabel);
   const bgGradient = pick(BG_VARIANTS, seed);
   const thinkingLabel = pick(THINKING_LABELS, seed, 1);
   const revealLabel = pick(REVEAL_LABELS, seed, 2);
   const thinkingLines = pick(THINKING_LINES, seed, 3);
 
-  // --- CORE TIMING MATH (30 FPS) — tuned for RETENTION ---
-  // Rule: the payoff (winning line) must land by ~8s or viewers swipe.
-  // 0. Hook: first 60 frames (2s)
-  // 1. Messages arrive fast — ~0.9s each (no dead air between them)
   const MSG_PACE = 28;
-  const chatStartFrame = 65; // after hook + 5 frame gap
+  const chatStartFrame = 65;
   const analyzeStartFrame = chatStartFrame + messages.length * MSG_PACE;
-  // 2. Brief tension beat — 0.6s, builds anticipation instead of making you wait
   const ANALYZE_FRAMES = 18;
   const revealStartFrame = analyzeStartFrame + ANALYZE_FRAMES;
-  // 3. Snappy typing (2 frames/char) so the payoff hits hard and quick
   const typingSpeed = 2;
   const typingDuration = winningLine.length * typingSpeed;
-  // 4. Let the payoff breathe (~2.5s) before the outro
   const outroStartFrame = revealStartFrame + typingDuration + 75;
+
+  // Matches globals.css `.animate-neon-pulse` keyframe (3s ease-in-out loop),
+  // the one place the design system allows a glow instead of a hard border.
+  const pulseT = (Math.sin((frame / 90) * Math.PI * 2) + 1) / 2;
+  const pulseBlur = interpolate(pulseT, [0, 1], [20, 30]);
+  const pulseSpread = interpolate(pulseT, [0, 1], [40, 60]);
+  const pulseAlpha1 = interpolate(pulseT, [0, 1], [0.15, 0.25]);
+  const pulseAlpha2 = interpolate(pulseT, [0, 1], [0.05, 0.1]);
 
   return (
     <AbsoluteFill
       style={{
         background: bgGradient,
-        fontFamily,
+        fontFamily: bodyFont,
         color: COOKD_THEME.nothingWhite,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "40px",
       }}
     >
-      {/* 🎙️ MASTER AUDIO — kept quiet so a creator can drop a trending sound
-          on top later. Nothing in the video RELIES on audio to be understood:
-          the whole story reads with sound off (silent-first for organic reach). */}
       {voiceoverAudio && <Audio src={voiceoverAudio} volume={0.8} />}
 
-      {/* 🪝 HOOK FRAME (first ~2 seconds — 60 frames at 30fps) */}
+      {/* --- Persistent logo watermark (all frames) --- */}
+      <LogoWatermark />
+
+      {/* HOOK FRAME (first ~2 seconds) */}
       {frame < 60 && (
         <AbsoluteFill
           style={{
@@ -263,17 +308,16 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
             alignItems: "center",
             justifyContent: "center",
             zIndex: 200,
-            // Snap in fast (attention peaks instantly), hold, clean exit.
             opacity: interpolate(frame, [0, 5, 50, 60], [0, 1, 1, 0]),
-            // Confident punch-in, then a quick pop on the way out.
             transform: `scale(${interpolate(
               frame,
               [0, 50, 60],
               [1, 1.05, 1.14]
             )})`,
+            paddingLeft: SAFE_LEFT,
+            paddingRight: SAFE_RIGHT,
           }}
         >
-          {/* ⚡ COLOR FLASH PATTERN INTERRUPT (first 3 frames) */}
           {frame < 4 && (
             <AbsoluteFill
               style={{
@@ -288,20 +332,19 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
               flexDirection: "column",
               alignItems: "center",
               gap: "36px",
+              maxWidth: "90%",
             }}
           >
-            {/* Word-by-word kinetic reveal — legible almost immediately,
-                each word springs up with a touch of overshoot for energy. */}
             <div
               style={{
                 display: "flex",
                 flexWrap: "wrap",
                 justifyContent: "center",
                 alignItems: "baseline",
-                maxWidth: "92%",
-                columnGap: "20px",
+                maxWidth: "100%",
+                columnGap: "18px",
                 rowGap: "6px",
-                padding: "0 20px",
+                fontFamily: headingFont,
               }}
             >
               {hookWords.map((word, i) => {
@@ -315,16 +358,13 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                     key={i}
                     style={{
                       display: "inline-block",
-                      fontSize: "84px",
-                      fontWeight: 800,
+                      fontSize: "72px",
+                      fontWeight: 700,
                       lineHeight: 1.05,
                       letterSpacing: "-2px",
                       color: word.emph
                         ? COOKD_THEME.neonRed
                         : COOKD_THEME.nothingWhite,
-                      textShadow: word.emph
-                        ? "0 0 40px rgba(255, 0, 60, 0.45)"
-                        : "none",
                       opacity: interpolate(wordSpring, [0, 0.8], [0, 1]),
                       transform: `translateY(${interpolate(
                         wordSpring,
@@ -342,9 +382,6 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                 );
               })}
             </div>
-
-            {/* Neon accent line — stamps in under the text for a punchy beat
-                (replaces the old "loading bar", which read as waiting). */}
             <div
               style={{
                 width: `${interpolate(
@@ -356,256 +393,184 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                   [0, 1],
                   [0, 160]
                 )}px`,
-                height: "6px",
+                height: "3px",
                 background: COOKD_THEME.neonRed,
-                borderRadius: "3px",
-                boxShadow: "0 0 24px rgba(255, 0, 60, 0.6)",
+                borderRadius: "2px",
               }}
             />
           </div>
         </AbsoluteFill>
       )}
 
-      {/* Phone mockup containing chat UI */}
+      {/* --- CHAT UI (full bleed, no phone frame) --- */}
       {frame >= 55 && (
         <div
           style={{
-            width: "90%",
-            maxWidth: "860px",
-            height: "100%",
+            position: "absolute",
+            top: SAFE_TOP,
+            left: SAFE_LEFT,
+            right: SAFE_RIGHT,
+            bottom: SAFE_BOTTOM,
             display: "flex",
             flexDirection: "column",
-            // Remotion's interpolate() EXTENDS past its range by default —
-            // it does not clamp. This div has no upper frame bound (stays
-            // mounted for the rest of the video), so without clamping here,
-            // translateY kept extrapolating negative forever after frame 70,
-            // dragging the entire phone mockup upward and off-canvas as the
-            // video went on. That was the real bug — clamp both explicitly.
             opacity: interpolate(frame, [55, 65], [0, 1], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
             }),
-            transform: `translateY(${interpolate(
-              frame,
-              [55, 70],
-              [40, 0],
-              { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-            )}px)`,
+            transform: `translateY(${interpolate(frame, [55, 70], [40, 0], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            })}px)`,
           }}
         >
-          <PhoneFrame>
-            {/* Chat header — reads like a REAL messaging app (contact + online),
-                not a surveillance HUD. Native feel = shares, not "this is an ad".
-                flexShrink: 0 — this is FIXED chrome; it must never be squeezed
-                or displaced by however tall the scrolling body gets. */}
+          {/* Chat header */}
+          <div
+            style={{
+              display: "flex",
+              flexShrink: 0,
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "20px 0",
+              borderBottom: `1px solid ${COOKD_THEME.nothingBorder}`,
+            }}
+          >
             <div
               style={{
                 display: "flex",
-                flexShrink: 0,
-                justifyContent: "space-between",
                 alignItems: "center",
-                background: COOKD_THEME.nothingSurface,
-                padding: "24px 32px",
-                borderBottom: `1px solid ${COOKD_THEME.nothingBorder}`,
+                gap: "14px",
               }}
             >
+              <Avatar
+                size={48}
+                initial={personName.charAt(0).toUpperCase()}
+                variant="contact"
+                fontSize={22}
+              />
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                }}
+                style={{ display: "flex", flexDirection: "column", gap: "2px" }}
               >
-                {/* Contact avatar */}
-                <div
+                <span
                   style={{
-                    width: "56px",
-                    height: "56px",
-                    borderRadius: "50%",
-                    backgroundColor: getAvatarColor(personName),
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "26px",
+                    fontFamily: headingFont,
+                    fontSize: "24px",
                     fontWeight: 700,
-                    flexShrink: 0,
                   }}
                 >
-                  {personName.charAt(0).toUpperCase()}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {personName}
+                </span>
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontFamily: monoFont,
+                    fontSize: "15px",
+                    fontWeight: 500,
+                    letterSpacing: "0.5px",
+                    color: COOKD_THEME.successGreen,
+                  }}
+                >
                   <span
                     style={{
-                      fontSize: "28px",
-                      fontWeight: 700,
-                      letterSpacing: "-0.5px",
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      backgroundColor: COOKD_THEME.successGreen,
                     }}
-                  >
-                    {personName}
-                  </span>
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      fontSize: "18px",
-                      fontWeight: 600,
-                      color: COOKD_THEME.successGreen,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: "10px",
-                        height: "10px",
-                        borderRadius: "50%",
-                        backgroundColor: COOKD_THEME.successGreen,
-                      }}
-                    />
-                    online
-                  </span>
-                </div>
+                  />
+                  online
+                </span>
               </div>
-              {/* Video-call glyph — pure native chrome */}
-              <span
-                style={{
-                  color: COOKD_THEME.textSecondary,
-                  fontSize: "28px",
-                }}
-              >
-                📹
-              </span>
             </div>
+            <CameraIcon size={26} color={COOKD_THEME.textSecondary} />
+          </div>
 
-            {/* Chat Messages BODY — the ONLY part of the phone that moves.
-                Header above and footer below are flexShrink:0 (fixed chrome);
-                this is flex:1 so it's locked to exactly the leftover space
-                between them, no matter how much is inside it.
-                minHeight: 0 overrides the flex-item default of min-height:auto —
-                without it, this box refuses to shrink below its own content
-                size and grows past its allotted space instead of clipping
-                internally (pushing the fixed header/footer out of place).
-                overflow: hidden + justifyContent: flex-end is what turns
-                "more messages than fit" into a real scroll: new messages sit
-                at the bottom, older ones get clipped off the top — the box
-                itself never resizes. */}
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "flex-end",
-                margin: "40px 32px",
-                overflow: "hidden",
-              }}
-            >
-              {messages.map((msg, index) => {
-                const entryFrame = chatStartFrame + index * MSG_PACE;
-                const isThem = msg.sender === "them";
-                // Short "typing…" tease (10 frames) — enough to feel live,
-                // not enough to stall the pace.
-                const DOTS_WINDOW = 10;
-                const showTypingDots =
-                  frame >= entryFrame - DOTS_WINDOW && frame < entryFrame;
+          {/* Messages body — centered in the safe area so the thread never
+              hugs the bottom edge where platform UI (likes/caption/audio)
+              lives, and fills the dead space above it instead. */}
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              paddingTop: "32px",
+              paddingBottom: "16px",
+              overflow: "hidden",
+            }}
+          >
+            {messages.map((msg, index) => {
+              const entryFrame = chatStartFrame + index * MSG_PACE;
+              const isThem = msg.sender === "them";
+              const DOTS_WINDOW = 10;
+              const showTypingDots =
+                frame >= entryFrame - DOTS_WINDOW && frame < entryFrame;
 
-                if (frame < entryFrame - DOTS_WINDOW) return null;
+              if (frame < entryFrame - DOTS_WINDOW) return null;
 
-                return (
-                  <React.Fragment key={index}>
-                    {/* Typing dots indicator before message */}
-                    {showTypingDots && (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: isThem ? "flex-start" : "flex-end",
-                        }}
-                      >
-                        {isThem && (
-                          <div
-                            style={{
-                              width: "44px",
-                              height: "44px",
-                              borderRadius: "50%",
-                              backgroundColor: getAvatarColor(personName),
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "20px",
-                              fontWeight: 700,
-                              marginRight: "12px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {personName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <TypingDots
-                          frame={frame - (entryFrame - DOTS_WINDOW)}
-                          fps={fps}
-                        />
-                        {!isThem && (
-                          <div
-                            style={{
-                              width: "44px",
-                              height: "44px",
-                              borderRadius: "50%",
-                              backgroundColor: COOKD_THEME.neonRed,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "20px",
-                              fontWeight: 700,
-                              marginLeft: "12px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            Y
-                          </div>
-                        )}
-                      </div>
-                    )}
+              return (
+                <React.Fragment key={index}>
+                  {showTypingDots && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: isThem ? "flex-start" : "flex-end",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      {isThem && (
+                        <div style={{ marginRight: "10px" }}>
+                          <Avatar
+                            size={36}
+                            initial={personName.charAt(0).toUpperCase()}
+                            variant="contact"
+                            fontSize={16}
+                          />
+                        </div>
+                      )}
+                      <TypingDots
+                        frame={frame - (entryFrame - DOTS_WINDOW)}
+                        fps={fps}
+                      />
+                      {!isThem && (
+                        <div style={{ marginLeft: "10px" }}>
+                          <Avatar size={36} initial="Y" variant="you" fontSize={16} />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                    {/* Message bubble */}
-                    {frame >= entryFrame &&
-                      (() => {
-                        // Monotonic ease (no bounce) that fully settles in ~10
-                        // frames — the upward growth IS the scroll, and it
-                        // finishes before the next message lands at MSG_PACE.
-                        const reveal = interpolate(
-                          frame - entryFrame,
-                          [0, 10],
-                          [0, 1],
-                          {
-                            extrapolateRight: "clamp",
-                            easing: Easing.out(Easing.cubic),
-                          }
-                        );
+                  {frame >= entryFrame &&
+                    (() => {
+                      const reveal = interpolate(
+                        frame - entryFrame,
+                        [0, 10],
+                        [0, 1],
+                        {
+                          extrapolateRight: "clamp",
+                          easing: Easing.out(Easing.cubic),
+                        }
+                      );
 
-                        return (
-                          <div
-                            style={{
-                              // Grow the row height from 0 → full: older
-                              // messages get pushed up smoothly, newest stays
-                              // pinned to the bottom. 600px comfortably exceeds
-                              // any single bubble so tall ones aren't clipped.
-                              maxHeight: `${interpolate(
-                                reveal,
-                                [0, 1],
-                                [0, 600]
-                              )}px`,
-                              overflow: "hidden",
-                              paddingTop: `${interpolate(
-                                reveal,
-                                [0, 1],
-                                [0, 28]
-                              )}px`,
-                            }}
-                          >
+                      return (
+                        <div
+                          style={{
+                            maxHeight: `${interpolate(
+                              reveal,
+                              [0, 1],
+                              [0, 500]
+                            )}px`,
+                            overflow: "hidden",
+                            marginBottom: "16px",
+                          }}
+                        >
                           <div
                             style={{
                               display: "flex",
                               alignItems: "flex-end",
-                              gap: "12px",
+                              gap: "10px",
                               justifyContent: isThem
                                 ? "flex-start"
                                 : "flex-end",
@@ -617,133 +582,104 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                               opacity: interpolate(reveal, [0, 0.6], [0, 1]),
                             }}
                           >
-                            {/* Avatar for "them" messages */}
                             {isThem && (
-                              <div
-                                style={{
-                                  width: "44px",
-                                  height: "44px",
-                                  borderRadius: "50%",
-                                  backgroundColor: getAvatarColor(personName),
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: "20px",
-                                  fontWeight: 700,
-                                  flexShrink: 0,
-                                  border: `2px solid ${COOKD_THEME.nothingBorder}`,
-                                }}
-                              >
-                                {personName.charAt(0).toUpperCase()}
-                              </div>
+                              <Avatar
+                                size={36}
+                                initial={personName.charAt(0).toUpperCase()}
+                                variant="contact"
+                                fontSize={16}
+                              />
                             )}
 
                             <div
                               style={{
-                                maxWidth: "75%",
-                                padding: "24px 32px",
-                                fontSize: "28px",
+                                maxWidth: "78%",
+                                padding: "18px 24px",
+                                fontFamily: bodyFont,
+                                fontSize: "24px",
                                 lineHeight: 1.4,
                                 backgroundColor: isThem
                                   ? COOKD_THEME.nothingSurface
-                                  : "rgba(255, 0, 60, 0.08)",
+                                  : "rgba(225, 29, 72, 0.08)",
                                 border: `1px solid ${
                                   isThem
                                     ? COOKD_THEME.nothingBorder
-                                    : "rgba(255, 0, 60, 0.2)"
+                                    : "rgba(225, 29, 72, 0.2)"
                                 }`,
                                 color: COOKD_THEME.nothingWhite,
                                 borderRadius: isThem
-                                  ? "4px 20px 20px 20px"
-                                  : "20px 4px 20px 20px",
+                                  ? "4px 12px 12px 12px"
+                                  : "12px 4px 12px 12px",
                                 fontWeight: 500,
                               }}
                             >
                               {msg.text}
                             </div>
 
-                            {/* Avatar for "you" messages */}
                             {!isThem && (
-                              <div
-                                style={{
-                                  width: "44px",
-                                  height: "44px",
-                                  borderRadius: "50%",
-                                  backgroundColor: COOKD_THEME.neonRed,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: "20px",
-                                  fontWeight: 700,
-                                  flexShrink: 0,
-                                  border: `2px solid rgba(255, 0, 60, 0.4)`,
-                                }}
-                              >
-                                Y
-                              </div>
+                              <Avatar size={36} initial="Y" variant="you" fontSize={16} />
                             )}
                           </div>
-                          </div>
-                        );
-                      })()}
-                  </React.Fragment>
-                );
-              })}
+                        </div>
+                      );
+                    })()}
+                </React.Fragment>
+              );
+            })}
 
-              {/* ⚡ VIRAL AI GENERATION BLOCK */}
-              {(() => {
-                if (frame < analyzeStartFrame) return null;
+            {/* AI Generation block */}
+            {(() => {
+              if (frame < analyzeStartFrame) return null;
 
-                const isAnalyzing = frame < revealStartFrame;
-                const charsToShow = Math.max(
-                  0,
-                  Math.floor((frame - revealStartFrame) / typingSpeed)
-                );
-                const visibleText = winningLine.substring(0, charsToShow);
-                const isTyping =
-                  charsToShow < winningLine.length && !isAnalyzing;
-                const randomScrambleChar = isTyping
-                  ? SCRAMBLE_CHARS[
-                      Math.floor(random(frame) * SCRAMBLE_CHARS.length)
-                    ]
-                  : "";
-                // Confidence races to 99% across the brief thinking beat —
-                // motion that builds anticipation instead of a dead spinner.
-                const calcProgress = Math.min(
-                  99,
-                  Math.floor(((frame - analyzeStartFrame) / ANALYZE_FRAMES) * 100)
-                );
+              const isAnalyzing = frame < revealStartFrame;
+              const charsToShow = Math.max(
+                0,
+                Math.floor((frame - revealStartFrame) / typingSpeed)
+              );
+              const visibleText = winningLine.substring(0, charsToShow);
+              const isTyping = charsToShow < winningLine.length && !isAnalyzing;
+              const randomScrambleChar = isTyping
+                ? SCRAMBLE_CHARS[
+                    Math.floor(random(frame) * SCRAMBLE_CHARS.length)
+                  ]
+                : "";
+              const calcProgress = Math.min(
+                99,
+                Math.floor(((frame - analyzeStartFrame) / ANALYZE_FRAMES) * 100)
+              );
 
-                // Slide the AI block up fast so it never stalls the pace.
-                const aiReveal = interpolate(
-                  frame - analyzeStartFrame,
-                  [0, 10],
-                  [0, 1],
-                  { extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) }
-                );
+              const aiReveal = interpolate(
+                frame - analyzeStartFrame,
+                [0, 10],
+                [0, 1],
+                {
+                  extrapolateRight: "clamp",
+                  easing: Easing.out(Easing.cubic),
+                }
+              );
 
-                return (
-                  <div
-                    style={{
-                      maxHeight: `${interpolate(aiReveal, [0, 1], [0, 900])}px`,
-                      overflow: "hidden",
-                      paddingTop: `${interpolate(aiReveal, [0, 1], [0, 40])}px`,
-                      transform: `translateY(${interpolate(
-                        aiReveal,
-                        [0, 1],
-                        [30, 0]
-                      )}px)`,
-                      opacity: interpolate(aiReveal, [0, 0.6], [0, 1]),
-                    }}
-                  >
+              return (
+                <div
+                  style={{
+                    maxHeight: `${interpolate(aiReveal, [0, 1], [0, 800])}px`,
+                    overflow: "hidden",
+                    marginTop: "8px",
+                    transform: `translateY(${interpolate(
+                      aiReveal,
+                      [0, 1],
+                      [30, 0]
+                    )}px)`,
+                    opacity: interpolate(aiReveal, [0, 0.6], [0, 1]),
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
                       flexDirection: "column",
                       width: "100%",
-                      gap: "24px",
+                      gap: "16px",
                       background: COOKD_THEME.nothingSurface,
-                      padding: "36px 40px",
+                      padding: "24px 28px",
                       border: `1px solid ${
                         isAnalyzing
                           ? COOKD_THEME.textSecondary
@@ -751,7 +687,7 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                       }`,
                       boxShadow: isAnalyzing
                         ? "none"
-                        : `0 0 40px rgba(255, 0, 60, 0.15)`,
+                        : `0 0 ${pulseBlur}px rgba(225, 29, 72, ${pulseAlpha1}), 0 0 ${pulseSpread}px rgba(225, 29, 72, ${pulseAlpha2})`,
                       borderRadius: "12px",
                     }}
                   >
@@ -762,16 +698,17 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                         justifyContent: "space-between",
                         alignItems: "center",
                         borderBottom: `1px solid ${COOKD_THEME.nothingBorder}`,
-                        paddingBottom: "16px",
+                        paddingBottom: "12px",
                       }}
                     >
                       <span
                         style={{
-                          fontSize: "26px",
+                          fontFamily: monoFont,
+                          fontSize: "18px",
                           color: isAnalyzing
                             ? COOKD_THEME.textSecondary
                             : COOKD_THEME.neonRed,
-                          fontWeight: 800,
+                          fontWeight: 600,
                           letterSpacing: "1px",
                         }}
                       >
@@ -780,11 +717,13 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                       {!isAnalyzing && (
                         <span
                           style={{
-                            fontSize: "18px",
+                            fontFamily: monoFont,
+                            fontSize: "13px",
                             color: COOKD_THEME.nothingBlack,
                             backgroundColor: COOKD_THEME.successGreen,
-                            padding: "4px 12px",
-                            fontWeight: 800,
+                            padding: "4px 10px",
+                            fontWeight: 600,
+                            letterSpacing: "0.5px",
                             borderRadius: "4px",
                           }}
                         >
@@ -799,16 +738,15 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                         style={{
                           display: "flex",
                           flexDirection: "column",
-                          gap: "24px",
+                          gap: "16px",
                         }}
                       >
-                        {/* AI Network Pulse - 3 concentric circles */}
                         <div
                           style={{
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            gap: "40px",
+                            gap: "32px",
                           }}
                         >
                           {[0, 1, 2].map((i) => {
@@ -821,8 +759,8 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                               <div
                                 key={i}
                                 style={{
-                                  width: `${20 + i * 16}px`,
-                                  height: `${20 + i * 16}px`,
+                                  width: `${20 + i * 14}px`,
+                                  height: `${20 + i * 14}px`,
                                   borderRadius: "50%",
                                   border: `2px solid ${COOKD_THEME.neonRed}`,
                                   opacity: interpolate(
@@ -840,15 +778,16 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                             );
                           })}
                         </div>
-
                         <div
                           style={{
+                            fontFamily: monoFont,
                             color: COOKD_THEME.textSecondary,
                             display: "flex",
                             flexDirection: "column",
-                            gap: "10px",
-                            fontSize: "24px",
+                            gap: "6px",
+                            fontSize: "16px",
                             fontWeight: 500,
+                            letterSpacing: "0.3px",
                           }}
                         >
                           <div>{thinkingLines[0]}</div>
@@ -857,14 +796,14 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                             style={{
                               display: "flex",
                               alignItems: "center",
-                              gap: "10px",
+                              gap: "8px",
                             }}
                           >
                             <span>Confidence</span>
                             <span
                               style={{
                                 color: COOKD_THEME.successGreen,
-                                fontWeight: 800,
+                                fontWeight: 700,
                               }}
                             >
                               {calcProgress}%
@@ -876,36 +815,30 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                       <div
                         style={{
                           display: "flex",
-                          gap: "16px",
+                          gap: "12px",
                           alignItems: "flex-start",
                         }}
                       >
-                        {/* Sparkle — "here's the magic line", not a crosshair */}
                         <div
                           style={{
-                            width: "48px",
-                            height: "48px",
+                            width: "40px",
+                            height: "40px",
                             borderRadius: "50%",
                             backgroundColor: "rgba(0, 255, 102, 0.12)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontSize: "24px",
                             flexShrink: 0,
                             marginTop: "4px",
                           }}
                         >
-                          ✨
+                          <SparkleIcon size={20} color={COOKD_THEME.successGreen} />
                         </div>
                         <div style={{ flex: 1, position: "relative" }}>
-                          {/* Ghost: the FULL winning line, invisible, reserves
-                              the final box height up front. This is what stops
-                              the layout from moving as characters type in —
-                              only the overlaid text below grows into the space
-                              that's already there; nothing above it reflows. */}
                           <div
                             style={{
-                              fontSize: "36px",
+                              fontFamily: bodyFont,
+                              fontSize: "30px",
                               fontWeight: 600,
                               lineHeight: 1.4,
                               visibility: "hidden",
@@ -920,7 +853,8 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                               top: 0,
                               left: 0,
                               right: 0,
-                              fontSize: "36px",
+                              fontFamily: bodyFont,
+                              fontSize: "30px",
                               fontWeight: 600,
                               lineHeight: 1.4,
                               color: COOKD_THEME.nothingWhite,
@@ -934,7 +868,7 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                               style={{
                                 opacity: isTyping || frame % 20 < 10 ? 1 : 0,
                                 color: COOKD_THEME.neonRed,
-                                fontSize: "32px",
+                                fontSize: "28px",
                               }}
                             >
                               █
@@ -944,50 +878,25 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                       </div>
                     )}
                   </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Subtext Footer — fixed chrome, same contract as the header. */}
-            <div
-              style={{
-                display: "flex",
-                flexShrink: 0,
-                justifyContent: "space-between",
-                alignItems: "center",
-                borderTop: `1px solid ${COOKD_THEME.nothingBorder}`,
-                padding: "28px 32px",
-                fontSize: "18px",
-                color: COOKD_THEME.textSecondary,
-                fontWeight: 600,
-              }}
-            >
-              <div>Cookd AI ✨</div>
-              <div>your wingman, in your pocket</div>
-            </div>
-          </PhoneFrame>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
-      {/* 🎬 SOFT-CTA OUTRO — a small caption over the still-visible chat,
-          not a full-screen ad takeover. Native feel = it plays like a
-          creator's own caption, not a download prompt, so it doesn't kill
-          completion rate. The phone/chat stays on screen behind this. */}
+      {/* OUTRO — CTA badge, positioned within safe zone */}
       {(() => {
         if (frame < outroStartFrame) return null;
 
         const localFrame = frame - outroStartFrame;
-        const OUTRO_HOLD = 120; // matches the +120 tail in calcDuration
+        const OUTRO_HOLD = 120;
 
-        // Caption fades/slides in from the bottom third — like a subtitle.
         const captionIn = interpolate(localFrame, [0, 15], [0, 1], {
           extrapolateRight: "clamp",
           easing: Easing.out(Easing.cubic),
         });
 
-        // Whole frame fades to black only in the final beat, so the cut
-        // feels like a natural close instead of a hard ad-stinger.
         const fadeToBlack = interpolate(
           localFrame,
           [OUTRO_HOLD - 20, OUTRO_HOLD],
@@ -1002,7 +911,9 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "flex-end",
-                paddingBottom: "90px",
+                paddingBottom: SAFE_BOTTOM - 20,
+                paddingLeft: SAFE_LEFT,
+                paddingRight: SAFE_RIGHT,
                 zIndex: 100,
                 pointerEvents: "none",
               }}
@@ -1012,10 +923,10 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                   display: "flex",
                   alignItems: "center",
                   gap: "12px",
-                  background: "rgba(5, 5, 5, 0.7)",
+                  background: "rgba(10, 10, 10, 0.85)",
                   border: `1px solid ${COOKD_THEME.nothingBorder}`,
-                  borderRadius: "999px",
-                  padding: "18px 32px",
+                  borderRadius: "9999px",
+                  padding: "16px 28px",
                   opacity: captionIn,
                   transform: `translateY(${interpolate(
                     captionIn,
@@ -1024,10 +935,18 @@ export const CookdChatShortVideo: React.FC<CookdShortProps> = ({
                   )}px)`,
                 }}
               >
-                <span style={{ fontSize: "26px" }}>✨</span>
+                <svg width="26" height="26" viewBox="0 0 108 108" fill="none">
+                  <circle cx="54" cy="54" r="28" fill="#FFFFFF" />
+                  <path
+                    fill="#000000"
+                    fillRule="evenodd"
+                    d="M63.73,45.51 A12,12 0 1,0 63.73,62.49 L61.31,60.07 A8.6,8.6 0 1,1 61.31,47.93 Z"
+                  />
+                </svg>
                 <span
                   style={{
-                    fontSize: "26px",
+                    fontFamily: bodyFont,
+                    fontSize: "22px",
                     fontWeight: 600,
                     color: COOKD_THEME.nothingWhite,
                   }}
