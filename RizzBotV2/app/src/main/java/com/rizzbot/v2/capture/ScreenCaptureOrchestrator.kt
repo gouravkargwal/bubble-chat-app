@@ -129,6 +129,7 @@ class ScreenCaptureOrchestrator @Inject constructor(
                 is SuggestionResult.Success -> {
                     hapticHelper.successTap()
                     analyticsHelper.replyGenerated("hosted", latencyMs)
+                    analyticsHelper.firstReplyGenerated("hosted", latencyMs)
                 }
                 is SuggestionResult.Error -> {
                     analyticsHelper.replyFailed("hosted", result.message)
@@ -272,6 +273,7 @@ class ScreenCaptureOrchestrator @Inject constructor(
                 is SuggestionResult.Success -> {
                     hapticHelper.successTap()
                     analyticsHelper.replyGenerated("hosted_gallery", latencyMs)
+                    analyticsHelper.firstReplyGenerated("hosted_gallery", latencyMs)
                 }
                 is SuggestionResult.Error -> {
                     analyticsHelper.replyFailed("hosted_gallery", result.message)

@@ -58,6 +58,13 @@ class HomeViewModel @Inject constructor(
     init {
         analyticsHelper.screenViewed("Home")
 
+        // Fire overlay_permission_granted once when permission is first detected after signup
+        viewModelScope.launch {
+            permissionHelper.canDrawOverlays().let { granted ->
+                if (granted) analyticsHelper.overlayPermissionGranted()
+            }
+        }
+
         viewModelScope.launch {
             combine(
                 settingsRepository.serviceEnabled,
@@ -155,7 +162,12 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refreshPermissionStatus() {
-        _state.update { it.copy(hasOverlayPermission = permissionHelper.canDrawOverlays()) }
+        val hadPermission = _state.value.hasOverlayPermission
+        val nowHasPermission = permissionHelper.canDrawOverlays()
+        if (!hadPermission && nowHasPermission) {
+            analyticsHelper.overlayPermissionGranted()
+        }
+        _state.update { it.copy(hasOverlayPermission = nowHasPermission) }
     }
 
     /**
