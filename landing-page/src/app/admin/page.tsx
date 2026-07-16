@@ -19,6 +19,65 @@ import { RenderedTab } from "@/components/admin/RenderedTab";
 
 const PAGE_SIZE = 20;
 
+// ── Async render helper: POST to start, then poll GET until done ─────────
+
+async function startRender(candidate: VideoCandidate): Promise<Blob> {
+  const postRes = await fetch("/api/render-video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      personName: candidate.personName,
+      messages: candidate.transcript,
+      winningLine: candidate.winningLine,
+      strategyLabel: candidate.strategyLabel,
+      hookStyle: candidate.hookStyle,
+      viralScore: candidate.viralScore,
+      interactionId: candidate.id,
+      isOpener: candidate.isOpener,
+      keyDetail: candidate.keyDetail,
+    }),
+  });
+  if (!postRes.ok) {
+    const err = await postRes
+      .json()
+      .catch(() => ({ error: postRes.statusText }));
+    throw new Error(err.error || `Render failed (${postRes.status})`);
+  }
+  const { jobId } = await postRes.json();
+
+  // 2. Poll until completed (GET returns the video blob when done)
+  const pollIntervalMs = 3_000;
+  const maxWaitMs = 120_000;
+  const deadline = Date.now() + maxWaitMs;
+
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+    const pollRes = await fetch(`/api/render-video?id=${jobId}`);
+    if (!pollRes.ok) {
+      if (pollRes.status === 404) throw new Error("Render job not found");
+      throw new Error(`Poll failed (${pollRes.status})`);
+    }
+
+    const contentType = pollRes.headers.get("content-type") || "";
+    // Video response means the render is done
+    if (contentType.startsWith("video/")) {
+      return pollRes.blob();
+    }
+
+    const status = await pollRes.json();
+    if (status.status === "error") {
+      throw new Error(status.error || "Render error");
+    }
+    if (status.status === "completed") {
+      const finalRes = await fetch(`/api/render-video?id=${jobId}`);
+      if (!finalRes.ok) throw new Error("Failed to fetch completed video");
+      return finalRes.blob();
+    }
+  }
+
+  throw new Error("Render timed out");
+}
+
 export default function AdminVideoPipeline() {
   const [candidates, setCandidates] = useState<VideoCandidate[]>([]);
   const [renderedVideos, setRenderedVideos] = useState<RenderedVideo[]>([]);
@@ -152,28 +211,7 @@ export default function AdminVideoPipeline() {
     setRenderProgress(`Rendering ${candidate.personName}...`);
 
     try {
-      const res = await fetch("/api/render-video", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          personName: candidate.personName,
-          messages: candidate.transcript,
-          winningLine: candidate.winningLine,
-          strategyLabel: candidate.strategyLabel,
-          hookStyle: candidate.hookStyle,
-          viralScore: candidate.viralScore,
-          interactionId: candidate.id,
-          isOpener: candidate.isOpener,
-          keyDetail: candidate.keyDetail,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error || `Render failed (${res.status})`);
-      }
-
-      const blob = await res.blob();
+      const blob = await startRender(candidate);
       const url = URL.createObjectURL(blob);
 
       setRenderLog((prev) => [
@@ -221,32 +259,7 @@ export default function AdminVideoPipeline() {
       if (!candidate) continue;
 
       try {
-        const res = await fetch("/api/render-video", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            personName: candidate.personName,
-            messages: candidate.transcript,
-            winningLine: candidate.winningLine,
-            strategyLabel: candidate.strategyLabel,
-            hookStyle: candidate.hookStyle,
-            viralScore: candidate.viralScore,
-            interactionId: candidate.id,
-            isOpener: candidate.isOpener,
-            keyDetail: candidate.keyDetail,
-          }),
-        });
-
-        if (!res.ok) {
-          failed++;
-          setRenderLog((prev) => [
-            `❌ ${candidate.personName}: render failed (${res.status})`,
-            ...prev,
-          ]);
-          continue;
-        }
-
-        const blob = await res.blob();
+        const blob = await startRender(candidate);
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement("a");

@@ -1,12 +1,9 @@
 /**
- * POST /api/render-video
+ * POST /api/render-video — start a render job (returns immediately with jobId)
+ * GET  /api/render-video?id=<jobId> — poll for job status / download finished video
  *
- * Renders a Remotion chat-short video directly.
- * Uses @remotion/bundler to bundle the composition .tsx files on-the-fly,
- * then @remotion/renderer to render the .mp4.
- *
- * The rendered file is saved permanently to ./rendered-videos/ and
- * a DB record is created via the backend CRUD API.
+ * Render runs in a background asyncio task so the HTTP request doesn't block
+ * for 30-90s. The client polls GET until status="completed" or "error".
  *
  * Dependencies:
  *   npm install @remotion/bundler @remotion/renderer remotion
@@ -19,30 +16,56 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import os from "os";
 import fs from "fs/promises";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://api:8000";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
-// Matches the timing math in Composition.tsx (30 FPS). Keep these constants
-// in lock-step with the composition or the video will clip / pad dead frames.
-function calcDuration(messages: number, winningLineLen: number): number {
-  const chatStartFrame = 65;
-  const analyzeStartFrame = chatStartFrame + messages * 28; // MSG_PACE
-  const revealStartFrame = analyzeStartFrame + 18; // ANALYZE_FRAMES
-  const typingDuration = winningLineLen * 2; // typingSpeed
-  const outroStartFrame = revealStartFrame + typingDuration + 75;
-  return outroStartFrame + 120; // ~4s outro hold
+// ── In-process job store ────────────────────────────────────────────────
+// Shared across all requests within the same process. On serverless or
+// multi-process deployments this would need Redis — fine for a single
+// Node.js process behind a proxy.
+
+interface RenderJob {
+  id: string;
+  status: "pending" | "rendering" | "completed" | "error";
+  outputPath: string;
+  error?: string;
+  createdAt: number;
+  completedAt?: number;
+  dbRecordId?: string | null;
 }
 
-// Duration for ProfileCard (opener) composition
-function calcProfileCardDuration(winningLineLen: number): number {
-  return 120 + winningLineLen * 2 + 20 + 60 + 90; // ~12s total
+const jobs = new Map<string, RenderJob>();
+
+let jobCounter = 0;
+function nextJobId(): string {
+  jobCounter += 1;
+  return `render-${Date.now()}-${jobCounter}`;
 }
 
-export async function POST(request: NextRequest) {
+// ── Background runner ────────────────────────────────────────────────────
+
+async function runRender(
+  jobId: string,
+  body: {
+    personName: string;
+    messages: string[];
+    winningLine: string;
+    strategyLabel?: string;
+    hookStyle?: string;
+    viralScore?: number;
+    interactionId?: string | null;
+    isOpener?: boolean;
+    keyDetail?: string;
+  }
+): Promise<void> {
+  const job = jobs.get(jobId);
+  if (!job) return;
+
   try {
-    const body = await request.json();
+    job.status = "rendering";
+
     const {
       personName,
       messages,
@@ -54,25 +77,15 @@ export async function POST(request: NextRequest) {
       isOpener,
       keyDetail,
     } = body;
-
-    if (!winningLine || !personName) {
-      return NextResponse.json(
-        { error: "Missing required fields: personName, winningLine" },
-        { status: 400 }
-      );
-    }
-
     const msgCount = (messages || []).length;
 
-    // Import Remotion modules dynamically
+    // Import Remotion modules dynamically (they're heavy)
     const { bundle } = await import("@remotion/bundler");
     const { renderMedia, selectComposition } = await import(
       "@remotion/renderer"
     );
 
-    // Path to the Remotion composition source files
     const compositionDir = path.join(process.cwd(), "src/app/admin/remotion");
-
     const inputProps = {
       personName,
       messages: messages || [],
@@ -83,14 +96,13 @@ export async function POST(request: NextRequest) {
       keyDetail: keyDetail || "",
     };
 
-    // ── Step 1: Bundle the composition .tsx files into a static site ──
+    // Step 1: bundle
     const serveUrl = await bundle({
       entryPoint: path.join(compositionDir, "index.ts"),
       outDir: path.join(os.tmpdir(), "cookd-remotion-bundles"),
     });
 
-    // ── Step 2: Select the composition by ID, overriding duration ──
-    // Openers use the ProfileCard composition; chat replies use ChatShort.
+    // Step 2: select composition
     const compositionId = isOpener ? "CookdProfileCard" : "CookdChatShort";
     const composition = await selectComposition({
       serveUrl,
@@ -101,15 +113,17 @@ export async function POST(request: NextRequest) {
       ? calcProfileCardDuration(winningLine.length)
       : calcDuration(msgCount, winningLine.length);
 
-    // ── Step 3: Define permanent output path (shared Docker volume) ──
-    // Both landing-page and api containers mount rendered_videos_data at /rendered-videos
+    // Step 3: output path
     const permanentDir = "/rendered-videos";
     await fs.mkdir(permanentDir, { recursive: true });
     const timestamp = Date.now();
     const safeName = personName.toLowerCase().replace(/\s+/g, "-");
     const outputPath = path.join(permanentDir, `${timestamp}-${safeName}.mp4`);
 
-    // ── Step 4: Render the video ──
+    // Update job with the real output path
+    job.outputPath = outputPath;
+
+    // Step 4: render
     await renderMedia({
       composition,
       serveUrl,
@@ -118,15 +132,11 @@ export async function POST(request: NextRequest) {
       inputProps,
       everyNthFrame: 1,
       numberOfGifLoops: null,
-      // 8 Mbps bitrate for crisp text rendering on social platforms
-      // Remotion default (~2 Mbps) causes blocky text on sharp font edges
       videoBitrate: "8M",
     });
 
-    // ── Step 5: Get file stats ──
+    // Step 5: DB record
     const stat = await fs.stat(outputPath);
-
-    // ── Step 6: Create DB record via backend CRUD API ──
     let dbRecordId: string | null = null;
     try {
       const recordRes = await fetch(
@@ -154,26 +164,125 @@ export async function POST(request: NextRequest) {
         const record = await recordRes.json();
         dbRecordId = record.id;
       }
-    } catch (dbErr) {
-      // Non-fatal: video is saved on disk even if DB record fails
-      console.warn("[Render] Failed to create DB record:", dbErr);
+    } catch {
+      console.warn("[Render] Failed to create DB record");
     }
 
-    // ── Step 7: Stream the file back as download ──
-    const fileBuffer = readFileSync(outputPath);
+    job.status = "completed";
+    job.completedAt = Date.now();
+    job.dbRecordId = dbRecordId;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Render failed";
+    console.error("[Render Error]", message);
+    job.status = "error";
+    job.error = message;
+    job.completedAt = Date.now();
+  }
+}
+
+// ── Duration helpers (lock-step with Composition.tsx) ────────────────────
+
+function calcDuration(messages: number, winningLineLen: number): number {
+  const chatStartFrame = 65;
+  const analyzeStartFrame = chatStartFrame + messages * 28;
+  const revealStartFrame = analyzeStartFrame + 18;
+  const typingDuration = winningLineLen * 2;
+  const outroStartFrame = revealStartFrame + typingDuration + 75;
+  return outroStartFrame + 120;
+}
+
+function calcProfileCardDuration(winningLineLen: number): number {
+  return 120 + winningLineLen * 2 + 20 + 60 + 90;
+}
+
+// ── Routes ──────────────────────────────────────────────────────────────
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { personName, winningLine } = body;
+
+    if (!winningLine || !personName) {
+      return NextResponse.json(
+        { error: "Missing required fields: personName, winningLine" },
+        { status: 400 }
+      );
+    }
+
+    // Clean up stale jobs older than 1 hour
+    const staleCutoff = Date.now() - 3_600_000;
+    for (const [id, j] of jobs) {
+      if (j.completedAt && j.completedAt < staleCutoff) jobs.delete(id);
+    }
+
+    const jobId = nextJobId();
+    const job: RenderJob = {
+      id: jobId,
+      status: "pending",
+      outputPath: "",
+      createdAt: Date.now(),
+    };
+    jobs.set(jobId, job);
+
+    // Fire & forget — runs in background
+    runRender(jobId, body).catch((err) =>
+      console.error("[Render] background task crashed:", err)
+    );
+
+    return NextResponse.json({ jobId, status: "pending" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Render failed";
+    console.error("[Render POST Error]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const jobId = request.nextUrl.searchParams.get("id");
+  if (!jobId) {
+    return NextResponse.json(
+      { error: "Missing ?id= parameter" },
+      { status: 400 }
+    );
+  }
+
+  const job = jobs.get(jobId);
+  if (!job) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+
+  // If completed and the file exists, stream it as a download
+  if (
+    job.status === "completed" &&
+    job.outputPath &&
+    existsSync(job.outputPath)
+  ) {
+    const fileBuffer = readFileSync(job.outputPath);
+    const safeName = path.basename(job.outputPath).replace(/\.mp4$/, "");
     const fileName = `cookd-${safeName}.mp4`;
+
+    // Clean up the job from the map — no more polling needed
+    jobs.delete(jobId);
 
     return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": "video/mp4",
         "Content-Disposition": `attachment; filename="${fileName}"`,
         "Content-Length": fileBuffer.length.toString(),
-        "X-Video-Id": dbRecordId || "",
+        "X-Video-Id": job.dbRecordId || "",
       },
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Render failed";
-    console.error("[Render Error]", message);
-    return NextResponse.json({ error: message }, { status: 500 });
   }
+
+  // Otherwise return status
+  return NextResponse.json({
+    jobId: job.id,
+    status: job.status,
+    error: job.error,
+    createdAt: job.createdAt,
+    completedAt: job.completedAt,
+    ...(job.status === "completed"
+      ? { downloadUrl: `/api/render-video?id=${jobId}` }
+      : {}),
+  });
 }
