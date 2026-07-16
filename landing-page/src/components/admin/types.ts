@@ -11,11 +11,13 @@ export interface VideoCandidate {
   winningLine: string;
   coachReasoning: string;
   theirLastMessage: string;
+  keyDetail?: string;
   transcript: TranscriptMessage[];
   hookStyle: string;
   viralScore: number;
   priority: string;
   createdAt: string;
+  isOpener?: boolean;
 }
 
 export interface RenderedVideo {
