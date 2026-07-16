@@ -310,10 +310,7 @@ export async function GET(request: NextRequest) {
     !job.outputPath ||
     !existsSync(job.outputPath)
   ) {
-    return NextResponse.json({
-      status: job.status,
-      error: job.status === "error" ? job.error : undefined,
-    });
+    return NextResponse.json({ error: "Video not ready yet" }, { status: 404 });
   }
 
   const fileBuffer = readFileSync(job.outputPath);
