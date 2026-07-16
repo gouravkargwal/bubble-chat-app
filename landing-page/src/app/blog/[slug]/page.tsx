@@ -37,9 +37,9 @@ export async function generateMetadata({
       section: article.category,
       images: [
         {
-          url: `${APP_URLS.website}/og-image.png`,
-          width: 1200,
-          height: 630,
+          url: `${APP_URLS.website}/logo.svg`,
+          width: 512,
+          height: 512,
           alt: article.title,
         },
       ],

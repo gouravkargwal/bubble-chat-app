@@ -60,9 +60,9 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: APP_URLS.ogImage,
-        width: 1200,
-        height: 630,
+        url: `${APP_URLS.website}/logo.svg`,
+        width: 512,
+        height: 512,
         alt: `${SITE.name} — AI Dating Coach App Preview — Get Better Replies on Hinge, Bumble & Tinder`,
       },
     ],
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: SITE.title,
     description: SITE.description,
-    images: [APP_URLS.ogImage],
+    images: [`${APP_URLS.website}/logo.svg`],
     creator: "@cookdai",
   },
   icons: {

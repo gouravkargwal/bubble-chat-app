@@ -479,6 +479,11 @@ class BubbleManager @Inject constructor(
         ensureScope().launch {
             settingsRepository.setServiceEnabled(false)
         }
+
+        // Stop the service itself so its foreground notification disappears and
+        // START_STICKY doesn't re-create the bubble on process restart.
+        val stopIntent = android.content.Intent(context, com.rizzbot.v2.overlay.OverlayService::class.java)
+        context.stopService(stopIntent)
     }
 
     /**

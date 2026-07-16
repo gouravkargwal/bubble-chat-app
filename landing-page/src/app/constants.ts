@@ -4,7 +4,6 @@ export const APP_URLS = {
   googlePlay: "https://play.google.com/store/apps/details?id=com.cookd.mobile",
   iosWaitlist: `mailto:support@${APP_DOMAIN}?subject=iOS%20Waitlist`,
   website: `https://${APP_DOMAIN}`,
-  ogImage: `https://${APP_DOMAIN}/og-image.png`,
   // PayU LTD checkout pages (relative — handled by Next.js routing)
   ltdSuccess: "/ltd/success",
   ltdFailure: "/ltd/failure",
