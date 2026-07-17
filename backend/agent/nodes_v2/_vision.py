@@ -10,7 +10,7 @@ LangGraph state into:
 No LLM calls happen in this file anymore.
 """
 
-from typing import Any, Literal, Optional, cast
+from typing import Literal, Optional
 
 import structlog
 from pydantic import BaseModel, Field
@@ -35,6 +35,25 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
+class RawOcrBubble(BaseModel):
+    """One extracted chat bubble, per the raw_ocr_text extraction rules in
+    app/prompts/vision_api.py (Step 2)."""
+
+    sender: Literal["user", "them"] = Field(
+        description="Structural anchor only (avatar/alignment) — never inferred from text semantics or color."
+    )
+    actual_new_message: str = Field(
+        description="The NEW text below any quoted preview. Never the quoted/reply preview text."
+    )
+    quoted_context: str | None = Field(
+        default=None,
+        description="The faded reply-preview text above the main bubble, or null if none.",
+    )
+    is_reply: bool = Field(
+        default=False, description="True if quoted_context is not null."
+    )
+
+
 class VisionNodeOutput(BaseModel):
     """Combined structural output of bouncer + OCR + analyst in a single call."""
 
@@ -57,13 +76,13 @@ class VisionNodeOutput(BaseModel):
     )
 
     # OCR fields
-    raw_ocr_text: list[dict[str, Any]] = Field(
+    raw_ocr_text: list[RawOcrBubble] = Field(
         default_factory=list,
         description="Array of extracted raw message objects containing structural attributes.",
     )
 
     # Analyst fields
-    visual_transcript: list[dict[str, Any]] = Field(
+    visual_transcript: list[ChatBubble] = Field(
         default_factory=list,
         description="Sequential list of transcript bubbles mapped 1:1 to chronological reality.",
     )
@@ -231,22 +250,10 @@ async def vision_node(state: AgentState) -> dict:
             "tier_2_summary": tier_2_summary,
         }
 
-    # Build AnalystOutput from VisionNodeOutput fields
-    visual_transcript: list[ChatBubble] = []
-    for bubble in out.visual_transcript:
-        if isinstance(bubble, ChatBubble):
-            visual_transcript.append(bubble)
-        elif isinstance(bubble, dict):
-            visual_transcript.append(
-                ChatBubble(
-                    sender=bubble.get("sender", "them"),
-                    quoted_context=bubble.get("quoted_context") or "",
-                    actual_new_message=bubble.get("actual_new_message", ""),
-                )
-            )
-
+    # out.visual_transcript is already list[ChatBubble] — validated by Pydantic
+    # when VisionNodeOutput was parsed, so no manual dict conversion is needed.
     analysis = AnalystOutput(
-        visual_transcript=visual_transcript,
+        visual_transcript=out.visual_transcript,
         visual_hooks=out.visual_hooks,
         photo_persona=out.photo_persona,
         detected_dialect=out.detected_dialect,  # type: ignore[arg-type]
@@ -285,7 +292,7 @@ async def vision_node(state: AgentState) -> dict:
         conversation_id=conversation_id,
         direction=direction,
         bubble_count=len(raw_ocr_text),
-        visual_transcript_count=len(visual_transcript),
+        visual_transcript_count=len(out.visual_transcript),
         visual_hooks_count=len(out.visual_hooks or []),
         detected_archetype=out.detected_archetype,
         detected_dialect=out.detected_dialect,
