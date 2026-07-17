@@ -156,117 +156,23 @@ def create_app() -> FastAPI:
         )
         return JSONResponse(status_code=422, content={"detail": errors})
 
-    # ── CORS + Security headers ──
-    # NOTE: Starlette's CORSMiddleware (ASGI-level) breaks with BaseHTTPMiddleware.
-    # Instead we use a single @app.middleware("http") that runs LAST on the response
-    # chain and adds both ACAO + security headers.  This avoids the known
-    # BaseHTTPMiddleware + CORSMiddleware incompatibility.
+    # ── Request pipeline (correlation ID, profiling, payload limit, RED
+    # metrics, CORS, security headers) ──
+    #
+    # NOTE: This used to be five separate @app.middleware("http") functions.
+    # Starlette implements each as a BaseHTTPMiddleware, and stacking several
+    # of them wraps the response body in nested re-streaming layers; under a
+    # client disconnect mid-response, that chain can raise
+    # "RuntimeError: Response content shorter than Content-Length" even
+    # though the endpoint itself returned a perfectly normal response.
+    # Collapsing everything into one middleware removes the extra layers
+    # (and, incidentally, still avoids the known CORSMiddleware +
+    # BaseHTTPMiddleware incompatibility that ruled out fastapi's CORSMiddleware).
     @app.middleware("http")
-    async def cors_and_security_headers(request: Request, call_next) -> Response:
-        response: Response = await call_next(request)
-
-        # ── CORS (add ACAO to every response) ──
-        origin = request.headers.get("origin", "")
-        allowed = settings.cors_origins
-        if "*" in allowed:
-            response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-        elif origin in allowed:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Methods"] = (
-                "GET, POST, PUT, DELETE, OPTIONS"
-            )
-            response.headers["Access-Control-Allow-Headers"] = (
-                "Content-Type, Authorization"
-            )
-
-        # Handle OPTIONS preflight immediately
-        if request.method == "OPTIONS":
-            return Response(status_code=200, headers=dict(response.headers))
-
-        # ── Security headers ──
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
-            "font-src 'self' data:; "
-            "object-src 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in https://secure.payu.in"
-        )
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=(), interest-cohort=()"
-        )
-        if settings.environment != "development":
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains; preload"
-            )
-        if not request.url.path.startswith("/static/"):
-            response.headers.setdefault(
-                "Cache-Control", "no-store, no-cache, must-revalidate"
-            )
-
-        return response
-
-    # Payload size limit for public endpoints (prevent OOM on large uploads)
-    @app.middleware("http")
-    async def limit_payload_size(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
-        if request.url.path.startswith("/api/public"):
-            content_length = request.headers.get("content-length")
-            if content_length and int(content_length) > max_payload_bytes:
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "detail": f"File too large. Max {settings.lead_magnet_max_payload_mb} MB."
-                    },
-                )
-        return await call_next(request)
-
-    # Profiling middleware (limited to the vision generate endpoint)
-    @app.middleware("http")
-    async def profile_request(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
-        # Only profile the vision generate endpoint
-        if "vision/generate_v2" not in request.url.path:
-            return await call_next(request)
-
-        profiler = Profiler(interval=0.001, async_mode="enabled")
-        profiler.start()
-        try:
-            response: Response = await call_next(request)
-        finally:
-            profiler.stop()
-            # Write HTML report to project root (WORKDIR is /app in Docker)
-            html_output = profiler.output_html()
-            with open("profile_results.html", "w", encoding="utf-8") as f:
-                f.write(html_output)
-
-        return response
-
-    # RED metrics: request rate/errors/duration per (method, path, status)
-    @app.middleware("http")
-    async def record_red_metrics(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
-        start = time.monotonic()
-        response: Response = await call_next(request)
-        duration = time.monotonic() - start
-        labels = {
-            "method": request.method,
-            "path": request.url.path,
-            "status": str(response.status_code),
-        }
-        http_requests_total.labels(**labels).inc()
-        http_request_duration_seconds.labels(**labels).observe(duration)
-        return response
-
-    # Correlation ID: prefer the W3C traceparent's trace-id (so logs and OTel
-    # traces share one ID and can be pivoted between in OpenObserve), then
-    # X-Correlation-ID/X-Request-ID passthrough, then a new UUID.
-    @app.middleware("http")
-    async def add_correlation_id(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+    async def request_pipeline(request: Request, call_next) -> Response:
+        # ── Correlation ID: prefer the W3C traceparent's trace-id (so logs
+        # and OTel traces share one ID and can be pivoted between in
+        # OpenObserve), then X-Correlation-ID/X-Request-ID, then a new UUID.
         traceparent = request.headers.get("traceparent", "")
         trace_id_from_traceparent = ""
         parts = traceparent.split("-")
@@ -282,8 +188,6 @@ def create_app() -> FastAPI:
         cid = incoming or str(uuid.uuid4())
         request.state.correlation_id = cid
 
-        # Include OTel trace/span IDs in structured logs so every event
-        # can be linked to its trace waterfall in OpenObserver.
         from opentelemetry import trace as _otel_trace
 
         _span = _otel_trace.get_current_span()
@@ -295,8 +199,98 @@ def create_app() -> FastAPI:
             http_method=request.method,
             http_path=request.url.path,
         )
+
         try:
-            response: Response = await call_next(request)
+            start = time.monotonic()
+
+            # Profiling middleware (limited to the vision generate endpoint)
+            profiling = "vision/generate_v2" in request.url.path
+            profiler = None
+            if profiling:
+                profiler = Profiler(interval=0.001, async_mode="enabled")
+                profiler.start()
+
+            try:
+                # Payload size limit for public endpoints (prevent OOM on
+                # large uploads)
+                content_length = request.headers.get("content-length")
+                if (
+                    request.url.path.startswith("/api/public")
+                    and content_length
+                    and int(content_length) > max_payload_bytes
+                ):
+                    response: Response = JSONResponse(
+                        status_code=413,
+                        content={
+                            "detail": f"File too large. Max {settings.lead_magnet_max_payload_mb} MB."
+                        },
+                    )
+                else:
+                    response = await call_next(request)
+            finally:
+                if profiler is not None:
+                    profiler.stop()
+                    # Write HTML report to project root (WORKDIR is /app in Docker)
+                    html_output = profiler.output_html()
+                    with open("profile_results.html", "w", encoding="utf-8") as f:
+                        f.write(html_output)
+
+            # RED metrics: request rate/errors/duration per (method, path, status)
+            duration = time.monotonic() - start
+            labels = {
+                "method": request.method,
+                "path": request.url.path,
+                "status": str(response.status_code),
+            }
+            http_requests_total.labels(**labels).inc()
+            http_request_duration_seconds.labels(**labels).observe(duration)
+
+            # ── CORS (add ACAO to every response) ──
+            origin = request.headers.get("origin", "")
+            allowed = settings.cors_origins
+            if "*" in allowed:
+                response.headers["Access-Control-Allow-Origin"] = "*"
+                response.headers["Access-Control-Allow-Methods"] = "*"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+            elif origin in allowed:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = (
+                    "GET, POST, PUT, DELETE, OPTIONS"
+                )
+                response.headers["Access-Control-Allow-Headers"] = (
+                    "Content-Type, Authorization"
+                )
+
+            if request.method == "OPTIONS":
+                # Handle OPTIONS preflight immediately
+                response = Response(status_code=200, headers=dict(response.headers))
+            else:
+                # ── Security headers ──
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'self'; "
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                    "style-src 'self' 'unsafe-inline'; "
+                    "img-src 'self' data: https:; "
+                    "font-src 'self' data:; "
+                    "object-src 'none'; "
+                    "base-uri 'self'; "
+                    "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in https://secure.payu.in https://api.payu.in https://apitest.payu.in"
+                )
+                response.headers["X-Content-Type-Options"] = "nosniff"
+                response.headers["X-Frame-Options"] = "DENY"
+                response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                response.headers["Permissions-Policy"] = (
+                    "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+                )
+                if settings.environment != "development":
+                    response.headers["Strict-Transport-Security"] = (
+                        "max-age=31536000; includeSubDomains; preload"
+                    )
+                if not request.url.path.startswith("/static/"):
+                    response.headers.setdefault(
+                        "Cache-Control", "no-store, no-cache, must-revalidate"
+                    )
+
             response.headers["X-Correlation-ID"] = cid
             return response
         finally:

@@ -40,7 +40,7 @@ async def add_security_headers(request: Request, call_next) -> Response:  # type
         "font-src 'self' data:; "
         "object-src 'none'; "
         "base-uri 'self'; "
-        "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in https://secure.payu.in"
+        "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in https://secure.payu.in https://api.payu.in https://apitest.payu.in"
     )
 
     # ── X-Content-Type-Options ───────────────────────────────────────────
