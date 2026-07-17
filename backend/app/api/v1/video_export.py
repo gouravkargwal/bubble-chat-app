@@ -250,6 +250,7 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
         "priority": score["priority"],
         "viralReasoning": score["viral_reasoning"],
         "timeGapSignal": score["time_gap_signal"],
+        "scoringSource": score["scoring_source"],
         "createdAt": ix.created_at.isoformat() if ix.created_at else "",
     }
 

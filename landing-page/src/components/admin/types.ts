@@ -16,6 +16,9 @@ export interface VideoCandidate {
   hookStyle: string;
   viralScore: number;
   priority: string;
+  viralReasoning?: string;
+  timeGapSignal?: string;
+  scoringSource?: "llm" | "heuristic";
   createdAt: string;
   isOpener?: boolean;
 }

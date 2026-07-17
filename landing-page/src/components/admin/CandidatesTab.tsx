@@ -1,7 +1,7 @@
 "use client";
 
 import type { VideoCandidate } from "./types";
-import { HOOK_LABELS, HOOK_COLORS, ScoreBadge } from "./helpers";
+import { HOOK_LABELS, HOOK_COLORS, ScoreBadge, SourceBadge } from "./helpers";
 
 export function CandidatesTab({
   candidates,
@@ -169,6 +169,7 @@ export function CandidatesTab({
                           {HOOK_LABELS[c.hookStyle] || c.hookStyle}
                         </span>
                         <ScoreBadge score={c.viralScore} />
+                        <SourceBadge source={c.scoringSource} />
                         <span className="text-xs text-[rgba(255,255,255,0.3)]">
                           {c.strategyLabel}
                         </span>
@@ -177,6 +178,11 @@ export function CandidatesTab({
                       <p className="text-sm text-[rgba(255,255,255,0.7)] italic mb-2">
                         &ldquo;{c.winningLine}&rdquo;
                       </p>
+                      {c.viralReasoning && (
+                        <p className="text-xs text-[rgba(255,255,255,0.35)] italic mb-2">
+                          {c.viralReasoning}
+                        </p>
+                      )}
 
                       <div className="flex items-center gap-2 mt-3">
                         <button

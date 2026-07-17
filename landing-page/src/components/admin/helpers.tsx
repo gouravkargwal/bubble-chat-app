@@ -66,6 +66,35 @@ export function ScoreBadge({ score }: { score: number }) {
   return <span className="text-[rgba(255,255,255,0.3)]">{score}</span>;
 }
 
+// Shows whether hookStyle/viralScore came from the vision LLM's own
+// classification or the message-heuristic fallback (used for interactions
+// saved before the LLM fields existed).
+export function SourceBadge({ source }: { source?: "llm" | "heuristic" }) {
+  if (source === "llm") {
+    return (
+      <span
+        className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border"
+        style={{ color: "#8B5CF6", borderColor: "#8B5CF6" }}
+        title="Scored by the vision LLM's own classification"
+      >
+        LLM
+      </span>
+    );
+  }
+  return (
+    <span
+      className="text-[9px] font-mono px-1.5 py-0.5 rounded border"
+      style={{
+        color: "rgba(255,255,255,0.35)",
+        borderColor: "rgba(255,255,255,0.15)",
+      }}
+      title="Scored by the message-length heuristic (no LLM classification on this row)"
+    >
+      HEURISTIC
+    </span>
+  );
+}
+
 // ── Utils ──
 
 export function formatBytes(bytes: number): string {
