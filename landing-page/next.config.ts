@@ -10,7 +10,7 @@ const csp = [
   "frame-src https://payu.in https://www.payu.in https://accounts.google.com",
   "media-src 'self' blob:",
   "frame-ancestors 'none'",
-  "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in",
+  "form-action 'self' https://payu.in https://www.payu.in https://secure.payu.in https://test.payu.in",
   "base-uri 'self'",
   "object-src 'none'",
 ].join("; ");
