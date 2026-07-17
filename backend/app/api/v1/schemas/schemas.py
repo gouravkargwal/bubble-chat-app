@@ -1,10 +1,23 @@
 """API request/response schemas."""
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import ConversationDirection
+
+# Internal persona name used in the reply-generation prompts (agent/prompts) to
+# keep the LLM's voice consistent. It must never reach the client — coach_reasoning
+# is coaching commentary addressed to the real user, not in-character dialogue.
+_PERSONA_NAME_RE = re.compile(r"\bKabir\b", re.IGNORECASE)
+
+
+def strip_persona_name(text: str) -> str:
+    """Replace the internal persona name with 'You' wherever user-facing
+    coaching commentary might echo it back (defensive backstop; the prompt
+    is instructed not to do this in the first place)."""
+    return _PERSONA_NAME_RE.sub("You", text) if text else text
 
 
 # Auth
@@ -52,6 +65,11 @@ class ReplyOptionPayload(BaseModel):
     strategy_label: str
     is_recommended: bool
     coach_reasoning: str = ""  # Empty string for free tier users
+
+    @field_validator("coach_reasoning")
+    @classmethod
+    def _strip_persona_name(cls, value: str) -> str:
+        return strip_persona_name(value)
 
 
 class VisionResponse(BaseModel):

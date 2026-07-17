@@ -55,7 +55,11 @@ class SingleLineReply(BaseModel):
         description="Dominant tactic for this reply; must match what the text actually does."
     )
     coach_reasoning: str = Field(
-        description="One short sentence: why this angle fits context and archetype."
+        description=(
+            "One short sentence explaining why this angle fits context and archetype, "
+            "addressed directly to the user as coaching advice. Write in second person "
+            "('you') — never refer to the sender by any character/persona name."
+        )
     )
 
 

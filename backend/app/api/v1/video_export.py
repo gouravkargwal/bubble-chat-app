@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.v1.admin_deps import verify_admin_key
+from app.api.v1.schemas.schemas import strip_persona_name
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Interaction, User
 
@@ -235,7 +236,7 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
         "detectedApp": "dating_app",
         "strategyLabel": winning.get("strategy_label", "COOKD_AI"),
         "winningLine": winning.get("text", ""),
-        "coachReasoning": winning.get("coach_reasoning", ""),
+        "coachReasoning": strip_persona_name(winning.get("coach_reasoning", "")),
         "theirLastMessage": ix.their_last_message or "",
         "keyDetail": ix.key_detail or "",
         "transcript": [

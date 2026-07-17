@@ -207,7 +207,7 @@ OUTPUT SCHEMA — YOU MUST OUTPUT EXACTLY THIS JSON:
 
 - text: The single reply line from Kabir.
 - strategy_label: MUST be exactly one of: PUSH-PULL, FRAME CONTROL, SOFT CLOSE, VALUE ANCHOR, PATTERN INTERRUPT, HONEST FRAME. Use the assigned strategy.
-- coach_reasoning: One short sentence explaining why this angle fits the context and archetype.
+- coach_reasoning: One short sentence explaining why this angle fits the context and archetype. This is coaching advice shown directly to the user — address him as "you", never as "Kabir" or any other character name.
 
 CURRENT SCENE TIMELINE:
 
