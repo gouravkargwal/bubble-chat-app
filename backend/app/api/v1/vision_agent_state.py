@@ -99,6 +99,10 @@ def _parsed_from_agent_state(final_state: dict) -> ParsedLlmResponse:
         ),
         detected_archetype=analysis_out.detected_archetype,
         archetype_reasoning=analysis_out.archetype_reasoning,
+        hook_type=getattr(analysis_out, "hook_type", None),
+        time_gap_signal=getattr(analysis_out, "time_gap_signal", None),
+        viral_tier=getattr(analysis_out, "viral_tier", None),
+        viral_reasoning=getattr(analysis_out, "viral_reasoning", None),
     )
 
     strategy = StrategyResult(

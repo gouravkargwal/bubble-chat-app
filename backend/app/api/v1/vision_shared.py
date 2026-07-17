@@ -716,6 +716,12 @@ async def persist_interaction(
         person_name=parsed.analysis.person_name,
         key_detail=parsed.analysis.key_detail,
         user_organic_text=user_organic_text,
+        hook_type=clamp_str(parsed.analysis.hook_type, max_len=50, label="hook_type"),
+        time_gap_signal=clamp_str(
+            parsed.analysis.time_gap_signal, max_len=100, label="time_gap_signal"
+        ),
+        viral_tier=clamp_str(parsed.analysis.viral_tier, max_len=20, label="viral_tier"),
+        viral_reasoning=parsed.analysis.viral_reasoning,
         transcript_json=transcript_json_value,
         reply_0=dump_reply_option(reply_options[0]),
         reply_1=dump_reply_option(reply_options[1]),

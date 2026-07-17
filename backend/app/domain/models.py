@@ -69,6 +69,10 @@ class AnalysisResult:
     their_actual_new_message: str | None = None
     detected_archetype: str | None = None
     archetype_reasoning: str | None = None
+    hook_type: str | None = None
+    time_gap_signal: str | None = None
+    viral_tier: str | None = None
+    viral_reasoning: str | None = None
 
 
 @dataclass

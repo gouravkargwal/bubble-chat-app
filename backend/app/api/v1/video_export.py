@@ -37,9 +37,10 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(dependencies=[Depends(verify_admin_key)])
 
-# No hardcoded keyword arrays — the LLM's `hook_type` field (from the vision prompt)
-# classifies each interaction for video content. This scoring engine only uses
-# message length heuristics as a fallback for historical data.
+# The LLM's `hook_type`/`viral_tier` fields (from the vision prompt) classify each
+# interaction for video content and are authoritative when present. The heuristics
+# below only apply to historical rows saved before those columns existed.
+_TIER_SCORE = {"low": 15, "medium": 35, "high": 55, "viral": 70}
 
 
 # ── Scoring engine ──
@@ -64,12 +65,20 @@ def score_interaction(ix: Interaction) -> dict:
     """
     Score an interaction for video content potential.
 
+    Prefers the vision LLM's own classification (`viral_tier`, `hook_type`) when
+    the row has it; falls back to the message-heuristic scoring for historical
+    rows saved before those columns existed.
+
     Returns a dict with:
       - total: int (0-70)
       - should_render: bool
       - priority: "high" | "medium" | "low"
       - hook_type: str
-      - breakdown: dict of individual scores
+      - scoring_source: "llm" | "heuristic"
+      - viral_reasoning: str
+      - time_gap_signal: str
+      - breakdown: dict of individual heuristic scores (informational even when
+        scoring_source is "llm")
     """
     messages = _safe_json(ix.transcript_json, [])
     replies = [_safe_json(getattr(ix, f"reply_{i}", None)) for i in range(4)]
@@ -162,11 +171,26 @@ def score_interaction(ix: Interaction) -> dict:
     else:
         hook_type = "bet"
 
+    # ── LLM classification overrides the heuristic when present ──
+    llm_tier = (ix.viral_tier or "").strip().lower()
+    if llm_tier in _TIER_SCORE:
+        total = _TIER_SCORE[llm_tier]
+        scoring_source = "llm"
+    else:
+        scoring_source = "heuristic"
+
+    llm_hook_type = (ix.hook_type or "").strip().lower()
+    if llm_hook_type:
+        hook_type = llm_hook_type
+
     return {
         "total": total,
         "should_render": total >= 30,
         "priority": "high" if total >= 50 else ("medium" if total >= 30 else "low"),
         "hook_type": hook_type,
+        "scoring_source": scoring_source,
+        "viral_reasoning": ix.viral_reasoning or "",
+        "time_gap_signal": ix.time_gap_signal or "",
         "breakdown": {
             "user_message_quality": score_user,
             "her_effort": score_effort,
@@ -224,6 +248,8 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
         "hookStyle": score["hook_type"],
         "viralScore": score["total"],
         "priority": score["priority"],
+        "viralReasoning": score["viral_reasoning"],
+        "timeGapSignal": score["time_gap_signal"],
         "createdAt": ix.created_at.isoformat() if ix.created_at else "",
     }
 

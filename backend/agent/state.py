@@ -95,6 +95,23 @@ class AnalystOutput(BaseModel):
         default_factory=list,
         description="Atomic, durable, third-person facts about her, extracted for long-term memory.",
     )
+    # --- Video content scoring (consumed by the video-export pipeline) ---
+    hook_type: str = Field(
+        default="strategy",
+        description="Video hook classification: 'roast', 'gap', 'outcome', or 'strategy'.",
+    )
+    time_gap_signal: str = Field(
+        default="",
+        description="Visible time-stamp gap between messages, e.g. '3 hours'. Empty if none.",
+    )
+    viral_tier: str = Field(
+        default="medium",
+        description="Video potential tier: 'low', 'medium', 'high', or 'viral'.",
+    )
+    viral_reasoning: str = Field(
+        default="",
+        description="1 sentence explaining the viral_tier classification.",
+    )
 
 
 class StrategyOutput(BaseModel):

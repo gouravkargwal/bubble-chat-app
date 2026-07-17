@@ -269,6 +269,10 @@ async def vision_node(state: AgentState) -> dict:
         inbound_image=out.inbound_image,
         inbound_image_detail=out.inbound_image_detail,
         durable_facts=out.durable_facts,
+        hook_type=out.hook_type,
+        time_gap_signal=out.time_gap_signal,
+        viral_tier=out.viral_tier,
+        viral_reasoning=out.viral_reasoning,
     )
 
     raw_ocr_text = normalize_raw_ocr_text(out.raw_ocr_text)

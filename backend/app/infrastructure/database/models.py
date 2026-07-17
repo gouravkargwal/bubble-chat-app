@@ -200,6 +200,13 @@ class Interaction(Base):
     # lossy 60-char summaries. Nullable: rows saved before this column existed
     # fall back to the their_last_message paraphrase.
     transcript_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Video content scoring (LLM-classified, from the vision prompt). Nullable:
+    # rows saved before these columns existed fall back to video_export.py's
+    # heuristic scoring.
+    hook_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    time_gap_signal: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    viral_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    viral_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Generated replies
     reply_0: Mapped[str] = mapped_column(Text)
     reply_1: Mapped[str] = mapped_column(Text)
