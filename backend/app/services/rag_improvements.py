@@ -43,16 +43,20 @@ logger = structlog.get_logger(__name__)
 
 
 def inline_pydantic_defs(schema: dict) -> dict:
-    """Recursively replaces Pydantic v2 $ref pointers with actual definitions.
+    """Recursively replaces Pydantic v2 $ref pointers with actual definitions,
+    and strips 'additionalProperties' from every object schema.
 
-    Gemini's response_schema validation breaks if a root-level '$defs' map exists.
+    Gemini's response_schema validation breaks if a root-level '$defs' map
+    exists, and the AI Studio (Developer API) backend rejects any
+    'additionalProperties' key outright — it's only accepted in Vertex
+    Enterprise mode. Fields typed as ``dict[str, Any]`` make Pydantic emit
+    'additionalProperties' on the generated JSON schema, so it must be
+    dropped before the schema is handed to `generate_content`.
     """
     if not schema:
         return schema
 
     defs = schema.pop("$defs", {})
-    if not defs:
-        return schema
 
     def resolve_refs(item: Any) -> Any:
         if isinstance(item, dict):
@@ -61,7 +65,11 @@ def inline_pydantic_defs(schema: dict) -> dict:
                 ref_key = item["$ref"].split("/")[-1]
                 if ref_key in defs:
                     return resolve_refs(defs[ref_key])
-            return {k: resolve_refs(v) for k, v in item.items()}
+            return {
+                k: resolve_refs(v)
+                for k, v in item.items()
+                if k != "additionalProperties"
+            }
         elif isinstance(item, list):
             return [resolve_refs(i) for i in item]
         return item
