@@ -75,6 +75,6 @@ _JSON_INSTRUCTION = (
     "\n\n---\nRESPOND WITH ONLY THIS JSON (no prose, no markdown fences):\n"
     '{"recommended_strategy_label":"<one label>","hook_point":"...","right_energy":"...",'
     '"wrong_moves":["..."],"replies":[{"text":"...","strategy_label":"<PUSH-PULL|FRAME '
-    'CONTROL|SOFT CLOSE|VALUE ANCHOR|PATTERN INTERRUPT|HONEST FRAME>","is_recommended":'
+    'CONTROL|SOFT CLOSE|VALUE ANCHOR|PATTERN INTERRUPT|HONEST FRAME|DIRECT ASK>","is_recommended":'
     'true,"coach_reasoning":"..."}]}\nExactly 4 replies; exactly one is_recommended=true.'
 )

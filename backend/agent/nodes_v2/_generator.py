@@ -227,7 +227,112 @@ async def generator_node(state: AgentState) -> dict:
 
     assignments: list[tuple[str, str]] = []
 
-    if (
+    if direction == "de_escalate":
+        # SCENE: DE-ESCALATION. The auditor already has three special-case
+        # rules for this scene (fails "sarcastic/defensive tone or no
+        # acknowledgment before a question", exempts it from the spike
+        # requirement, exempts it from needing a grounded hook) — all signs
+        # this scene needs sincere, non-tactical treatment. But the generator
+        # was still defaulting to FRAME CONTROL/PATTERN INTERRUPT/PUSH-PULL/
+        # VALUE ANCHOR, every one of which risks tripping that exact fail
+        # condition. HONEST FRAME (acknowledge, own it) covers the majority;
+        # SOFT CLOSE covers the brief's second half ("opens space forward").
+        assignments.append(
+            ("acknowledging what happened, plainly, before anything else", "HONEST FRAME")
+        )
+        assignments.append(
+            ("owning the specific thing Kabir got wrong or could have done better", "HONEST FRAME")
+        )
+        assignments.append(
+            ("a genuine, non-defensive read of where she's coming from", "HONEST FRAME")
+        )
+        assignments.append(
+            ("a low-pressure opening back toward the conversation", "SOFT CLOSE")
+        )
+    elif direction == "go_deeper":
+        # SCENE: EMOTIONAL BEAT. All 4 replies belong in the same honest,
+        # non-tactical register — HONEST FRAME is the only strategy built for
+        # this — so instead of 4 different strategy labels we vary the
+        # specific MOVE per the scene's own brief (naming / reaction /
+        # question / reframe), rather than defaulting to the playful-banter
+        # strategies (FRAME CONTROL, PATTERN INTERRUPT, etc.) that scene is
+        # explicitly told never to use here.
+        assignments.append(
+            ("naming what she just shared, plainly and directly", "HONEST FRAME")
+        )
+        assignments.append(
+            ("a short, raw, human reaction to what she said", "HONEST FRAME")
+        )
+        assignments.append(
+            (
+                "a genuine, curious question about her inner experience of it",
+                "HONEST FRAME",
+            )
+        )
+        assignments.append(
+            (
+                "a gentle reframe that meets her where she is, no advice or pep talk",
+                "HONEST FRAME",
+            )
+        )
+    elif direction == "revive_chat":
+        # SCENE: WARM RE-ENGAGEMENT. FRAME CONTROL ("force her to defend or
+        # play along") and PATTERN INTERRUPT ("cuts right through curated
+        # pretense") are both written in a confrontational register that
+        # directly contradicts this scene's own brief — "NOT the moment for
+        # a cocky jab, a harsh tease, or an accusation." SOFT CLOSE (low-
+        # pressure, relaxed) replaces them here instead.
+        assignments.append((key_detail or "something she shared before", "SOFT CLOSE"))
+        assignments.append((_first_visual_or_key(0), "SOFT CLOSE"))
+        assignments.append((_first_visual_or_key(1), "PUSH-PULL"))
+        assignments.append(
+            (
+                inbound_image_detail
+                or _first_visual_or_key(2)
+                or photo_persona_hook
+                or their_last_message
+                or "any unused detail",
+                "VALUE ANCHOR",
+            )
+        )
+    elif direction == "get_number":
+        # SCENE: MOVING OFF-APP. Brief requires "at least 3 of 4 replies
+        # include an explicit ask anchored to something specific" — none of
+        # the playful-banter strategies (nor SOFT CLOSE, which stops short of
+        # a hard ask) actually make a concrete ask, so DIRECT ASK covers 3
+        # slots here, with one playful slot kept for variety.
+        assignments.append((key_detail or "her profile", "DIRECT ASK"))
+        assignments.append((_first_visual_or_key(0), "DIRECT ASK"))
+        assignments.append((_first_visual_or_key(1), "DIRECT ASK"))
+        assignments.append(
+            (
+                inbound_image_detail
+                or _first_visual_or_key(2)
+                or photo_persona_hook
+                or their_last_message
+                or "any unused detail",
+                "VALUE ANCHOR",
+            )
+        )
+    elif direction == "ask_out":
+        # SCENE: DATE REQUEST. Brief requires "at least 2 of 4 replies
+        # include a concrete, conversation-anchored ask with a specific
+        # activity" — DIRECT ASK covers 2 slots, the other 2 stay playful so
+        # the user has a banter option alongside the direct ones.
+        assignments.append((key_detail or "her profile", "DIRECT ASK"))
+        assignments.append((_first_visual_or_key(0), "DIRECT ASK"))
+        assignments.append((_first_visual_or_key(1), "PUSH-PULL"))
+        assignments.append(
+            (
+                inbound_image_detail
+                or _first_visual_or_key(2)
+                or photo_persona_hook
+                or their_last_message
+                or "any unused detail",
+                "VALUE ANCHOR",
+            )
+        )
+    elif (
         direction == "opener"
         and opener_hook_priority(analysis, transcript_text) == "text_first"
     ):
@@ -512,6 +617,42 @@ async def generator_node(state: AgentState) -> dict:
                     replies[i] = r.model_copy(update={"is_recommended": False})
                 else:
                     seen_first = True
+
+    # Phase 5: prefer a strategy with a proven track record over the arbitrary
+    # "lowest slot index wins" default above. Tries THIS conversation's own
+    # history first (most specific), then falls back to what's landed for her
+    # archetype across every conversation (Phase 3 — lets a brand-new match
+    # benefit immediately instead of starting from zero). Both lists are
+    # ranked best-first; take the first entry that matches one of the 4
+    # strategies actually present this turn. If nothing in either list
+    # matches (cold start, no data anywhere yet), the slot-order default
+    # stands.
+    preferred_strategies: list[str] = (
+        conversation_context or {}
+    ).get("preferred_strategies") or []
+    archetype_preferred_strategies: list[str] = (
+        conversation_context or {}
+    ).get("archetype_preferred_strategies") or []
+    combined_preferences = preferred_strategies + [
+        label
+        for label in archetype_preferred_strategies
+        if label not in preferred_strategies
+    ]
+    for pref_label in combined_preferences:
+        match_idx = next(
+            (i for i, r in enumerate(replies) if r.strategy_label == pref_label),
+            None,
+        )
+        if match_idx is None:
+            continue
+        if not replies[match_idx].is_recommended:
+            for i, r in enumerate(replies):
+                if r.is_recommended:
+                    replies[i] = r.model_copy(update={"is_recommended": False})
+            replies[match_idx] = replies[match_idx].model_copy(
+                update={"is_recommended": True}
+            )
+        break
 
     # Pull out recommended strategy label to feed down the pipeline
     for r in replies:

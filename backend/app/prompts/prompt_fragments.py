@@ -105,11 +105,12 @@ def _resolve_scene_direction(direction: str) -> str:
 STRATEGY_LABEL_GLOSSARY = """STRATEGY LABEL DEFINITIONS (label each reply by what it ACTUALLY does — pick the dominant tactic):
 * PUSH-PULL — gives and takes in one line: a compliment/acknowledgment immediately undercut by a tease or challenge. Litmus: it BOTH warms AND pokes. ("you seem fun but i bet you're trouble")
 * FRAME CONTROL — you set or flip the frame: reinterpret her statement, define the terms, or assign roles. ALL "would you rather / A or B" hypotheticals go here (YOU set the choice). Litmus: you control the narrative or the choice, not her.
-* VALUE ANCHOR — anchors on a specific real detail to build genuine connection; shows you actually noticed something concrete. Litmus: grounds in a real detail to CONNECT, not to tease.
+* VALUE ANCHOR — anchors on a specific real detail with unbothered, detached confidence; shows you actually noticed something concrete, without needing to challenge or undercut it. Can absolutely carry a playful or mischievous edge (e.g. in a tease scene) — what it does NOT do is the push-then-pull, warm-then-poke structure of PUSH-PULL. Litmus: grounds in a real detail and stays relaxed about it, no give-and-take.
 * PATTERN INTERRUPT — an unexpected angle that breaks the predictable opener script. Litmus: she would NOT see it coming.
 * HONEST FRAME — sincere and direct, no game: states something genuine or names something plainly. Litmus: earnest, zero tease, no tactic underneath.
-* SOFT CLOSE — gently nudges momentum toward a next step (keep talking / meet) without a hard ask. Litmus: moves the interaction forward.
-The strategy_label MUST match the litmus for the reply text. A question that makes her pick between two options = FRAME CONTROL, NOT HONEST FRAME. Pure validation/agreement is NOT a tactic — if a reply only validates, it is HONEST FRAME."""
+* SOFT CLOSE — gently nudges momentum toward a next step (keep talking / meet) without a hard ask. Litmus: moves the interaction forward, but leaves the actual invite unstated.
+* DIRECT ASK — makes an explicit, concrete ask: a specific day, activity, or platform (WhatsApp/Instagram/number), anchored to something real from the conversation. Litmus: it contains an actual proposal, not just an opening for one — this is what SOFT CLOSE stops short of.
+The strategy_label MUST match the litmus for the reply text. A question that makes her pick between two options = FRAME CONTROL, NOT HONEST FRAME. Pure validation/agreement is NOT a tactic — if a reply only validates, it is HONEST FRAME. A concrete "let's do X on day Y" is DIRECT ASK, never SOFT CLOSE."""
 
 # The illustrative example phrases baked into the prompts TEACH a technique —
 # they are NOT lines to send. The generator has been observed copying them

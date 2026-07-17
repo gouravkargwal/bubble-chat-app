@@ -534,7 +534,9 @@ async def _run_generate_v2(
         )
         convo = convo_result.scalar_one_or_none()
         if convo and convo.is_active:
-            conversation_context = await build_conversation_context(convo, db)
+            conversation_context = await build_conversation_context(
+                convo, db, current_archetype=vision_out.detected_archetype
+            )
 
     logger.info(
         "llm_lifecycle",

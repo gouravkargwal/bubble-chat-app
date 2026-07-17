@@ -134,6 +134,11 @@ class ConversationContext:
     photo_persona: str = ""
     # Phase 5: strategy_labels that have landed with her (copy-rate ranked).
     preferred_strategies: list[str] = field(default_factory=list)
+    # Cross-user, archetype-conditioned fallback for preferred_strategies —
+    # what's landed for this archetype across every conversation, not just
+    # this one. Lets a brand-new conversation benefit immediately instead of
+    # starting from zero. See get_archetype_preferred_strategies.
+    archetype_preferred_strategies: list[str] = field(default_factory=list)
 
 
 @dataclass

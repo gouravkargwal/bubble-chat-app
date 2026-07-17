@@ -25,7 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.schemas.schemas import ReplyOptionPayload, VisionResponse
 from app.config import settings
 from app.core.embeddings import embed_text
-from app.domain.conversation import find_or_create_conversation
+from app.domain.conversation import (
+    bump_archetype_strategy_stat,
+    find_or_create_conversation,
+)
 from app.domain.models import ParsedLlmResponse
 from app.domain.voice_dna import is_echo_text, update_voice_dna_stats
 from app.infrastructure.database.models import (
@@ -524,6 +527,67 @@ def dump_reply_option(opt: Any) -> str:
         )
 
 
+# Below this length, fuzzy text matching isn't reliable enough to trust for
+# attribution — a short line can too easily coincide with unrelated text.
+_MIN_ATTRIBUTABLE_TEXT_LEN = 12
+
+
+def _find_attributable_response(
+    new_pairs: list[dict],
+    suggested_text: str,
+) -> bool:
+    """Check whether the new transcript cleanly shows the user sending
+    `suggested_text` (verbatim or a close edit), immediately followed by
+    exactly one reply from her — no other turns in between on either side.
+
+    Searches the transcript captured in the new screenshot directly for the
+    suggested text, rather than requiring the same messages the PRIOR scan
+    saw to still be visible — a tightly-cropped follow-up screenshot that
+    only shows the tail of the conversation still works, as long as it
+    captures our line and her reply together. If it doesn't, that's exactly
+    the case we can't verify and must skip.
+
+    Returns False whenever attribution can't be verified from what's actually
+    visible in the screenshot (our line isn't in it at all, the user sent
+    something else, other turns intervened, or she hasn't replied yet) — the
+    caller must NOT count that turn toward landed/flopped in that case.
+    Prefer no signal over a wrong one: we only ever learn from what the user's
+    own screenshots actually show, never from an inferred guess.
+    """
+    if not new_pairs:
+        return False
+
+    # Short lines (e.g. "haha", "acha") can't be matched reliably — a couple of
+    # edits is enough for an unrelated message the user typed on their own to
+    # clear the fuzzy-match threshold by coincidence. Below this length, we
+    # can't trust a match either way, so don't attempt one at all.
+    if len((suggested_text or "").strip()) < _MIN_ATTRIBUTABLE_TEXT_LEN:
+        return False
+
+    # Find the LAST "user" message matching the suggested text — the most
+    # recent occurrence, so a wide scrollback capture that happens to still
+    # show an older, already-resolved instance of a similar line doesn't get
+    # credited again.
+    match_idx = None
+    for i, msg in enumerate(new_pairs):
+        if msg.get("s") == "user" and text_overlap(msg.get("t") or "", suggested_text):
+            match_idx = i
+
+    if match_idx is None:
+        return False  # our line isn't visible in this screenshot at all
+
+    # What follows must be exactly one reply from her, with no other "user"
+    # turn in between (that would mean the user kept talking on their own,
+    # contaminating attribution).
+    for msg in new_pairs[match_idx + 1 :]:
+        if msg.get("s") == "user":
+            return False  # extra user turn before her reply — contaminated
+        if msg.get("s") == "them":
+            return True  # clean: our line, then her direct response
+
+    return False  # she hasn't replied yet
+
+
 def clamp_str(value: str | None, max_len: int = 255, label: str = "") -> str | None:
     if value and len(value) > max_len:
         logger.warning(f"{label}_truncated", original_length=len(value))
@@ -581,6 +645,14 @@ async def persist_interaction(
     # Archetype is observed on every scan (copy-independent); strategy "shown"
     # counts every option we surface. The matching "copied" increment happens in
     # the /track/copy handler. Never let a stats failure block persistence.
+    #
+    # transcript_json_value and current_archetype are initialized here (outside
+    # the try) since both are needed by the Interaction(...) construction below
+    # regardless of whether the stats block succeeds.
+    transcript_json_value: str | None = None
+    current_archetype: str = (
+        getattr(parsed.analysis, "detected_archetype", "") or ""
+    ).strip()
     try:
         # Tally each personality DIMENSION observed this scan (copy-independent).
         # The archetype is derived from the smoothed dimensions later — we never
@@ -633,11 +705,43 @@ async def persist_interaction(
             entry = _entry(label)
             entry["shown"] += 1
             stats[label] = entry
+            if current_archetype:
+                await bump_archetype_strategy_stat(
+                    db, current_archetype, label, shown=1
+                )
+
+        # Build the new transcript pairs now (moved ahead of the conversion-delta
+        # block below, since attribution needs to diff against it) — her words +
+        # the user's sent bubbles, so build_conversation_context can replay the
+        # REAL thread instead of lossy summaries.
+        try:
+            pairs: list[dict] = []
+            for msg in parsed.visual_transcript or []:
+                text = (getattr(msg, "actual_new_message", "") or "").strip()
+                if not text:
+                    continue
+                is_user = (
+                    getattr(msg, "side", "").lower() == "right"
+                    or getattr(msg, "sender", "").lower() == "user"
+                )
+                pairs.append({"s": "user" if is_user else "them", "t": text})
+            if pairs:
+                transcript_json_value = json.dumps(pairs, ensure_ascii=False)
+        except Exception:
+            transcript_json_value = None
 
         # (b) Conversion delta — attribute her engagement change to the strategy
         #     the user actually SENT last turn. We compare her engagement in the
         #     previous scan (before she received that reply) to this scan (her
         #     response to it). Up = the strategy landed, down = it flopped.
+        #
+        #     This is ONLY counted when the new transcript cleanly shows: the
+        #     suggested text sent verbatim (or a close edit), immediately
+        #     followed by exactly one reply from her — no other turns in
+        #     between. If the user sent something else, or several turns
+        #     happened, we can't tell whether OUR strategy caused her reaction
+        #     vs. something the user said on their own — so we skip it rather
+        #     than guess. See _find_attributable_response.
         def _engagement(temp: str | None, effort: str | None) -> int:
             t = {"hot": 4, "warm": 3, "lukewarm": 2, "cold": 1}.get(
                 (temp or "").strip().lower(), 2
@@ -654,9 +758,18 @@ async def persist_interaction(
             .limit(1)
         )
         prior = prior_result.scalar_one_or_none()
-        if prior is not None and prior.copied_index is not None:
+        # attribution_status is None only until this interaction has been
+        # scored exactly once. Guards against double-counting the same real
+        # exchange if a duplicate/retried request races to attribute the same
+        # `prior` row twice (see _find_attributable_response docstring).
+        if (
+            prior is not None
+            and prior.copied_index is not None
+            and prior.attribution_status is None
+        ):
             sent_raw = getattr(prior, f"reply_{prior.copied_index}", None)
             sent_label = ""
+            sent_text = ""
             if sent_raw:
                 try:
                     loaded = json.loads(sent_raw)
@@ -664,42 +777,63 @@ async def persist_interaction(
                         sent_label = (
                             (loaded.get("strategy_label") or "").strip().upper()
                         )
+                        sent_text = loaded.get("text") or ""
                 except (json.JSONDecodeError, TypeError):
                     sent_label = ""
-            if sent_label:
-                delta = _engagement(
-                    parsed.analysis.conversation_temperature,
-                    parsed.analysis.their_effort,
-                ) - _engagement(prior.conversation_temperature, prior.their_effort)
-                entry = _entry(sent_label)
-                if delta > 0:
-                    entry["landed"] += 1
-                elif delta < 0:
-                    entry["flopped"] += 1
-                stats[sent_label] = entry
+
+            if sent_label and sent_text:
+                try:
+                    new_pairs = (
+                        json.loads(transcript_json_value)
+                        if transcript_json_value
+                        else []
+                    )
+                    if not isinstance(new_pairs, list):
+                        new_pairs = []
+                except (json.JSONDecodeError, TypeError):
+                    new_pairs = []
+
+                if _find_attributable_response(new_pairs, sent_text):
+                    delta = _engagement(
+                        parsed.analysis.conversation_temperature,
+                        parsed.analysis.their_effort,
+                    ) - _engagement(prior.conversation_temperature, prior.their_effort)
+                    entry = _entry(sent_label)
+                    # Use the archetype AS READ WHEN THIS STRATEGY WAS SENT
+                    # (prior.detected_archetype), never the current scan's
+                    # read. The current scan's archetype can itself be shaped
+                    # by how the reply landed (e.g. a bad PUSH-PULL tease
+                    # reading her as more "guarded" afterward) — using it here
+                    # would attribute the outcome to a label contaminated by
+                    # that very outcome.
+                    outcome_archetype = getattr(prior, "detected_archetype", None) or ""
+                    if delta > 0:
+                        entry["landed"] += 1
+                        prior.attribution_status = "landed"
+                        if outcome_archetype:
+                            await bump_archetype_strategy_stat(
+                                db, outcome_archetype, sent_label, landed=1
+                            )
+                    elif delta < 0:
+                        entry["flopped"] += 1
+                        prior.attribution_status = "flopped"
+                        if outcome_archetype:
+                            await bump_archetype_strategy_stat(
+                                db, outcome_archetype, sent_label, flopped=1
+                            )
+                    else:
+                        prior.attribution_status = "neutral"
+                    stats[sent_label] = entry
+                else:
+                    # Couldn't verify from the screenshots — user sent something
+                    # else, other turns intervened, or she hasn't replied yet.
+                    # Recorded (not just silently skipped) so we can measure how
+                    # much data attribution coverage is actually discarding.
+                    prior.attribution_status = "unattributable"
 
         convo.strategy_stats = json.dumps(stats)
     except Exception:
         pass
-
-    # Persist the verbatim turn transcript (her words + the user's sent bubbles) so
-    # build_conversation_context can replay the REAL thread instead of lossy summaries.
-    transcript_json_value: str | None = None
-    try:
-        pairs: list[dict] = []
-        for msg in parsed.visual_transcript or []:
-            text = (getattr(msg, "actual_new_message", "") or "").strip()
-            if not text:
-                continue
-            is_user = (
-                getattr(msg, "side", "").lower() == "right"
-                or getattr(msg, "sender", "").lower() == "user"
-            )
-            pairs.append({"s": "user" if is_user else "them", "t": text})
-        if pairs:
-            transcript_json_value = json.dumps(pairs, ensure_ascii=False)
-    except Exception:
-        transcript_json_value = None
 
     interaction = Interaction(
         conversation_id=convo.id,
@@ -722,6 +856,7 @@ async def persist_interaction(
         ),
         viral_tier=clamp_str(parsed.analysis.viral_tier, max_len=20, label="viral_tier"),
         viral_reasoning=parsed.analysis.viral_reasoning,
+        detected_archetype=current_archetype or None,
         transcript_json=transcript_json_value,
         reply_0=dump_reply_option(reply_options[0]),
         reply_1=dump_reply_option(reply_options[1]),

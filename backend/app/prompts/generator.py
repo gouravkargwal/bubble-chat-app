@@ -111,6 +111,11 @@ _STRATEGY_TRAIT_DIRECTIVES: dict[str, str] = {
         "names something genuine about the interaction without over-explaining or "
         "asking for validation."
     ),
+    "DIRECT ASK": (
+        "Make the actual proposal — a specific day, activity, or platform, anchored "
+        "to something real from the conversation. This is the one strategy that does "
+        "NOT stop short of the ask; it makes it, plainly and confidently."
+    ),
 }
 
 _STRATEGY_BEHAVIOR_DIRECTIVES: dict[str, str] = {
@@ -139,6 +144,11 @@ _STRATEGY_BEHAVIOR_DIRECTIVES: dict[str, str] = {
     "HONEST FRAME": (
         "Speak plainly without tactical framing. A short, genuine line that names "
         "something true about the interaction without evaluation or agenda."
+    ),
+    "DIRECT ASK": (
+        "State the concrete ask outright — day, activity, or platform, tied to "
+        "something specific she said or shared. Confident, not tentative; this is "
+        "the moment to actually propose, not hint."
     ),
 }
 
@@ -206,7 +216,7 @@ OUTPUT SCHEMA — YOU MUST OUTPUT EXACTLY THIS JSON:
 {{"text": "...", "strategy_label": "...", "coach_reasoning": "..."}}
 
 - text: The single reply line from Kabir.
-- strategy_label: MUST be exactly one of: PUSH-PULL, FRAME CONTROL, SOFT CLOSE, VALUE ANCHOR, PATTERN INTERRUPT, HONEST FRAME. Use the assigned strategy.
+- strategy_label: MUST be exactly one of: PUSH-PULL, FRAME CONTROL, SOFT CLOSE, VALUE ANCHOR, PATTERN INTERRUPT, HONEST FRAME, DIRECT ASK. Use the assigned strategy.
 - coach_reasoning: One short sentence explaining why this angle fits the context and archetype. This is coaching advice shown directly to the user — address him as "you", never as "Kabir" or any other character name.
 
 CURRENT SCENE TIMELINE:

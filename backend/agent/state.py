@@ -12,6 +12,7 @@ StrategyLabel = Literal[
     "VALUE ANCHOR",
     "PATTERN INTERRUPT",
     "HONEST FRAME",
+    "DIRECT ASK",
 ]
 
 

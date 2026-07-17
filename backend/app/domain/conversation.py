@@ -4,10 +4,15 @@ import json
 from datetime import datetime, timezone
 
 from sqlalchemy import select, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import AnalysisResult, ConversationContext
-from app.infrastructure.database.models import Conversation, Interaction
+from app.infrastructure.database.models import (
+    ArchetypeStrategyStat,
+    Conversation,
+    Interaction,
+)
 
 
 async def find_or_create_conversation(
@@ -235,6 +240,72 @@ def _derive_preferred_strategies(raw_stats: str | None) -> list[str]:
         return []
 
 
+async def bump_archetype_strategy_stat(
+    db: AsyncSession,
+    archetype: str | None,
+    strategy_label: str | None,
+    *,
+    shown: int = 0,
+    landed: int = 0,
+    flopped: int = 0,
+) -> None:
+    """Atomically increment the global (archetype, strategy_label) counters.
+
+    Uses a single UPSERT rather than read-then-write: unlike per-conversation
+    strategy_stats (naturally partitioned by conversation_id), this table can
+    be hit concurrently by many different users' requests for the same
+    archetype, so a Python-level read-modify-write would race.
+    """
+    if not archetype or not strategy_label or (shown, landed, flopped) == (0, 0, 0):
+        return
+    stmt = pg_insert(ArchetypeStrategyStat).values(
+        archetype=archetype,
+        strategy_label=strategy_label,
+        shown=shown,
+        landed=landed,
+        flopped=flopped,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["archetype", "strategy_label"],
+        set_={
+            "shown": ArchetypeStrategyStat.shown + shown,
+            "landed": ArchetypeStrategyStat.landed + landed,
+            "flopped": ArchetypeStrategyStat.flopped + flopped,
+            "updated_at": func.now(),
+        },
+    )
+    await db.execute(stmt)
+
+
+async def get_archetype_preferred_strategies(
+    db: AsyncSession, archetype: str | None
+) -> list[str]:
+    """Rank strategies by conversion rate for a given archetype, aggregated
+    across every conversation that's ever recorded a clean attribution for it.
+
+    Mirrors _derive_preferred_strategies' minimum-sample gating (>= 2
+    landed+flopped observations) so a strategy shown only once doesn't
+    dominate the ranking on a fluke.
+    """
+    if not archetype:
+        return []
+    result = await db.execute(
+        select(ArchetypeStrategyStat).where(
+            ArchetypeStrategyStat.archetype == archetype
+        )
+    )
+    ranked: list[tuple[float, str]] = []
+    for row in result.scalars().all():
+        conv_obs = row.landed + row.flopped
+        if conv_obs < 2:
+            continue
+        score = row.landed / conv_obs
+        if score > 0:
+            ranked.append((score, row.strategy_label))
+    ranked.sort(key=lambda t: t[0], reverse=True)
+    return [label for _, label in ranked[:3]]
+
+
 def _reply_option_text(raw: str | None) -> str:
     """Unwrap a stored reply (JSON {"text": ...} or a plain string) to its text."""
     if not raw:
@@ -274,8 +345,16 @@ def _her_last_verbatim(interaction: Interaction) -> str:
 async def build_conversation_context(
     conversation: Conversation,
     db: AsyncSession,
+    current_archetype: str | None = None,
 ) -> ConversationContext:
-    """Build a ConversationContext domain object for prompt injection."""
+    """Build a ConversationContext domain object for prompt injection.
+
+    current_archetype is the CURRENT turn's freshly-detected archetype (always
+    available from the moment the first scan runs), used for the archetype-
+    conditioned strategy lookup — stable_archetype below is a smoothed read
+    that stays None until >= 3 scans exist, which is exactly when a brand-new
+    conversation would benefit most from cross-user archetype data.
+    """
     topics_worked = json.loads(conversation.topics_worked or "[]")
     topics_failed = json.loads(conversation.topics_failed or "[]")
 
@@ -285,6 +364,9 @@ async def build_conversation_context(
     )
     preferred_strategies = _derive_preferred_strategies(
         getattr(conversation, "strategy_stats", None)
+    )
+    archetype_preferred_strategies = await get_archetype_preferred_strategies(
+        db, current_archetype or stable_archetype
     )
 
     # Long-term memory: anchor to the very first interaction of this conversation.
@@ -390,4 +472,5 @@ async def build_conversation_context(
         stable_dimensions=stable_dimensions,
         photo_persona=getattr(conversation, "photo_persona", "") or "",
         preferred_strategies=preferred_strategies,
+        archetype_preferred_strategies=archetype_preferred_strategies,
     )

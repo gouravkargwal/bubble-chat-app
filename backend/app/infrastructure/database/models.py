@@ -171,6 +171,36 @@ class Conversation(Base):
     user: Mapped[User] = relationship(back_populates="conversations")
 
 
+class ArchetypeStrategyStat(Base):
+    """Cross-user, cross-conversation outcome stats keyed by (archetype,
+    strategy_label) — the global counterpart to Conversation.strategy_stats.
+
+    Unlike per-conversation stats (which start at zero for every new match),
+    this lets a brand-new conversation with a freshly-detected archetype
+    immediately benefit from what's landed for that archetype across the
+    whole userbase. Written via atomic UPSERT (see bump_archetype_strategy_stat
+    in app/domain/conversation.py) since many different users' requests can
+    concurrently hit the same (archetype, strategy_label) row.
+    """
+
+    __tablename__ = "archetype_strategy_stats"
+    __table_args__ = (
+        UniqueConstraint("archetype", "strategy_label", name="uq_archetype_strategy"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    archetype: Mapped[str] = mapped_column(String(50), index=True)
+    strategy_label: Mapped[str] = mapped_column(String(30), index=True)
+    shown: Mapped[int] = mapped_column(Integer, default=0)
+    landed: Mapped[int] = mapped_column(Integer, default=0)
+    flopped: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Interaction(Base):
     __tablename__ = "interactions"
     __table_args__ = (Index("ix_interactions_user_created", "user_id", "created_at"),)
@@ -207,6 +237,13 @@ class Interaction(Base):
     time_gap_signal: Mapped[str | None] = mapped_column(String(100), nullable=True)
     viral_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
     viral_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Archetype AS READ AT THE TIME this interaction's replies were generated
+    # (derive_archetype() on this scan's dimensions). Deliberately NOT the
+    # archetype read on the NEXT scan — that read can be shaped by how this
+    # interaction's suggested reply landed, which would contaminate the
+    # archetype-conditioned stats (see bump_archetype_strategy_stat) with the
+    # very outcome they're meant to measure.
+    detected_archetype: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Generated replies
     reply_0: Mapped[str] = mapped_column(Text)
     reply_1: Mapped[str] = mapped_column(Text)
@@ -216,6 +253,13 @@ class Interaction(Base):
     copied_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rating_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rating_positive: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Per-interaction verdict for the copied reply's strategy_label, set on the
+    # NEXT scan once _find_attributable_response evaluates it against the new
+    # transcript: "landed" / "flopped" (clean single-exchange attribution) or
+    # "unattributable" (user sent something else, other turns intervened, or
+    # she hasn't replied yet). NULL until the next scan happens at all (e.g.
+    # the user never returned to this conversation).
+    attribution_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Vector embedding of the copied reply for similarity search (768-dim, gemini-embedding-001)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
     # Metadata
