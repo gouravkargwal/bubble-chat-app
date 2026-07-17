@@ -194,7 +194,7 @@ def create_app() -> FastAPI:
             "font-src 'self' data:; "
             "object-src 'none'; "
             "base-uri 'self'; "
-            "form-action 'self' https://test.payu.in https://secure.payu.in"
+            "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in https://secure.payu.in"
         )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
