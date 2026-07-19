@@ -59,3 +59,19 @@ cache-clear-before:
 
 cache-clear-after:
 	python -c "import sqlite3; c=sqlite3.connect('app/testing/eval_cache.db'); c.execute(\"DELETE FROM eval_results WHERE variant_id='after'\"); c.commit(); print('Deleted', c.total_changes, 'rows')"
+
+# ── RAG evaluation (retrieval quality) ───────────────────────────────────────
+eval-rag:
+	python -m scripts.eval_rag_quality
+
+eval-rag-diff:
+	python -m scripts.eval_rag_quality --variants before after
+
+eval-rag-easy:
+	python -m scripts.eval_rag_quality --difficulty easy
+
+eval-rag-hard:
+	python -m scripts.eval_rag_quality --difficulty hard
+
+eval-rag-cache-clear:
+	python -c "import sqlite3; c=sqlite3.connect('app/testing/eval_cache.db'); c.execute(\"DELETE FROM eval_results WHERE variant_id LIKE 'rag_%'\"); c.commit()"

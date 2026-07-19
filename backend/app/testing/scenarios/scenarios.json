@@ -17,14 +17,20 @@
         "overthinking"
       ],
       "must_have_fork": true
-    }
+    },
+    "facts": [
+      {"text": "Ananya is a 24-year-old graphic designer from Pune", "category": "identity", "importance": 5},
+      {"text": "She is a self-proclaimed chai addict and overthinking specialist", "category": "identity", "importance": 4},
+      {"text": "She loves street food especially maggi", "category": "preference", "importance": 3}
+    ],
+    "core_lore_facts": ["chai"]
   },
   {
     "id": "early_night_owl_youtube_06",
     "category": "early_conversation",
     "description": "She's a self-confessed night owl — was up till 4am going down a YouTube rabbit hole about cults",
     "their_last_message": "im such a night owl its genuinely a problem... was up till 4am last night going down a youtube rabbit hole about how cults recruit people",
-    "person_name": "unknown",
+    "person_name": "Sarah",
     "direction": "keep_playful",
     "expected_stage": "early_talking",
     "expected_tone": "playful",
@@ -36,46 +42,20 @@
         "cults"
       ],
       "must_have_fork": true
-    }
-  },
-  {
-    "id": "early_one_word_replies_07",
-    "category": "early_conversation",
-    "description": "She's giving flat one-word replies — asked about travel, she said 'goa' and nothing more. No energy coming back but hasn't unmatched.",
-    "their_last_message": "idk everything lol",
-    "person_name": "unknown",
-    "direction": "keep_playful",
-    "expected_stage": "early_talking",
-    "expected_tone": "dry",
-    "top_hooks": ["goa", "idk everything", "one-word replies", "low effort"],
-    "quality_criteria": {
-      "must_reference": [
-        "goa"
-      ],
-      "must_have_fork": true
-    }
-  },
-  {
-    "id": "chemistry_youre_actually_funny_09",
-    "category": "building_chemistry",
-    "description": "12 messages in, great banter. She said he's actually funny and most guys on here are so boring — clearly interested, light flirting starting",
-    "their_last_message": "okay you're actually funny... most guys on here are so boring it hurts. how are you real",
-    "person_name": "unknown",
-    "direction": "quick_reply",
-    "expected_stage": "building_chemistry",
-    "expected_tone": "flirty",
-    "top_hooks": ["actually funny", "most guys are boring", "how are you real", "it hurts"],
-    "quality_criteria": {
-      "must_reference": [],
-      "must_have_fork": true
-    }
+    },
+    "facts": [
+      {"text": "Sarah is a 27-year-old marketing executive from Bangalore", "category": "identity", "importance": 5},
+      {"text": "She is a self-confessed night owl who stays up watching YouTube", "category": "identity", "importance": 4},
+      {"text": "She has a quirky interest in learning about how cults recruit people", "category": "opinion", "importance": 3}
+    ],
+    "core_lore_facts": ["night owl", "YouTube"]
   },
   {
     "id": "chemistry_pineapple_pizza_war_10",
     "category": "building_chemistry",
     "description": "Playful argument about pineapple on pizza — she's dying on the 'war crime' hill and has declared it a dealbreaker",
     "their_last_message": "absolutely not. pineapple on pizza is a war crime and i will die on this hill. unironically a dealbreaker",
-    "person_name": "unknown",
+    "person_name": "Priya",
     "direction": "keep_playful",
     "expected_stage": "building_chemistry",
     "expected_tone": "playful",
@@ -86,7 +66,14 @@
         "pizza"
       ],
       "must_have_fork": true
-    }
+    },
+    "facts": [
+      {"text": "Priya is a graphic designer from Bangalore who loves cooking Italian food", "category": "identity", "importance": 5},
+      {"text": "She is a vegetarian and passionate about food", "category": "preference", "importance": 4},
+      {"text": "She has strong opinions about pineapple on pizza — thinks it's a war crime", "category": "opinion", "importance": 3},
+      {"text": "She has a dog named Olive", "category": "factual", "importance": 3}
+    ],
+    "core_lore_facts": ["vegetarian", "graphic designer"]
   },
   {
     "id": "dying_lol_only_14",
@@ -124,7 +111,7 @@
     "category": "vulnerable",
     "description": "Chatting a few days, good rapport. She had a terrible day — boss called out her report in front of the whole team. Seeking connection, not advice.",
     "their_last_message": "today was genuinely awful... my boss called out my report in front of the whole team and basically said i was careless. i just want to disappear",
-    "person_name": "unknown",
+    "person_name": "Meera",
     "direction": "go_deeper",
     "expected_stage": "building_chemistry",
     "expected_tone": "upset",
@@ -135,7 +122,13 @@
         "team"
       ],
       "must_have_fork": true
-    }
+    },
+    "facts": [
+      {"text": "Meera is a 28-year-old consultant at a Big 4 firm", "category": "identity", "importance": 5},
+      {"text": "She has been working on a high-stakes client report for weeks", "category": "factual", "importance": 4},
+      {"text": "She is a perfectionist who takes work criticism personally", "category": "opinion", "importance": 3}
+    ],
+    "core_lore_facts": ["consultant", "Big 4"]
   },
   {
     "id": "vulnerable_last_relationship_18",
@@ -157,7 +150,7 @@
     "category": "goal_oriented",
     "description": "15+ messages, great banter, shared interests discovered. Peak chemistry moment — she called him the most entertaining person she's matched with.",
     "their_last_message": "okay you might actually be the most entertaining person ive matched with... and ive been on here a while so that's saying something",
-    "person_name": "unknown",
+    "person_name": "Riya",
     "direction": "get_number",
     "expected_stage": "building_chemistry",
     "expected_tone": "flirty",
@@ -165,7 +158,13 @@
     "quality_criteria": {
       "must_reference": [],
       "must_have_fork": true
-    }
+    },
+    "facts": [
+      {"text": "Riya is a product manager at a SaaS startup", "category": "identity", "importance": 5},
+      {"text": "She has been on dating apps for a while and is selective", "category": "opinion", "importance": 4},
+      {"text": "She values good banter and a sense of humor above everything", "category": "preference", "importance": 4}
+    ],
+    "core_lore_facts": ["product manager", "good banter"]
   },
   {
     "id": "goal_coffee_ask_out_20",
@@ -190,7 +189,7 @@
     "category": "new_match",
     "description": "Hinge match — her bio says 'training for a half marathon but also deeply committed to biryani'. Photos: running gear, rooftop dinner with friends, a dog.",
     "their_last_message": "",
-    "person_name": "unknown",
+    "person_name": "Zara",
     "direction": "opener",
     "expected_stage": "new_match",
     "expected_tone": "playful",
@@ -202,7 +201,13 @@
         "dog"
       ],
       "must_have_fork": true
-    }
+    },
+    "facts": [
+      {"text": "Zara is a fitness enthusiast training for a half marathon", "category": "identity", "importance": 5},
+      {"text": "She is also a self-proclaimed foodie who loves biryani", "category": "identity", "importance": 4},
+      {"text": "She has a dog she adores", "category": "factual", "importance": 3}
+    ],
+    "core_lore_facts": ["half marathon", "biryani"]
   },
   {
     "id": "opener_solo_traveller_22",

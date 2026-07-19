@@ -4,6 +4,9 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass, field
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.testing.cache import clear as cache_clear
@@ -19,6 +22,16 @@ from app.testing.scenarios.dataset import (
     get_by_category,
     get_by_id,
 )
+from app.testing.rag_seed_helpers import (
+    clean_test_data,
+    seed_facts,
+    seed_interactions,
+    seed_user_and_conversation,
+    TEST_USER_ID,
+    TEST_CONVERSATION_ID,
+    PERSON_NAME,
+)
+from app.services.memory_service import get_match_context
 
 
 # Rate limits:
@@ -40,6 +53,10 @@ class RunResult:
     auditor_feedback: str = ""
     latency_ms: int = 0
     error: str | None = None
+    # RAG quality metrics (populated when scenario has fact data)
+    rag_hit_rate: float = 0.0   # 1.0 if core_lore_facts found in retrieved context
+    rag_precision: float = 0.0  # fraction of retrieved facts that are relevant
+    rag_core_lore_chars: int = 0
 
 
 @dataclass
@@ -93,6 +110,21 @@ class ScenarioResult:
         results = [r.auditor_passes for r in self.runs if r.auditor_passes is not None]
         return sum(results) / len(results) if results else 0.0
 
+    @property
+    def avg_rag_hit_rate(self) -> float:
+        scores = [r.rag_hit_rate for r in self.runs if not r.error]
+        return sum(scores) / len(scores) if scores else 0.0
+
+    @property
+    def avg_rag_precision(self) -> float:
+        scores = [r.rag_precision for r in self.runs if not r.error]
+        return sum(scores) / len(scores) if scores else 0.0
+
+    @property
+    def avg_rag_core_lore_chars(self) -> int:
+        lengths = [r.rag_core_lore_chars for r in self.runs if not r.error]
+        return int(sum(lengths) / len(lengths)) if lengths else 0
+
 
 @dataclass
 class TestSuiteResult:
@@ -112,6 +144,12 @@ class TestSuiteResult:
             "avg_usability": sum(r.avg_usability for r in results) / len(results),
             "auditor_pass_rate": sum(r.auditor_pass_rate for r in results)
             / len(results),
+            "avg_rag_hit_rate": sum(r.avg_rag_hit_rate for r in results)
+            / len(results),
+            "avg_rag_precision": sum(r.avg_rag_precision for r in results)
+            / len(results),
+            "avg_rag_core_lore_chars": sum(r.avg_rag_core_lore_chars for r in results)
+            // len(results),
             "worst_scenario": (
                 min(results, key=lambda r: r.avg_judge_score).scenario_id
                 if scored
@@ -131,10 +169,12 @@ class TestRunner:
         model: str | None = None,
         inter_call_delay: float = _INTER_CALL_DELAY_SECONDS,
         use_cache: bool = True,
+        db: AsyncSession | None = None,
     ) -> None:
         self.model = model or settings.gemini_model
         self.inter_call_delay = inter_call_delay
         self.use_cache = use_cache
+        self.db = db  # optional DB session for RAG context seeding
 
     async def run(
         self,
@@ -262,15 +302,67 @@ class TestRunner:
             analyst_dict = build_analyst_output(scenario)
             analysis = AnalystOutput(**analyst_dict)
 
+            # --- RAG context seeding (when scenario has fact data) ---
+            core_lore = ""
+            tier_1_raw = ""
+            tier_2_summary = ""
+            rag_hit_rate = 0.0
+            rag_precision = 0.0
+
+            if self.db and scenario.facts:
+                try:
+                    # Clean previous test data, then seed user + conversation + facts
+                    await clean_test_data(self.db)
+                    await seed_user_and_conversation(self.db)
+                    await seed_interactions(self.db)
+                    await seed_facts(self.db, scenario.facts, use_llm=False)
+
+                    # Retrieve RAG context using the scenario's message as query
+                    ctx = await get_match_context(
+                        self.db,
+                        user_id=TEST_USER_ID,
+                        conversation_id=TEST_CONVERSATION_ID,
+                        current_text=scenario.their_last_message or scenario.description,
+                    )
+                    core_lore = ctx.get("core_lore") or ""
+                    tier_1_raw = ctx.get("tier_1_raw_exchanges") or ""
+                    tier_2_summary = ctx.get("tier_2_summary") or ""
+
+                    # Score RAG hit rate against expected core_lore_facts
+                    if scenario.core_lore_facts and core_lore:
+                        lore_lower = core_lore.lower()
+                        hits = sum(
+                            1 for f in scenario.core_lore_facts
+                            if f.lower() in lore_lower
+                        )
+                        rag_hit_rate = hits / len(scenario.core_lore_facts)
+                        # Precision: fraction of retrieved facts that match expected
+                        lore_lines = [
+                            ln.strip()
+                            for ln in core_lore.split("\n")
+                            if ln.strip() and not ln.startswith("===")
+                        ]
+                        matched = sum(
+                            1 for line in lore_lines[:8]
+                            if any(f.lower() in line.lower() for f in scenario.core_lore_facts)
+                        )
+                        rag_precision = matched / len(lore_lines[:8]) if lore_lines[:8] else 0.0
+
+                except Exception as e:
+                    logger = __import__("structlog").get_logger("rag_seed")
+                    logger.warning("rag_seed_failed_for_scenario", scenario_id=scenario.id, error=str(e))
+
             # Minimal AgentState for generator
             state: dict = {
                 "user_id": "eval",
-                "conversation_id": None,
+                "conversation_id": TEST_CONVERSATION_ID if scenario.facts else None,
                 "direction": scenario.direction,
                 "custom_hint": "",
                 "voice_dna_dict": {},
                 "conversation_context_dict": {},
-                "core_lore": "",
+                "core_lore": core_lore,
+                "tier_1_raw_exchanges": tier_1_raw,
+                "tier_2_summary": tier_2_summary,
                 "past_memories": "",
                 "analysis": analysis,
                 "revision_count": 0,
@@ -282,13 +374,13 @@ class TestRunner:
 
             # --- Generator call ---
             start = time.monotonic()
-            gen_out = await asyncio.to_thread(generator_node, state)
+            gen_out = await generator_node(state)
             latency_ms = int((time.monotonic() - start) * 1000)
             state.update(gen_out)
 
             # --- Auditor call ---
             await asyncio.sleep(self.inter_call_delay)
-            audit_out = await asyncio.to_thread(auditor_node, state)
+            audit_out = await auditor_node(state)
 
             # Extract replies
             drafts = state.get("drafts")
@@ -336,6 +428,9 @@ class TestRunner:
                 auditor_passes=auditor_passes,
                 auditor_feedback=auditor_feedback,
                 latency_ms=latency_ms,
+                rag_hit_rate=rag_hit_rate,
+                rag_precision=rag_precision,
+                rag_core_lore_chars=len(core_lore),
             )
 
         except Exception as e:

@@ -27,7 +27,7 @@ def generate_report(result: TestSuiteResult) -> str:
     lines.append("")
     header = (
         f"{'Variant':<25} {'Judge':>7} {'Specific':>9} {'Human':>7} {'Usable':>7} "
-        f"{'Auditor':>8} {'Scenarios':>10}"
+        f"{'Auditor':>8} {'RAG-Hit':>9} {'RAG-Prec':>9} {'Scenarios':>10}"
     )
     lines.append(header)
     lines.append("-" * 90)
@@ -36,7 +36,9 @@ def generate_report(result: TestSuiteResult) -> str:
         lines.append(
             f"{s['variant']:<25} {s['avg_judge_score']:>7.1f} {s['avg_specificity']:>9.1f} "
             f"{s['avg_human_voice']:>7.1f} {s['avg_usability']:>7.1f} "
-            f"{s['auditor_pass_rate']:>7.0%} {s['scenarios_tested']:>10}"
+            f"{s['auditor_pass_rate']:>7.0%} "
+            f"{s.get('avg_rag_hit_rate', 0.0):>8.0%} {s.get('avg_rag_precision', 0.0):>8.0%} "
+            f"{s['scenarios_tested']:>10}"
         )
 
     lines.append("")
@@ -58,6 +60,9 @@ def generate_report(result: TestSuiteResult) -> str:
 
             for sr in sorted(results_in_cat, key=lambda r: r.avg_judge_score):
                 status = "✓" if sr.avg_judge_score >= 6.0 else "✗"
+                rag_info = ""
+                if sr.avg_rag_hit_rate > 0 or sr.avg_rag_precision > 0:
+                    rag_info = f"  RAG-Hit: {sr.avg_rag_hit_rate:.0%} Prec: {sr.avg_rag_precision:.0%}"
                 lines.append(
                     f"    {status} {sr.scenario_id:<42} "
                     f"Judge: {sr.avg_judge_score:.1f}  "
@@ -65,6 +70,7 @@ def generate_report(result: TestSuiteResult) -> str:
                     f"Human: {sr.avg_human_voice:.1f}  "
                     f"Use: {sr.avg_usability:.1f}  "
                     f"Auditor: {sr.auditor_pass_rate:.0%}"
+                    f"{rag_info}"
                 )
 
                 # Show detail on weak scenarios

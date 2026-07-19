@@ -575,6 +575,7 @@ async def upsert_conversation_memory(
     user_id: str,
     conversation_id: str,
     fact_text: str,
+    fact_source: str = "explicit",
 ) -> None:
     """Persist a single fact into conversation_memories.
 
@@ -583,6 +584,10 @@ async def upsert_conversation_memory(
     3. Semantic similarity check (< 0.20 cosine distance) -- skip if near-duplicate.
     4. Concurrently: importance scoring, lexical expansion, graph extraction.
     5. Insert fact + graph entities/edges.
+
+    Args:
+        fact_source: 'explicit' (user stated it) or 'inferred' (LLM guessed).
+            Used by the context formatter to label facts [CONFIRMED] / [INFERRED].
 
     ADD-only memory -- no supersession. The newest fact floats to the top
     via recency-weighted retrieval. Never raises.
@@ -690,11 +695,11 @@ async def upsert_conversation_memory(
                     INSERT INTO conversation_memories
                         (id, user_id, conversation_id, fact_text, embedding,
                          importance_score, fact_category, lexical_expansion,
-                         created_at)
+                         fact_source, created_at)
                     VALUES
                         (:id, :user_id, :conversation_id, :fact_text, :embedding,
                          :importance_score, :fact_category, :lexical_expansion,
-                         now())
+                         :fact_source, now())
                     """),
                 {
                     "id": str(uuid.uuid4()),
@@ -705,6 +710,7 @@ async def upsert_conversation_memory(
                     "importance_score": importance_score,
                     "fact_category": fact_category,
                     "lexical_expansion": lexical_expansion,
+                    "fact_source": fact_source,
                 },
             )
 

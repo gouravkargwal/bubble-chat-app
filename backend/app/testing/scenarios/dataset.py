@@ -22,6 +22,11 @@ class Scenario(BaseModel):
     expected_tone: str
     detected_dialect: str = "ENGLISH"  # ENGLISH | HINDI | HINGLISH
     quality_criteria: QualityCriteria
+    # RAG context: if provided, these facts are seeded into conversation_memories
+    # before the generator runs, so the prompt receives real RAG context.
+    facts: list[dict] = []  # list of {"text": str, "category": str, "importance": int}
+    # Subset of fact texts that SHOULD appear in core_lore for this scenario.
+    core_lore_facts: list[str] = []
 
 
 _SCENARIOS_PATH = Path(__file__).parent / "scenarios.json"

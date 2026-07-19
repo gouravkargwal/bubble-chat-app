@@ -13,6 +13,7 @@ Model: `settings.gemini_model` (GEMINI_MODEL) with dynamic temperature
 
 import asyncio
 import json
+import os
 import time
 from typing import Any, cast
 
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from agent.nodes_v2._lc_usage import invoke_structured_gemini, invoke_structured_groq
 from agent.nodes_v2._post_processor import validate_and_fix_replies
+from agent.nodes_v2._context_formatter import format_rag_context, fetch_facts_meta
 from agent.nodes_v2._shared import (
     GENERATOR_MODEL,
     opener_hook_priority,
@@ -155,6 +157,32 @@ async def generator_node(state: AgentState) -> dict:
         )
         detected_archetype = str(stable_archetype)
 
+    # --- Format RAG context with structured sections ---
+    # Set RAG_FORMAT_DISABLED=1 to bypass the formatter (for A/B testing).
+    _use_raw = os.environ.get("RAG_FORMAT_DISABLED", "") == "1"
+    if _use_raw:
+        core_lore_for_llm = core_lore
+    else:
+        # Try to fetch fact metadata for importance sorting + category grouping.
+        facts_meta = None
+        if conversation_id and user_id:
+            try:
+                from app.infrastructure.database.engine import librarian_async_session
+                async with librarian_async_session() as _db:
+                    facts_meta = await fetch_facts_meta(
+                        _db, user_id=user_id, conversation_id=conversation_id
+                    )
+            except Exception:
+                facts_meta = None
+
+        formatted_context = format_rag_context(
+            core_lore=core_lore,
+            tier_1_raw=tier_1_raw,
+            tier_2_summary=tier_2_summary,
+            facts_meta=facts_meta,
+        )
+        core_lore_for_llm = formatted_context if formatted_context else core_lore
+
     # --- Build payload shared across all micro-calls ---
     # We include last_ai_replies_shown so each micro-call can do stale-line prevention.
     shared_payload: dict[str, Any] = {
@@ -164,7 +192,7 @@ async def generator_node(state: AgentState) -> dict:
         or "ENGLISH",
         "transcript_text": transcript_text,
         "photo_persona": getattr(analysis, "photo_persona", "") or "",
-        "core_lore": core_lore,
+        "core_lore": core_lore_for_llm,
         "tier_1_raw_exchanges": tier_1_raw,
         "tier_2_summary": tier_2_summary,
         "voice_dna_dict": voice_dna,

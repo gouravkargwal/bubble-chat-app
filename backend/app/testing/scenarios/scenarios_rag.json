@@ -1,0 +1,280 @@
+[
+  {
+    "id": "identity_city_profession",
+    "difficulty": "easy",
+    "description": "Exact keyword match for city and profession",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "She loves trekking and has been to Himachal 3 times", "category": "opinion", "importance": 3},
+      {"text": "She is a vegetarian", "category": "preference", "importance": 4}
+    ],
+    "query": "what does priya do and where is she from",
+    "expected_fact_texts": [
+      "Priya is 26 years old from Mumbai",
+      "Priya works as a software engineer at a fintech startup"
+    ],
+    "expected_graph_entities": ["mumbai", "software engineer"]
+  },
+  {
+    "id": "preference_trekking",
+    "difficulty": "easy",
+    "description": "Query about a hobby with exact keyword overlap",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "She loves trekking and has been to Himachal 3 times", "category": "opinion", "importance": 3},
+      {"text": "She enjoys trying new cafes in Bandra", "category": "opinion", "importance": 3}
+    ],
+    "query": "does she like trekking and adventure",
+    "expected_fact_texts": [
+      "She loves trekking and has been to Himachal 3 times"
+    ]
+  },
+  {
+    "id": "empty_query_fallback",
+    "difficulty": "easy",
+    "description": "Empty query should fall back to chronological fact load",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "She is a vegetarian", "category": "preference", "importance": 4}
+    ],
+    "query": "",
+    "expected_fact_texts": [
+      "Priya is 26 years old from Mumbai",
+      "Priya works as a software engineer at a fintech startup",
+      "She is a vegetarian"
+    ]
+  },
+  {
+    "id": "exact_match_fact",
+    "difficulty": "easy",
+    "description": "Query is an exact verbatim copy of a fact text",
+    "facts": [
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "She has a younger sister who is studying in Delhi", "category": "identity", "importance": 4},
+      {"text": "She speaks Marathi, Hindi, and English fluently", "category": "factual", "importance": 3}
+    ],
+    "query": "works as a software engineer at a fintech startup",
+    "expected_fact_texts": [
+      "Priya works as a software engineer at a fintech startup"
+    ]
+  },
+  {
+    "id": "semantic_job_query",
+    "difficulty": "hard",
+    "description": "Query uses synonyms with no word overlap to fact text",
+    "facts": [
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "She studied at NMIMS Mumbai", "category": "identity", "importance": 4},
+      {"text": "She is looking for a serious relationship", "category": "opinion", "importance": 4}
+    ],
+    "query": "what is her profession in the tech industry",
+    "expected_fact_texts": [
+      "Priya works as a software engineer at a fintech startup"
+    ]
+  },
+  {
+    "id": "multi_concept_query",
+    "difficulty": "medium",
+    "description": "Query mentions two different concepts — both should be retrieved",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "She loves trekking and has been to Himachal 3 times", "category": "opinion", "importance": 3},
+      {"text": "She recently adopted a stray puppy named Chiku", "category": "factual", "importance": 3}
+    ],
+    "query": "priya loves trekking in himachal and works in tech",
+    "expected_fact_texts": [
+      "She loves trekking and has been to Himachal 3 times",
+      "Priya works as a software engineer at a fintech startup"
+    ]
+  },
+  {
+    "id": "single_identity_fact",
+    "difficulty": "easy",
+    "description": "Single fact retrieval — exact keyword match",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5}
+    ],
+    "query": "how old is priya and where is she from",
+    "expected_fact_texts": [
+      "Priya is 26 years old from Mumbai"
+    ]
+  },
+  {
+    "id": "distractor_facts",
+    "difficulty": "hard",
+    "description": "Similar-sounding but incorrect facts should not overtake the right one",
+    "facts": [
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "Priya's sister is studying engineering in Delhi", "category": "identity", "importance": 4},
+      {"text": "She loves engineering challenges in trekking", "category": "opinion", "importance": 3}
+    ],
+    "query": "what is priya's job",
+    "expected_fact_texts": [
+      "Priya works as a software engineer at a fintech startup"
+    ]
+  },
+  {
+    "id": "identity_family",
+    "difficulty": "easy",
+    "description": "Query about family members",
+    "facts": [
+      {"text": "She has a younger sister who is studying in Delhi", "category": "identity", "importance": 4},
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "She recently adopted a stray puppy named Chiku", "category": "factual", "importance": 3}
+    ],
+    "query": "does she have any siblings",
+    "expected_fact_texts": [
+      "She has a younger sister who is studying in Delhi"
+    ]
+  },
+  {
+    "id": "preference_diet",
+    "difficulty": "easy",
+    "description": "Query about dietary preference",
+    "facts": [
+      {"text": "She is a vegetarian", "category": "preference", "importance": 4},
+      {"text": "She enjoys trying new cafes in Bandra", "category": "opinion", "importance": 3},
+      {"text": "She loves trekking and has been to Himachal 3 times", "category": "opinion", "importance": 3}
+    ],
+    "query": "what does she like to eat is she vegetarian",
+    "expected_fact_texts": [
+      "She is a vegetarian"
+    ]
+  },
+  {
+    "id": "multilingual_query",
+    "difficulty": "medium",
+    "description": "Hinglish query — translated English facts should still match",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "She speaks Marathi, Hindi, and English fluently", "category": "factual", "importance": 3},
+      {"text": "She studied at NMIMS Mumbai", "category": "identity", "importance": 4}
+    ],
+    "query": "priya kidhar se hai aur kya padhai kari hai",
+    "expected_fact_texts": [
+      "Priya is 26 years old from Mumbai",
+      "She studied at NMIMS Mumbai"
+    ]
+  },
+  {
+    "id": "relationship_serious",
+    "difficulty": "medium",
+    "description": "Query about relationship intentions",
+    "facts": [
+      {"text": "She is looking for a serious relationship", "category": "opinion", "importance": 4},
+      {"text": "She is a vegetarian", "category": "preference", "importance": 4},
+      {"text": "She loves trekking and has been to Himachal 3 times", "category": "opinion", "importance": 3}
+    ],
+    "query": "what kind of relationship is she looking for",
+    "expected_fact_texts": [
+      "She is looking for a serious relationship"
+    ]
+  },
+  {
+    "id": "pet_ownership",
+    "difficulty": "medium",
+    "description": "Query about pet — fact uses different phrasing",
+    "facts": [
+      {"text": "She recently adopted a stray puppy named Chiku", "category": "factual", "importance": 3},
+      {"text": "She is a vegetarian", "category": "preference", "importance": 4},
+      {"text": "She has a younger sister who is studying in Delhi", "category": "identity", "importance": 4}
+    ],
+    "query": "does she have any pets or animals at home",
+    "expected_fact_texts": [
+      "She recently adopted a stray puppy named Chiku"
+    ]
+  },
+  {
+    "id": "education_query",
+    "difficulty": "easy",
+    "description": "Query about education background",
+    "facts": [
+      {"text": "She studied at NMIMS Mumbai", "category": "identity", "importance": 4},
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5}
+    ],
+    "query": "where did she go to college or university",
+    "expected_fact_texts": [
+      "She studied at NMIMS Mumbai"
+    ]
+  },
+  {
+    "id": "language_query",
+    "difficulty": "medium",
+    "description": "Query about languages — fact lists specific languages",
+    "facts": [
+      {"text": "She speaks Marathi, Hindi, and English fluently", "category": "factual", "importance": 3},
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5}
+    ],
+    "query": "what languages can she speak",
+    "expected_fact_texts": [
+      "She speaks Marathi, Hindi, and English fluently"
+    ]
+  },
+  {
+    "id": "cafe_hobby",
+    "difficulty": "medium",
+    "description": "Query about hobby with location-specific detail",
+    "facts": [
+      {"text": "She enjoys trying new cafes in Bandra", "category": "opinion", "importance": 3},
+      {"text": "She loves trekking and has been to Himachal 3 times", "category": "opinion", "importance": 3},
+      {"text": "She studied at NMIMS Mumbai", "category": "identity", "importance": 4}
+    ],
+    "query": "what does she like to do in bandra for fun",
+    "expected_fact_texts": [
+      "She enjoys trying new cafes in Bandra"
+    ]
+  },
+  {
+    "id": "long_query_many_facts",
+    "difficulty": "hard",
+    "description": "Long detailed query — should pull multiple relevant facts",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "She loves trekking and has been to Himachal 3 times", "category": "opinion", "importance": 3},
+      {"text": "She is a vegetarian", "category": "preference", "importance": 4},
+      {"text": "She has a younger sister who is studying in Delhi", "category": "identity", "importance": 4},
+      {"text": "She speaks Marathi, Hindi, and English fluently", "category": "factual", "importance": 3},
+      {"text": "She is looking for a serious relationship", "category": "opinion", "importance": 4},
+      {"text": "She enjoys trying new cafes in Bandra", "category": "opinion", "importance": 3},
+      {"text": "She recently adopted a stray puppy named Chiku", "category": "factual", "importance": 3},
+      {"text": "She studied at NMIMS Mumbai", "category": "identity", "importance": 4}
+    ],
+    "query": "tell me everything about priya — her job, where she lives, her hobbies, her family, her education, and what she's looking for",
+    "expected_fact_texts": [
+      "Priya is 26 years old from Mumbai",
+      "Priya works as a software engineer at a fintech startup",
+      "She loves trekking and has been to Himachal 3 times",
+      "She studied at NMIMS Mumbai"
+    ]
+  },
+  {
+    "id": "negative_query",
+    "difficulty": "hard",
+    "description": "Query about something that doesn't exist — retrieval should not return irrelevant facts",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5},
+      {"text": "Priya works as a software engineer at a fintech startup", "category": "identity", "importance": 5},
+      {"text": "She is a vegetarian", "category": "preference", "importance": 4}
+    ],
+    "query": "does priya have any children or kids",
+    "expected_fact_texts": [],
+    "is_negative": true
+  },
+  {
+    "id": "recent_interaction_context",
+    "difficulty": "medium",
+    "description": "Tier 1 and Tier 2 should be populated from interactions",
+    "facts": [
+      {"text": "Priya is 26 years old from Mumbai", "category": "identity", "importance": 5}
+    ],
+    "query": "what was the recent conversation about",
+    "expected_fact_texts": ["Priya is 26 years old from Mumbai"],
+    "expect_tier1": true,
+    "expect_tier2": true
+  }
+]

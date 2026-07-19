@@ -381,6 +381,11 @@ class ConversationMemory(Base):
     lexical_expansion: Mapped[str | None] = mapped_column(
         Text, default="", nullable=True
     )
+    # Fact source: 'explicit' (user stated it) or 'inferred' (LLM guessed).
+    # Used by the context formatter to label facts with [CONFIRMED] / [INFERRED].
+    fact_source: Mapped[str | None] = mapped_column(
+        String(20), default="explicit", nullable=True
+    )
     superseded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
