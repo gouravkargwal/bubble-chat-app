@@ -101,7 +101,7 @@ export default function TermsPage() {
         <title>Terms of Service | Cookd</title>
         <meta
           name="description"
-          content="Cookd terms of service — conditions for using our AI dating coach app, including subscriptions, refunds, and acceptable use."
+          content="Cookd terms of service — conditions for using our AI conversation assistant app, including subscriptions, refunds, and acceptable use."
         />
       </head>
       <Header />

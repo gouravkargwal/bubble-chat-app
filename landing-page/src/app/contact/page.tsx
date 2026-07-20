@@ -12,15 +12,15 @@ import posthog from "posthog-js";
 const FAQ_ITEMS = [
   {
     q: "How do I get started?",
-    a: "Download Cookd from Google Play, create an account, and connect your dating apps. Our AI analyzes your conversations in real-time and suggests winning responses.",
+    a: "Download Cookd from Google Play, create an account, and start getting AI-powered reply suggestions for your conversations. Our AI analyzes your chats in real-time and suggests winning responses.",
   },
   {
     q: "Is my chat data private?",
     a: "Absolutely. All conversations are encrypted end-to-end. We never store your messages after analysis, and we never share your data with third parties.",
   },
   {
-    q: "Which dating apps are supported?",
-    a: "Cookd works with all major dating platforms including Tinder, Hinge, Bumble, and more. Our AI adapts to any conversation style across any app.",
+    q: "Which messaging apps are supported?",
+    a: "Cookd works with any chat-based app. Our AI adapts to any conversation style across any platform.",
   },
   {
     q: "Can I cancel anytime?",
@@ -114,7 +114,7 @@ export default function ContactPage() {
         <title>Contact Us | Cookd</title>
         <meta
           name="description"
-          content="Get in touch with Cookd — our AI dating coach team is here to help. Contact support, ask questions, or share feedback."
+          content="Get in touch with Cookd — our AI conversation assistant team is here to help. Contact support, ask questions, or share feedback."
         />
       </head>
       <Header />

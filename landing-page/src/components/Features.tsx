@@ -162,7 +162,7 @@ export function Features() {
           id="features-heading"
           className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-nothing-white"
         >
-          Engineered for the <span className="text-neon-red">Modern Dater</span>
+          Engineered for <span className="text-neon-red">Better Conversations</span>
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
           Every feature is built on real conversation data and tested for

@@ -31,6 +31,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.api.v1.admin_deps import verify_admin_key
 from app.api.v1.schemas.schemas import strip_persona_name
+from app.api.v1.video_anonymize import anonymize_name
 from app.infrastructure.database.engine import get_db
 from app.infrastructure.database.models import Interaction, User
 
@@ -232,8 +233,14 @@ def _build_video_payload(ix: Interaction, score: dict) -> dict:
     return {
         "id": ix.id,
         "isOpener": is_opener,
-        "personName": ix.person_name or "Someone",
-        "detectedApp": "dating_app",
+        # ponytail: anonymize_name returns first initial only (e.g., "A" for "Alex").
+        # Two people with the same initial produce identically-named downloads
+        # ("cookd-a.mp4"). If uniqueness is needed later, append a short hash
+        # of the full name.
+        "personName": anonymize_name(ix.person_name),
+        # hardcoded after product rebrand — was "dating_app"; kept static
+        # since all current interactions are messaging-app-based.
+        "detectedApp": "messaging_app",
         "strategyLabel": winning.get("strategy_label", "COOKD_AI"),
         "winningLine": winning.get("text", ""),
         "coachReasoning": strip_persona_name(winning.get("coach_reasoning", "")),

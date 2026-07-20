@@ -34,7 +34,7 @@ _tracer_provider: Optional[TracerProvider] = None
 def setup_tracing(
     app,
     *,
-    service_name: str = "rizzbot-api",
+    service_name: str = "cookd-api",
     otlp_endpoint: str = "",
     console_export: bool = False,
     auth_header: str = "",

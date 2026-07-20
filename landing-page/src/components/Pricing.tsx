@@ -39,7 +39,7 @@ const PLANS = [
     price: String(PRICING.plans.match.price),
     currency: PRICING.plans.match.currency,
     period: PRICING.plans.match.period,
-    description: "The standard blueprint for dating control.",
+    description: "The standard blueprint for conversation control.",
     credits: `${PRICING.plans.match.credits} conversations / month`,
     label: "MOST POPULAR ⭐",
     highlighted: false,

@@ -132,7 +132,7 @@ export default async function BlogArticlePage({
             Get Better Replies Instantly
           </h2>
           <p className="text-sm text-brand-muted mb-6 max-w-md mx-auto leading-relaxed">
-            Download Cookd — the AI dating coach that analyzes your chats and
+            Download Cookd — the AI conversation assistant that analyzes your chats and
             crafts winning replies in seconds.
           </p>
           <a

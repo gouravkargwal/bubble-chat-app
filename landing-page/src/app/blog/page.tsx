@@ -6,11 +6,11 @@ import { SITE } from "@/app/constants";
 export const metadata: Metadata = {
   title: `Blog | ${SITE.name}`,
   description:
-    "Dating tips, AI coaching guides, and strategies to get better replies on Hinge, Bumble, Tinder and more.",
+    "Conversation tips, AI guides, and strategies to get better replies across any messaging app.",
   openGraph: {
-    title: `${SITE.name} Blog — Dating Tips & AI Coaching Guides`,
+    title: `${SITE.name} Blog — Conversation Tips & AI Guides`,
     description:
-      "Learn how to get better replies, craft winning openers, and master dating apps with AI-powered insights.",
+      "Learn how to get better replies, craft engaging messages, and master conversations with AI-powered insights.",
   },
 };
 
@@ -21,12 +21,12 @@ export default function BlogListPage() {
         {/* Header */}
         <div className="mb-12 text-center">
           <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-brand-white">
-            Dating Tips &{" "}
-            <span className="text-brand-primary">AI Coaching Guides</span>
+            Conversation Tips &{" "}
+            <span className="text-brand-primary">AI Guides</span>
           </h1>
           <p className="mt-4 text-brand-muted text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
-            Data-driven advice to improve your dating app conversations and get
-            more responses.
+            Data-driven advice to improve your conversations and get
+            more responses across any messaging app.
           </p>
         </div>
 

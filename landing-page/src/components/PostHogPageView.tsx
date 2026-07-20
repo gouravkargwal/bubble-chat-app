@@ -17,6 +17,9 @@ export function PostHogPageView() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    // Skip pageview tracking on admin pages — PostHog is not initialized there
+    if (pathname?.startsWith("/admin")) return;
+
     if (pathname) {
       const url = searchParams?.toString()
         ? `${pathname}?${searchParams.toString()}`

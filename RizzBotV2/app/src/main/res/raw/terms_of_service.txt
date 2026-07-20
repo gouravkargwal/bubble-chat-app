@@ -8,13 +8,13 @@ IMPORTANT: This is in-app legal text for your product. Replace or review with qu
 By downloading, installing, or using Cookd (“App”, “we”, “us”), you agree to these Terms. If you do not agree, do not use the App.
 
 2. THE SERVICE
-Cookd provides AI-assisted features for dating-app conversations and related tools (for example, suggested replies and profile help). Output is generated automatically and may be inaccurate, inappropriate, or unsuitable for your situation. You are solely responsible for what you send to others.
+Cookd provides AI-assisted features for messaging conversations and related tools (for example, suggested replies and profile help). Output is generated automatically and may be inaccurate, inappropriate, or unsuitable for your situation. You are solely responsible for what you send to others.
 
 3. ELIGIBILITY & ACCOUNTS
 You must be old enough to use the App under the laws where you live. You may need an account (for example, sign-in with Google). Keep your credentials secure and notify us if you suspect unauthorized access.
 
 4. ACCEPTABLE USE
-You agree not to: (a) break the law or third-party terms (including dating platforms); (b) harass, harm, or deceive others; (c) attempt to reverse engineer or overload the service; (d) scrape or misuse our APIs; (e) upload illegal content or content you do not have rights to use.
+You agree not to: (a) break the law or third-party terms (including messaging platforms); (b) harass, harm, or deceive others; (c) attempt to reverse engineer or overload the service; (d) scrape or misuse our APIs; (e) upload illegal content or content you do not have rights to use.
 
 5. SUBSCRIPTIONS & PAYMENTS
 Paid plans, if offered, are processed by app stores or our payment partners. Fees, renewal, and cancellation follow the store’s rules and any in-app disclosures. Taxes may apply.

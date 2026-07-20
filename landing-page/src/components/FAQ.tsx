@@ -16,8 +16,8 @@ const FAQS = [
     a: "Absolutely. Your conversations are encrypted in transit and at rest. We never store your screenshots longer than needed to generate a response, and we never share your chat data with anyone. You can delete your data anytime from settings.",
   },
   {
-    q: "Which dating apps does Cookd support?",
-    a: "Cookd works with any chat-based app — Hinge, Bumble, Tinder, Instagram DM, WhatsApp, Telegram, you name it. If you can screenshot it, Cookd can analyze it.",
+    q: "Which messaging apps does Cookd support?",
+    a: "Cookd works with any chat-based app — Instagram DM, WhatsApp, Telegram, and many others. If you can screenshot it, Cookd can analyze it.",
   },
   {
     q: "Is there a free plan?",
@@ -25,7 +25,7 @@ const FAQS = [
   },
   {
     q: "How accurate is the AI?",
-    a: "Our AI has been trained on thousands of successful dating conversations. It picks up on subtle cues like tone, engagement level, and personality signals that most people miss. Users report a 2-3x improvement in reply rates.",
+    a: "Our AI picks up on subtle cues like tone, engagement level, and personality signals that most people miss. Users report a 2-3x improvement in reply rates.",
   },
   {
     q: "Can I cancel my subscription anytime?",

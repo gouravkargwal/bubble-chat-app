@@ -10,7 +10,7 @@ Usage:
     setup_otel_logging(
         endpoint="http://openobserver:5001/api/default/v1/logs",
         auth_header="Bearer your-api-key",
-        service_name="rizzbot-api",
+        service_name="cookd-api",
     )
 """
 
@@ -59,7 +59,7 @@ def setup_otel_logging(
     *,
     endpoint: str = "",
     auth_header: str = "",
-    service_name: str = "rizzbot-api",
+    service_name: str = "cookd-api",
     console_export: bool = False,
 ) -> Optional[LoggingHandler]:
     """Configure OpenTelemetry log export to OpenObserver.

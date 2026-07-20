@@ -305,7 +305,7 @@ fun SettingsScreen(
                     SettingsRow(icon = Icons.Default.Share, label = "Share Cookd", onClick = {
                         val refCode = state.referral?.referralCode
                         val refSuffix = if (!refCode.isNullOrEmpty()) "&ref=$refCode" else ""
-                        val shareText = "Check out Cookd — AI replies for dating apps! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile$refSuffix"
+                        val shareText = "Check out Cookd — AI conversation assistant! 🚀\n\nhttps://play.google.com/store/apps/details?id=com.cookd.mobile$refSuffix"
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, shareText)

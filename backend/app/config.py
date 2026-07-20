@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     # OpenObserver (unified observability: logs, metrics, traces)
     openobserver_endpoint: str = "http://localhost:5001"
     openobserver_api_key: str = ""
-    openobserver_service_name: str = "rizzbot-api"
+    openobserver_service_name: str = "cookd-api"
     zo_org: str = "default"
     otlp_enabled: bool = True
     otlp_sample_rate: float = 0.1  # 10% sampling to control cost at scale

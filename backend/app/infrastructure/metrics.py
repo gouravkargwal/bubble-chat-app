@@ -426,7 +426,7 @@ def setup_otel_metrics(
     *,
     endpoint: str = "",
     auth_header: str = "",
-    service_name: str = "rizzbot-api",
+    service_name: str = "cookd-api",
 ) -> None:
     """Configure OTLP metric export to OpenObserver.
 

@@ -11,7 +11,7 @@ internal object PaywallTierMarketing {
             "crush" -> "Upgrade to Match"
             "match" -> "Manage your plan"
             "rizz" -> "Manage your plan"
-            else -> "Upgrade your wingman"
+            else -> "Upgrade your plan"
         }
 
     /** Is the given app tier an LTD (Lifetime Deal) purchase? */

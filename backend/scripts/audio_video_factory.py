@@ -5,6 +5,7 @@ import os
 import subprocess
 import httpx
 from sqlalchemy import text
+from app.api.v1.video_anonymize import anonymize_name
 from app.config import settings
 from app.infrastructure.database.engine import get_db
 
@@ -117,7 +118,7 @@ async def main():
     # 💥 THE PAYLOAD
     # ---------------------------------------------------------
     video_payload = {
-        "personName": person_name,
+        "personName": anonymize_name(person_name),
         "messages": parsed_messages,
         "winningLine": winning_line,
         "strategyLabel": strategy_label.upper(),

@@ -240,9 +240,8 @@ export default function AdminVideoPipeline() {
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cookd-${candidate.personName
-        .toLowerCase()
-        .replace(/\s+/g, "-")}.mp4`;
+      const nameForDownload = candidate.personName.toLowerCase().replace(/\s+/g, "-");
+      a.download = `cookd-${nameForDownload}.mp4`;
       a.click();
       URL.revokeObjectURL(url);
 
@@ -279,9 +278,8 @@ export default function AdminVideoPipeline() {
 
         const a = document.createElement("a");
         a.href = url;
-        a.download = `cookd-${candidate.personName
-          .toLowerCase()
-          .replace(/\s+/g, "-")}.mp4`;
+      const nameForDownload = candidate.personName.toLowerCase().replace(/\s+/g, "-");
+      a.download = `cookd-${nameForDownload}.mp4`;
         a.click();
         URL.revokeObjectURL(url);
 

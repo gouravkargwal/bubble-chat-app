@@ -37,15 +37,15 @@ export const metadata: Metadata = {
     },
   },
   keywords: [
-    "AI dating coach",
-    "dating app replies",
-    "Hinge reply generator",
-    "Bumble chat assistant",
-    "Tinder opener",
-    "AI wingman",
-    "dating profile help",
-    "better dating responses",
-    "free AI dating coach",
+    "AI conversation assistant",
+    "chat reply generator",
+    "smart replies",
+    "messaging assistant",
+    "AI chat helper",
+    "WhatsApp reply assistant",
+    "text reply suggestions",
+    "better responses",
+    "free AI assistant",
     "Cookd",
   ],
   authors: [{ name: siteName }],
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
         url: `${APP_URLS.website}/logo.svg`,
         width: 512,
         height: 512,
-        alt: `${SITE.name} — AI Dating Coach App Preview — Get Better Replies on Hinge, Bumble & Tinder`,
+        alt: `${SITE.name} — AI Conversation Assistant — Craft Better Replies on Any Chat App`,
       },
     ],
   },
@@ -125,7 +125,7 @@ export default function RootLayout({
             crossOrigin="anonymous"
           />
 
-          {/* JSON-LD: WebApplication (AI Dating Coach) */}
+          {/* JSON-LD: WebApplication (AI Conversation Assistant) */}
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{
@@ -195,10 +195,10 @@ export default function RootLayout({
                   },
                   {
                     "@type": "Question",
-                    name: "Which dating apps does Cookd support?",
+                    name: "Which messaging apps does Cookd support?",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "Cookd works with any chat-based app — Hinge, Bumble, Tinder, Instagram DM, WhatsApp, Telegram, you name it. If you can screenshot it, Cookd can analyze it.",
+                        text: "Cookd works with any chat-based app — Instagram DM, WhatsApp, Telegram, and many others. If you can screenshot it, Cookd can analyze it.",
                     },
                   },
                   {
@@ -214,7 +214,7 @@ export default function RootLayout({
                     name: "How accurate is the AI?",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "Our AI has been trained on thousands of successful dating conversations. It picks up on subtle cues like tone, engagement level, and personality signals that most people miss. Users report a 2-3x improvement in reply rates.",
+                      text: "Our AI picks up on subtle cues like tone, engagement level, and personality signals that most people miss. Users report a 2-3x improvement in reply rates across messaging apps.",
                     },
                   },
                   {

@@ -320,8 +320,8 @@ private fun HeroCard(
                     )
                     Spacer(modifier = Modifier.height(NothingDimens.textGap))
                     Text(
-                        if (isEnabled) "Open a dating app and tap the bubble."
-                        else "Turn on to get AI replies in your dating apps.",
+                        if (isEnabled) "Open a messaging app and tap the bubble."
+                        else "Turn on to get AI replies in your messaging apps.",
                         color = NothingTextSecondary,
                         style = MaterialTheme.typography.labelMedium,
                     )
@@ -469,7 +469,7 @@ private fun PhotoAuditCard(
                 )
                 Spacer(modifier = Modifier.height(NothingDimens.textGap))
                 Text(
-                    text = "Score your dating photos",
+                    text = "Score your profile photos",
                     color = NothingTextSecondary,
                     style = MaterialTheme.typography.labelSmall,
                 )
@@ -629,7 +629,7 @@ private fun OverlayPermissionDialog(
                 Spacer(modifier = Modifier.height(NothingDimens.elementGap))
 
                 Text(
-                    text = "Cookd needs overlay permission to float a bubble over your dating apps.",
+                    text = "Cookd needs overlay permission to float a bubble over your messaging apps.",
                     color = NothingTextSecondary,
                     style = MaterialTheme.typography.bodySmall,
                 )

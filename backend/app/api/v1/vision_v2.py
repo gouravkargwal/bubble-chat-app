@@ -663,7 +663,7 @@ async def _run_generate_v2(
         raise HTTPException(
             status_code=400,
             detail=final_state.get(
-                "bouncer_reason", "Image is not a valid chat or dating app screenshot."
+                "bouncer_reason", "Image is not a valid chat screenshot."
             ),
         )
 

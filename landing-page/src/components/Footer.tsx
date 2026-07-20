@@ -14,6 +14,9 @@ const FOOTER_LINKS = {
     { label: "Blog", href: "/blog" },
     { label: "Contact", href: "/contact" },
   ],
+  Company: [
+    { label: "Careers", href: "/careers" },
+  ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms of Service", href: "/terms" },
@@ -44,7 +47,7 @@ export function Footer() {
               </span>
             </div>
             <p className="text-sm leading-relaxed text-nothing-text-secondary">
-              AI-powered dating coach that helps you craft winning messages.
+              AI-powered conversation assistant that helps you craft winning messages.
               Stop guessing. Start connecting.
             </p>
           </div>

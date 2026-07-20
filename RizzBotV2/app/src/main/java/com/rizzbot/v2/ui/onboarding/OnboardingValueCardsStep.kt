@@ -57,7 +57,7 @@ private val cards = listOf(
     ValueCard(
         icon = Icons.Filled.AutoAwesome,
         headline = "Your profile, perfected",
-        description = "Get an AI-powered audit of your dating profile. See what works, what doesn\u2019t, and exactly how to improve your matches.",
+        description = "Get an AI-powered audit of your profile. See what works, what doesn\u2019t, and exactly how to improve your matches.",
     ),
     ValueCard(
         icon = Icons.Filled.Bolt,

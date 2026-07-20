@@ -1,6 +1,6 @@
 # Cookd Landing Page — cookdai.site
 
-Marketing landing page for Cookd AI Dating Coach. Built with Next.js 16 (App Router), Tailwind CSS 4, Framer Motion, and PostHog analytics.
+Marketing landing page for Cookd AI Conversation Assistant. Built with Next.js 16 (App Router), Tailwind CSS 4, Framer Motion, and PostHog analytics.
 
 ## Stack
 

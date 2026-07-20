@@ -12,8 +12,12 @@ import { readFileSync, existsSync } from "fs";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://api:8000";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
+const RENDER_OUTPUT_DIR = process.env.RENDER_OUTPUT_DIR || "/rendered-videos";
 
 // ── In-process job store ────────────────────────────────────────────────
+// ponytail: in-memory Map — jobs are lost on server restart or scale-out.
+// If this becomes a problem, swap for SQLite (better-sqlite3) or Redis
+// with a TTL of ~1 hour.
 
 interface PendingJob {
   id: string;
@@ -81,8 +85,10 @@ async function runRender(
     );
 
     const compositionDir = path.join(process.cwd(), "src/app/admin/remotion");
+    // personName is already anonymized by the backend before being sent here
+    const anonName = personName;
     const inputProps = {
-      personName,
+      personName: anonName,
       messages: messages || [],
       winningLine,
       strategyLabel: strategyLabel || "COOKD_AI",
@@ -108,10 +114,10 @@ async function runRender(
       ? calcProfileCardDuration(winningLine.length)
       : calcDuration(msgCount, winningLine.length);
 
-    const permanentDir = "/rendered-videos";
+    const permanentDir = RENDER_OUTPUT_DIR;
     await fs.mkdir(permanentDir, { recursive: true });
     const timestamp = Date.now();
-    const safeName = personName.toLowerCase().replace(/\s+/g, "-");
+    const safeName = anonName.toLowerCase().replace(/\s+/g, "-");
     const outputPath = path.join(permanentDir, `${timestamp}-${safeName}.mp4`);
     job.outputPath = outputPath;
 
@@ -138,7 +144,7 @@ async function runRender(
             "X-Admin-Key": ADMIN_API_KEY || "",
           },
           body: JSON.stringify({
-            personName,
+            personName: anonName,
             winningLine,
             strategyLabel: strategyLabel || "COOKD_AI",
             hookStyle: hookStyle || "strategy",
@@ -192,6 +198,15 @@ export async function POST(request: NextRequest) {
     if (!winningLine || !personName) {
       return NextResponse.json(
         { error: "Missing required fields: personName, winningLine" },
+        { status: 400 }
+      );
+    }
+
+    // Defense-in-depth: reject if personName isn't already anonymized
+    // (single uppercase letter, per backend's anonymize_name).
+    if (!/^[A-Z]$/.test(personName)) {
+      return NextResponse.json(
+        { error: "Invalid personName — must be a single anonymized letter" },
         { status: 400 }
       );
     }

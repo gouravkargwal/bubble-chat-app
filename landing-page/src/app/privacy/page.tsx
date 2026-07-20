@@ -14,7 +14,7 @@ const sections = [
   {
     title: "1. Who We Are & Data Controller",
     content:
-      "Cookd (\u201Cwe\u201D, \u201Cus\u201D, or \u201Cour\u201D) provides a mobile application and related services for AI-assisted dating conversation support. We are the data controller for personal information collected through the Service. For any privacy-related inquiries, you can reach us at the contact details in Section 15.",
+      "Cookd (\u201Cwe\u201D, \u201Cus\u201D, or \u201Cour\u201D) provides a mobile application and related services for AI-assisted conversation support. We are the data controller for personal information collected through the Service. For any privacy-related inquiries, you can reach us at the contact details in Section 15.",
   },
   {
     title: "2. Information We Collect",
@@ -158,7 +158,7 @@ export default function PrivacyPage() {
         <title>Privacy Policy | Cookd</title>
         <meta
           name="description"
-          content="Cookd privacy policy — how we collect, use, and protect your data when you use our AI dating coach app."
+          content="Cookd privacy policy — how we collect, use, and protect your data when you use our AI conversation assistant app."
         />
       </head>
       <Header />

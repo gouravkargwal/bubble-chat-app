@@ -129,6 +129,7 @@ async def download_video(
     if not video.file_path or not os.path.isfile(video.file_path):
         raise HTTPException(status_code=404, detail="Video file not found on disk.")
 
+    # person_name is already anonymized at write time (route.ts anonymizes before POSTing)
     filename = f"cookd-{video.person_name.lower().replace(' ', '-')}.mp4"
 
     return FileResponse(

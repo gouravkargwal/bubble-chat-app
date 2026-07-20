@@ -316,7 +316,7 @@ def create_app() -> FastAPI:
     max_payload_bytes = settings.lead_magnet_max_payload_mb * 1024 * 1024
 
     app = FastAPI(
-        title="RizzBot API",
+        title="Cookd API",
         version="2.0.0",
         lifespan=lifespan,
         docs_url=None if settings.environment != "development" else "/docs",

@@ -337,7 +337,7 @@ class BubbleManager @Inject constructor(
             else
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE,
-            // Always use FLAG_NOT_FOCUSABLE to prevent stealing keyboard focus from dating apps
+            // Always use FLAG_NOT_FOCUSABLE to prevent stealing keyboard focus from messaging apps
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
