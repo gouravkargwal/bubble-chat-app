@@ -247,7 +247,7 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
       {/* === Content === */}
       <div className="relative z-10 flex w-full max-w-3xl flex-col items-center">
         {/* Animated area */}
-        <div className="w-full h-[650px] flex items-start justify-center overflow-y-auto">
+        <div className="w-full flex items-start justify-center">
           <AnimatePresence mode="wait">
             {state === "idle" && (
               <Dropzone key="idle" onImageSelected={onImageSelected} />
