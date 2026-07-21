@@ -8,7 +8,6 @@ import { Footer } from "@/components/Footer";
 import { StatusDot } from "@/components/Logo";
 import { AnimatedSection } from "@/components/Animations";
 import { JOBS, SITE } from "@/app/constants";
-import posthog from "posthog-js";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -97,13 +96,6 @@ export default function CareersPage() {
                 <AnimatedSection key={job.slug} direction="up" delay={0.1 * i}>
                   <Link
                     href={`/careers/${job.slug}`}
-                    onClick={() =>
-                      posthog.capture("careers_card_clicked", {
-                        slug: job.slug,
-                        title: job.title,
-                        status: "open",
-                      })
-                    }
                     className="group block rounded-xl border border-nothing-border bg-nothing-black/30 p-6 transition-all duration-200 hover:border-neon-red/40 hover:bg-nothing-black/50"
                   >
                     {/* Card top: dot + type */}

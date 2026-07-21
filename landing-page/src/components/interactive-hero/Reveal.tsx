@@ -21,34 +21,6 @@ interface RevealProps {
   onReset?: () => void;
 }
 
-function DownloadAppCTA() {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
-      className="w-full max-w-lg text-center"
-    >
-      <p className="text-xs text-nothing-text-secondary mb-4 max-w-sm mx-auto leading-relaxed">
-        Get unlimited conversations, all conversation directions, custom hints,
-        and coach reasoning in the app.
-      </p>
-
-      <motion.a
-        href={APP_URLS.googlePlay}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 rounded-full bg-neon-red px-8 py-3 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-red-600"
-        whileHover={{ scale: 1.04 }}
-        whileTap={{ scale: 0.97 }}
-      >
-        <MobileIcon className="h-3.5 w-3.5" />
-        Get the App
-      </motion.a>
-    </motion.div>
-  );
-}
-
 function CopyButton({ text, onCopy }: { text: string; onCopy?: () => void }) {
   const [copied, setCopied] = React.useState(false);
 
@@ -198,9 +170,6 @@ export function Reveal({
           </motion.div>
         ))}
       </div>
-
-      {/* Download CTA */}
-      <DownloadAppCTA />
     </motion.div>
   );
 }

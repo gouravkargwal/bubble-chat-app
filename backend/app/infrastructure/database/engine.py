@@ -36,6 +36,17 @@ async def init_db() -> None:
         # pg_trgm trigram similarity for fuzzy graph-entity matching.
         # See docker/migrations/007_pg_trgm.sql (applied idempotently here at startup).
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        # Apply idempotent SQL migrations on every startup.
+        # Each uses IF [NOT] EXISTS / ADD COLUMN IF NOT EXISTS so it's safe to re-run.
+        await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archetype_counts TEXT NOT NULL DEFAULT '{}'"))  # 002
+        await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS dimension_counts TEXT NOT NULL DEFAULT '{}'"))  # 003
+        await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS photo_persona VARCHAR(64) NOT NULL DEFAULT ''"))  # 004
+        await conn.execute(text("ALTER TABLE conversation_memories ADD COLUMN IF NOT EXISTS lexical_expansion TEXT DEFAULT ''"))  # 006
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN NOT NULL DEFAULT TRUE"))  # 009
+        # ── 010_remove_ltd.sql: drop unused LTD columns (idempotent) ──────────
+        await conn.execute(text("ALTER TABLE user_quotas DROP COLUMN IF EXISTS is_ltd"))
+        await conn.execute(text("ALTER TABLE user_quotas DROP COLUMN IF EXISTS ltd_refill_credits"))
+        await conn.execute(text("ALTER TABLE user_quotas DROP COLUMN IF EXISTS ltd_refill_days"))
         await conn.run_sync(Base.metadata.create_all)
 
 

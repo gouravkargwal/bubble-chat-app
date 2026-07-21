@@ -179,10 +179,7 @@ export function Pricing() {
       <StaggerContainer className="mx-auto max-w-4xl" staggerDelay={0.1}>
         <div className="grid gap-6 lg:gap-8 sm:grid-cols-1 lg:grid-cols-2 items-start">
           {PLANS.map((plan) => (
-            <StaggerItem
-              key={plan.id}
-              distance={60}
-            >
+            <StaggerItem key={plan.id} distance={60}>
               <ScaleHover scale={1.01}>
                 <div
                   className={`relative flex flex-col p-6 sm:p-8 transition-all duration-300 rounded-xl ${

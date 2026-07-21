@@ -119,7 +119,7 @@ export const JOBS: Job[] = [
     ],
     formUrl: CAREERS.mediaManagerForm,
     taskInstructions:
-      "Download Cookd from Google Play, use it to generate a \"rizz\" response for a conversation, and create a 15-second TikTok or Instagram Reel hook featuring the result. Then tell us exactly how you would get our first 50 users this weekend with a $0 budget.",
+      'Download Cookd from Google Play, use it to generate a "rizz" response for a conversation, and create a 15-second TikTok or Instagram Reel hook featuring the result. Then tell us exactly how you would get our first 50 users this weekend with a $0 budget.',
   },
   {
     slug: "software-engineering-intern",
@@ -205,7 +205,7 @@ export const JOBS: Job[] = [
 export const PRICING = {
   plans: {
     crush: { price: 99, currency: "₹", period: "/week", credits: 50 },
-    match: { price: 249, currency: "₹", period: "/month", credits: 150 },
+    match: { price: 179, currency: "₹", period: "/month", credits: 150 },
   },
 } as const;
 

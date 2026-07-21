@@ -9,7 +9,6 @@ import { Footer } from "@/components/Footer";
 import { StatusDot } from "@/components/Logo";
 import { AnimatedSection } from "@/components/Animations";
 import { JOBS, SITE } from "@/app/constants";
-import posthog from "posthog-js";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -214,12 +213,6 @@ export default function JobDetailPage({
                     href={job.formUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() =>
-                      posthog.capture("careers_apply_clicked", {
-                        slug: job.slug,
-                        title: job.title,
-                      })
-                    }
                     className="inline-flex items-center gap-2 rounded-full bg-neon-red px-8 py-4 text-sm font-bold text-nothing-white transition-all duration-200 hover:bg-neon-red/90 hover:scale-[1.02] animate-neon-pulse"
                   >
                     <svg
