@@ -294,6 +294,7 @@ async def process_audit_job(
                     error="AI analysis failed. Please retry.",
                 )
                 await _cleanup_temp_images(image_keys)
+                await _refund_audit_credits(google_provider_id, tier)
                 return
 
             # Parse response
@@ -308,6 +309,7 @@ async def process_audit_job(
                     db, job_id, status="failed", error="Failed to parse AI response."
                 )
                 await _cleanup_temp_images(image_keys)
+                await _refund_audit_credits(google_provider_id, tier)
                 return
 
             # Step 5: Merge results and persist

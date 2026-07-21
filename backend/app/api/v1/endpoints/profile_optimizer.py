@@ -84,6 +84,7 @@ async def optimize_profile(
             idempotency_key=x_idempotency_key,
         )
         # SUCCESS: commit blueprint + deduct credits.
+        # Use idempotency_key (if provided) to prevent double-charge on client retry.
         await db.commit()
         if current_user.google_provider_id:
             try:
@@ -92,6 +93,7 @@ async def optimize_profile(
                     action="profile_blueprint",
                     tier=effective_tier,
                     daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+                    idempotency_key=x_idempotency_key,
                 )
             except QuotaExceededException:
                 pass  # Already checked — edge case on concurrent requests.

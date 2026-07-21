@@ -203,6 +203,8 @@ async def profile_audit(
     await db.refresh(job)
 
     # Deduct credits now — job is guaranteed to run.
+    # idempotency_key prevents double-charge if client retries after a partial failure.
+    _spend_idempotency_key = job.idempotency_key or job.id
     if qm and user.google_provider_id:
         try:
             await qm.check_and_spend(
@@ -210,6 +212,7 @@ async def profile_audit(
                 action="profile_audit",
                 tier=effective_tier,
                 daily_free_limit=tier_config["limits"].get("daily_credits", 2),
+                idempotency_key=_spend_idempotency_key,
             )
         except QuotaExceededException:
             pass  # Already checked above — edge case on concurrent requests.
