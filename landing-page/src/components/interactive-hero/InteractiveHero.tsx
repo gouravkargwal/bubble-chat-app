@@ -14,7 +14,6 @@ import { VibeCheck } from "./VibeCheck";
 import { Gate } from "./Gate";
 import { ProcessingState } from "./ProcessingState";
 import { Reveal } from "./Reveal";
-import { LtdCheckoutModal } from "../LtdCheckoutModal";
 import { type ComponentState, type ReplyItem, EASE_OUT } from "./types";
 import { APP_URLS, API_URLS } from "@/app/constants";
 import posthog from "posthog-js";
@@ -52,9 +51,6 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiResponse, setApiResponse] = useState<ApiResponse | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  // LTD checkout modal
-  const [showLtdModal, setShowLtdModal] = useState(false);
 
   // ── Handlers ──
 
@@ -275,7 +271,6 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
                 isRateLimited={true}
                 appUrl={apiResponse?.app_url || APP_URLS.googlePlay}
                 onReset={onReset}
-                onBuyLifetime={() => setShowLtdModal(true)}
               />
             )}
 
@@ -285,7 +280,6 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
                 replies={apiResponse?.replies || []}
                 isCached={apiResponse?.cached || false}
                 onReset={onReset}
-                onBuyLifetime={() => setShowLtdModal(true)}
               />
             )}
           </AnimatePresence>
@@ -332,12 +326,6 @@ export function InteractiveHero({ onRepliesReady }: InteractiveHeroProps) {
 
       {/* Bottom gradient fade */}
       <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-32 bg-gradient-to-t from-nothing-black to-transparent" />
-
-      {/* LTD checkout modal */}
-      <LtdCheckoutModal
-        isOpen={showLtdModal}
-        onClose={() => setShowLtdModal(false)}
-      />
     </section>
   );
 }

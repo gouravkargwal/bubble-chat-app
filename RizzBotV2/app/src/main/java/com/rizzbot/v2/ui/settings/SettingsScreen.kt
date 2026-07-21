@@ -34,8 +34,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.rizzbot.v2.domain.model.TierQuota
 import com.rizzbot.v2.ui.components.PlanCardSkeleton
-import com.rizzbot.v2.ui.components.RedeemCodeCard
-import com.rizzbot.v2.ui.components.RedeemCodeSkeleton
+
 import com.rizzbot.v2.ui.theme.NothingBlack
 import com.rizzbot.v2.ui.theme.NothingBorder
 import com.rizzbot.v2.ui.theme.NothingDimens
@@ -164,24 +163,6 @@ fun SettingsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(NothingDimens.screenPadding)
                 ) {
-            // ── REDEEM CODE (simple input, no pricing/selling — Google Play safe) ──
-            if (!state.isLtd) {
-                Text("REDEEM CODE", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(NothingDimens.elementGap))
-                if (state.usageLoaded) {
-                    RedeemCodeCard(
-                        ltdCodeInput = state.ltdCodeInput,
-                        onLTDCodeChanged = { viewModel.onLTDCodeChanged(it) },
-                        onRedeemClick = { viewModel.redeemLTDCode() },
-                        isRedeemingLTD = state.isRedeemingLTD,
-                        ltdRedeemResult = state.ltdRedeemResult,
-                    )
-                } else {
-                    RedeemCodeSkeleton()
-                }
-                Spacer(Modifier.height(NothingDimens.sectionSpacing))
-            }
-
             // ── ACCOUNT + PLAN CARD ──
             Text("ACCOUNT", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(NothingDimens.elementGap))
@@ -215,7 +196,6 @@ fun SettingsScreen(
                             creditsPeriodLimit = state.creditsPeriodLimit,
                             billingPeriod = state.billingPeriod,
                             onUpgradeClick = onPremium,
-                            isLtd = state.isLtd,
                         )
                     }
                 }
@@ -370,7 +350,6 @@ private fun CompactPlanCard(
     creditsPeriodLimit: Int,
     billingPeriod: String,
     onUpgradeClick: () -> Unit,
-    isLtd: Boolean = false,
 ) {
     val isPaidPlan = tier in listOf(TierQuota.PLAN_CRUSH, TierQuota.PLAN_MATCH)
 
@@ -387,7 +366,6 @@ private fun CompactPlanCard(
                 Spacer(modifier = Modifier.width(NothingDimens.elementGap))
                 Column(modifier = Modifier.weight(1f)) {
                     val planName = when {
-                        isLtd -> "Match Plan \u221E (Lifetime)"
                         isOnTrial -> "Free Trial Active"
                         tier == TierQuota.PLAN_CRUSH -> "Crush Plan Active"
                         tier == TierQuota.PLAN_MATCH -> "Match Plan Active"
@@ -395,76 +373,44 @@ private fun CompactPlanCard(
                         else -> "Basic (Free)"
                     }
                     Text(planName, color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                    if (isLtd) {
-                        Text("Pay once, own forever \u2728", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
-                    } else if (isOnTrial) {
+                    if (isOnTrial) {
                         Text("$trialDaysRemaining days left", color = NothingTextSecondary, style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                if (isLtd) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("∞", color = NothingSuccess, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text("unlimited", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
-                    }
-                } else {
-                    Text("$creditsRemaining", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                }
+                Text("$creditsRemaining", color = NothingWhite, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             }
 
-            if (isLtd) {
-                // LTD: clean unlimited summary — no numbers, no progress bar
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(NothingBorder.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("∞", color = NothingSuccess, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                            Text("conversations", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("9", color = NothingWhite, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                            Text("directions", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("∞", color = NothingSuccess, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                            Text("no expiry", color = NothingTextTertiary, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            } else {
-                // Credit description
+            // Credit description
+            Text(
+                when {
+                    isPaidPlan -> "per ${TierQuota.billingPeriodNoun(billingPeriod)}"
+                    else -> "Signup bonus + ${TierQuota.FREE_DAILY_CREDITS}/day free"
+                },
+                color = NothingTextTertiary,
+                style = MaterialTheme.typography.labelSmall,
+            )
+
+            // Progress bar for paid plans
+            if (isPaidPlan && creditsPeriodLimit > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val creditsUsed = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
+                val progress = (creditsUsed.toFloat() / creditsPeriodLimit).coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                    color = if (progress >= 0.8f) NothingError else NothingWhite,
+                    trackColor = NothingBorder,
+                )
+                val resetText = TierQuota.billingPeriodNoun(billingPeriod)
                 Text(
-                    when {
-                        isPaidPlan -> "per ${TierQuota.billingPeriodNoun(billingPeriod)}"
-                        else -> "Signup bonus + ${TierQuota.FREE_DAILY_CREDITS}/day free"
-                    },
+                    "${creditsUsed}/${creditsPeriodLimit} used • resets $resetText",
                     color = NothingTextTertiary,
                     style = MaterialTheme.typography.labelSmall,
                 )
-
-                // Progress bar for paid plans
-                if (isPaidPlan && creditsPeriodLimit > 0) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    val creditsUsed = (creditsPeriodLimit - creditsRemaining).coerceAtLeast(0)
-                    val progress = (creditsUsed.toFloat() / creditsPeriodLimit).coerceIn(0f, 1f)
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                        color = if (progress >= 0.8f) NothingError else NothingWhite,
-                        trackColor = NothingBorder,
-                    )
-                    val resetText = TierQuota.billingPeriodNoun(billingPeriod)
-                    Text(
-                        "${creditsUsed}/${creditsPeriodLimit} used • resets $resetText",
-                        color = NothingTextTertiary,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
             }
 
-            // Upgrade CTA — hidden for LTD users who already have the top tier
-            if (!isLtd && (!isPaidPlan || isOnTrial)) {
+            // Upgrade CTA
+            if (!isPaidPlan || isOnTrial) {
                 Spacer(modifier = Modifier.height(NothingDimens.elementGap))
                 Button(
                     onClick = onUpgradeClick,

@@ -10,7 +10,6 @@ data class UsageState(
     val customHintsEnabled: Boolean = false,
     val maxScreenshots: Int = 2,
     val maxPhotosPerAudit: Int = 3,
-    val isLtd: Boolean = false,
 ) {
     val isPaidPlan: Boolean
         get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH

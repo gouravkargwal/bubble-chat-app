@@ -29,7 +29,7 @@ class _QuietAccessLogFilter(logging.Filter):
         "GET /api/v1/preferences ",
         "GET /api/v1/referral/me ",
         "GET /api/v1/profile-audit/blueprints",
-        "GET /api/v1/billing/ltd/banner-config",
+        # (removed: GET /api/v1/billing/ltd/banner-config was part of LTD/Payu)
         # Bot/crawler noise: 404s for common scanner paths
         "GET /robots.txt ",
         "GET /favicon.ico ",

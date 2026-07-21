@@ -18,19 +18,14 @@ import javax.inject.Singleton
  * Mapping from RevenueCat entitlement IDs → backend tier strings.
  * This is the single source of truth for the entitlement→tier relationship.
  * Add new entitlements here as they are created in the RevenueCat dashboard.
- *
- * LTD entitlements (ltd, lifetime, match_ltd) map to "match" tier.
  */
 private val ENTITLEMENT_TIER_MAP: Map<String, String> = mapOf(
     "rizz" to "rizz",
     "match" to "match",
     "crush" to "crush",
-    "ltd" to "match",
-    "lifetime" to "match",
-    "match_ltd" to "match",
 )
 
-private val TIER_PRIORITY: List<String> = listOf("rizz", "match", "match_ltd", "ltd", "lifetime", "crush")
+private val TIER_PRIORITY: List<String> = listOf("rizz", "match", "crush")
 
 @Singleton
 class SubscriptionManager @Inject constructor() {

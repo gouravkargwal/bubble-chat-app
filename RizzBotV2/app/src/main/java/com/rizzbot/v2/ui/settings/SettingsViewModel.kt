@@ -34,12 +34,6 @@ data class SettingsState(
     val referralApplyResult: String? = null,
     val isApplyingReferral: Boolean = false,
     val roastLanguage: String = "English",
-    // LTD redeem
-    val ltdCodeInput: String = "",
-    val ltdRedeemResult: String? = null,
-    val isRedeemingLTD: Boolean = false,
-    // LTD status (isLtd comes from usage — no separate /ltd/status call)
-    val isLtd: Boolean = false,
     val usageLoaded: Boolean = false,
 ) {
     val isPaidPlan: Boolean get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH
@@ -82,7 +76,6 @@ class SettingsViewModel @Inject constructor(
                 creditsPeriodLimit = usage.creditsPeriodLimit,
                 billingPeriod = usage.billingPeriod,
                 tierExpiresAt = usage.tierExpiresAt,
-                isLtd = usage.isLtd,
             )
         }
     }
@@ -101,7 +94,7 @@ class SettingsViewModel @Inject constructor(
             hostedRepository.refreshUsage(force = true)
             hostedRepository.usageState.collect { usage ->
                 applyUsageSnapshot(usage)
-                _state.update { it.copy(isLtd = usage.isLtd, usageLoaded = true) }
+                _state.update { it.copy(usageLoaded = true) }
             }
         }
 
@@ -175,41 +168,6 @@ class SettingsViewModel @Inject constructor(
                         it.copy(
                             isApplyingReferral = false,
                             referralApplyResult = e.message
-                        )
-                    }
-                }
-            )
-        }
-    }
-
-    fun onLTDCodeChanged(code: String) {
-        _state.update { it.copy(ltdCodeInput = code, ltdRedeemResult = null) }
-    }
-
-    fun redeemLTDCode() {
-        val code = _state.value.ltdCodeInput.trim()
-        if (code.isEmpty()) return
-
-        viewModelScope.launch {
-            _state.update { it.copy(isRedeemingLTD = true, ltdRedeemResult = null) }
-            val result = hostedRepository.redeemLTDCode(code)
-            result.fold(
-                onSuccess = { message ->
-                    analyticsHelper.settingsLtdRedeemed()
-                    refreshComplete()
-                    _state.update {
-                        it.copy(
-                            isRedeemingLTD = false,
-                            ltdRedeemResult = message,
-                            ltdCodeInput = "",
-                        )
-                    }
-                },
-                onFailure = { e ->
-                    _state.update {
-                        it.copy(
-                            isRedeemingLTD = false,
-                            ltdRedeemResult = e.message,
                         )
                     }
                 }

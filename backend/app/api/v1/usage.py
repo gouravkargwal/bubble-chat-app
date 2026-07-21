@@ -37,33 +37,28 @@ async def get_usage(
             user.google_provider_id, effective_tier
         )
 
-    # Billing period: use purchase product_id for subs, or 'monthly' for LTD.
+    # Billing period: infer from purchase product_id.
     billing_period = "daily"
     if effective_tier != "free":
-        # LTD users have no Purchase row — they bought via PayU.
-        if user.tier_source == "ltd":
-            billing_period = "monthly"
-        else:
-            purchase_result = await db.execute(
-                select(Purchase)
-                .where(Purchase.user_id == user.id, Purchase.status == "active")
-                .order_by(Purchase.created_at.desc())
-                .limit(1)
-            )
-            purchase = purchase_result.scalar_one_or_none()
-            if purchase and purchase.product_id:
-                pid = purchase.product_id.lower()
-                if "crush" in pid or "weekly" in pid:
-                    billing_period = "weekly"
-                elif "match" in pid or "monthly" in pid:
-                    billing_period = "monthly"
+        purchase_result = await db.execute(
+            select(Purchase)
+            .where(Purchase.user_id == user.id, Purchase.status == "active")
+            .order_by(Purchase.created_at.desc())
+            .limit(1)
+        )
+        purchase = purchase_result.scalar_one_or_none()
+        if purchase and purchase.product_id:
+            pid = purchase.product_id.lower()
+            if "crush" in pid or "weekly" in pid:
+                billing_period = "weekly"
+            elif "match" in pid or "monthly" in pid:
+                billing_period = "monthly"
 
     return UsageResponse(
         credits_remaining=credits_remaining,
         credits_period_limit=credits_period_limit,
         billing_period=billing_period,
         tier=effective_tier,
-        is_ltd=user.tier_source == "ltd",
         is_premium=effective_tier != "free",
         tier_expires_at=(
             int(user.tier_expires_at.timestamp()) if user.tier_expires_at else None

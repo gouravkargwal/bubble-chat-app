@@ -1,8 +1,7 @@
 """Webhook endpoints for external services — RevenueCat (subscriptions only).
 
 RevenueCat handles Crush (₹99/week) and Match (₹249/month) subscriptions
-sold through Google Play Billing. LTD is NOT handled here — it goes through
-the PayU web checkout + auto-redeem flow in billing.py.
+sold through Google Play Billing.
 """
 
 import structlog
@@ -65,7 +64,6 @@ async def revenuecat_webhook(
       - EXPIRATION: downgrade user to free.
       - Others (RESTORE, UNCANCELLATION, CANCELLATION): ignored.
 
-    LTD purchases are NOT handled here — use the PayU flow in billing.py.
     """
     webhook_secret = settings.revenuecat_webhook_secret
     if not webhook_secret and settings.environment != "development":
@@ -137,7 +135,6 @@ async def revenuecat_webhook(
             new_tier=new_tier,
             billing_period=billing_period,
             webhook_event_type=event_type,
-            is_ltd=False,
         )
 
         return {
@@ -180,10 +177,6 @@ async def revenuecat_webhook(
                 quota.credits_reset_at = None
                 quota.daily_free_credits_used = 0
                 quota.daily_free_reset_at = now + timedelta(days=1)
-                # Clear LTD flags (defensive — subscriptions shouldn't have these)
-                quota.is_ltd = False
-                quota.ltd_refill_credits = 0
-                quota.ltd_refill_days = 0
 
         await db.commit()
 

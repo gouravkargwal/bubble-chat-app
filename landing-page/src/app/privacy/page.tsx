@@ -25,7 +25,7 @@ const sections = [
       "Usage Data: Settings, feature usage, in-app analytics events, page views, and interaction data collected via PostHog (a third-party analytics platform).",
       "Content You Submit: Text, images, and screenshots you upload for AI processing. These are processed in real-time and not stored permanently.",
       "Device & Technical Data: Device type, operating system version, app version, crash diagnostics, and IP address.",
-      "Purchase Data: Subscription status, Lifetime Deal records, and store transaction identifiers (processed via Google Play and PayU).",
+      "Purchase Data: Subscription status and store transaction identifiers (processed via Google Play).",
       "Communication Data: If you contact us via email or the contact form, we retain the content of your message and your email address to respond.",
     ],
   },
@@ -46,7 +46,7 @@ const sections = [
     bullets: [
       "To operate, maintain, and improve the Service and its features.",
       "To process AI-generated replies based on content you submit.",
-      "To manage your account, process subscriptions and Lifetime Deal purchases, and send transactional communications (e.g., payment confirmations, LTD code delivery).",
+      "To manage your account, process subscriptions, and send transactional communications (e.g., payment confirmations).",
       "To monitor and analyze usage trends via PostHog for product improvement and crash detection.",
       "To enforce our Terms of Service, prevent fraud and abuse, and protect the rights and safety of our users and the public.",
       "To comply with legal obligations and respond to lawful requests from authorities.",
@@ -74,7 +74,7 @@ const sections = [
     content:
       "We do not sell your personal information. We may share your data with the following categories of third parties:",
     bullets: [
-      "Service Providers: Hosting infrastructure (cloud providers), analytics (PostHog), payment processing (Google Play, PayU), crash reporting, and email communications. These providers are contractually bound to process data only on our instructions and to implement appropriate security measures.",
+      "Service Providers: Hosting infrastructure (cloud providers), analytics (PostHog), payment processing (Google Play), crash reporting, and email communications. These providers are contractually bound to process data only on our instructions and to implement appropriate security measures.",
       "Legal Authorities: When required by applicable law, legal process, or governmental request, or to protect our rights, property, or safety, or that of our users or the public.",
       "Business Transfers: In connection with a merger, acquisition, or sale of all or substantially all of our assets, your information may be transferred as part of that transaction. We will notify you via email and a prominent notice on the Service of any change in ownership or uses of your personal information.",
     ],

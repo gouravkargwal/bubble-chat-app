@@ -53,7 +53,7 @@ def _security_headers(environment: str) -> dict[str, str]:
             "font-src 'self' data:; "
             "object-src 'none'; "
             "base-uri 'self'; "
-            "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in https://secure.payu.in https://api.payu.in https://apitest.payu.in"
+            "form-action 'self'"
         ),
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",

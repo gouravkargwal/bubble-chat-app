@@ -146,8 +146,7 @@ fun PaywallScreen(
                                 Column(modifier = Modifier.padding(NothingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     AnimatedContent(targetState = state.selectedTier, transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) }, label = "features") { tier ->
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            val isLtdForSelected = viewModel.usageState.value.isLtd && tier == PaywallTier.Match
-                                            PaywallTierMarketing.featureLines(tier, isLtd = isLtdForSelected).forEach { line ->
+                                            PaywallTierMarketing.featureLines(tier).forEach { line ->
                                                 Row(verticalAlignment = Alignment.Top) {
                                                     Icon(Icons.Default.Check, contentDescription = null, tint = NothingWhite, modifier = Modifier.size(18.dp))
                                                     Spacer(modifier = Modifier.width(NothingDimens.elementGap))

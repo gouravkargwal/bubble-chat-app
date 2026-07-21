@@ -14,10 +14,6 @@ internal object PaywallTierMarketing {
             else -> "Upgrade your plan"
         }
 
-    /** Is the given app tier an LTD (Lifetime Deal) purchase? */
-    fun isLtdTier(appTier: String): Boolean =
-        appTier == "match_ltd"
-
     fun sublineForAppTier(appTier: String): String =
         when (appTier) {
             "crush" -> "Crush unlocks 7 reply modes, custom hints, and photo audits. Match adds Ask Out + Get Number + blueprints."
@@ -26,10 +22,10 @@ internal object PaywallTierMarketing {
             else -> "Free gives you Openers, Quick Replies, Keep Playful, and Revive Chat. Upgrade for the full toolkit."
         }
 
-    fun featureLines(selected: PaywallTier, isLtd: Boolean = false): List<String> =
+    fun featureLines(selected: PaywallTier): List<String> =
         when (selected) {
             PaywallTier.Crush -> crushLines
-            PaywallTier.Match -> if (isLtd) matchLtdLines else matchLines
+            PaywallTier.Match -> matchLines
             PaywallTier.Rizz -> rizzLines
         }
 
@@ -45,15 +41,6 @@ internal object PaywallTierMarketing {
     /** 150 credits / 30 days — ₹249/month */
     private val matchLines = listOf(
         "150 credits every month",
-        "All 9 reply modes — including Get Number & Ask Out",
-        "Custom hints & chemistry tracking",
-        "Photo audit & profile blueprint",
-        "Up to 5 screenshots per reply",
-    )
-
-    /** Unlimited — Lifetime Deal variant */
-    private val matchLtdLines = listOf(
-        "Unlimited every month",
         "All 9 reply modes — including Get Number & Ask Out",
         "Custom hints & chemistry tracking",
         "Photo audit & profile blueprint",

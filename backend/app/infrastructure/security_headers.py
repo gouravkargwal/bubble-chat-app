@@ -30,8 +30,6 @@ async def add_security_headers(request: Request, call_next) -> Response:  # type
     # If neither is needed, tighten to:
     #   script-src 'self'; style-src 'self' 'unsafe-inline'
     #
-    # PayU domains are allowed in form-action so the hidden POST form
-    # on the LTD checkout page can submit to PayU.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
@@ -40,7 +38,7 @@ async def add_security_headers(request: Request, call_next) -> Response:  # type
         "font-src 'self' data:; "
         "object-src 'none'; "
         "base-uri 'self'; "
-        "form-action 'self' https://payu.in https://www.payu.in https://test.payu.in https://secure.payu.in https://api.payu.in https://apitest.payu.in"
+        "form-action 'self'"
     )
 
     # ── X-Content-Type-Options ───────────────────────────────────────────

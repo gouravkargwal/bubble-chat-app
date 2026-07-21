@@ -60,5 +60,6 @@ htmlcov/
 # Added by code-review-graph
 .code-review-graph/
 
-# ── Agent / Roo config ──
+# ── Agent / Roo / Kilo config ──
 .roo/
+.kilo/plans/

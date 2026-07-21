@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { motion } from "framer-motion";
 import { StatusDot } from "./Logo";
 import {
@@ -9,8 +9,7 @@ import {
   StaggerItem,
   ScaleHover,
 } from "./Animations";
-import { LtdCheckoutModal } from "./LtdCheckoutModal";
-import { APP_URLS, PRICING, API_URLS } from "@/app/constants";
+import { APP_URLS, PRICING } from "@/app/constants";
 import posthog from "posthog-js";
 
 const PLANS = [
@@ -42,7 +41,7 @@ const PLANS = [
     description: "The standard blueprint for conversation control.",
     credits: `${PRICING.plans.match.credits} conversations / month`,
     label: "MOST POPULAR ⭐",
-    highlighted: false,
+    highlighted: true,
     features: [
       { text: "All 9 conversation directions", included: true },
       { text: "5 screenshots per request", included: true },
@@ -50,27 +49,6 @@ const PLANS = [
       { text: "Coach reasoning", included: true },
       { text: "Profile blueprints", included: true },
       { text: "Get Number / Ask Out", included: true },
-    ],
-  },
-  {
-    id: "launch",
-    name: "Launch LTD",
-    price: String(PRICING.plans.ltd.price),
-    currency: PRICING.plans.ltd.currency,
-    period: PRICING.plans.ltd.period,
-    description:
-      "Pay once, own it forever. Unlimited conversations. No subscription loops.",
-    credits: "Unlimited",
-    label: "FOUNDER'S EDITION",
-    highlighted: true,
-    features: [
-      { text: "All 9 conversation directions", included: true },
-      { text: "Max screenshots allowed*", included: true },
-      { text: "Custom hints (1000 chars)", included: true },
-      { text: "Coach reasoning", included: true },
-      { text: "Profile blueprints", included: true },
-      { text: "Get Number / Ask Out", included: true },
-      { text: "Lifetime system updates", included: true },
     ],
   },
 ];
@@ -110,34 +88,6 @@ function MinusIcon() {
 }
 
 export function Pricing() {
-  const [ltdConfig, setLtdConfig] = useState<{
-    spotsRemaining: number;
-    totalSpots: number;
-  } | null>(null);
-  const [showLtdModal, setShowLtdModal] = useState(false);
-
-  // Fetch real scarcity count from backend
-  useEffect(() => {
-    fetch(API_URLS.ltdBannerConfig)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.enabled && data.spots_remaining !== undefined) {
-          setLtdConfig({
-            spotsRemaining: data.spots_remaining,
-            totalSpots: data.total_spots,
-          });
-        }
-      })
-      .catch(() => {
-        // Fallback to hardcoded PRICING.ltdSpots on error
-      });
-  }, []);
-
-  const spotsLeft =
-    ltdConfig?.spotsRemaining ??
-    PRICING.ltdSpots.total - PRICING.ltdSpots.claimed;
-  const totalSpots = ltdConfig?.totalSpots ?? PRICING.ltdSpots.total;
-
   return (
     <section
       id="pricing"
@@ -161,17 +111,10 @@ export function Pricing() {
           Pick Your <span className="text-neon-red">Edge</span>.
         </h2>
         <p className="mt-4 text-nothing-text-secondary text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
-          Start accelerating your chat conversion rate today. Own the platform
-          outright or pay as you go.
+          Start accelerating your chat conversion rate today. Pay as you go.
         </p>
         <p className="mt-2 text-xs font-mono text-nothing-text-tertiary tracking-wider">
           Start free — no credit card needed
-        </p>
-        <p className="mt-2 text-xs font-mono text-nothing-text-tertiary tracking-wider">
-          ₹249/mo &bull;{" "}
-          <span className="text-neon-red">
-            ₹999 Lifetime = 4 months of Match Pro
-          </span>
         </p>
       </AnimatedSection>
 
@@ -233,19 +176,18 @@ export function Pricing() {
         </span>
       </motion.div>
 
-      <StaggerContainer className="mx-auto max-w-6xl" staggerDelay={0.1}>
-        <div className="grid gap-6 lg:gap-8 sm:grid-cols-1 lg:grid-cols-3 items-center">
+      <StaggerContainer className="mx-auto max-w-4xl" staggerDelay={0.1}>
+        <div className="grid gap-6 lg:gap-8 sm:grid-cols-1 lg:grid-cols-2 items-start">
           {PLANS.map((plan) => (
             <StaggerItem
               key={plan.id}
               distance={60}
-              className={plan.highlighted ? "order-first lg:order-none" : ""}
             >
-              <ScaleHover scale={plan.highlighted ? 1.02 : 1.01}>
+              <ScaleHover scale={1.01}>
                 <div
                   className={`relative flex flex-col p-6 sm:p-8 transition-all duration-300 rounded-xl ${
                     plan.highlighted
-                      ? "bg-nothing-black lg:-my-8 lg:py-12 border-2 border-neon-red z-20"
+                      ? "bg-nothing-black border-2 border-neon-red z-20"
                       : "bg-nothing-black border border-nothing-border hover:border-neon-red/30 hover:bg-nothing-surface z-10"
                   }`}
                 >
@@ -309,112 +251,39 @@ export function Pricing() {
                     </span>
                   </div>
 
-                  {plan.highlighted && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                      className="mb-4 flex items-center gap-2 rounded-lg border border-neon-red/20 bg-neon-red/10 px-3 py-2"
+                  <motion.a
+                    href={APP_URLS.googlePlay}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      posthog.capture("pricing_plan_cta_clicked", {
+                        plan: plan.id,
+                        plan_name: plan.name,
+                      })
+                    }
+                    className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
+                      plan.highlighted
+                        ? "bg-neon-red text-nothing-white hover:bg-red-600"
+                        : "border border-nothing-border text-nothing-text-secondary hover:bg-nothing-white/5 hover:text-nothing-white"
+                    }`}
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    <svg
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
                     >
-                      <motion.span
-                        className="h-2 w-2 rounded-full bg-neon-red"
-                        animate={{ scale: [1, 1.3, 1], opacity: [0.6, 1, 0.6] }}
-                        transition={{
-                          duration: 1.2,
-                          repeat: Infinity,
-                        }}
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
                       />
-                      <span className="text-[10px] font-mono text-neon-red tracking-wider font-bold">
-                        {spotsLeft} of {totalSpots} founder licenses remaining
-                      </span>
-                    </motion.div>
-                  )}
-
-                  {plan.id === "launch" ? (
-                    <motion.button
-                      onClick={() => {
-                        setShowLtdModal(true);
-                        posthog.capture("ltd_checkout_opened");
-                      }}
-                      className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
-                        plan.highlighted
-                          ? "bg-neon-red text-nothing-white hover:bg-red-600"
-                          : "border border-nothing-border text-nothing-text-secondary hover:bg-nothing-white/5 hover:text-nothing-white"
-                      }`}
-                      whileHover={{ scale: 1.04 }}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <svg
-                        className="h-3 w-3"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
-                        />
-                      </svg>
-                      Claim Lifetime License
-                    </motion.button>
-                  ) : (
-                    <motion.a
-                      href={APP_URLS.googlePlay}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() =>
-                        posthog.capture("pricing_plan_cta_clicked", {
-                          plan: plan.id,
-                          plan_name: plan.name,
-                        })
-                      }
-                      className={`mb-6 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${
-                        plan.highlighted
-                          ? "bg-neon-red text-nothing-white hover:bg-red-600"
-                          : "border border-nothing-border text-nothing-text-secondary hover:bg-nothing-white/5 hover:text-nothing-white"
-                      }`}
-                      whileHover={{ scale: 1.04 }}
-                      whileTap={{ scale: 0.97 }}
-                    >
-                      <svg
-                        className="h-3 w-3"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
-                        />
-                      </svg>
-                      Download App
-                    </motion.a>
-                  )}
-
-                  {plan.highlighted && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.8 }}
-                      className="mb-4 rounded-lg border border-nothing-border bg-nothing-surface/50 px-3 py-2.5 text-center"
-                    >
-                      <p className="text-[10px] font-mono text-nothing-text-secondary tracking-wider leading-relaxed">
-                        ₹249/mo × 12 ={" "}
-                        <span className="text-nothing-white">₹2,988/yr</span>
-                        <br />
-                        <span className="text-neon-red">
-                          ₹999 LTD pays for itself in 4 months
-                        </span>
-                      </p>
-                      <p className="mt-2 text-[9px] font-mono text-nothing-text-tertiary tracking-wider">
-                        * Fair usage policy applies. See Terms of Service.
-                      </p>
-                    </motion.div>
-                  )}
+                    </svg>
+                    Download App
+                  </motion.a>
 
                   <ul className="space-y-3 mt-auto">
                     {plan.features.map((feature, fi) => (
@@ -451,12 +320,6 @@ export function Pricing() {
           ))}
         </div>
       </StaggerContainer>
-
-      {/* LTD checkout modal */}
-      <LtdCheckoutModal
-        isOpen={showLtdModal}
-        onClose={() => setShowLtdModal(false)}
-      />
     </section>
   );
 }

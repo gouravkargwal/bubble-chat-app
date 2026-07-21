@@ -4,9 +4,6 @@ export const APP_URLS = {
   googlePlay: "https://play.google.com/store/apps/details?id=com.cookd.mobile",
   iosWaitlist: `mailto:support@${APP_DOMAIN}?subject=iOS%20Waitlist`,
   website: `https://${APP_DOMAIN}`,
-  // PayU LTD checkout pages (relative — handled by Next.js routing)
-  ltdSuccess: "/ltd/success",
-  ltdFailure: "/ltd/failure",
 } as const;
 
 // ── API URLs ──
@@ -17,8 +14,6 @@ export const API_BASE_URL =
 
 export const API_URLS = {
   leadMagnet: `${API_BASE_URL}/api/v1/public/lead-magnet/generate`,
-  ltdCreateOrder: `${API_BASE_URL}/api/v1/billing/ltd/create-order`,
-  ltdBannerConfig: `${API_BASE_URL}/api/v1/billing/ltd/banner-config`,
 } as const;
 
 // ── Social Links ──
@@ -192,9 +187,7 @@ export const PRICING = {
   plans: {
     crush: { price: 99, currency: "₹", period: "/week", credits: 50 },
     match: { price: 249, currency: "₹", period: "/month", credits: 150 },
-    ltd: { price: 999, currency: "₹", period: "/forever" },
   },
-  ltdSpots: { total: 1000, claimed: 342 },
 } as const;
 
 // ── Site Metadata ──

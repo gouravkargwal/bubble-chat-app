@@ -95,7 +95,7 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // Collect usage state from backend (includes isLtd — no separate /ltd/status call needed)
+        // Collect usage state from backend
         viewModelScope.launch {
             hostedRepository.usageState.collect { usage ->
                 _state.update {

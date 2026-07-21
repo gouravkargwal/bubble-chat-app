@@ -49,9 +49,6 @@ interface HostedRepository {
     suspend fun deleteProfileAuditPhoto(photoId: String): Result<Unit>
     suspend fun deleteAllUserData(): Result<Unit>
 
-    // LTD redeem (Google Play-safe: no pricing/selling, just code redemption)
-    suspend fun redeemLTDCode(code: String): Result<String>
-
     // Marketing consent sync
     suspend fun syncMarketingConsent(enabled: Boolean): Result<Unit>
 }

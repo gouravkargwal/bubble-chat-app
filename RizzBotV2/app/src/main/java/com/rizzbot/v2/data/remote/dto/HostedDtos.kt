@@ -110,7 +110,6 @@ data class UsageResponse(
     @SerialName("credits_period_limit") val creditsPeriodLimit: Int = 0,
     @SerialName("billing_period") val billingPeriod: String = "monthly",
     val tier: String = "free",
-    @SerialName("is_ltd") val isLtd: Boolean = false,
     @SerialName("tier_expires_at") val tierExpiresAt: Long? = null,
     @SerialName("allowed_directions") val allowedDirections: List<String> = emptyList(),
     @SerialName("max_screenshots") val maxScreenshots: Int = 2,
@@ -170,20 +169,6 @@ data class BillingStatusResponse(
     @SerialName("product_id") val productId: String? = null,
     @SerialName("expires_at") val expiresAt: Long? = null,
     @SerialName("auto_renewing") val autoRenewing: Boolean = false
-)
-
-// ── LTD (Lifetime Deal) ──
-
-@Serializable
-data class RedeemLTDCodeRequest(
-    val code: String
-)
-
-@Serializable
-data class RedeemLTDCodeResponse(
-    val status: String,
-    val tier: String = "match",
-    val message: String = ""
 )
 
 // ── History ──

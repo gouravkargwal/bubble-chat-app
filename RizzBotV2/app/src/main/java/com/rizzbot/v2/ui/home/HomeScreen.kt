@@ -139,7 +139,6 @@ fun HomeScreen(
                         creditsRemaining = state.usage.creditsRemaining,
                         creditsPeriodLimit = state.usage.creditsPeriodLimit,
                         billingPeriod = state.usage.billingPeriod,
-                        isLtd = state.usage.isLtd,
                     )
                     HeroCard(
                         isEnabled = state.isServiceEnabled,
@@ -188,7 +187,6 @@ private fun SmartReplyEntryCard(
     creditsRemaining: Int,
     creditsPeriodLimit: Int,
     billingPeriod: String = "daily",
-    isLtd: Boolean = false,
 ) {
     Card(
         modifier = Modifier
@@ -233,39 +231,22 @@ private fun SmartReplyEntryCard(
                 )
             }
             Spacer(modifier = Modifier.width(NothingDimens.elementGap))
-            // Credit badge — unlimited for LTD, fraction for paid, total for free
-            if (isLtd) {
-                // Clean unlimited badge — no numbers, no progress
-                Column(horizontalAlignment = Alignment.End) {
+            // Credit badge
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = if (tier == TierQuota.PLAN_FREE)
+                        "$creditsRemaining cr"
+                    else
+                        "$creditsRemaining / $creditsPeriodLimit",
+                    color = if (creditsRemaining <= 0) NothingError else NothingTextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                if (tier != TierQuota.PLAN_FREE && creditsPeriodLimit > 0) {
                     Text(
-                        text = "∞",
-                        color = NothingSuccess,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text = "unlimited",
+                        text = TierQuota.billingPeriodNoun(billingPeriod),
                         color = NothingTextTertiary,
                         style = MaterialTheme.typography.labelSmall,
                     )
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = if (tier == TierQuota.PLAN_FREE)
-                            "$creditsRemaining cr"
-                        else
-                            "$creditsRemaining / $creditsPeriodLimit",
-                        color = if (creditsRemaining <= 0) NothingError else NothingTextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    if (tier != TierQuota.PLAN_FREE && creditsPeriodLimit > 0) {
-                        Text(
-                            text = TierQuota.billingPeriodNoun(billingPeriod),
-                            color = NothingTextTertiary,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))

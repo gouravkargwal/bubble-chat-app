@@ -4,7 +4,7 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { StatusDot } from "./Logo";
 import { AnimatedSection } from "./Animations";
-import { UpsellBlock } from "./interactive-hero/Reveal";
+import { APP_URLS } from "@/app/constants";
 
 type AppState = "bubble" | "loading" | "expanded";
 
@@ -885,7 +885,6 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                             </motion.button>
                           </motion.div>
 
-                          {/* Upsell block for users who came from the funnel */}
                           {hasRealReplies && (
                             <motion.div
                               className="mt-4"
@@ -897,7 +896,29 @@ export function AppMockup({ replies: userReplies, onReset }: AppMockupProps) {
                                 ease: [0.16, 1, 0.3, 1],
                               }}
                             >
-                              <UpsellBlock />
+                              <motion.a
+                                href={APP_URLS.googlePlay}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 rounded-full bg-neon-red px-8 py-3 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-red-600"
+                                whileHover={{ scale: 1.04 }}
+                                whileTap={{ scale: 0.97 }}
+                              >
+                                <svg
+                                  className="h-3.5 w-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-1.5 15v.01M12 12v7.5"
+                                  />
+                                </svg>
+                                Download App
+                              </motion.a>
                             </motion.div>
                           )}
 

@@ -19,50 +19,32 @@ interface RevealProps {
   isRateLimited?: boolean;
   appUrl?: string;
   onReset?: () => void;
-  onBuyLifetime?: () => void;
 }
 
-export function UpsellBlock({ onBuyLifetime }: { onBuyLifetime?: () => void }) {
+function DownloadAppCTA() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.5, duration: 0.5, ease: EASE_OUT }}
-      className="relative w-full max-w-lg rounded-xl border-2 border-neon-red bg-nothing-black p-6 text-center"
+      className="w-full max-w-lg text-center"
     >
-      <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-neon-red/30 px-3 py-1 text-[10px] font-mono text-neon-red tracking-wider">
-        LIMITED OFFER
-      </div>
-      <h3 className="font-heading text-xl font-extrabold text-nothing-white mb-2">
-        Lifetime Access
-      </h3>
-      <p className="text-xs text-nothing-text-secondary mb-5 max-w-sm mx-auto leading-relaxed">
-        Unlimited conversations. All directions, custom hints, coach reasoning,
-        and more. *
+      <p className="text-xs text-nothing-text-secondary mb-4 max-w-sm mx-auto leading-relaxed">
+        Get unlimited conversations, all conversation directions, custom hints,
+        and coach reasoning in the app.
       </p>
 
-      <div className="mb-5 flex items-baseline justify-center gap-1.5">
-        <span className="text-4xl font-extrabold text-nothing-white">
-          &#x20B9;999
-        </span>
-        <span className="text-xs font-mono text-nothing-text-tertiary line-through">
-          &#x20B9;4,799
-        </span>
-      </div>
-
-      <button
-        onClick={onBuyLifetime}
-        className="inline-flex items-center gap-2 rounded-full border border-nothing-border bg-nothing-white px-8 py-3 text-xs font-bold text-nothing-black transition-all duration-200 hover:bg-nothing-white/90"
+      <motion.a
+        href={APP_URLS.googlePlay}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 rounded-full bg-neon-red px-8 py-3 text-xs font-bold text-nothing-white transition-all duration-200 hover:bg-red-600"
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.97 }}
       >
         <MobileIcon className="h-3.5 w-3.5" />
-        Claim Lifetime Access
-      </button>
-
-      <div className="mt-4 flex items-center justify-center gap-3 text-[10px] font-mono text-nothing-text-tertiary">
-        <span>[ NO SUBSCRIPTION ]</span>
-        <span>[ LIFETIME UPDATES ]</span>
-        <span>[ CANCEL ANYTIME ]</span>
-      </div>
+        Get the App
+      </motion.a>
     </motion.div>
   );
 }
@@ -162,7 +144,6 @@ export function Reveal({
   isRateLimited = false,
   appUrl = APP_URLS.googlePlay,
   onReset,
-  onBuyLifetime,
 }: RevealProps) {
   // Rate limited state — show download prompt
   if (isRateLimited || replies.length === 0) {
@@ -211,15 +192,15 @@ export function Reveal({
               <span className="text-[10px] font-mono uppercase tracking-widest text-nothing-text-tertiary">
                 {reply.style}
               </span>
-              <CopyButton text={reply.text} onCopy={onBuyLifetime} />
+              <CopyButton text={reply.text} />
             </div>
             <p className="text-sm text-nothing-white">{reply.text}</p>
           </motion.div>
         ))}
       </div>
 
-      {/* Upsell */}
-      <UpsellBlock onBuyLifetime={onBuyLifetime} />
+      {/* Download CTA */}
+      <DownloadAppCTA />
     </motion.div>
   );
 }

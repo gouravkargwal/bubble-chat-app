@@ -46,31 +46,6 @@ BILLING_PERIOD_DAYS = {
     "rizz": 30,
 }
 
-# LTD Configuration (Lifetime Deal)
-LTD_CONFIG = {
-    "price": 999,  # ₹999 one-time
-    "compare_at": 4799,  # Original price for strikethrough anchoring
-    "mapped_tier": "match",  # LTD maps to match tier
-    "refill_credits": 300,  # Credits per refill (matches FUP threshold; no genuine user hits this)
-    "refill_days": 30,  # Refill cycle
-    "badge": "LIMITED OFFER",
-    "badge_icon": "🔥",  # Emoji / icon prefix for the badge
-    "title": "Lifetime Access",  # Card heading
-    "sticky": "Pays for itself in 4 months",
-    "scarcity_label": "licenses claimed",  # Label after "{claimed} of {total}"
-    "benefit_credits_label": "credits/mo",
-    "benefit_directions_label": "directions",
-    "benefit_no_expiry_label": "no expiry",
-    "benefit_no_expiry_value": "∞",
-    "cta_text": "Claim Your Lifetime License",
-    "redeem_title": "Already have a code?",
-    "redeem_placeholder": "LTD-XXXXXXXX",
-    "redeem_cta_text": "Redeem",
-    "landing_url": "",  # Override for in-app banner link (empty = use PAYU_REDIRECT_BASE)
-    "total_spots": 1000,  # Scarcity: total number of launch licenses
-    "claimed_spots": 342,  # Scarcity: how many have been claimed
-}
-
 TIER_CONFIG = {
     "free": {
         "limits": {

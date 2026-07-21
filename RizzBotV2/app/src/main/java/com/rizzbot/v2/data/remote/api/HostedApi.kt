@@ -139,7 +139,4 @@ interface HostedApi {
     @DELETE("api/v1/users/me/data")
     suspend fun deleteAllUserData()
 
-    // LTD redeem (Google Play-safe: no pricing/selling, just code redemption)
-    @POST("api/v1/billing/ltd/redeem")
-    suspend fun redeemLTDCode(@Body request: com.rizzbot.v2.data.remote.dto.RedeemLTDCodeRequest): com.rizzbot.v2.data.remote.dto.RedeemLTDCodeResponse
 }

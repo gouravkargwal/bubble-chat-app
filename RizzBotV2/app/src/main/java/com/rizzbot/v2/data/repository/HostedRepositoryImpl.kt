@@ -80,7 +80,6 @@ class HostedRepositoryImpl @Inject constructor(
             creditsPeriodLimit = usage.creditsPeriodLimit,
             billingPeriod = usage.billingPeriod,
             tierExpiresAt = usage.tierExpiresAt,
-            isLtd = usage.isLtd,
             allowedDirections = usage.allowedDirections,
             customHintsEnabled = usage.customHints,
             maxScreenshots = usage.maxScreenshots,
@@ -534,25 +533,6 @@ class HostedRepositoryImpl @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
-        }
-    }
-
-    override suspend fun redeemLTDCode(code: String): Result<String> {
-        return try {
-            val response = hostedApi.redeemLTDCode(
-                com.rizzbot.v2.data.remote.dto.RedeemLTDCodeRequest(code)
-            )
-            // Force refresh usage after tier change
-            refreshUsage(force = true)
-            Result.success(response.message)
-        } catch (e: retrofit2.HttpException) {
-            val msg = when (e.code()) {
-                400 -> "Invalid or already used redemption code"
-                else -> "Something went wrong. Please try again."
-            }
-            Result.failure(Exception(msg))
-        } catch (e: Exception) {
-            Result.failure(Exception("Network error. Try again."))
         }
     }
 

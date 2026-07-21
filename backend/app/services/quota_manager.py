@@ -3,7 +3,6 @@
 Credits system:
 - Free users: 10 one-time signup bonus + 2 credits/day forever.
 - Paid users: period credit pool (weekly or monthly) set by billing.
-- LTD users: perpetual refill cycle — credits replenish every [ltd_refill_days].
 - Credit costs: chat_generation=1, profile_audit=8, profile_blueprint=12.
 - No daily cap for paid users — they spend from their period pool freely.
 """
@@ -68,19 +67,12 @@ class QuotaManager:
         """Reset/refill credits when the billing period expires.
 
         Subscriptions: zero the pool when the period ends (no auto-refill).
-        LTD: refill back to the refill cap on schedule forever.
         """
         if quota.credits_reset_at is not None and now >= quota.credits_reset_at:
-            if quota.is_ltd and quota.ltd_refill_credits > 0:
-                # Perpetual refill: top up to the refill cap.
-                quota.credits_remaining = quota.ltd_refill_credits
-                quota.credits_period_limit = quota.ltd_refill_credits
-                quota.credits_reset_at = now + timedelta(days=quota.ltd_refill_days)
-            else:
-                # Subscriptions: zero pool on expiry.
-                quota.credits_remaining = 0
-                quota.credits_period_limit = 0
-                quota.credits_reset_at = None
+            # Subscriptions: zero pool on expiry.
+            quota.credits_remaining = 0
+            quota.credits_period_limit = 0
+            quota.credits_reset_at = None
 
     async def grant_signup_bonus(self, google_provider_id: str) -> bool:
         """Grant one-time 10-credit signup bonus. Returns True if bonus was newly granted."""

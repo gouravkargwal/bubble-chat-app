@@ -29,16 +29,11 @@ import javax.inject.Inject
 /**
  * Mapping from entitlement ID → [PaywallTier].
  * Single source of truth for the paywall UI; add new entitlements here.
- *
- * LTD entitlements (ltd, lifetime, match_ltd) map to Match tier.
  */
 private val ENTITLEMENT_TIER_MAP: Map<String, PaywallTier> = mapOf(
     "match" to PaywallTier.Match,
     "crush" to PaywallTier.Crush,
     "rizz" to PaywallTier.Rizz,
-    "ltd" to PaywallTier.Match,
-    "lifetime" to PaywallTier.Match,
-    "match_ltd" to PaywallTier.Match,
 )
 
 private val TIER_PRIORITY: List<PaywallTier> = listOf(PaywallTier.Rizz, PaywallTier.Match, PaywallTier.Crush)

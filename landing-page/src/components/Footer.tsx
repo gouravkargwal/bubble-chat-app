@@ -53,7 +53,7 @@ export function Footer() {
           </div>
 
           {/* Links */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-12">
+          <div className="grid grid-cols-4 gap-8 sm:gap-12">
             {Object.entries(FOOTER_LINKS).map(([category, links]) => (
               <div key={category}>
                 <h2 className="text-xs font-mono tracking-[0.15em] text-nothing-text-secondary mb-4 uppercase">
@@ -64,6 +64,8 @@ export function Footer() {
                     <li key={link.label}>
                       <a
                         href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         onClick={() => trackFooterClick(category, link.label)}
                         className="text-sm text-nothing-text-secondary hover:text-nothing-white transition-colors duration-200"
                       >
