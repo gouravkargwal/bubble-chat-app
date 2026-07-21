@@ -58,15 +58,17 @@ class GeminiClient(LlmClient):
         client = get_client()
         t_start = time.monotonic()
 
-        # Build parts
-        parts = []
+        # Build parts — images first, then user_prompt text.
+        from google.genai import types
+
+        parts: list[types.Part] = []
         for img_b64 in base64_images:
             image_bytes = base64.b64decode(img_b64)
-            from google.genai import types
-
             parts.append(
                 types.Part.from_bytes(mime_type="image/jpeg", data=image_bytes)
             )
+        if user_prompt:
+            parts.append(types.Part.from_text(text=user_prompt))
 
         config: dict = {
             "temperature": temperature,
