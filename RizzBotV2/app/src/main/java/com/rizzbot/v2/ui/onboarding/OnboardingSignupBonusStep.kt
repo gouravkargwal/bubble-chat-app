@@ -47,7 +47,7 @@ import com.rizzbot.v2.ui.theme.NothingTextTertiary
 import com.rizzbot.v2.ui.theme.NothingWhite
 import com.rizzbot.v2.util.Constants
 
-/** Matches backend FREE_SIGNUP_CREDITS in tier_config.py — 15 one-time signup bonus credits (updated Jan 2025). */
+/** Reads Constants.SIGNUP_BONUS_CREDITS — set to 15 to match backend's match trial grant (auth.py). */
 private val freeCreditsCount = Constants.SIGNUP_BONUS_CREDITS
 
 /**

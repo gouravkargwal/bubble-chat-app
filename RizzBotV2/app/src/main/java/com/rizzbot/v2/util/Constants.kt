@@ -25,8 +25,8 @@ object Constants {
     const val MIN_RATINGS_FOR_PREFERENCES = 20
 
     // ── Credits & Tiers ──
-    /** One-time signup bonus credits (matches backend FREE_SIGNUP_CREDITS=10 in tier_config.py). */
-    const val SIGNUP_BONUS_CREDITS = 10
+    /** Match trial credits granted on signup (backend grants 15 as a 3-day match trial in auth.py). */
+    const val SIGNUP_BONUS_CREDITS = 15
 
     /** Free tier daily credits (matches backend FREE_DAILY_CREDITS=1 in tier_config.py). */
     const val FREE_DAILY_CREDITS = 1

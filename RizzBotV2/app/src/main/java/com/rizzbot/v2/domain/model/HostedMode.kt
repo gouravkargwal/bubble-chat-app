@@ -14,7 +14,7 @@ data class UsageState(
     val isPaidPlan: Boolean
         get() = tier == TierQuota.PLAN_CRUSH || tier == TierQuota.PLAN_MATCH
 
-    /** For free tier: credits include signup bonus (10) + daily free (2/day, max 8 accumulation).
+    /** For free tier: credits include signup bonus (15) + daily free (2/day, max 8 accumulation).
      *  For paid tier: just the period pool credits. */
     val canGenerate: Boolean
         get() = creditsRemaining > 0
