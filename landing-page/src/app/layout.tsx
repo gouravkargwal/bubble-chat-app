@@ -206,7 +206,7 @@ export default function RootLayout({
                     name: "Is there a free plan?",
                     acceptedAnswer: {
                       "@type": "Answer",
-                      text: "Yes! Every user gets 2 free conversations per day (up to 60 per month) plus 10 bonus conversations on signup. No credit card needed. It's enough to try it out and see the difference.",
+                      text: "Yes! Every user gets a 3-day Match trial with 15 replies on signup, then free tier continues with 2 free conversations per day. No credit card needed. It's enough to try it out and see the difference.",
                     },
                   },
                   {
