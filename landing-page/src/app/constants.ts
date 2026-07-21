@@ -45,7 +45,7 @@ export interface Job {
   slug: string;
   title: string;
   location: string;
-  type: "Full-time" | "Internship" | "Contract";
+  type: "Full-time" | "Internship" | "Contract" | "Co-Founder";
   department: string;
   stipend?: string;
   salary?: string;
@@ -54,53 +54,72 @@ export interface Job {
   description: string;
   details: Array<{ title: string; items: string[] }>;
   formUrl?: string;
+  taskInstructions?: string;
 }
 
 export const JOBS: Job[] = [
   {
-    slug: "media-marketing-manager-intern",
-    title: "Media Marketing Manager Intern",
+    slug: "head-of-growth-co-founder",
+    title: "Head of Growth (Co-Founder)",
     location: "Remote",
-    type: "Internship",
-    department: "Marketing",
-    stipend: "₹5,000 / month",
-    publishedAt: "2026-07-01",
+    type: "Co-Founder",
+    department: "Growth",
+    publishedAt: "2026-07-21",
     status: "open",
     description:
-      "Own Cookd\u2019s social media presence across TikTok, Instagram Reels, and Twitter/X. Create viral hooks and grow organic reach among Gen Z/Millennial messaging app users.",
+      "Day-zero co-founder role. Own user acquisition end-to-end — viral content, zero-dollar distribution, community building. No salary, massive equity stake.",
     details: [
       {
-        title: "What You\u2019ll Do",
+        title: "The Vibe",
         items: [
-          "Own Cookd\u2019s social media presence across TikTok, Instagram Reels, and Twitter/X",
-          "Create viral hooks, trend-jack, and grow organic reach among Gen Z/Millennial messaging app users",
-          "Collaborate with the product team to shape and amplify brand voice",
-          "Analyze content performance and iterate on what works",
-          "Produce short-form video content that drives app downloads",
+          "We are building Cookd AI \u2014 the ultimate AI-powered wingman for Gen Z",
+          "Our product ensures users never run out of things to say, generating the perfect, witty responses for dating apps and dry texts",
+          "We don\u2019t do corporate fluff, we don\u2019t care about your GPA, and we don\u2019t do boring marketing",
+          "We are a fast-moving, high-contrast startup looking for a partner who lives and breathes internet culture",
+        ],
+      },
+      {
+        title: "The Deal",
+        items: [
+          "This is a day-zero co-founder role \u2014 no salary, no corporate safety net, no marketing budget",
+          "You are trading short-term comfort for a massive equity stake in an early-stage consumer AI startup",
+          "Standard 4-year vest with 1-year cliff",
+          "If Cookd wins, you own a huge piece of the pie",
+          "I handle the codebase; you handle the users",
+        ],
+      },
+      {
+        title: "What You\u2019ll Actually Do",
+        items: [
+          "Script, shoot, edit, and post highly engaging TikToks, Reels, and Shorts",
+          "Craft a 3-second hook that stops a doom-scroller cold",
+          "Hack our growth \u2014 QR codes on college campuses, leverage meme pages, hijack internet trends",
+          "Speak the language of Gen Z and position Cookd as an edgy, must-have utility",
+          "Your single metric is user acquisition",
         ],
       },
       {
         title: "Who You Are",
         items: [
-          "Deeply fluent in meme culture, messaging app dynamics, and what makes content spread",
-          "Comfortable on camera or can direct someone who is \u2014 you know what makes a 15-second hook land",
-          "Data-informed: you look at retention curves, not just likes",
-          "Resourceful and autonomous \u2014 this is a high-agency role at an early-stage startup",
-          "Familiar with CapCut, DaVinci Resolve, or equivalent editing tools",
+          "Scrappy & Relentless \u2014 you don\u2019t need a budget to get 1,000 strangers to download an app",
+          "Internet Native & Video First \u2014 you live on TikTok and you are dangerous with CapCut or Premiere",
+          "Builder Mentality \u2014 you aren\u2019t looking for a 9-to-5, you want to build a company from the ground up",
+          "You have the financial runway to work for equity right now",
         ],
       },
       {
-        title: "Details",
+        title: "How to Apply",
         items: [
-          "Stipend: \u20B95,000 / month",
-          "Duration: 3 months (renewable based on performance)",
-          "Location: Remote \u2014 work from anywhere",
-          "Task-based application \u2014 submit your CV along with the task",
-          "Start date: Immediate",
+          "We don\u2019t want a generic resume and we don\u2019t care about your degree",
+          "We only care about what you can build",
+          "Click the link below and complete the \u201cProof of Work\u201d challenge",
+          "You will be asked to create a real 15-second TikTok/Reel hook for the app and tell us exactly how you would get our first 50 users this weekend with a $0 budget",
         ],
       },
     ],
     formUrl: CAREERS.mediaManagerForm,
+    taskInstructions:
+      "Download Cookd from Google Play, use it to generate a \"rizz\" response for a conversation, and create a 15-second TikTok or Instagram Reel hook featuring the result. Then tell us exactly how you would get our first 50 users this weekend with a $0 budget.",
   },
   {
     slug: "software-engineering-intern",

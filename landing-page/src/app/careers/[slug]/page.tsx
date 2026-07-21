@@ -187,16 +187,8 @@ export default function JobDetailPage({
                     </h3>
                   </div>
                   <p className="text-sm sm:text-base text-nothing-text-secondary leading-relaxed mb-4">
-                    <strong className="text-nothing-white">
-                      Download Cookd from Google Play,
-                    </strong>{" "}
-                    use it to generate a &ldquo;rizz&rdquo; response for a
-                    conversation, and create a{" "}
-                    <strong className="text-nothing-white">
-                      15-second TikTok or Instagram Reel hook
-                    </strong>{" "}
-                    featuring the result. Show us how you&rsquo;d make this go
-                    viral.
+                    {job.taskInstructions ||
+                      "Download Cookd from Google Play, use it to generate a &ldquo;rizz&rdquo; response for a conversation, and create a 15-second TikTok or Instagram Reel hook featuring the result. Show us how you&rsquo;d make this go viral."}
                   </p>
                   <div className="flex flex-wrap gap-2 mt-4">
                     <span className="inline-flex items-center gap-1 rounded-full border border-nothing-border px-3 py-1 text-xs font-mono text-nothing-text-secondary">
