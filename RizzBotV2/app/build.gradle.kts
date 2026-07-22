@@ -32,7 +32,7 @@ android {
         applicationId = "com.cookd.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 38
+        versionCode = 39
         versionName = "2.0.1"
 
         // Set via gradle.properties or Firebase Console → Authentication → Google
@@ -188,5 +188,5 @@ dependencies {
 
     // RevenueCat
     // NOTE: Keep these versions in sync with a version that exists on Maven Central
-    implementation("com.revenuecat.purchases:purchases:8.10.1")
+    implementation("com.revenuecat.purchases:purchases:9.29.1")
 }
